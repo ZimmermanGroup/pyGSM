@@ -717,11 +717,9 @@ class ICoord(object):
         print "\n"
 
         redset = N3 - self.nicd
-        self.U = v[0:self.nicd, :]
-        print "Delocalized internal coordinates"
-        print(self.U)
-
-        print "Shape of U is %s" % (np.shape(self.U),)
+        #self.U = v[0:self.nicd, :]
+        self.U = v
+        #print "Shape of U is %s" % (np.shape(self.U),)
 
 
     def q_create(self):  
@@ -736,13 +734,8 @@ class ICoord(object):
         np.set_printoptions(suppress=True)
 
         dists=[self.distance(bond[0],bond[1]) for bond in self.bonds ]
-        print dists
-
-        angles=[self.get_angle(angle[0],angle[1],angle[2]) for angle in self.angles ]
-        print angles
-
-        torsions =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]) for torsion in self.torsions]
-        print torsions
+        angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.angles ]
+        torsions =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])*np.pi/180. for torsion in self.torsions]
 
         for i in range(self.nicd):
             Ubond=self.U[i][0:self.nbonds]
@@ -750,15 +743,32 @@ class ICoord(object):
             Utorsion=self.U[i][self.nangles+self.nbonds:self.nangles+self.nbonds+self.ntor]
             self.q[i] = np.dot(Ubond,dists) + np.dot(Uangle,angles) + np.dot(Utorsion,torsions)
 
-        print self.q
 
     def bmat_create(self):
 
-        print(" In bmat create")
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
 
+        print(" In bmat create")
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
         self.q_create()
 
+        print(" now making bmat in delocalized ICs")
+        bmat = np.matmul(np.transpose(self.U),self.bmatp)
+        print("printing bmat")
+        print bmat
+        print(" Shape of bmat %s" %(np.shape(bmat),))
 
+        bbt = np.matmul(bmat,np.transpose(bmat))
+        print(" Shape of bbt %s" %(np.shape(bbt),))
+
+        bbti = np.linalg.inv(bbt)
+        print("bmatti formation")
+        self.bmatti = np.matmul(bbti,bmat)
+        print self.bmatti
+
+        print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
 
 if __name__ == '__main__':
