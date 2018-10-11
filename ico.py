@@ -100,11 +100,7 @@ class ICoord(object):
         for angle in ob.OBMolAngleIter(self.mol.OBMol):
             self.nangles+=1
             self.angles.append(angle)
-            #a is the vertex
-            a=self.mol.OBMol.GetAtom(angle[0]+1)
-            b=self.mol.OBMol.GetAtom(angle[1]+1)
-            c=self.mol.OBMol.GetAtom(angle[2]+1)
-            self.anglev.append(self.mol.OBMol.GetAngle(b,a,c))
+            self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
         #print self.angles
         #print self.anglev
         print "number of angles is %i" %self.nangles
@@ -117,11 +113,7 @@ class ICoord(object):
         for torsion in ob.OBMolTorsionIter(self.mol.OBMol):
             self.ntor+=1
             self.torsions.append(torsion)
-            a=self.mol.OBMol.GetAtom(torsion[0]+1)
-            b=self.mol.OBMol.GetAtom(torsion[1]+1)
-            c=self.mol.OBMol.GetAtom(torsion[2]+1)
-            d=self.mol.OBMol.GetAtom(torsion[3]+1)
-            self.torv.append(self.mol.OBMol.GetTorsion(a,b,c,d))
+            self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
         #print self.torsions
         #print self.torv
         print "number of torsions is %i" %self.ntor
@@ -220,20 +212,12 @@ class ICoord(object):
     def update_angles(self):
         self.anglev=[]
         for angle in self.angles:
-            a=self.mol.OBMol.GetAtom(angle[0]+1)
-            b=self.mol.OBMol.GetAtom(angle[1]+1)
-            c=self.mol.OBMol.GetAtom(angle[2]+1)
-            # a is the vertex
-            self.anglev.append(self.mol.OBMol.GetAngle(b,a,c))
+            self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
 
     def update_torsions(self):
         self.torv=[]
         for torsion in self.torsions:
-            a=self.mol.OBMol.GetAtom(torsion[0]+1)
-            b=self.mol.OBMol.GetAtom(torsion[1]+1)
-            c=self.mol.OBMol.GetAtom(torsion[2]+1)
-            d=self.mol.OBMol.GetAtom(torsion[3]+1)
-            self.torv.append(self.mol.OBMol.GetTorsion(a,b,c,d))
+            self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
 
     def union_ic(
             self,
@@ -360,6 +344,20 @@ class ICoord(object):
         a1=self.mol.OBMol.GetAtom(i+1)
         a2=self.mol.OBMol.GetAtom(j+1)
         return a1.GetDistance(a2)
+
+    def get_angle(self,i,j,k):
+        a=self.mol.OBMol.GetAtom(i+1)
+        b=self.mol.OBMol.GetAtom(j+1)
+        c=self.mol.OBMol.GetAtom(k+1)
+        return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex
+
+    def get_torsion(self,i,j,k,l):
+        a=self.mol.OBMol.GetAtom(i+1)
+        b=self.mol.OBMol.GetAtom(j+1)
+        c=self.mol.OBMol.GetAtom(k+1)
+        d=self.mol.OBMol.GetAtom(l+1)
+        return self.mol.OBMol.GetTorsion(a,b,c,d)
+
 
     def getIndex(self,i):
         return self.mol.OBMol.GetAtom(i+1).GetIndex()
@@ -700,7 +698,7 @@ class ICoord(object):
         print "\n"
         lowev=[]
 
-        self.nicd=N3
+        self.nicd=self.num_ics
         #TODO this is a hack
         for i in e:
             if np.real(i)<0.001:
@@ -719,16 +717,48 @@ class ICoord(object):
         print "\n"
 
         redset = N3 - self.nicd
-        self.U = v[0:self.nicd, 0:N3]
+        self.U = v[0:self.nicd, :]
         print "Delocalized internal coordinates"
         print(self.U)
 
         print "Shape of U is %s" % (np.shape(self.U),)
 
 
-    def bmat_create(self):
+    def q_create(self):  
+        """Determines the scalars in delocalized internal coordinates"""
+
+        print(" Determining q in ICs")
         N3=3*self.natoms
-        self.q = np.zeros(1)
+        self.q = np.zeros(self.nicd)
+        print "Number of ICs %i" % self.num_ics
+        print "Number of IC dimensions %i" %self.nicd
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
+
+        dists=[self.distance(bond[0],bond[1]) for bond in self.bonds ]
+        print dists
+
+        angles=[self.get_angle(angle[0],angle[1],angle[2]) for angle in self.angles ]
+        print angles
+
+        torsions =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]) for torsion in self.torsions]
+        print torsions
+
+        for i in range(self.nicd):
+            Ubond=self.U[i][0:self.nbonds]
+            Uangle=self.U[i][self.nbonds:self.nangles+self.nbonds]
+            Utorsion=self.U[i][self.nangles+self.nbonds:self.nangles+self.nbonds+self.ntor]
+            self.q[i] = np.dot(Ubond,dists) + np.dot(Uangle,angles) + np.dot(Utorsion,torsions)
+
+        print self.q
+
+    def bmat_create(self):
+
+        print(" In bmat create")
+
+        self.q_create()
+
+
 
 
 if __name__ == '__main__':
@@ -753,6 +783,7 @@ if __name__ == '__main__':
     ic1.ic_create()
     ic1.bmatp_create()
     ic1.bmatp_to_U()
+    ic1.bmat_create()
     
     #ic1.union_ic(ic1,ic2)
     #ic1.update_ics()
