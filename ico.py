@@ -571,7 +571,14 @@ class ICoord(object):
         u = np.zeros(3,dtype=float)
         v = np.zeros(3,dtype=float)
         w = np.zeros(3,dtype=float)
-
+        coora=np.array([a.GetX(),a.GetY(),a.GetZ()])
+        coorb=np.array([b.GetX(),b.GetY(),b.GetZ()])
+        coorc=np.array([c.GetX(),c.GetY(),c.GetZ()])
+        coord=np.array([d.GetX(),d.GetY(),d.GetZ()])
+        u=np.subtract(coora,coorb)
+        w=np.subtract(coorc,coorb)
+        v=np.subtract(coord,coorc)
+        
         n1=self.distance(i,j)
         n2=self.distance(j,k)
         n3=self.distance(k,l)
@@ -610,39 +617,42 @@ class ICoord(object):
 
 
     def bmatp_create(self):
-        self.nicd=self.nbonds + self.nangles + self.ntor
+        self.num_ics = self.nbonds + self.nangles + self.ntor
         N3 = 3*self.natoms
-        print "Number of internal coord dimension is %i " % self.nicd
-        self.bmatp=np.zeros((N3,self.nicd),dtype=float)
+        print "Number of internal coordinates is %i " % self.num_ics
+        self.bmatp=np.zeros((self.num_ics,N3),dtype=float)
         #TODO Not sure to make this rows or columns
         i=0
         for bond in self.bonds:
             a1=bond[0]
             a2=bond[1]
             dqbdx = self.bmatp_dqbdx(a1,a2)
-            self.bmatp[3*a1+0][i] = dqbdx[0]
-            self.bmatp[3*a1+1][i] = dqbdx[1]
-            self.bmatp[3*a1+2][i] = dqbdx[2]
-            self.bmatp[3*a2+0][i] = dqbdx[3]
-            self.bmatp[3*a2+1][i] = dqbdx[4]
-            self.bmatp[3*a2+2][i] = dqbdx[5]
+            self.bmatp[i][3*a1+0] = dqbdx[0]
+            self.bmatp[i][3*a1+1] = dqbdx[1]
+            self.bmatp[i][3*a1+2] = dqbdx[2]
+            self.bmatp[i][3*a2+0] = dqbdx[3]
+            self.bmatp[i][3*a2+1] = dqbdx[4]
+            self.bmatp[i][3*a2+2] = dqbdx[5]
             i+=1
+            #print "%s" % ((a1,a2),)
 
         for angle in self.angles:
             a1=angle[1]
             a2=angle[0] #vertex
             a3=angle[2]
             dqadx = self.bmatp_dqadx(a1,a2,a3)
-            self.bmatp[3*a1+0][i] = dqadx[0]
-            self.bmatp[3*a1+1][i] = dqadx[1]
-            self.bmatp[3*a1+2][i] = dqadx[2]
-            self.bmatp[3*a2+0][i] = dqadx[3]
-            self.bmatp[3*a2+1][i] = dqadx[4]
-            self.bmatp[3*a2+2][i] = dqadx[5]
-            self.bmatp[3*a3+0][i] = dqadx[6]
-            self.bmatp[3*a3+1][i] = dqadx[7]
-            self.bmatp[3*a3+2][i] = dqadx[8]
+            self.bmatp[i][3*a1+0] = dqadx[0]
+            self.bmatp[i][3*a1+1] = dqadx[1]
+            self.bmatp[i][3*a1+2] = dqadx[2]
+            self.bmatp[i][3*a2+0] = dqadx[3]
+            self.bmatp[i][3*a2+1] = dqadx[4]
+            self.bmatp[i][3*a2+2] = dqadx[5]
+            self.bmatp[i][3*a3+0] = dqadx[6]
+            self.bmatp[i][3*a3+1] = dqadx[7]
+            self.bmatp[i][3*a3+2] = dqadx[8]
             i+=1
+            #print i
+            #print "%s" % ((a1,a2,a3),)
 
         for torsion in self.torsions:
             a1=torsion[0]
@@ -650,57 +660,75 @@ class ICoord(object):
             a3=torsion[2]
             a4=torsion[3]
             dqtdx = self.bmatp_dqtdx(a1,a2,a3,a4)
-            self.bmatp[3*a1+0][i] = dqtdx[0]
-            self.bmatp[3*a1+1][i] = dqtdx[1]
-            self.bmatp[3*a1+2][i] = dqtdx[2]
-            self.bmatp[3*a2+0][i] = dqtdx[3]
-            self.bmatp[3*a2+1][i] = dqtdx[4]
-            self.bmatp[3*a2+2][i] = dqtdx[5]
-            self.bmatp[3*a3+0][i] = dqtdx[6]
-            self.bmatp[3*a3+1][i] = dqtdx[7]
-            self.bmatp[3*a3+2][i] = dqtdx[8]
-            self.bmatp[3*a4+0][i] = dqtdx[9]
-            self.bmatp[3*a4+1][i] = dqtdx[10]
-            self.bmatp[3*a4+2][i] = dqtdx[11]
+            self.bmatp[i][3*a1+0] = dqtdx[0]
+            self.bmatp[i][3*a1+1] = dqtdx[1]
+            self.bmatp[i][3*a1+2] = dqtdx[2]
+            self.bmatp[i][3*a2+0] = dqtdx[3]
+            self.bmatp[i][3*a2+1] = dqtdx[4]
+            self.bmatp[i][3*a2+2] = dqtdx[5]
+            self.bmatp[i][3*a3+0] = dqtdx[6]
+            self.bmatp[i][3*a3+1] = dqtdx[7]
+            self.bmatp[i][3*a3+2] = dqtdx[8]
+            self.bmatp[i][3*a4+0] = dqtdx[9]
+            self.bmatp[i][3*a4+1] = dqtdx[10]
+            self.bmatp[i][3*a4+2] = dqtdx[11]
             i+=1
+            #print i
+            #print dqtdx
+            #print "%s" % ((a1,a2,a3,a4),)
 
         #print self.bmatp
 
     def bmatp_to_U(self):
         N3=3*self.natoms
-        G=np.matmul(np.transpose(self.bmatp),self.bmatp)
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
+        print "printing bmatp"
+        print self.bmatp
+
+        print "\n"
+        print "shape of bmatp is %s" %(np.shape(self.bmatp),)
+
+        G=np.matmul(self.bmatp,np.transpose(self.bmatp))
         #print G
         print "Shape of G is %s" % (np.shape(G),)
         e,v = np.linalg.eig(G)
         e = np.real(e)
         v= np.real(v)
-        np.set_printoptions(precision=3)
-        np.set_printoptions(suppress=True)
         print "eigenvalues of BB^T" 
         print e
         print "\n"
-        self.nicd=N3
         lowev=[]
 
+        self.nicd=N3
         #TODO this is a hack
         for i in e:
             if np.real(i)<0.001:
                 lowev.append(i)
                 self.nicd -=1
-        if len(lowev)>7:
+        if self.nicd<N3-6:
             print(" Error: optimization space less than 3N-6 DOF")
             print len(lowev)
             exit(-1)
 
+        print(" Number of internal coordinate dimensions %i" %self.nicd)
+        print(" Number of lowev %i" %len(lowev))
+
         print "diag(BB^T)"
         print v
+        print "\n"
 
-        redset = N3 - self.nicd;
-        self.U = v[0:self.nicd,0:self.nicd]
+        redset = N3 - self.nicd
+        self.U = v[0:self.nicd, 0:N3]
         print "Delocalized internal coordinates"
         print(self.U)
 
         print "Shape of U is %s" % (np.shape(self.U),)
+
+
+    def bmat_create(self):
+        N3=3*self.natoms
+        self.q = np.zeros(1)
 
 
 if __name__ == '__main__':
