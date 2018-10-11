@@ -52,6 +52,7 @@ class ICoord(object):
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
         #self.print_xyz()
+
         
     def print_xyz(self):
         for a in ob.OBMolAtomIter(self.mol.OBMol):
@@ -721,6 +722,8 @@ class ICoord(object):
         self.U = v
         #print "Shape of U is %s" % (np.shape(self.U),)
 
+        self.gradq = np.zeros(self.nicd)
+
 
     def q_create(self):  
         """Determines the scalars in delocalized internal coordinates"""
@@ -770,6 +773,13 @@ class ICoord(object):
 
         print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
+    def grad_to_q(self):
+        N3=self.natoms*3
+
+        self.pgradq = self.gradq
+        gradq = np.matmul(self.bmatti,self.grad)
+
+
 
 if __name__ == '__main__':
 
@@ -794,6 +804,8 @@ if __name__ == '__main__':
     ic1.bmatp_create()
     ic1.bmatp_to_U()
     ic1.bmat_create()
+
+    print(type(ic1))
     
     #ic1.union_ic(ic1,ic2)
     #ic1.update_ics()
