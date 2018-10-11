@@ -82,7 +82,7 @@ class ICoord(object):
             self.nbonds+=1
             self.bonds.append((bond.GetBeginAtomIdx()-1,bond.GetEndAtomIdx()-1))
             self.bondd.append(bond.GetLength())
-        print "number of nbonds is %i" %self.nbonds
+        print "number of bonds is %i" %self.nbonds
 
     def coord_num(self):
         self.coordn=[]
@@ -157,9 +157,6 @@ class ICoord(object):
                         elif self.angles[k][1]==j:
                             found=True
                 if found==False:
-                   #a1=self.mol.OBMol.GetAtom(i+1)
-                   #a2=self.mol.OBMol.GetAtom(j+1)
-                   #self.nonbond.append(a1.GetDistance(a2))
                    self.nonbond.append(self.distance(i,j))
         #print self.nonbond
 
@@ -218,9 +215,6 @@ class ICoord(object):
     def update_bonds(self):
         self.bondd=[]
         for bond in self.bonds:
-            #a1=self.mol.OBMol.GetAtom(bond[0])
-            #a2=self.mol.OBMol.GetAtom(bond[1])
-            #self.bondd.append(a1.GetDistance(a2))
             self.bondd.append(self.distance(bond[0],bond[1]))
 
     def update_angles(self):
@@ -272,8 +266,6 @@ class ICoord(object):
         for anglev in self.anglev:
             if anglev>160.:
                 maxsize+=1
-        #print maxsize
-        #blist = np.full((3*maxsize+1,1),-1,dtype=int)
         blist=[]
         n=0
         for anglev,angle in zip(self.anglev,self.angles):
@@ -333,7 +325,7 @@ class ICoord(object):
     def make_frags(self):
         """ Currently only works for two fragments """
 
-        print("merging")
+        print("making frags")
         nfrags=0
         merged=0
         self.frags=[]
@@ -571,8 +563,8 @@ class ICoord(object):
         c=self.mol.OBMol.GetAtom(k+1)
         d=self.mol.OBMol.GetAtom(l+1)
 
-        angle1=self.mol.OBMol.GetAngle(i,j,k)*np.pi/180.
-        angle2=self.mol.OBMol.GetAngle(j,k,l)*np.pi/180.
+        angle1=self.mol.OBMol.GetAngle(a,b,c)*np.pi/180.
+        angle2=self.mol.OBMol.GetAngle(b,c,d)*np.pi/180.
         if angle1>3.0 or angle2>3.0:
             print(" near-linear angle")
             return
@@ -600,7 +592,7 @@ class ICoord(object):
             return
 
         #CPMZ possible error in uw calc
-        dqadx = np.zeros(12,dtype=float)
+        dqtdx = np.zeros(12,dtype=float)
         dqtdx[0]  = uw[0]/(n1*sin2phiu);
         dqtdx[1]  = uw[1]/(n1*sin2phiu);
         dqtdx[2]  = uw[2]/(n1*sin2phiu);
@@ -653,10 +645,10 @@ class ICoord(object):
             i+=1
 
         for torsion in self.torsions:
-            a1=torsions[0]
-            a2=torsions[1]
-            a3=torsions[2]
-            a4=torsions[3]
+            a1=torsion[0]
+            a2=torsion[1]
+            a3=torsion[2]
+            a4=torsion[3]
             dqtdx = self.bmatp_dqtdx(a1,a2,a3,a4)
             self.bmatp[3*a1+0][i] = dqtdx[0]
             self.bmatp[3*a1+1][i] = dqtdx[1]
@@ -672,33 +664,43 @@ class ICoord(object):
             self.bmatp[3*a4+2][i] = dqtdx[11]
             i+=1
 
-        print self.bmatp
+        #print self.bmatp
 
     def bmatp_to_U(self):
         N3=3*self.natoms
-        G=np.matmul(self.bmatp,np.transpose(self.bmatp))
-        print G
-        print np.shape(G)
+        G=np.matmul(np.transpose(self.bmatp),self.bmatp)
+        #print G
+        print "Shape of G is %s" % (np.shape(G),)
         e,v = np.linalg.eig(G)
         e = np.real(e)
         v= np.real(v)
+        np.set_printoptions(precision=3)
+        np.set_printoptions(suppress=True)
+        print "eigenvalues of BB^T" 
         print e
-
+        print "\n"
         self.nicd=N3
         lowev=[]
+
+        #TODO this is a hack
         for i in e:
             if np.real(i)<0.001:
                 lowev.append(i)
                 self.nicd -=1
         if len(lowev)>7:
             print(" Error: optimization space less than 3N-6 DOF")
+            print len(lowev)
             exit(-1)
 
-        redset = N3 - self.nicd;
-        self.U = v[0:N3,0:self.nicd]
-        print self.U
-        print np.shape(self.U)
+        print "diag(BB^T)"
+        print v
 
+        redset = N3 - self.nicd;
+        self.U = v[0:self.nicd,0:self.nicd]
+        print "Delocalized internal coordinates"
+        print(self.U)
+
+        print "Shape of U is %s" % (np.shape(self.U),)
 
 
 if __name__ == '__main__':
@@ -717,7 +719,7 @@ if __name__ == '__main__':
     ic1.ic_create()
     """
     
-    filepath="methane.xyz"
+    filepath="fluoroethene.xyz"
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol)
     ic1.ic_create()
