@@ -364,6 +364,10 @@ class ICoord(object):
     def getIndex(self,i):
         return self.mol.OBMol.GetAtom(i+1).GetIndex()
 
+    def getCoords(self,i):
+        a= self.mol.OBMol.GetAtom(i+1)
+        return (a.GetX(),a.GetY(),a.GetZ())
+
     def getAtomicNum(self,i):
         return self.mol.OBMol.GetAtom(i+1).GetAtomicNum()
 
@@ -622,7 +626,7 @@ class ICoord(object):
     def bmatp_create(self):
         self.num_ics = self.nbonds + self.nangles + self.ntor
         N3 = 3*self.natoms
-        print "Number of internal coordinates is %i " % self.num_ics
+        #print "Number of internal coordinates is %i " % self.num_ics
         self.bmatp=np.zeros((self.num_ics,N3),dtype=float)
         #TODO Not sure to make this rows or columns
         i=0
@@ -676,9 +680,15 @@ class ICoord(object):
             self.bmatp[i][3*a4+1] = dqtdx[10]
             self.bmatp[i][3*a4+2] = dqtdx[11]
             i+=1
-            #print i
             #print dqtdx
             #print "%s" % ((a1,a2,a3,a4),)
+
+        """
+        print "printing bmatp"
+        print self.bmatp
+        print "\n"
+        print "shape of bmatp is %s" %(np.shape(self.bmatp),)
+        """
 
         #print self.bmatp
 
@@ -686,46 +696,35 @@ class ICoord(object):
         N3=3*self.natoms
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
-        print "printing bmatp"
-        print self.bmatp
-
-        print "\n"
-        print "shape of bmatp is %s" %(np.shape(self.bmatp),)
-
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
-        #print G
-        print "Shape of G is %s" % (np.shape(G),)
+        #print "Shape of G is %s" % (np.shape(G),)
         e,v_temp = np.linalg.eigh(G)
         v = np.transpose(v_temp)
         e = np.real(e)
         v= np.real(v)
-        print "eigenvalues of BB^T" 
-        print e
-        print "\n"
-        lowev=[]
+        #print "eigenvalues of BB^T" 
+        #print e
+        lowev=0
+        self.nicd=N3-6
+        for i in range(self.nicd):
+            if e[self.num_ics-1-i]<0.001:
+                lowev+=1
+        if lowev>0:
+            print("!!!!! lowev: %i" % lowev)
 
-        self.nicd=self.num_ics
-        #TODO this is a hack
-        for i in e:
-            if np.real(i)<0.001:
-                lowev.append(i)
-                self.nicd -=1
-        if self.nicd<N3-6:
+        self.nicd -= lowev
+        if lowev>3:
             print(" Error: optimization space less than 3N-6 DOF")
-            print len(lowev)
             exit(-1)
 
-        print(" Number of internal coordinate dimensions %i" %self.nicd)
-        print(" Number of lowev %i" %len(lowev))
-
-        print "U matrix  i.e. diag(BB^T)"
-        print v
-        print "\n"
-
+        #print(" Number of internal coordinate dimensions %i" %self.nicd)
+        redset = self.num_ics - self.nicd
+        #print "\nU matrix  i.e. diag(BB^T)"
         redset = N3 - self.nicd
-        #self.U = v[0:self.nicd, :]
-        self.U = v
-        print "Shape of U is %s" % (np.shape(self.U),)
+        idx = e.argsort()[::-1]
+        self.U=v[idx[0:self.nicd]]
+        #print self.U
+        #print "Shape of U is %s\n" % (np.shape(self.U),)
 
         self.gradq = np.zeros(self.nicd)
 
@@ -733,11 +732,11 @@ class ICoord(object):
     def q_create(self):  
         """Determines the scalars in delocalized internal coordinates"""
 
-        print(" Determining q in ICs")
+        #print(" Determining q in ICs")
         N3=3*self.natoms
         self.q = np.zeros(self.nicd)
-        print "Number of ICs %i" % self.num_ics
-        print "Number of IC dimensions %i" %self.nicd
+        #print "Number of ICs %i" % self.num_ics
+        #print "Number of IC dimensions %i" %self.nicd
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
 
@@ -757,26 +756,25 @@ class ICoord(object):
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
 
-        print(" In bmat create")
+        #print(" In bmat create")
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
         self.q_create()
 
-        print(" now making bmat in delocalized ICs")
-        bmat = np.matmul(np.transpose(self.U),self.bmatp)
+        bmat = np.matmul(self.U,self.bmatp)
+        """
         print("printing bmat")
         print bmat
         print(" Shape of bmat %s" %(np.shape(bmat),))
+        """
 
         bbt = np.matmul(bmat,np.transpose(bmat))
-        print(" Shape of bbt %s" %(np.shape(bbt),))
-
+        #print(" Shape of bbt %s" %(np.shape(bbt),))
         bbti = np.linalg.inv(bbt)
-        print("bmatti formation")
+        #print("bmatti formation")
         self.bmatti = np.matmul(bbti,bmat)
-        print self.bmatti
-
-        print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
+        #print self.bmatti
+        #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
     def grad_to_q(self,grad):
         N3=self.natoms*3
@@ -799,9 +797,62 @@ class ICoord(object):
         return val
 
     def ic_to_xyz(self,dq):
-        #btit = np.transpose(self.bmatti)
-        #xyzd = btit*dq
-        #print xyzd
+        SCALEBT = 1.5
+        MAX_MOVE = 0.75
+
+        N3=self.natoms*3
+        qn = self.q + dq
+        coords=[]
+        xyzall=[]
+        magall=[]
+        magp=100
+
+        for n in range(1):
+            xyz1=[]
+            btit = np.transpose(self.bmatti)
+            xyzd=[]
+            for row in btit:
+                xyzd.append(np.dot(row,dq))
+
+            #TODO Frozen
+            mag=np.dot(xyzd,xyzd)
+            magall.append(mag)
+
+            if mag>magp:
+                SCALEBT *=1.5
+            magp=mag
+
+            for i in range(self.natoms):
+                coords.append(self.getCoords(i))
+            xyzall.append(coords)
+
+            for i in range(self.natoms):
+                tmpvec1 = tuple( xyzd[i]/SCALEBT for i in range(3))
+                result = np.subtract(coords[i],tmpvec1)
+                xyz1.append(tuple( x for x in result))
+                self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
+
+            xyzall.append(xyz1)
+            coords = xyz1
+
+            self.update_ics()
+            self.bmatp_create()
+            self.bmat_create()
+
+            dq = qn - self.q
+
+            if mag<0.00005: break
+            print dq
+        print(" magall ")
+        print magall
+        print("\n xyzall")
+        print xyzall
+
+
+
+        #print xyzall
+        #self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
+
         return 
 
 
@@ -829,7 +880,9 @@ if __name__ == '__main__':
     ic1.bmatp_to_U()
     ic1.bmat_create()
 
+    #dq=np.zeros((ic1.nicd,1),dtype=float)
     dq=np.zeros(ic1.nicd)
+    dq[0]=0.05
     ic1.ic_to_xyz(dq)
 
     #ic1.union_ic(ic1,ic2)
