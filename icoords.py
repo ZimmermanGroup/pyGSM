@@ -832,6 +832,5 @@ if __name__ == '__main__':
     dq=np.zeros(ic1.nicd)
     ic1.ic_to_xyz(dq)
 
-
     #ic1.union_ic(ic1,ic2)
     #ic1.update_ics()
