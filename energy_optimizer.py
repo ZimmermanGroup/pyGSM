@@ -131,7 +131,7 @@ class EOpt(object):
 if __name__ == '__main__':
 
     from obutils import *
-    from lot import *
+    from pytc import *
     
     filepath="tests/fluoroethene.xyz"
     mol=pb.readfile("xyz",filepath).next()
@@ -143,11 +143,11 @@ if __name__ == '__main__':
     
     nocc=23
     nactive=2
-    lot=LOT.from_options(calc_states=[(0,0)],nstates=1,filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot=PyTC.from_options(calc_states=[(0,0)],nstates=1,filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
     #lot.cas_from_geom()
 
     opt = EOpt.from_options(PES=lot,ICoord=ic1,nsteps=1) 
     opt.make_Hint()
-    #opt.optimize()
+    opt.optimize()
 
 

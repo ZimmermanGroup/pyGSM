@@ -1,10 +1,10 @@
 import lightspeed as ls
 import psiw
-from pes import * 
+from base import * 
 import numpy as np
 
 
-class LOT(Base):
+class PyTC(Base):
     """
     Level of theory is a wrapper object to do DFT and CASCI calculations 
     Inherits from Base
@@ -33,7 +33,7 @@ class LOT(Base):
     @staticmethod
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
-        return LOT(LOT.default_options().set_values(kwargs))
+        return PyTC(PyTC.default_options().set_values(kwargs))
 
     def cas_from_geom(
         self,
