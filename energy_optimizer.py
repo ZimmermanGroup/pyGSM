@@ -60,6 +60,48 @@ class EOpt(object):
         self.filepath = self.options['filepath']
         self.PES = self.options['PES']
 
+        #TODO What is optCG Ask Paul
+        self.optCG = False
+        self.isTSnode =False
+
+
+    def make_Hint(self):
+
+        self.newHess = 5
+        Hdiagp = []
+        for bond in self.ICoord.bonds:
+            Hdiagp.append(0.35*self.ICoord.close_bond(bond))
+        for angle in self.ICoord.angles:
+            Hdiagp.append(0.2)
+        for tor in self.ICoord.torsions:
+            Hdiagp.append(0.035)
+
+        self.Hintp=np.diag(Hdiagp)
+        """
+        print(" Hdiagp elements")
+        for i in Hdiagp:
+            print i
+        print(len(Hdiagp))
+        print("Hintp matrix")
+        print self.Hintp
+        """
+        
+        #TODO should U be size (num_ics,num_ics) or (nicd,num_ics) ASK Paul
+        tmp = self.ICoord.U[0:self.ICoord.nicd][:]*Hdiagp
+        self.Hint = np.matmul(np.transpose(tmp),self.ICoord.U[0:self.ICoord.nicd][:])
+        self.Hinv = np.linalg.inv(self.Hint)
+
+        """
+        print("Hint elements")
+        print Hint
+        """
+        if self.optCG==False or self.isTSNode==False:
+            print "Not implemented"
+
+    def Hintp_to_Hint(self):
+        tmp = np.matmul(self.U,self.Hint)
+
+
     def optimize(self):
         #Hintp_to_Hint()
         energy=0.
@@ -74,14 +116,12 @@ class EOpt(object):
         energy = self.PES.getEnergy()
         print("energy is %1.4f" % energy)
         grad = self.PES.getGrad()
-        print grad
 
         #for n in range(self.nsteps):
 
         gradq = self.ICoord.grad_to_q(grad)
 
         #TODO need to calc gradrms and pgradrms  and gradqprim
-        
 
         with open(xyzfile,'w') as f:
             for mol in opt_molecules:
@@ -104,9 +144,10 @@ if __name__ == '__main__':
     nocc=23
     nactive=2
     lot=LOT.from_options(calc_states=[(0,0)],nstates=1,filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot.cas_from_geom()
+    #lot.cas_from_geom()
 
     opt = EOpt.from_options(PES=lot,ICoord=ic1,nsteps=1) 
-    opt.optimize()
+    opt.make_Hint()
+    #opt.optimize()
 
 

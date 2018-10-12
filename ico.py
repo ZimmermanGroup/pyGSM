@@ -2,6 +2,7 @@ import numpy as np
 import openbabel as ob
 import pybel as pb
 import options
+import vdw_radii    
 
 
 class ICoord(object):
@@ -363,6 +364,9 @@ class ICoord(object):
     def getIndex(self,i):
         return self.mol.OBMol.GetAtom(i+1).GetIndex()
 
+    def getAtomicNum(self,i):
+        return self.mol.OBMol.GetAtom(i+1).GetAtomicNum()
+
     def isTM(self,i):
         anum= self.getIndex(i)
         if anum>20:
@@ -713,14 +717,14 @@ class ICoord(object):
         print(" Number of internal coordinate dimensions %i" %self.nicd)
         print(" Number of lowev %i" %len(lowev))
 
-        print "diag(BB^T)"
+        print "U matrix  i.e. diag(BB^T)"
         print v
         print "\n"
 
         redset = N3 - self.nicd
         #self.U = v[0:self.nicd, :]
         self.U = v
-        #print "Shape of U is %s" % (np.shape(self.U),)
+        print "Shape of U is %s" % (np.shape(self.U),)
 
         self.gradq = np.zeros(self.nicd)
 
@@ -785,6 +789,18 @@ class ICoord(object):
 
         return gradq
 
+    def close_bond(self,bond):
+        A = 0.2
+        d = self.distance(bond[0],bond[1])
+        dr = (vdw_radii.radii[self.getAtomicNum(bond[0])] + vdw_radii.radii[self.getAtomicNum(bond[1])] )/2
+        val = np.exp(-A*(d-dr))
+        if val>1: val=1
+        return val
+
+    def ic_to_xyz(self,dq):
+        btit = np.transpose(self.bmatti)
+        xyzd = btit*dq
+        print xyzd
 
 
 if __name__ == '__main__':
@@ -803,7 +819,7 @@ if __name__ == '__main__':
     ic1.ic_create()
     """
     
-    filepath="fluoroethene.xyz"
+    filepath="tests/fluoroethene.xyz"
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol)
     ic1.ic_create()
@@ -811,7 +827,9 @@ if __name__ == '__main__':
     ic1.bmatp_to_U()
     ic1.bmat_create()
 
-    print(type(ic1))
-    
+    dq=np.zeros(ic1.nicd)
+    ic1.ic_to_xyz(dq)
+
+
     #ic1.union_ic(ic1,ic2)
     #ic1.update_ics()
