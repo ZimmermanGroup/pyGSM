@@ -1,16 +1,34 @@
 import lightspeed as ls
 import psiw
 from pes import * 
+import numpy as np
 
 
 class LOT(Base):
     """
-    Level of theory is a wrapper for the Psiwinder and lightspeed EST to do DFT and CASCI calculations 
+    Level of theory is a wrapper object to do DFT and CASCI calculations 
     Inherits from Base
     """
 
     def getEnergy(self):
-        return self.lot.compute_energy(S=self.wspin,index=self.wstate)
+        energy =0.
+        average_over =0
+        for i in self.calc_states:
+            energy += self.lot.compute_energy(S=i[0],index=i[1])
+            average_over+=1
+        return energy/average_over
+
+    def getGrad(self):
+        average_over=0
+        grad = np.zeros((self.molecule.natom,3))
+        for i in self.calc_states:
+            tmp = self.lot.compute_gradient(S=i[0],index=i[1])
+            print(np.shape(tmp[...]))
+            grad += tmp[...] 
+            average_over+=1
+        final_grad = grad/average_over
+
+        return np.reshape(final_grad,(3*self.molecule.natom,1))
 
     @staticmethod
     def from_options(**kwargs):
@@ -21,7 +39,8 @@ class LOT(Base):
         self,
         ):
 
-        molecule1 = ls.Molecule.from_xyz_file(self.filepath)      
+        self.molecule = ls.Molecule.from_xyz_file(self.filepath)      
+        print self.molecule.natom
         self.resources = ls.ResourceList.build()
 
         nalpha = nbeta = self.nactive/2
@@ -33,7 +52,7 @@ class LOT(Base):
 
         geom1 = psiw.Geometry.build(
             resources=self.resources,
-            molecule=molecule1,
+            molecule=self.molecule,
             basisname=self.basis,
             )
         
@@ -65,5 +84,4 @@ class LOT(Base):
             rhf_guess=True,
             rhf_mom=True,
             )
-
 

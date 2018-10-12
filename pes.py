@@ -9,20 +9,14 @@ class Base(object):
 
         if hasattr(Base, '_default_options'): return Base._default_options.copy()
         opt = options.Options() 
-        opt.add_option(
-            key='wstate',
-            value=0,
-            required=False,
-            allowed_types=[int],
-            doc='what state')
 
         opt.add_option(
-            key='wspin',
-            value=0,
-            required=False,
-            allowed_types=[int],
-            doc='what spin')
-            
+            key='calc_states',
+            value=(0,0),
+            required=True,
+            allowed_types=[list],
+            doc='')
+
         opt.add_option(
                 key='nocc',
                 value=0,
@@ -38,6 +32,13 @@ class Base(object):
                 doc='number of active orbitals (for CAS)')
 
         opt.add_option(
+                key='nstates',
+                value=1,
+                required=False,
+                allowed_types=[int],
+                doc='Number of states')
+
+        opt.add_option(
                 key='basis',
                 value=0,
                 required=False,
@@ -51,7 +52,6 @@ class Base(object):
                 allowed_types=[str],
                 doc='path to xyz file')
 
-
         Base._default_options = opt
         return Base._default_options.copy()
 
@@ -62,14 +62,17 @@ class Base(object):
 
         self.options = options
         # Cache some useful atributes
-        self.wstate=self.options['wstate']
-        self.wspin = self.options['wspin']
+        self.calc_states=self.options['calc_states']
+        self.nstates=self.options['nstates']
         self.filepath = self.options['filepath']
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
 
     def getEnergy(self):
+        raise NotImplementedError()
+
+    def getGrad(self):
         raise NotImplementedError()
 
     def finite_difference(self):

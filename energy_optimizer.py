@@ -3,6 +3,8 @@ import openbabel as ob
 import pybel as pb
 import options
 import ico as ic
+import pes
+import os
 #import grad
 
 class EOpt(object):
@@ -10,6 +12,7 @@ class EOpt(object):
     @staticmethod
     def default_options():
         if hasattr(EOpt, '_default_options'): return EOpt._default_options.copy()
+
         opt = options.Options() 
         opt.add_option(
             key='nsteps',
@@ -17,13 +20,6 @@ class EOpt(object):
             required=False,
             allowed_types=[int],
             doc='Number of steps the optimizer will take')
-
-        opt.add_option(
-                key='penalty',
-                value=1.0,
-                required=False,
-                allowed_types=[float],
-                doc='Penalty parameter for penalty optimizer')
 
         opt.add_option(
                 key='ICoord',
@@ -67,7 +63,29 @@ class EOpt(object):
     def optimize(self):
         #Hintp_to_Hint()
         energy=0.
+        xyzfile=os.getcwd()+"/xyzfile.xyz"
+        output_format = 'xyz'
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat(output_format)
 
+        opt_molecules=[]
+        opt_molecules.append(self.ICoord.mol.OBMol)
+
+        energy = self.PES.getEnergy()
+        print("energy is %1.4f" % energy)
+        grad = self.PES.getGrad()
+        print grad
+
+        #for n in range(self.nsteps):
+
+        gradq = self.ICoord.grad_to_q(grad)
+
+        #TODO need to calc gradrms and pgradrms  and gradqprim
+        
+
+        with open(xyzfile,'w') as f:
+            for mol in opt_molecules:
+                f.write(obconversion.WriteString(mol))
 
 
 if __name__ == '__main__':
@@ -75,7 +93,7 @@ if __name__ == '__main__':
     from obutils import *
     from lot import *
     
-    filepath="fluoroethene.xyz"
+    filepath="tests/fluoroethene.xyz"
     mol=pb.readfile("xyz",filepath).next()
     ic1=ic.ICoord.from_options(mol=mol)
     ic1.ic_create()
@@ -85,9 +103,10 @@ if __name__ == '__main__':
     
     nocc=23
     nactive=2
-    calculator=LOT.from_options(wstate=0,wspin=0,filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
-    calculator.cas_from_geom()
-    print(calculator.getEnergy())
+    lot=LOT.from_options(calc_states=[(0,0)],nstates=1,filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot.cas_from_geom()
 
-    #opt.optimize()
+    opt = EOpt.from_options(PES=lot,ICoord=ic1,nsteps=1) 
+    opt.optimize()
+
 

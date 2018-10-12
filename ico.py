@@ -773,11 +773,17 @@ class ICoord(object):
 
         print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
-    def grad_to_q(self):
+    def grad_to_q(self,grad):
         N3=self.natoms*3
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
 
         self.pgradq = self.gradq
-        gradq = np.matmul(self.bmatti,self.grad)
+        gradq = np.matmul(self.bmatti,grad)
+        print("Printing gradq")
+        print gradq
+
+        return gradq
 
 
 
