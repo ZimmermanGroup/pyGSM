@@ -695,7 +695,8 @@ class ICoord(object):
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
         #print G
         print "Shape of G is %s" % (np.shape(G),)
-        e,v = np.linalg.eig(G)
+        e,v_temp = np.linalg.eigh(G)
+        v = np.transpose(v_temp)
         e = np.real(e)
         v= np.real(v)
         print "eigenvalues of BB^T" 
@@ -798,9 +799,10 @@ class ICoord(object):
         return val
 
     def ic_to_xyz(self,dq):
-        btit = np.transpose(self.bmatti)
-        xyzd = btit*dq
-        print xyzd
+        #btit = np.transpose(self.bmatti)
+        #xyzd = btit*dq
+        #print xyzd
+        return 
 
 
 if __name__ == '__main__':
