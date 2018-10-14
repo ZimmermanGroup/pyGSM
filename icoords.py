@@ -85,6 +85,11 @@ class ICoord(object):
             self.bonds.append((bond.GetBeginAtomIdx()-1,bond.GetEndAtomIdx()-1))
             self.bondd.append(bond.GetLength())
         print "number of bonds is %i" %self.nbonds
+        print "printing bonds"
+        for n,bond in enumerate(self.bonds):
+            print "%s: %1.2f" %(bond, self.bondd[n])
+        #print self.bonds
+        #print self.bondd
 
     def coord_num(self):
         self.coordn=[]
@@ -103,9 +108,9 @@ class ICoord(object):
             self.nangles+=1
             self.angles.append(angle)
             self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
-        #print self.angles
-        #print self.anglev
-        print "number of angles is %i" %self.nangles
+        print "printing angles"
+        for n,angle in enumerate(self.angles):
+            print "%s: %1.2f" %(angle, self.anglev[n])
 
 
     def make_torsions(self):
@@ -116,9 +121,10 @@ class ICoord(object):
             self.ntor+=1
             self.torsions.append(torsion)
             self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
-        #print self.torsions
-        #print self.torv
         print "number of torsions is %i" %self.ntor
+        print "printing torsions"
+        for n,torsion in enumerate(self.torsions):
+            print "%s: %1.2f" %(torsion, self.torv[n])
 
 
     def make_nonbond(self):
@@ -351,14 +357,19 @@ class ICoord(object):
         a=self.mol.OBMol.GetAtom(i+1)
         b=self.mol.OBMol.GetAtom(j+1)
         c=self.mol.OBMol.GetAtom(k+1)
-        return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex
+        return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex #in degrees
 
     def get_torsion(self,i,j,k,l):
         a=self.mol.OBMol.GetAtom(i+1)
         b=self.mol.OBMol.GetAtom(j+1)
         c=self.mol.OBMol.GetAtom(k+1)
         d=self.mol.OBMol.GetAtom(l+1)
-        return self.mol.OBMol.GetTorsion(a,b,c,d)
+        tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
+        if tval>=np.pi:
+            tval-=2.*np.pi
+        if tval<=-np.pi:
+            tval+=2.*np.pi
+        return tval*180/np.pi #in degrees
 
 
     def getIndex(self,i):
@@ -634,12 +645,12 @@ class ICoord(object):
             a1=bond[0]
             a2=bond[1]
             dqbdx = self.bmatp_dqbdx(a1,a2)
-            self.bmatp[i][3*a1+0] = dqbdx[0]
-            self.bmatp[i][3*a1+1] = dqbdx[1]
-            self.bmatp[i][3*a1+2] = dqbdx[2]
-            self.bmatp[i][3*a2+0] = dqbdx[3]
-            self.bmatp[i][3*a2+1] = dqbdx[4]
-            self.bmatp[i][3*a2+2] = dqbdx[5]
+            self.bmatp[i,3*a1+0] = dqbdx[0]
+            self.bmatp[i,3*a1+1] = dqbdx[1]
+            self.bmatp[i,3*a1+2] = dqbdx[2]
+            self.bmatp[i,3*a2+0] = dqbdx[3]
+            self.bmatp[i,3*a2+1] = dqbdx[4]
+            self.bmatp[i,3*a2+2] = dqbdx[5]
             i+=1
             #print "%s" % ((a1,a2),)
 
@@ -648,15 +659,15 @@ class ICoord(object):
             a2=angle[0] #vertex
             a3=angle[2]
             dqadx = self.bmatp_dqadx(a1,a2,a3)
-            self.bmatp[i][3*a1+0] = dqadx[0]
-            self.bmatp[i][3*a1+1] = dqadx[1]
-            self.bmatp[i][3*a1+2] = dqadx[2]
-            self.bmatp[i][3*a2+0] = dqadx[3]
-            self.bmatp[i][3*a2+1] = dqadx[4]
-            self.bmatp[i][3*a2+2] = dqadx[5]
-            self.bmatp[i][3*a3+0] = dqadx[6]
-            self.bmatp[i][3*a3+1] = dqadx[7]
-            self.bmatp[i][3*a3+2] = dqadx[8]
+            self.bmatp[i,3*a1+0] = dqadx[0]
+            self.bmatp[i,3*a1+1] = dqadx[1]
+            self.bmatp[i,3*a1+2] = dqadx[2]
+            self.bmatp[i,3*a2+0] = dqadx[3]
+            self.bmatp[i,3*a2+1] = dqadx[4]
+            self.bmatp[i,3*a2+2] = dqadx[5]
+            self.bmatp[i,3*a3+0] = dqadx[6]
+            self.bmatp[i,3*a3+1] = dqadx[7]
+            self.bmatp[i,3*a3+2] = dqadx[8]
             i+=1
             #print i
             #print "%s" % ((a1,a2,a3),)
@@ -667,28 +678,37 @@ class ICoord(object):
             a3=torsion[2]
             a4=torsion[3]
             dqtdx = self.bmatp_dqtdx(a1,a2,a3,a4)
-            self.bmatp[i][3*a1+0] = dqtdx[0]
-            self.bmatp[i][3*a1+1] = dqtdx[1]
-            self.bmatp[i][3*a1+2] = dqtdx[2]
-            self.bmatp[i][3*a2+0] = dqtdx[3]
-            self.bmatp[i][3*a2+1] = dqtdx[4]
-            self.bmatp[i][3*a2+2] = dqtdx[5]
-            self.bmatp[i][3*a3+0] = dqtdx[6]
-            self.bmatp[i][3*a3+1] = dqtdx[7]
-            self.bmatp[i][3*a3+2] = dqtdx[8]
-            self.bmatp[i][3*a4+0] = dqtdx[9]
-            self.bmatp[i][3*a4+1] = dqtdx[10]
-            self.bmatp[i][3*a4+2] = dqtdx[11]
+            self.bmatp[i,3*a1+0] = dqtdx[0]
+            self.bmatp[i,3*a1+1] = dqtdx[1]
+            self.bmatp[i,3*a1+2] = dqtdx[2]
+            self.bmatp[i,3*a2+0] = dqtdx[3]
+            self.bmatp[i,3*a2+1] = dqtdx[4]
+            self.bmatp[i,3*a2+2] = dqtdx[5]
+            self.bmatp[i,3*a3+0] = dqtdx[6]
+            self.bmatp[i,3*a3+1] = dqtdx[7]
+            self.bmatp[i,3*a3+2] = dqtdx[8]
+            self.bmatp[i,3*a4+0] = dqtdx[9]
+            self.bmatp[i,3*a4+1] = dqtdx[10]
+            self.bmatp[i,3*a4+2] = dqtdx[11]
             i+=1
             #print dqtdx
             #print "%s" % ((a1,a2,a3,a4),)
 
-        """
-        print "printing bmatp"
-        print self.bmatp
-        print "\n"
-        print "shape of bmatp is %s" %(np.shape(self.bmatp),)
-        """
+        #print "printing bmatp"
+        #print self.bmatp
+        #print "\n"
+        #print "shape of bmatp is %s" %(np.shape(self.bmatp),)
+
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
+        #print(" printing bond contribution")
+        #for i in range(self.nbonds):
+        #    print self.bmatp[i,:]
+
+        #print(" printing angle contribution")
+        #for i in range(self.nangles):
+        #    print self.bmatp[self.nbonds+i,:]
+
 
         #print self.bmatp
 
@@ -698,16 +718,24 @@ class ICoord(object):
         np.set_printoptions(suppress=True)
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
         #print "Shape of G is %s" % (np.shape(G),)
-        e,v_temp = np.linalg.eigh(G)
+
+        ##e,v_temp = np.linalg.eigh(G)
+        #e,v_temp = np.linalg.eig(G)
+        #v = np.transpose(v_temp)
+        #idx = e.argsort()[::-1]
+        #e=e[idx]
+        #v=v[idx,:]
+
+        v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
-        e = np.real(e)
-        v= np.real(v)
-        #print "eigenvalues of BB^T" 
+        ##print "eigenvalues of BB^T" 
         #print e
+        #print v
+        
         lowev=0
         self.nicd=N3-6
         for i in range(self.nicd):
-            if e[self.num_ics-1-i]<0.001:
+            if e[i]<0.001:
                 lowev+=1
         if lowev>0:
             print("!!!!! lowev: %i" % lowev)
@@ -720,19 +748,20 @@ class ICoord(object):
         #print(" Number of internal coordinate dimensions %i" %self.nicd)
         redset = self.num_ics - self.nicd
         #print "\nU matrix  i.e. diag(BB^T)"
-        redset = N3 - self.nicd
-        idx = e.argsort()[::-1]
-        self.U=v[idx[0:self.nicd]]
-        #print self.U
-        #print "Shape of U is %s\n" % (np.shape(self.U),)
-
+        self.Ut=v[0:self.nicd,:]
+        #print("U eigenvalues")
+        #print e
+        #print("printing non-redundant vectors of U")
+        #print self.Ut
+        #print "Shape of U is %s\n" % (np.shape(self.Ut),)
+        
         self.gradq = np.zeros(self.nicd)
 
 
     def q_create(self):  
         """Determines the scalars in delocalized internal coordinates"""
 
-        #print(" Determining q in ICs")
+        print(" Determining q in ICs")
         N3=3*self.natoms
         self.q = np.zeros(self.nicd)
         #print "Number of ICs %i" % self.num_ics
@@ -744,11 +773,19 @@ class ICoord(object):
         angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.angles ]
         torsions =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])*np.pi/180. for torsion in self.torsions]
 
-        for i in range(self.nicd):
-            Ubond=self.U[i][0:self.nbonds]
-            Uangle=self.U[i][self.nbonds:self.nangles+self.nbonds]
-            Utorsion=self.U[i][self.nangles+self.nbonds:self.nangles+self.nbonds+self.ntor]
+        #for i in range(self.nicd):
+        #    Ubond=self.Ut[i,0:self.nbonds]
+        #    Uangle=self.Ut[i,self.nbonds:self.nangles+self.nbonds]
+        #    Utorsion=self.Ut[i,self.nangles+self.nbonds:self.nangles+self.nbonds+self.ntor]
+        #    self.q[i] = np.dot(Ubond,dists) + np.dot(Uangle,angles) + np.dot(Utorsion,torsions)
+        for i,row in enumerate(self.Ut):
+            Ubond = row[0:self.nbonds]
+            Uangle =row[self.nbonds:self.nangles+self.nbonds]
+            Utorsion = row[self.nbonds+self.nangles:self.nbonds+self.nangles+self.ntor]
             self.q[i] = np.dot(Ubond,dists) + np.dot(Uangle,angles) + np.dot(Utorsion,torsions)
+
+        #print("Printing q")
+        #print self.q
 
 
     def bmat_create(self):
@@ -761,7 +798,7 @@ class ICoord(object):
         np.set_printoptions(suppress=True)
         self.q_create()
 
-        bmat = np.matmul(self.U,self.bmatp)
+        bmat = np.matmul(self.Ut,self.bmatp)
         """
         print("printing bmat")
         print bmat
@@ -796,25 +833,45 @@ class ICoord(object):
         if val>1: val=1
         return val
 
+    
     def ic_to_xyz(self,dq):
-        SCALEBT = 1.5
-        MAX_MOVE = 0.75
+        """ is this function used?"""
 
+        np.set_printoptions(precision=3)
+        np.set_printoptions(suppress=True)
+
+        self.update_ics()
+        self.bmatp_create()
+        self.bmat_create()
+
+        SCALEBT = 1.5
+        #MAX_MOVE = 0.75  #not used?
+        print("q at beginning is")
+        print self.q
         N3=self.natoms*3
-        qn = self.q + dq
-        coords=[]
+        qn = self.q + dq  #target IC values
+        print(" qn is ")
+        print qn
+        print("dq at start is")
+        print dq
+        print("\n")
+
         xyzall=[]
         magall=[]
         magp=100
 
-        for n in range(1):
-            xyz1=[]
+        for n in range(10):
             btit = np.transpose(self.bmatti)
-            xyzd=[]
-            for row in btit:
-                xyzd.append(np.dot(row,dq))
+            xyzd=np.matmul(btit,dq)
+    
+            print("xyzd(%i):" %n)
+            for i in range(self.natoms):
+                tmp=[xyzd[i*3+k] for k in range(3)]
+                print(np.around(tmp,decimals=3))
+            print("\n")
 
             #TODO Frozen
+
             mag=np.dot(xyzd,xyzd)
             magall.append(mag)
 
@@ -822,13 +879,21 @@ class ICoord(object):
                 SCALEBT *=1.5
             magp=mag
 
+            coords=[]
             for i in range(self.natoms):
                 coords.append(self.getCoords(i))
-            xyzall.append(coords)
 
+            print("current coords\n")
             for i in range(self.natoms):
-                tmpvec1 = tuple( xyzd[i]/SCALEBT for i in range(3))
-                result = np.subtract(coords[i],tmpvec1)
+                print(np.around(coords[i],decimals=3))
+            print("\n")
+
+            xyz1=[]
+            for i in range(self.natoms):
+                tmpvec1 = tuple( xyzd[i*3+j] for j in range(3))
+                print tmpvec1
+                result = np.add(coords[i],tmpvec1)
+                print result
                 xyz1.append(tuple( x for x in result))
                 self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
 
@@ -837,17 +902,22 @@ class ICoord(object):
 
             self.update_ics()
             self.bmatp_create()
+            #self.bmatp_to_U()
             self.bmat_create()
 
+            print("Printing q")
+            print self.q
             dq = qn - self.q
 
             if mag<0.00005: break
+            print("dq is ")
             print dq
-        print(" magall ")
+        print("\n magall ")
         print magall
         print("\n xyzall")
         print xyzall
 
+        self.mol.write("xyz","after_ic_to_xyz.xyz",overwrite=True)
 
 
         #print xyzall
@@ -880,9 +950,9 @@ if __name__ == '__main__':
     ic1.bmatp_to_U()
     ic1.bmat_create()
 
-    #dq=np.zeros((ic1.nicd,1),dtype=float)
+    dq=np.zeros((ic1.nicd,1),dtype=float)
     dq=np.zeros(ic1.nicd)
-    dq[0]=0.05
+    dq[-1]=0.1
     ic1.ic_to_xyz(dq)
 
     #ic1.union_ic(ic1,ic2)
