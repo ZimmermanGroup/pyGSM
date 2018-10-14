@@ -36,6 +36,7 @@ def read_xyz(
 def write_xyz(
     filename, 
     geom, 
+    charge,
     scale=(1.0/units.ANGSTROM_TO_AU),
     ):
 
@@ -47,7 +48,8 @@ def write_xyz(
 
     """
     fh = open(filename,'w')
-    fh.write('%d\n\n' % len(geom))
+    fh.write('%d\n' % len(geom))
+    fh.write('%i\n' % charge)
     for atom in geom:
         fh.write('%-2s %14.6f %14.6f %14.6f\n' % (
             atom[0],
@@ -58,7 +60,7 @@ def write_xyz(
 
 def write_xyzs(
     filename, 
-    geoms, 
+    gggeoms, 
     scale=(1.0/units.ANGSTROM_TO_AU),
     ):
 
@@ -81,40 +83,6 @@ def write_xyzs(
                 scale*atom[1],
                 scale*atom[2],
                 scale*atom[3],
-                ))
-
-def write_fms90(
-    filename,
-    geomx,  
-    geomp=None,
-    ):
-
-    """ Write fms90 geometry file with position and velocities
-
-    Params:
-        filename (str) - name of fms90 geometry file to write
-        geomx ((natoms,4) np.ndarray) - system positions (atom symbol, x,y,z)
-        geomp ((natoms,4) np.ndarray) - system momenta (atom symbol, px, py, pz)
-
-    """
-
-    fh = open(filename,'w')
-    fh.write('UNITS=BOHR\n')
-    fh.write('%d\n' % len(geomx))
-    for atom in geomx:
-        fh.write('%-2s %14.6f %14.6f %14.6f\n' % (
-            atom[0],
-            atom[1],
-            atom[2],
-            atom[3],
-            ))
-    if geomp:
-        fh.write('# momenta\n')
-        for atom in geomp:
-            fh.write('  %14.6f %14.6f %14.6f\n' % (
-                atom[1],
-                atom[2],
-                atom[3],
                 ))
 
 def xyz_to_np(
@@ -183,26 +151,4 @@ def combine_atom_xyz(
         tmp = list(atom) + [x for x in xyz[N]] 
         geom2.append(tmp)
     return geom2
-
-def create_OBMol(
-    coordinates,
-    ):
-    
-    mol = ob.OBMol() 
-    for entry in coordinates: 
-           #print(entry)
-           #print atom_data.atom_symbol_table.keys()[atom_data.atom_symbol_table.values().index(entry[0])]
-           newAtom = mol.NewAtom() 
-           newAtom.SetAtomicNum(atom_data.atom_symbol_table.keys()[atom_data.atom_symbol_table.values().index(entry[0])])
-           X=[ x/units.units['au_per_ang'] for x in entry[1:]]
-           #print(X)
-    #for obatom in ob.OBMolAtomIter(mol):
-    #    print(obatom.GetVector())
-    #atom=mol.GetAtom(1)
-    #print(atom)
-    #print(mol.GetCoordinates())
-    #print(mol.OBMol.GetCoordinates())
-    #pybelmol = pybel.Molecule(mol)
-    #pybelmol.write("xyz", "outputfile.xyz")
-    return mol
 

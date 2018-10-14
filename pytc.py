@@ -2,6 +2,7 @@ import lightspeed as ls
 import psiw
 from base import * 
 import numpy as np
+import manage_xyz as mx
 
 
 class PyTC(Base):
@@ -39,7 +40,8 @@ class PyTC(Base):
         self,
         ):
 
-        self.molecule = ls.Molecule.from_xyz_file(self.filepath)      
+        mx.write_xyz("ls.xyz",self.geom,0)
+        self.molecule = ls.Molecule.from_xyz_file("ls.xyz")    
         print self.molecule.natom
         self.resources = ls.ResourceList.build()
 
@@ -84,4 +86,19 @@ class PyTC(Base):
             rhf_guess=True,
             rhf_mom=True,
             )
+
+
+if __name__ == '__main__':
+
+    from obutils import *
+    from pytc import *
+    import manage_xyz
+    
+    filepath="tests/fluoroethene.xyz"
+    nocc=23
+    nactive=2
+    geom=manage_xyz.read_xyz(filepath,scale=1)
+
+    lot=PyTC.from_options(calc_states=[(0,0)],nstates=1,geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot.cas_from_geom()
 

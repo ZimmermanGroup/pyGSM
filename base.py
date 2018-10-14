@@ -46,11 +46,10 @@ class Base(object):
                 doc='Basis set')
 
         opt.add_option(
-                key='filepath',
-                value='initial0000.xyz',
-                required=False,
-                allowed_types=[str],
-                doc='path to xyz file')
+                key='geom',
+                required=True,
+                allowed_types=[list],
+                doc='geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)')
 
         Base._default_options = opt
         return Base._default_options.copy()
@@ -64,7 +63,7 @@ class Base(object):
         # Cache some useful atributes
         self.calc_states=self.options['calc_states']
         self.nstates=self.options['nstates']
-        self.filepath = self.options['filepath']
+        self.geom = self.options['geom']
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
