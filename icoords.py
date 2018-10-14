@@ -2,7 +2,8 @@ import numpy as np
 import openbabel as ob
 import pybel as pb
 import options
-import vdw_radii    
+#import vdw_radii    
+import elements 
 
 
 class ICoord(object):
@@ -53,6 +54,15 @@ class ICoord(object):
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
         #self.print_xyz()
+        self.Elements = elements.ElementData()
+        self.ic_create()
+        self.bmatp_create()
+        self.bmatp_to_U()
+        self.bmat_create()
+
+        self.gradq = np.zeros(self.nicd)
+        self.pgradqprim = np.zeros((self.num_ics),dtype=float)
+        self.gradqprim = np.zeros((self.num_ics),dtype=float)
 
         
     def print_xyz(self):
@@ -739,13 +749,12 @@ class ICoord(object):
         #print self.Ut
         #print "Shape of U is %s\n" % (np.shape(self.Ut),)
         
-        self.gradq = np.zeros(self.nicd)
 
 
     def q_create(self):  
         """Determines the scalars in delocalized internal coordinates"""
 
-        print(" Determining q in ICs")
+        #print(" Determining q in ICs")
         N3=3*self.natoms
         self.q = np.zeros(self.nicd)
         #print "Number of ICs %i" % self.num_ics
@@ -799,15 +808,27 @@ class ICoord(object):
 
         self.pgradq = self.gradq
         gradq = np.matmul(self.bmatti,grad)
-        print("Printing gradq")
-        print gradq
+        #print("Printing gradq")
+        #print gradq
+        #TODO need to calc gradrms and pgradrms  and gradqprim
+
+        self.gradrms = np.linalg.norm(gradq)
+        #print("gradrms = %1.4f" % self.gradrms)
+
+        #Hessian update
+        self.pgradqprim=self.gradqprim
+        self.gradqprim = np.matmul(np.transpose(self.Ut),gradq)
+        #print self.gradqprim
 
         return gradq
 
     def close_bond(self,bond):
         A = 0.2
         d = self.distance(bond[0],bond[1])
-        dr = (vdw_radii.radii[self.getAtomicNum(bond[0])] + vdw_radii.radii[self.getAtomicNum(bond[1])] )/2
+        #dr = (vdw_radii.radii[self.getAtomicNum(bond[0])] + vdw_radii.radii[self.getAtomicNum(bond[1])] )/2
+        a=self.getAtomicNum(bond[0])
+        b=self.getAtomicNum(bond[1])
+        dr = self.Elements.from_atomic_number(a).vdw_radius + self.Elements.from_atomic_number(b).vdw_radius 
         val = np.exp(-A*(d-dr))
         if val>1: val=1
         return val
@@ -900,6 +921,38 @@ class ICoord(object):
 
         return 
 
+    def make_Hint(self):
+
+        self.newHess = 5
+        Hdiagp = []
+        for bond in self.bonds:
+            Hdiagp.append(0.35*self.close_bond(bond))
+        for angle in self.angles:
+            Hdiagp.append(0.2)
+        for tor in self.torsions:
+            Hdiagp.append(0.035)
+
+        self.Hintp=np.diag(Hdiagp)
+        #print(" Hdiagp elements")
+        #for i in Hdiagp:
+        #    print i
+        
+        #TODO should U be size (num_ics,num_ics) or (nicd,num_ics) ASK Paul
+        #tmp = self.Ut[0:self.nicd][:]*Hdiagp
+        tmp = np.matmul(self.Ut,self.Hintp)
+        #self.Hint = np.matmul(np.transpose(tmp),self.Ut[0:self.nicd][:])
+        self.Hint = np.matmul(np.transpose(self.Ut),tmp)
+        self.Hinv = np.linalg.inv(self.Hint)
+
+        #print("Hint elements")
+        #print Hint
+        #if self.optCG==False or self.isTSNode==False:
+        #    print "Not implemented"
+
+    def Hintp_to_Hint(self):
+        tmp = np.matmul(self.Ut,self.Hintp)
+        Hint = np.matmul(np.transpose(self.Ut),tmp)
+
 
 if __name__ == '__main__':
 
@@ -920,10 +973,6 @@ if __name__ == '__main__':
     filepath="tests/fluoroethene.xyz"
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol)
-    ic1.ic_create()
-    ic1.bmatp_create()
-    ic1.bmatp_to_U()
-    ic1.bmat_create()
 
     dq=np.zeros((ic1.nicd,1),dtype=float)
     dq=np.zeros(ic1.nicd)

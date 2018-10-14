@@ -14,6 +14,7 @@ class PyTC(Base):
     def getEnergy(self):
         energy =0.
         average_over =0
+        print(" in getEnergy")
         for i in self.calc_states:
             energy += self.lot.compute_energy(S=i[0],index=i[1])
             average_over+=1
@@ -22,14 +23,18 @@ class PyTC(Base):
     def getGrad(self):
         average_over=0
         grad = np.zeros((self.molecule.natom,3))
+        print(" in getGrad")
+        print self.lot.casci.print_level
         for i in self.calc_states:
             tmp = self.lot.compute_gradient(S=i[0],index=i[1])
-            print(np.shape(tmp[...]))
             grad += tmp[...] 
             average_over+=1
         final_grad = grad/average_over
 
         return np.reshape(final_grad,(3*self.molecule.natom,1))
+
+    def update_xyz(self):
+        raise NotImplementedError()
 
     @staticmethod
     def from_options(**kwargs):
@@ -40,9 +45,8 @@ class PyTC(Base):
         self,
         ):
 
-        mx.write_xyz("ls.xyz",self.geom,0)
+        mx.write_xyz("ls.xyz",self.geom,0,1)
         self.molecule = ls.Molecule.from_xyz_file("ls.xyz")    
-        print self.molecule.natom
         self.resources = ls.ResourceList.build()
 
         nalpha = nbeta = self.nactive/2
@@ -66,6 +70,7 @@ class PyTC(Base):
             fomo_temp=fomo_temp,
             fomo_nocc=self.nocc,
             fomo_nact=self.nactive,
+            print_level=0,
             )
         ref1.compute_energy()
         
@@ -77,6 +82,7 @@ class PyTC(Base):
             nbeta=nbeta,
             S_inds=S_inds,
             S_nstates=S_nstates,
+            print_level=0,
             )
         casci1.compute_energy()
 
@@ -99,6 +105,6 @@ if __name__ == '__main__':
     nactive=2
     geom=manage_xyz.read_xyz(filepath,scale=1)
 
-    lot=PyTC.from_options(calc_states=[(0,0)],nstates=1,geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot=PyTC.from_options(calc_states=[(0,0)],geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
     lot.cas_from_geom()
 

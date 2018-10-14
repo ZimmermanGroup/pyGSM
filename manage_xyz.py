@@ -1,6 +1,5 @@
 import numpy as np
 import units 
-import atom_data
 import re
 import openbabel as ob
 

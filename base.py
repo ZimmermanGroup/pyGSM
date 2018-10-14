@@ -18,6 +18,12 @@ class Base(object):
             doc='')
 
         opt.add_option(
+                key='functional',
+                required=False,
+                allowed_types=[str],
+                doc='density functional')
+
+        opt.add_option(
                 key='nocc',
                 value=0,
                 required=False,
@@ -51,6 +57,14 @@ class Base(object):
                 allowed_types=[list],
                 doc='geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)')
 
+        opt.add_option(
+                key='charge',
+                value=0,
+                required=False,
+                allowed_types=[int],
+                doc='charge of molecule')
+                
+
         Base._default_options = opt
         return Base._default_options.copy()
 
@@ -67,6 +81,7 @@ class Base(object):
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
+        self.functional=self.options['functional']
 
     def getEnergy(self):
         raise NotImplementedError()
