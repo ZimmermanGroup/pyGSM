@@ -1,6 +1,6 @@
 import lightspeed as ls
 import psiw
-from base import * 
+from base_lot import * 
 import numpy as np
 import manage_xyz as mx
 
@@ -11,27 +11,12 @@ class PyTC(Base):
     Inherits from Base
     """
 
-    def getEnergy(self):
-        energy =0.
-        average_over =0
-        print(" in getEnergy")
-        for i in self.calc_states:
-            energy += self.lot.compute_energy(S=i[0],index=i[1])
-            average_over+=1
-        return energy/average_over
+    def compute_energy(self,S,index):
+        return self.lot.compute_energy(S=S,index=index)
 
-    def getGrad(self):
-        average_over=0
-        grad = np.zeros((self.molecule.natom,3))
-        print(" in getGrad")
-        print self.lot.casci.print_level
-        for i in self.calc_states:
-            tmp = self.lot.compute_gradient(S=i[0],index=i[1])
-            grad += tmp[...] 
-            average_over+=1
-        final_grad = grad/average_over
-
-        return np.reshape(final_grad,(3*self.molecule.natom,1))
+    def compute_gradient(self,S,index):
+        tmp=self.lot.compute_gradient(S=S,index=index)
+        return tmp[...]
 
     def update_xyz(self):
         raise NotImplementedError()
@@ -96,15 +81,20 @@ class PyTC(Base):
 
 if __name__ == '__main__':
 
-    from obutils import *
     from pytc import *
     import manage_xyz
     
     filepath="tests/fluoroethene.xyz"
     nocc=23
     nactive=2
-    geom=manage_xyz.read_xyz(filepath,scale=1)
+    #geom=manage_xyz.read_xyz(filepath,scale=1)
 
-    lot=PyTC.from_options(calc_states=[(0,0)],geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
+    #lot=PyTC.from_options(calc_states=[(0,0)],geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
     lot.cas_from_geom()
+
+    e=lot.getEnergy()
+    print e
+    g=lot.getGrad()
+    print g
 

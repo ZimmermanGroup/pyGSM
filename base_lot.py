@@ -1,4 +1,6 @@
 import options
+import manage_xyz
+import numpy as np
 
 class Base(object):
     """ Base object for potential energy surface calculators """
@@ -53,9 +55,16 @@ class Base(object):
 
         opt.add_option(
                 key='geom',
-                required=True,
-                allowed_types=[list],
+                value=None,
+                required=False,
+                allowed_types=[list,None],
                 doc='geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)')
+
+        opt.add_option(
+                key='filepath',
+                required=False,
+                allowed_types=[str],
+                doc='filepath')
 
         opt.add_option(
                 key='charge',
@@ -78,16 +87,41 @@ class Base(object):
         self.calc_states=self.options['calc_states']
         self.nstates=self.options['nstates']
         self.geom = self.options['geom']
+        self.filepath = self.options['filepath']
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
         self.functional=self.options['functional']
 
+        if self.geom is None:
+            self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
+
+
     def getEnergy(self):
+        energy =0.
+        average_over =0
+        print(" in getEnergy")
+        for i in self.calc_states:
+            energy += self.compute_energy(S=i[0],index=i[1])
+            average_over+=1
+        return energy/average_over
+
+    def compute_energy(self,spin,index):
         raise NotImplementedError()
 
     def getGrad(self):
+        average_over=0
+        grad = np.zeros((self.molecule.natom,3))
+        for i in self.calc_states:
+            grad += self.compute_gradient(S=i[0],index=i[1])
+            average_over+=1
+        final_grad = grad/average_over
+
+        return np.reshape(final_grad,(3*self.molecule.natom,1))
+
+    def compute_gradient(self,S,index):
         raise NotImplementedError()
+
 
     def finite_difference(self):
         self.getEnergy() 

@@ -2,8 +2,8 @@ import numpy as np
 import openbabel as ob
 import pybel as pb
 import options
-#import vdw_radii    
 import elements 
+import os
 
 
 class ICoord(object):
@@ -34,6 +34,11 @@ class ICoord(object):
                 allowed_types=[pb.Molecule],
                 doc='Pybel molecule object (not OB.Mol)')
 
+        opt.add_option(
+                key="lot",
+                required=True,
+                doc='level of theory object')
+
         ICoord._default_options = opt
         return ICoord._default_options.copy()
 
@@ -53,6 +58,9 @@ class ICoord(object):
         self.mol = self.options['mol']
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
+        self.lot = self.options['lot']
+
+
         #self.print_xyz()
         self.Elements = elements.ElementData()
         self.ic_create()
@@ -60,6 +68,7 @@ class ICoord(object):
         self.bmatp_to_U()
         self.bmat_create()
 
+        self.make_Hint()  #put in init
         self.gradq = np.zeros(self.nicd)
         self.pgradqprim = np.zeros((self.num_ics),dtype=float)
         self.gradqprim = np.zeros((self.num_ics),dtype=float)
@@ -953,31 +962,50 @@ class ICoord(object):
         tmp = np.matmul(self.Ut,self.Hintp)
         Hint = np.matmul(np.transpose(self.Ut),tmp)
 
+    def update_ic_eigen(self,gradq):
+        return
+
+    def optimize(self,nsteps):
+        xyzfile=os.getcwd()+"/xyzfile.xyz"
+        output_format = 'xyz'
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat(output_format)
+        opt_molecules=[]
+        opt_molecules.append(self.mol.OBMol)
+
+        for step in range(nsteps):
+            self.opt_step()
+
+        #step controller 
+        with open(xyzfile,'w') as f:
+            for mol in opt_molecules:
+                f.write(obconversion.WriteString(mol))
+
+    def opt_step(self):
+        energy=0.
+        grad = self.lot.getGrad()
+        energy = self.lot.getEnergy()
+        print("energy is %1.4f" % energy)
+        grad = self.lot.getGrad()
+        gradq = self.grad_to_q(grad)
+        self.update_ic_eigen(grad)
+
 
 if __name__ == '__main__':
-
-    from obutils import *
-
-    """
-    # => bimolecular example to test make frags <= #
-    filepath="bimol.xyz"
-    molecules=read_molecules(filepath,single=False)
-    mol1 = pb.Molecule(molecules[0])
-    mol2 = pb.Molecule(molecules[1])
-    ic1=ICoord.from_options(mol=mol1)
-    print ic1.isOpt
-    print ic1.MAX_FRAG_DIST
-    ic1.ic_create()
-    """
+    from pytc import *
     
     filepath="tests/fluoroethene.xyz"
-    mol=pb.readfile("xyz",filepath).next()
-    ic1=ICoord.from_options(mol=mol)
 
-    dq=np.zeros((ic1.nicd,1),dtype=float)
-    dq=np.zeros(ic1.nicd)
-    dq[-1]=0.1
-    ic1.ic_to_xyz(dq)
+    # LOT object
+    nocc=23
+    nactive=2
+    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot.cas_from_geom()
+
+    # ICoord object
+    mol=pb.readfile("xyz",filepath).next()
+    ic1=ICoord.from_options(mol=mol,lot=lot)
 
     #ic1.union_ic(ic1,ic2)
-    #ic1.update_ics()
+    
+    ic1.optimize(1)
