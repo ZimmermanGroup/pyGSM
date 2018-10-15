@@ -1,36 +1,9 @@
 import numpy as np
 import options
 import os
+from base_gsm import *
 
-class GSM(object):
-
-    @staticmethod
-    def default_options():
-        if hasattr(GSM, '_default_options'): return GSM._default_options.copy()
-
-        opt = options.Options() 
-
-        GSM._default_options = opt
-        return GSM._default_options.copy()
-
-
-    @staticmethod
-    def from_options(**kwargs):
-        return GSM(GSM.default_options().set_values(kwargs))
-
-    def __init__(
-            self,
-            options,
-            ):
-        """ Constructor """
-        self.options = options
-
-        # Cache some useful attributes
-
-        #TODO What is optCG Ask Paul
-        self.optCG = False
-        self.isTSnode =False
-
+class GSM(BaseGSM):
 
     def starting_string(self):
         #dq
@@ -47,20 +20,26 @@ class GSM(object):
         return
 
 if __name__ == '__main__':
-
-    
+    from icoords import *
+    from qchem import *
+    import manage_xyz
     filepath="tests/fluoroethene.xyz"
 
     # LOT object
-    nocc=23
-    nactive=2
-    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot.cas_from_geom()
+#    nocc=23
+#    nactive=2
+#    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+    #lot.cas_from_geom()
+
 
     mol=pb.readfile("xyz",filepath).next()
-    ic1=ICoord.from_options(mol=mol,lot=lot)
-    ic2=ICoord(ic1.options.copy().set_values(dict(filepath=filepath2)))
+    geom = manage_xyz.read_xyz(filepath,scale=1)
+    lot=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 
-    gsm = GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9)
+
+    ic1=ICoord.from_options(mol=mol,lot=lot)
+#    ic2=ICoord(ic1.options.copy().set_values(dict(filepath=filepath2)))
+
+    gsm=GSM.from_options(ICoord1=ic1,nnodes=9)
 
 
