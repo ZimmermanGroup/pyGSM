@@ -78,10 +78,12 @@ class ICoord(object):
         self.DMAX = 0.1
         self.dEpre = 0.0
         self.ixflag = 0
-        self.coords = []
-        for a in ob.OBMolAtomIter(self.mol.OBMol):
-            tmpvec = (a.GetX(), a.GetY(), a.GetZ())
-            self.coords.append(tmpvec)
+        self.lot.coords = np.zeros((len(self.mol.atoms),3))
+        for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
+            self.lot.coords[i,0] = a.GetX()
+            self.lot.coords[i,1] = a.GetY()
+            self.lot.coords[i,2] = a.GetZ()
+
 
         self.nretry = 0 
         
@@ -244,7 +246,8 @@ class ICoord(object):
         self.update_torsions()
 
     def update_xyz(self):
-        for i,xyz in enumerate(self.coords):
+        """ Updates the mol.OBMol object coords: Important for ICs"""
+        for i,xyz in enumerate(self.lot.coords):
             self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
 
     def update_bonds(self):
@@ -412,7 +415,7 @@ class ICoord(object):
 
     def getCoords(self,i):
         a= self.mol.OBMol.GetAtom(i+1)
-        return (a.GetX(),a.GetY(),a.GetZ())
+        return [a.GetX(),a.GetY(),a.GetZ()]
 
     def getAtomicNum(self,i):
         return self.mol.OBMol.GetAtom(i+1).GetAtomicNum()
@@ -885,62 +888,61 @@ class ICoord(object):
         for n in range(10):
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
-   
             #print("xyzd(%i):" %n)
             #for i in range(self.natoms):
             #    tmp=[xyzd[i*3+k] for k in range(3)]
             #    print(np.around(tmp,decimals=3))
             #print("\n")
 
+            xyzd = np.reshape(xyzd,(self.natoms,3))
+
             #TODO Frozen
 
             # => Calc Mag <= #
-            mag=np.dot(xyzd,xyzd)
+            mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
             magall.append(mag)
 
             if mag>magp:
                 SCALEBT *=1.5
             magp=mag
 
-            self.coords=[]
+            # Get Current coords
             for i in range(self.natoms):
-                self.coords.append(self.getCoords(i))
+                tmpvec = self.getCoords(i)
+                self.lot.coords[i,0] = tmpvec[0]
+                self.lot.coords[i,1] = tmpvec[1]
+                self.lot.coords[i,2] = tmpvec[2]
 
             #print("current coords\n")
             #for i in range(self.natoms):
-            #    print(np.around(coords[i],decimals=3))
+            #    print(np.around(self.lot.coords[i,:],decimals=3))
             #print("\n")
 
-            xyz1=[]
-            for i in range(self.natoms):
-                tmpvec1 = tuple( xyzd[i*3+j]/SCALEBT for j in range(3))
-                result = np.add(self.coords[i],tmpvec1)
-                xyz1.append(tuple( x for x in result))
-                #self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
+            xyz1 = self.lot.coords + xyzd/SCALEBT 
 
             xyzall.append(xyz1)
-            self.coords = xyz1
+            self.lot.coords = xyz1
 
             self.update_ics()
             self.bmatp_create()
             self.bmat_create()
 
             dq = qn - self.q
-            print dq
             #dqmag = np.linalg.norm(dq)
             #print dqmag
 
             if mag<0.00005: break
-        #print("\n magall ")
+        print("\n magall ")
         print magall
         #print("\n xyzall")
         #print xyzall
 
         self.mol.write("xyz","after_ic_to_xyz.xyz",overwrite=True)
 
-
         #print xyzall
         #self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
+
+        #TODO implement mag check here
 
         return 
 
@@ -948,7 +950,8 @@ class ICoord(object):
 
         MAX_STEPS = 8
         rflag = 0 
-        retry = True
+        retry = False
+        SCALEBT = 1.5
 
         N3 = self.natoms*3
         xyzall=[]
@@ -957,10 +960,13 @@ class ICoord(object):
         self.update_ics()
 
         #Current coords
-        self.coords=[]
         for i in range(self.natoms):
-            self.coords.append(self.getCoords(i))
-        xyzall.append(self.coords)
+            #self.lot.coords.append(self.getCoords(i))
+            tmpvec = self.getCoords(i)
+            self.lot.coords[i,0] = tmpvec[0]
+            self.lot.coords[i,1] = tmpvec[1]
+            self.lot.coords[i,2] = tmpvec[2]
+        xyzall.append(self.lot.coords)
 
         magp=100
         dqmagp=100.
@@ -968,29 +974,25 @@ class ICoord(object):
         dq = dq0
         qn = self.q + dq  #target IC values
 
-        SCALEBT = 1.5
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
+            xyzd = np.reshape(xyzd,(self.natoms,3))
 
             #TODO frozen
 
             # => Add Change in Coords <= #
-            xyz1=[]
-            for i in range(self.natoms):
-                tmpvec1 = tuple( xyzd[i*3+j]/SCALEBT for j in range(3))
-                result = np.add(self.coords[i],tmpvec1)
-                xyz1.append(tuple( x for x in result))
+            xyz1 = self.lot.coords + xyzd/SCALEBT 
 
             # => Calc Mag <= #
-            mag=np.dot(xyzd,xyzd)
+            mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
             magall.append(mag)
             xyzall.append(xyz1)
 
             # update coords
-            xyzp = list(self.coords)  # list is needed so not a reference
-            self.coords = xyz1
+            xyzp = np.copy(self.lot.coords) # note that when we modify coords, xyzp will not change
+            self.lot.coords = xyz1
 
             self.update_ics()
             self.bmatp_create()
@@ -998,7 +1000,6 @@ class ICoord(object):
 
             #calc new dq
             dq = qn - self.q
-            print dq
 
             dqmag = np.linalg.norm(dq)
             dqmagall.append(dqmag)
@@ -1013,7 +1014,7 @@ class ICoord(object):
             if dqmag>dqmagp*10.:
                 print(" Q%i" % n)
                 SCALEBT *= 2.0
-                self.coords=list(xyzp)
+                self.lot.coords = xyzp
                 self.update_ics()
                 self.bmatp_create()
                 self.bmat_create()
@@ -1050,14 +1051,13 @@ class ICoord(object):
 
         print dqmagall
         print "\n"
-        #if retry==True:
-        #    self.ic_to_xyz_opt(dq0)
-        #else:
-        #    return rflag
+        if retry==True:
+            self.ic_to_xyz_opt(dq0)
+        else:
+            return rflag
 
 
     def make_Hint(self):
-
         self.newHess = 5
         Hdiagp = []
         for bond in self.bonds:
@@ -1080,6 +1080,7 @@ class ICoord(object):
         #print("Hint elements")
         #print Hint
         #print("Shape of Hint is %s" % (np.shape(self.Hint),))
+
         #if self.optCG==False or self.isTSNode==False:
         #    print "Not implemented"
 
@@ -1178,6 +1179,9 @@ if __name__ == '__main__':
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol,lot=lot)
 
+    #dq = np.zeros(ic1.nicd)
+    #dq[-1]=0.1
+    #ic1.ic_to_xyz(dq)
     for i in range(ic1.nicd):
         print(" on test %i" % i)
         dq = np.zeros(ic1.nicd)
@@ -1185,11 +1189,7 @@ if __name__ == '__main__':
         ic1.ic_to_xyz_opt(dq)
         filename = "test" + str(i) + ".xyz"
         ic1.mol.write("xyz",filename,overwrite=True)
-
     dq[:] = 0.05
     ic1.ic_to_xyz_opt(dq)
-
-
-    ic1.ic_to_xyz(dq)
 
     #ic1.optimize(1)

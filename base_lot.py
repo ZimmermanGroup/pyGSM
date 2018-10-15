@@ -96,6 +96,7 @@ class Base(object):
         if self.geom is None:
             self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
 
+        self.coords = manage_xyz.xyz_to_np(self.geom)
 
     def getEnergy(self):
         energy =0.
@@ -111,17 +112,16 @@ class Base(object):
 
     def getGrad(self):
         average_over=0
-        grad = np.zeros((self.molecule.natom,3))
+        grad = np.zeros((np.shape(self.coords)))
         for i in self.calc_states:
             grad += self.compute_gradient(S=i[0],index=i[1])
             average_over+=1
         final_grad = grad/average_over
 
-        return np.reshape(final_grad,(3*self.molecule.natom,1))
+        return np.reshape(final_grad,(3*len(self.coords),1))
 
     def compute_gradient(self,S,index):
         raise NotImplementedError()
-
 
     def finite_difference(self):
         self.getEnergy() 
