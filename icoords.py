@@ -4,6 +4,7 @@ import pybel as pb
 import options
 import elements 
 import os
+from units import *
 
 
 class ICoord(object):
@@ -69,9 +70,13 @@ class ICoord(object):
         self.bmat_create()
 
         self.make_Hint()  #put in init
-        self.gradq = np.zeros(self.nicd)
+        #self.gradq = np.zeros(self.nicd)
         self.pgradqprim = np.zeros((self.num_ics),dtype=float)
         self.gradqprim = np.zeros((self.num_ics),dtype=float)
+        self.SCALEQN = 1.0
+        self.MAXAD = 0.075
+        self.DMAX = 0.1
+        self.dEpre = 0.0
 
         
     def print_xyz(self):
@@ -815,8 +820,8 @@ class ICoord(object):
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
 
-        self.pgradq = self.gradq
         gradq = np.matmul(self.bmatti,grad)
+        self.pgradq = gradq
         #print("Printing gradq")
         #print gradq
         #TODO need to calc gradrms and pgradrms  and gradqprim
@@ -946,23 +951,69 @@ class ICoord(object):
         #for i in Hdiagp:
         #    print i
         
-        #TODO should U be size (num_ics,num_ics) or (nicd,num_ics) ASK Paul
-        #tmp = self.Ut[0:self.nicd][:]*Hdiagp
         tmp = np.matmul(self.Ut,self.Hintp)
-        #self.Hint = np.matmul(np.transpose(tmp),self.Ut[0:self.nicd][:])
-        self.Hint = np.matmul(np.transpose(self.Ut),tmp)
+        #print("Shape oftmp is %s" % (np.shape(tmp),))
+        self.Hint = np.matmul(self.Ut,np.transpose(tmp))
         self.Hinv = np.linalg.inv(self.Hint)
 
         #print("Hint elements")
         #print Hint
+        #print("Shape of Hint is %s" % (np.shape(self.Hint),))
         #if self.optCG==False or self.isTSNode==False:
         #    print "Not implemented"
 
     def Hintp_to_Hint(self):
         tmp = np.matmul(self.Ut,self.Hintp)
-        Hint = np.matmul(np.transpose(self.Ut),tmp)
+        Hint = np.matmul(self.Ut,np.transpose(tmp))
 
     def update_ic_eigen(self,gradq):
+        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
+        if self.SCALEQN>10.0: SCALE=10.0
+        tmph = self.Hint
+        lambda1 = 0.0
+
+        #print "shape of gradq is %s" %(np.shape(gradq),)
+        e,v_temp = np.linalg.eigh(tmph)
+        e = np.reshape( e,(len(e),1))
+        leig = e[0]
+        #print "shape of e is %s" %(np.shape(e),)
+        #print e
+
+        if leig < 0:
+            lambda1 = -leig+0.015
+        else:
+            lambda1 = 0.005
+        if abs(lambda1)<0.005: lambda1 = 0.005
+
+        gqe = np.matmul(v_temp,gradq)
+
+        #TODO why is this done if sign is going to overwrite it?
+        dqe0 = np.divide(-gqe,e)
+        dqe0 = dqe0/lambda1/SCALE
+        dqe0 = np.fromiter((self.MAXAD*np.sign(xi) for xi in dqe0), dqe0.dtype)
+
+        dq0 = np.matmul(v_temp,np.transpose(dqe0))
+
+        for i in dq0:
+            if abs(i)>self.MAXAD:
+                i=np.sign(i)*self.MAXAD
+
+        # regulate max overall step
+        smag = np.linalg.norm(dq0)
+        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
+        if smag>self.DMAX:
+            dq0 = np.fromiter(( xi*self.DMAX/smag for xi in dq0), dq0.dtype)
+
+        # compute predicted change in energy 
+        dEtemp = np.matmul(self.Hint,dq0)
+        self.dEpre = 0
+        self.dEpre = np.dot(dq0,gradq)
+        dEpre2 = 0.5*np.dot(dEtemp,dq0)
+
+        self.dEpre +=dEpre2
+        self.dEpre *=KCAL_MOL_PER_AU
+
+        print( "predE: %5.2f " % self.dEpre)
         return
 
     def optimize(self,nsteps):
@@ -972,6 +1023,7 @@ class ICoord(object):
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
         opt_molecules.append(self.mol.OBMol)
+        self.pgradrms = 10000.
 
         for step in range(nsteps):
             self.opt_step()
@@ -988,7 +1040,7 @@ class ICoord(object):
         print("energy is %1.4f" % energy)
         grad = self.lot.getGrad()
         gradq = self.grad_to_q(grad)
-        self.update_ic_eigen(grad)
+        self.update_ic_eigen(gradq)
 
 
 if __name__ == '__main__':
