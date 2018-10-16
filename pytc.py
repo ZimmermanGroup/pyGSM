@@ -12,14 +12,10 @@ class PyTC(Base):
     """
 
     def compute_energy(self,S,index):
-        #geom = mx.combine_atom_xyz(self.atoms,self.coords)
-        #mx.write_xyz(self.nodefile,geom,self.charge,1)
-        #molecule = ls.Molecule.from_xyz_file(nodefile)
-        #self.lot = self.lot.update_xyz(molecule.xyz) 
+        print("printing coords in lot")
+        print self.coords
         T = ls.Tensor((np.shape(self.coords)))
-        T.zero()
         T[...] = self.coords
-        print T
         self.lot.update_xyz(T)
         return self.lot.compute_energy(S=S,index=index)
 
@@ -41,8 +37,8 @@ class PyTC(Base):
             self,
             ):
 
-        mx.write_xyz("ls.xyz",self.geom,0,1)
-        molecule = ls.Molecule.from_xyz_file("ls.xyz")    
+        #mx.write_xyz("ls.xyz",self.geom,0,1)
+        molecule = ls.Molecule.from_xyz_file(self.filepath)    
         resources = ls.ResourceList.build()
 
         nalpha = nbeta = self.nactive/2

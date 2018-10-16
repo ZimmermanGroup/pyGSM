@@ -302,7 +302,7 @@ class ICoord(object):
             if anglev>160.:
                 blist.append(angle)
                 print(" linear angle %i of %i: %s (%4.2f)",n+1,maxsize,angle,anglev)
-                n=+1
+                n+=1
 
         # atoms attached to linear atoms
         clist=[[]]
@@ -403,11 +403,13 @@ class ICoord(object):
         c=self.mol.OBMol.GetAtom(k+1)
         d=self.mol.OBMol.GetAtom(l+1)
         tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
+        #if tval >3.14159:
         if tval>=np.pi:
             tval-=2.*np.pi
+        #if tval <-3.14159:
         if tval<=-np.pi:
             tval+=2.*np.pi
-        return tval*180/np.pi #in degrees
+        return tval*180./np.pi
 
 
     def getIndex(self,i):
@@ -668,6 +670,9 @@ class ICoord(object):
         dqtdx[9]   = -vw[0]/(n3*sin2phiv)                                                                                  
         dqtdx[10]  = -vw[1]/(n3*sin2phiv)                                                                                  
         dqtdx[11]  = -vw[2]/(n3*sin2phiv)
+
+        if np.isnan(dqtdx).any():
+            print "Error!"
         return dqtdx
 
 
@@ -727,7 +732,6 @@ class ICoord(object):
             self.bmatp[i,3*a4+1] = dqtdx[10]
             self.bmatp[i,3*a4+2] = dqtdx[11]
             i+=1
-            #print dqtdx
             #print "%s" % ((a1,a2,a3,a4),)
 
         #print "printing bmatp"
@@ -775,8 +779,9 @@ class ICoord(object):
         #print("printing non-redundant vectors of U")
         #print self.Ut
         #print "Shape of U is %s\n" % (np.shape(self.Ut),)
-        
 
+        self.torv0 = list(self.torv)
+        
 
     def q_create(self):  
         """Determines the scalars in delocalized internal coordinates"""
@@ -791,7 +796,19 @@ class ICoord(object):
 
         dists=[self.distance(bond[0],bond[1]) for bond in self.bonds ]
         angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.angles ]
-        torsions =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])*np.pi/180. for torsion in self.torsions]
+        tmp =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]) for torsion in self.torsions]
+        torsions=[]
+        for i,j in zip(self.torv0,tmp):
+            tordiff = i-j
+            if tordiff>180.:
+                torfix=360.
+            elif tordiff<-180.:
+                torfix=-360.
+            else:
+                torfix=0.
+            torsions.append((j+torfix)*np.pi/180.)
+            n=+1
+
 
         for i,row in enumerate(self.Ut):
             Ubond = row[0:self.nbonds]
@@ -880,20 +897,20 @@ class ICoord(object):
         #print("dq at start is")
         #print dq
         #print("\n")
-
         xyzall=[]
         magall=[]
         magp=100
 
+        opt_molecules=[]
+        xyzfile=os.getcwd()+"/ic_to_xyz.xyz"
+        output_format = 'xyz'
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat(output_format)
+        opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
+
         for n in range(10):
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
-            #print("xyzd(%i):" %n)
-            #for i in range(self.natoms):
-            #    tmp=[xyzd[i*3+k] for k in range(3)]
-            #    print(np.around(tmp,decimals=3))
-            #print("\n")
-
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
             #TODO Frozen
@@ -906,28 +923,18 @@ class ICoord(object):
                 SCALEBT *=1.5
             magp=mag
 
-            # Get Current coords
-            for i in range(self.natoms):
-                tmpvec = self.getCoords(i)
-                self.lot.coords[i,0] = tmpvec[0]
-                self.lot.coords[i,1] = tmpvec[1]
-                self.lot.coords[i,2] = tmpvec[2]
-
-            #print("current coords\n")
-            #for i in range(self.natoms):
-            #    print(np.around(self.lot.coords[i,:],decimals=3))
-            #print("\n")
-
+            # update coords
             xyz1 = self.lot.coords + xyzd/SCALEBT 
-
             xyzall.append(xyz1)
             self.lot.coords = xyz1
-
             self.update_ics()
             self.bmatp_create()
             self.bmat_create()
 
+            opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
+
             dq = qn - self.q
+            #print dq
             #dqmag = np.linalg.norm(dq)
             #print dqmag
 
@@ -937,7 +944,10 @@ class ICoord(object):
         #print("\n xyzall")
         #print xyzall
 
-        self.mol.write("xyz","after_ic_to_xyz.xyz",overwrite=True)
+        #write convergence
+        largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
+        for mol in opt_molecules:
+            largeXyzFile.write(pb.readstring("xyz",mol))
 
         #print xyzall
         #self.mol.OBMol.GetAtom(i+1).SetVector(result[0],result[1],result[2])
@@ -961,7 +971,6 @@ class ICoord(object):
 
         #Current coords
         for i in range(self.natoms):
-            #self.lot.coords.append(self.getCoords(i))
             tmpvec = self.getCoords(i)
             self.lot.coords[i,0] = tmpvec[0]
             self.lot.coords[i,1] = tmpvec[1]
@@ -972,10 +981,23 @@ class ICoord(object):
         dqmagp=100.
 
         dq = dq0
-        qn = self.q + dq  #target IC values
+        #target IC values
+        qn = self.q + dq 
+        #print("printing target q")
+        #print qn
+        #print("dq")
+        #print dq
+
+        opt_molecules=[]
+        xyzfile=os.getcwd()+"/ic_to_xyz.xyz"
+        output_format = 'xyz'
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat(output_format)
+        opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
+            #print("iteration step %i" %n)
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
             xyzd = np.reshape(xyzd,(self.natoms,3))
@@ -998,41 +1020,38 @@ class ICoord(object):
             self.bmatp_create()
             self.bmat_create()
 
+            opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
+
             #calc new dq
             dq = qn - self.q
 
             dqmag = np.linalg.norm(dq)
             dqmagall.append(dqmag)
-    
-            if mag>magp:
-                SCALEBT *=1.5
-            magp=mag
+            if dqmag<0.0001: break
 
-            #TODO this doesn't work  why?
-            #for some reason dq values are jumping around and dqmag is large
-            #print dqmag
             if dqmag>dqmagp*10.:
                 print(" Q%i" % n)
                 SCALEBT *= 2.0
-                self.lot.coords = xyzp
+                self.lot.coords = np.copy(xyzp)
                 self.update_ics()
                 self.bmatp_create()
                 self.bmat_create()
                 dq = qn - self.q
+            magp = mag
             dqmagp = dqmag
 
             if mag<0.00005: break
-       
+
         MAXMAG = 0.025*self.natoms
         if np.sqrt(mag)>MAXMAG:
             self.ixflag +=1
             maglow = 100.
             nlow = -1
-            for n,mag in enumerate(magall):
+            for mag in magall:
                 if mag<maglow:
                     maglow=mag
             if maglow<MAXMAG:
-                coords = xyzall[n]
+                coords = xyzall[nlow]
                 print("Wb(%6.5f/%i)" %(maglow,nlow))
             else:
                 coords=xyzall[0]
@@ -1047,10 +1066,18 @@ class ICoord(object):
             self.ixflag = 0
 
         #regular GSM does things with qprim  not doing here
-        self.mol.write("xyz","after_ic_to_xyz.xyz",overwrite=True)
 
-        print dqmagall
-        print "\n"
+        #write convergence geoms to file 
+        largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
+        for mol in opt_molecules:
+            largeXyzFile.write(pb.readstring("xyz",mol))
+       
+
+        #print(" \n magall")
+        #print magall
+        #print(" \n dmagall")
+        #print dqmagall
+        #print "\n"
         if retry==True:
             self.ic_to_xyz_opt(dq0)
         else:
@@ -1132,8 +1159,8 @@ class ICoord(object):
         self.dEpre +=dEpre2
         self.dEpre *=KCAL_MOL_PER_AU
 
-        print( "predE: %5.2f " % self.dEpre)
-        return
+        print( "predE: %5.2f " % self.dEpre) 
+        return dq0
 
     def optimize(self,nsteps):
         xyzfile=os.getcwd()+"/xyzfile.xyz"
@@ -1146,6 +1173,7 @@ class ICoord(object):
 
         for step in range(nsteps):
             self.opt_step()
+            opt_molecules.append(self.mol.OBMol)
 
             #step controller 
 
@@ -1161,7 +1189,9 @@ class ICoord(object):
         print("energy is %1.4f" % energy)
         grad = self.lot.getGrad()
         gradq = self.grad_to_q(grad)
-        self.update_ic_eigen(gradq)
+        dq = self.update_ic_eigen(gradq)
+        print dq
+        rflag = self.ic_to_xyz_opt(dq)
 
 
 if __name__ == '__main__':
@@ -1170,7 +1200,7 @@ if __name__ == '__main__':
     filepath="tests/fluoroethene.xyz"
 
     # LOT object
-    nocc=23
+    nocc=11
     nactive=2
     lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
     #lot.cas_from_geom()
@@ -1178,18 +1208,24 @@ if __name__ == '__main__':
     # ICoord object
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol,lot=lot)
+    lot.cas_from_geom()
 
-    #dq = np.zeros(ic1.nicd)
-    #dq[-1]=0.1
-    #ic1.ic_to_xyz(dq)
-    for i in range(ic1.nicd):
-        print(" on test %i" % i)
-        dq = np.zeros(ic1.nicd)
-        dq[i]=0.1
-        ic1.ic_to_xyz_opt(dq)
-        filename = "test" + str(i) + ".xyz"
-        ic1.mol.write("xyz",filename,overwrite=True)
-    dq[:] = 0.05
+    dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
+    print dq
     ic1.ic_to_xyz_opt(dq)
 
-    #ic1.optimize(1)
+    #dq = np.zeros(ic1.nicd)
+    #dq[:]=0.01
+    #ic1.ic_to_xyz(dq)
+
+    #for i in range(ic1.nicd):
+    #    print(" on test %i" % i)
+    #    dq = np.zeros(ic1.nicd)
+    #    dq[i]=0.1
+    #    ic1.ic_to_xyz_opt(dq)
+    #    filename = "test" + str(i) + ".xyz"
+    #    ic1.mol.write("xyz",filename,overwrite=True)
+    #dq[:] = 0.05
+    #ic1.ic_to_xyz_opt(dq)
+
+    #ic1.optimize(2)
