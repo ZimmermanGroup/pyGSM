@@ -42,6 +42,18 @@ class ICoord(Mixin):
                 required=True,
                 doc='level of theory object')
 
+        opt.add_option(
+                key="bonds"
+                )
+
+        opt.add_option(
+                key="angles"
+                )
+
+        opt.add_option(
+                key="torsions"
+                )
+
         ICoord._default_options = opt
         return ICoord._default_options.copy()
 
@@ -49,6 +61,58 @@ class ICoord(Mixin):
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return ICoord(ICoord.default_options().set_values(kwargs))
+
+    @staticmethod
+    def union_ic(
+            icoordA,
+            icoordB,
+            ):
+        """ return union ICoord of two ICoord Objects """
+        unionBonds    = list(set(icoordA.bonds) | set(icoordB.bonds))
+        #b = []
+        #seen=set()
+        #for bond in unionBonds:
+        #    s=frozenset(bond)
+        #    if s not in seen:
+        #        seen.add(s)
+        #        b.append(bond)
+        #print b
+
+        unionAngles   = list(set(icoordA.angles) | set(icoordB.angles))
+        unionTorsions = list(set(icoordA.torsions) | set(icoordB.torsions))
+
+        print icoordA.bonds
+        print icoordB.bonds
+        print unionBonds
+        #print unionAngles
+        #print unionTorsions
+        #print "Saving bond union"
+        bonds = []
+        angles = []
+        torsions = []
+        #for bond in b:
+        for bond in unionBonds:
+            if bond not in icoordA.bonds:
+                print "need to add bond to %s" % (bond,)
+                isOkay = icoordA.mol.OBMol.AddBond(bond[0]+1,bond[1]+1,1)
+                print "Bond: %s added okay? %r" % (bond,isOkay)
+                bonds.append(bond)
+        #for angle in unionAngles:
+        #    #print angle
+        #    if bond not in icoordA.angles or bond not in icoordB.angles:
+        #        pass
+        #        #print "need to add angle to %i" % angle[0]
+        #    angles.append(angle)
+        #for torsion in unionTorsions:
+        #    torsions.append(torsion)
+
+        return icoordA
+        #return ICoord(icoordA.options.copy().set_values({
+        #    'bonds' : bonds,
+        #     'angles': angles,
+        #     'torsions': torsions,
+        #    }))
+
     
     def __init__(
             self,
@@ -74,6 +138,7 @@ class ICoord(Mixin):
         self.make_Hint()  
         self.pgradqprim = np.zeros((self.num_ics),dtype=float)
         self.gradqprim = np.zeros((self.num_ics),dtype=float)
+        self.gradq = np.zeros((self.nicd,1),dtype=float)
         self.SCALEQN = 1.0
         self.MAXAD = 0.075
         self.DMAX = 0.1
@@ -111,7 +176,13 @@ class ICoord(Mixin):
         self.bondd=[]
         for bond in ob.OBMolBondIter(self.mol.OBMol):
             self.nbonds+=1
-            self.bonds.append((bond.GetBeginAtomIdx()-1,bond.GetEndAtomIdx()-1))
+            a=bond.GetBeginAtomIdx()-1
+            b=bond.GetEndAtomIdx()-1
+            if a>b:
+                self.bonds.append((a,b))
+            else:
+                self.bonds.append((b,a))
+            #self.bonds.append((bond.GetBeginAtomIdx()-1,bond.GetEndAtomIdx()-1))
             self.bondd.append(bond.GetLength())
         print "number of bonds is %i" %self.nbonds
         print "printing bonds"
@@ -261,26 +332,6 @@ class ICoord(Mixin):
         for torsion in self.torsions:
             self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
 
-    def union_ic(
-            self,
-            icoordA,
-            icoordB,
-            ):
-        """ return the union of two lists """
-        unionBonds    = list(set(icoordA.bonds) | set(icoordB.bonds))
-        unionAngles   = list(set(icoordA.angles) | set(icoordB.angles))
-        unionTorsions = list(set(icoordA.torsions) | set(icoordB.torsions))
-        print "Saving bond union"
-        self.bonds = []
-        self.angles = []
-        self.torsions = []
-        for bond in unionBonds:
-            self.bonds.append(bond)
-        for angle in unionAngles:
-            self.angles.append(angle)
-        for torsion in unionTorsions:
-            self.torsions.append(torsion)
-
     def linear_ties(self):
         maxsize=0
         for anglev in self.anglev:
@@ -427,8 +478,7 @@ class ICoord(Mixin):
                     dja2 = self.distance(comb[1][1],a2)
                     dist21 = (dia1+dja1)/2.
                     dist22 = (dia2+dja2)/2.
-                    dist21 = (dia1+dja1)/2.
-                    dist22 = (dia2+dja2)/2.
+
                     #TODO changed from 4.5 to 4
                     if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4. and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
                         mclose2 = close
@@ -505,7 +555,7 @@ class ICoord(Mixin):
     def bmatp_create(self):
         self.num_ics = self.nbonds + self.nangles + self.ntor
         N3 = 3*self.natoms
-        #print "Number of internal coordinates is %i " % self.num_ics
+        print "Number of internal coordinates is %i " % self.num_ics
         self.bmatp=np.zeros((self.num_ics,N3),dtype=float)
         i=0
         for bond in self.bonds:
@@ -584,9 +634,11 @@ class ICoord(Mixin):
         #print v
         
         lowev=0
+        print N3
+        print e
         self.nicd=N3-6
-        for i in range(self.nicd):
-            if e[i]<0.001:
+        for eig in e:
+            if eig<0.001:
                 lowev+=1
         if lowev>0:
             print("!!!!! lowev: %i" % lowev)
@@ -670,30 +722,6 @@ class ICoord(Mixin):
         self.bmatti = np.matmul(bbti,bmat)
         #print self.bmatti
         #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
-
-
-    #TODO this could be a Mixin function if formatted properly
-    def grad_to_q(self,grad):
-        N3=self.natoms*3
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
-
-        gradq = np.matmul(self.bmatti,grad)
-        self.pgradq = gradq
-        #print("Printing gradq")
-        #print gradq
-        #TODO need to calc gradrms and pgradrms  and gradqprim
-
-        self.gradrms = np.linalg.norm(gradq)
-        print("gradrms = %1.4f" % self.gradrms)
-
-        #Hessian update
-        self.pgradqprim=self.gradqprim
-        self.gradqprim = np.matmul(np.transpose(self.Ut),gradq)
-        #print self.gradqprim
-
-        return gradq
-
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -901,7 +929,6 @@ class ICoord(Mixin):
         else:
             return rflag
 
-
     def make_Hint(self):
         self.newHess = 5
         Hdiagp = []
@@ -933,53 +960,6 @@ class ICoord(Mixin):
         tmp = np.matmul(self.Ut,self.Hintp)
         Hint = np.matmul(self.Ut,np.transpose(tmp))
 
-		#TODO this could be in mixin if formatted differently
-    def update_ic_eigen(self,gradq):
-        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
-        if self.SCALEQN>10.0: SCALE=10.0
-        lambda1 = 0.0
-
-        e,v_temp = np.linalg.eigh(self.Hint)
-        v = np.transpose(v_temp)
-        e = np.reshape( e,(len(e),1))
-        leig = e[0]
-
-        if leig < 0:
-            lambda1 = -leig+0.015
-        else:
-            lambda1 = 0.005
-        if abs(lambda1)<0.005: lambda1 = 0.005
-
-        # => grad in eigenvector basis <= #
-        gqe = np.matmul(v,gradq)
-
-        #TODO why is this done if sign is going to overwrite it?
-        dqe0 = np.divide(-gqe,e)
-        dqe0 = dqe0/lambda1/SCALE
-        dqe0 = np.fromiter((self.MAXAD*np.sign(xi) for xi in dqe0), dqe0.dtype)
-
-        dq0 = np.matmul(v_temp,np.transpose(dqe0))
-
-        for i in dq0:
-            if abs(i)>self.MAXAD:
-                i=np.sign(i)*self.MAXAD
-
-        # regulate max overall step
-        smag = np.linalg.norm(dq0)
-        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
-        if smag>self.DMAX:
-            dq0 = np.fromiter(( xi*self.DMAX/smag for xi in dq0), dq0.dtype)
-
-        # compute predicted change in energy 
-        dEtemp = np.matmul(self.Hint,dq0)
-        self.dEpre = 0
-        self.dEpre = np.dot(dq0,gradq)
-        dEpre2 = 0.5*np.dot(dEtemp,dq0)
-        self.dEpre +=dEpre2
-        self.dEpre *=KCAL_MOL_PER_AU
-        print( "predE: %5.2f " % self.dEpre) 
-        return dq0
-
     def optimize(self,nsteps):
         xyzfile=os.getcwd()+"/xyzfile.xyz"
         output_format = 'xyz'
@@ -991,9 +971,12 @@ class ICoord(Mixin):
 
         for step in range(nsteps):
             print("iteration step %i" %step)
+
+            # => Opt step <= #
             self.opt_step()
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-            #step controller 
+            # => step controller  <= #
+
             #write convergence
             largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
             for mol in opt_molecules:
@@ -1007,27 +990,59 @@ class ICoord(Mixin):
         grad = self.lot.getGrad()
         self.bmatp_create()
         self.bmat_create()
-        gradq = self.grad_to_q(grad)
-        dq = self.update_ic_eigen(gradq)
-        print("dq is ")
-        print dq
+        self.pgradq = self.gradq
+        self.gradq = self.grad_to_q(grad)
+
+        # For Hessian update
+        self.pgradqprim=self.gradqprim
+        self.gradqprim = np.matmul(np.transpose(self.Ut),self.gradq)
+
+        # => Take Eigenvector Step <=#
+        dq = self.update_ic_eigen(self.gradq)
+
+        # => Update Hessian <= #
+        self.update_bfgs(dq)
+
+        dEpre = self.compute_predE(dq)
         rflag = self.ic_to_xyz_opt(dq)
+
+    def update_bfgs(self,dq):
+
+        print("In update bfgs")
+        self.newHess-=1
+        dg = self.gradq - self.pgradq
+        Gdg = np.matmul(self.Hinv,dg)
+        print "shape of Gdg is %s" %(np.shape(Gdg),)
+
 
 
 if __name__ == '__main__':
     from pytc import *
     
-    filepath="tests/stretched_fluoroethene.xyz"
+    filepath1="tests/SiH4.xyz"
+    filepath2="tests/SiH2H2.xyz"
 
     # LOT object
     nocc=11
     nactive=2
-    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot2 = PyTC(lot1.options.copy())
+
+    #lot2=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
     #lot.cas_from_geom()
 
     # ICoord object
-    mol=pb.readfile("xyz",filepath).next()
-    ic1=ICoord.from_options(mol=mol,lot=lot)
+    mol1=pb.readfile("xyz",filepath1).next()
+    mol2=pb.readfile("xyz",filepath2).next()
+    print "ic1"
+    ic1=ICoord.from_options(mol=mol1,lot=lot1)
+    print "ic2"
+    ic2=ICoord.from_options(mol=mol2,lot=lot2)
+    ic3= ICoord.union_ic(ic1,ic2)
+    ic3.bmatp_create()
+    ic3.bmatp_to_U()
+    ic3.bmat_create()
+    
     #lot.cas_from_geom()
 
     #dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
@@ -1048,4 +1063,4 @@ if __name__ == '__main__':
     #dq[:] = 0.05
     #ic1.ic_to_xyz_opt(dq)
 
-    #ic1.optimize(50)
+    #ic1.optimize(1)

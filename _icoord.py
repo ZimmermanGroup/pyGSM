@@ -1,6 +1,7 @@
 import numpy as np
 import openbabel as ob
 import pybel as pb
+from units import *
 
 class Mixin:
 
@@ -200,3 +201,62 @@ class Mixin:
         val = np.exp(-A*(d-dr))
         if val>1: val=1
         return val
+
+    def update_ic_eigen(self,gradq):
+        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
+        if self.SCALEQN>10.0: SCALE=10.0
+        lambda1 = 0.0
+
+        e,v_temp = np.linalg.eigh(self.Hint)
+        v = np.transpose(v_temp)
+        e = np.reshape( e,(len(e),1))
+        leig = e[0]
+
+        if leig < 0:
+            lambda1 = -leig+0.015
+        else:
+            lambda1 = 0.005
+        if abs(lambda1)<0.005: lambda1 = 0.005
+
+        # => grad in eigenvector basis <= #
+        gqe = np.matmul(v,gradq)
+
+        #TODO why is this done if sign is going to overwrite it?
+        dqe0 = np.divide(-gqe,e)
+        dqe0 = dqe0/lambda1/SCALE
+        dqe0 = np.fromiter((self.MAXAD*np.sign(xi) for xi in dqe0), dqe0.dtype)
+
+        dq0 = np.matmul(v_temp,np.transpose(dqe0))
+
+        for i in dq0:
+            if abs(i)>self.MAXAD:
+                i=np.sign(i)*self.MAXAD
+
+        # regulate max overall step
+        smag = np.linalg.norm(dq0)
+        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
+        if smag>self.DMAX:
+            dq0 = np.fromiter(( xi*self.DMAX/smag for xi in dq0), dq0.dtype)
+        return dq0
+
+    def compute_predE(self,dq0):
+        # compute predicted change in energy 
+        dEtemp = np.matmul(self.Hint,dq0)
+        dEpre = np.dot(dq0,self.gradq) + 0.5*np.dot(dEtemp,dq0)
+        dEpre *=KCAL_MOL_PER_AU
+        print( "predE: %5.2f " % self.dEpre) 
+        return dEpre
+
+    def grad_to_q(self,grad):
+        N3=self.natoms*3
+        np.set_printoptions(precision=4)
+        np.set_printoptions(suppress=True)
+
+        gradq = np.matmul(self.bmatti,grad)
+        #print("Printing gradq")
+        #print gradq
+        #TODO need to calc gradrms and pgradrms  and gradqprim
+
+        self.gradrms = np.linalg.norm(gradq)
+        print("gradrms = %1.4f" % self.gradrms)
+        return gradq

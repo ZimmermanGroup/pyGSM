@@ -93,10 +93,15 @@ class Base(object):
         self.basis=self.options['basis']
         self.functional=self.options['functional']
 
-        if self.geom is None:
-            self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
+        if self.filepath is not None:
+            self.geom=manage_xyz.read_xyz(filepath,scale=1)
+        if self.geom is not None:
+            self.coords = manage_xyz.xyz_to_np(self.geom)
 
-        self.coords = manage_xyz.xyz_to_np(self.geom)
+        #if self.geom is None:
+        #    self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
+
+        #self.coords = manage_xyz.xyz_to_np(self.geom)
 
     def getEnergy(self):
         energy =0.
