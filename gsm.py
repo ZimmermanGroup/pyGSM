@@ -24,6 +24,7 @@ if __name__ == '__main__':
     from qchem import *
     import manage_xyz
     filepath="tests/fluoroethene.xyz"
+    filepath2="tests/fluoroethene_2.xyz"
 
     # LOT object
 #    nocc=23
@@ -33,13 +34,18 @@ if __name__ == '__main__':
 
 
     mol=pb.readfile("xyz",filepath).next()
+    mol2=pb.readfile("xyz",filepath2).next()
     geom = manage_xyz.read_xyz(filepath,scale=1)
+    geom2 = manage_xyz.read_xyz(filepath2,scale=1)
     lot=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+    lot2=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 
 
     ic1=ICoord.from_options(mol=mol,lot=lot)
-#    ic2=ICoord(ic1.options.copy().set_values(dict(filepath=filepath2)))
+    ic2=ICoord.from_options(mol=mol2,lot=lot2)
 
-    gsm=GSM.from_options(ICoord1=ic1,nnodes=9)
+    gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9)
+    gsm.add_node(0,1,8)
 
+    gsm2 = GSM.from_options(ICoord1=ic1,nnodes=9,isomers=[('torsions',3,2,1,5,90)]) 
 
