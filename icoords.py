@@ -5,6 +5,7 @@ import options
 import elements 
 import os
 from units import *
+import itertools
 
 
 class ICoord(object):
@@ -69,8 +70,7 @@ class ICoord(object):
         self.bmatp_to_U()
         self.bmat_create()
 
-        self.make_Hint()  #put in init
-        #self.gradq = np.zeros(self.nicd)
+        self.make_Hint()  
         self.pgradqprim = np.zeros((self.num_ics),dtype=float)
         self.gradqprim = np.zeros((self.num_ics),dtype=float)
         self.SCALEQN = 1.0
@@ -120,8 +120,6 @@ class ICoord(object):
         print "printing bonds"
         for n,bond in enumerate(self.bonds):
             print "%s: %1.2f" %(bond, self.bondd[n])
-        #print self.bonds
-        #print self.bondd
 
     def coord_num(self):
         self.coordn=[]
@@ -140,6 +138,7 @@ class ICoord(object):
             self.nangles+=1
             self.angles.append(angle)
             self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
+        print "number of angles is %i" %self.nangles
         print "printing angles"
         for n,angle in enumerate(self.angles):
             print "%s: %1.2f" %(angle, self.anglev[n])
@@ -463,39 +462,40 @@ class ICoord(object):
                 d2 = -1
                 mclose4 = 1000.
 
-                for i in range(self.natoms):
-                    for j in range(self.natoms):
-                        if frags[i]==n1 and frags[j]==n2:
-                            close=self.distance(i,j)
-                            #connect whatever is closest
-                            if close < mclose and close < self.MAX_FRAG_DIST:
-                                mclose = close
-                                a1=i
-                                a2=j
-                                found=1
+                frag0 = filter(lambda x: x[0]==n1, self.frags)
+                frag1 = filter(lambda x: x[0]==n2, self.frags)
+                combs = list(itertools.product(frag0,frag1))
+                for comb in combs: 
+                    close=self.distance(comb[0][1],comb[1][1])
+                    if close < mclose and close < self.MAX_FRAG_DIST:
+                        mclose=close
+                        a1=comb[0][1]
+                        a2=comb[1][1]
+                        found=1
 
+                #connect second pair heavies or H-Bond only, away from first pair
+                for comb in combs: 
+                    close=self.distance(comb[0][1],comb[1][1])
+                    dia1 = self.distance(comb[0][1],a1)
+                    dja1 = self.distance(comb[1][1],a1)
+                    dia2 = self.distance(comb[0][1],a2)
+                    dja2 = self.distance(comb[1][1],a2)
+                    dist21 = (dia1+dja1)/2.
+                    dist22 = (dia2+dja2)/2.
+                    dist21 = (dia1+dja1)/2.
+                    dist22 = (dia2+dja2)/2.
+                    #TODO changed from 4.5 to 4
+                    if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4. and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
+                        mclose2 = close
+                        b1=i
+                        b2=j
+                        found2=1
+    
+                #TODO
+                """
                 for i in range(self.natoms):
                     for j in range(self.natoms):
-                        if frags[i]==n1 and frags[j]==n2:
-                            close=self.distance(i,j)
-                            #connect second pair heavies or H-Bond only, away from first pair
-                            dia1 = self.distance(i,a1)
-                            dja1 = self.distance(j,a1)
-                            dia2 = self.distance(i,a2)
-                            dja2 = self.distance(j,a2)
-                            dist21 = (dia1+dja1)/2.
-                            dist22 = (dia2+dja2)/2.
-
-                            #TODO changed from 4.5 to 4
-                            if (self.getIndex(i) > 1 or self.getIndex(j)>1) and dist21 > 4. and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
-                                mclose2 = close
-                                b1=i
-                                b2=j
-                                found2=1
-                
-                for i in range(self.natoms):
-                    for j in range(self.natoms):
-                        if frags[i]==n1 and frags[j]==n2 and b1>0 and b2>0:
+                        if self.frags[i][0]==n1 and self.frags[j][0]==n2 and b1>0 and b2>0:
                             close=self.distance(i,j)
                             #connect third pair, heavies or H-Bond only, away from first pair //TODO what does this mean?
                             dia1 = self.distance(i,a1)
@@ -518,7 +518,7 @@ class ICoord(object):
 
                 for i in range(self.natoms):
                     for j in range(self.natoms):
-                        if frags[i]==n1 and frags[j]==n2 and self.isOpt==2:
+                        if self.frags[i]==n1 and self.frags[j]==n2 and self.isOpt==2:
                             #connect fourth pair, TM only, away from first pair
                             if c1!=i and c2!=i and c1!=j and c2!=j: #don't repeat 
                                 if self.isTM(i) or self.isTM(j):
@@ -528,11 +528,15 @@ class ICoord(object):
                                         d1=i
                                         d2=j
                                         found4=1
+                """
 
                 bond1=(a1,a2)
                 if found>0 and self.bond_exists(bond1)==False:
                     print("bond pair1 added : %s" % (bond1,))
                     self.bonds.append(bond1)
+                    self.nbonds+=1
+                    self.bondd.append(mclose)
+                    print "bond dist: %1.4f" % mclose
                 bond2=(b1,b2)
                 if found2>0 and self.bond_exists(bond2)==False:
                     self.bonds.append(bond2)
@@ -545,6 +549,9 @@ class ICoord(object):
                 if found4>0 and self.bond_exists(bond4)==False:
                     self.bonds.append(bond4)
                     print("bond pair2 added : %s" % (bond24,))
+
+                isOkay = self.mol.OBMol.AddBond(bond1[0]+1,bond1[1]+1,1)
+                print "Bond added okay? %r" % isOkay
 
                 if self.isOpt==2:
                     print("Checking for linear angles in newly added bond")
@@ -653,8 +660,12 @@ class ICoord(object):
         sin2phiu = 1.-cosphiu*cosphiu
         sin2phiv = 1.-cosphiv*cosphiv
 
-        if sin2phiu < 1e-3 or sin2phiv <1e-3:
-            return
+        #TODO why does this cause problems
+        #if sin2phiu < 1e-3 or sin2phiv <1e-3:
+        #    print("shouldn't be here\n")
+        #    print sin2phiu
+        #    print sin2phiv
+        #    return
 
         #CPMZ possible error in uw calc
         dqtdx = np.zeros(12,dtype=float)
@@ -718,6 +729,7 @@ class ICoord(object):
             a2=torsion[1]
             a3=torsion[2]
             a4=torsion[3]
+            #print "%s" % ((a1,a2,a3,a4),)
             dqtdx = self.bmatp_dqtdx(a1,a2,a3,a4)
             self.bmatp[i,3*a1+0] = dqtdx[0]
             self.bmatp[i,3*a1+1] = dqtdx[1]
@@ -732,7 +744,6 @@ class ICoord(object):
             self.bmatp[i,3*a4+1] = dqtdx[10]
             self.bmatp[i,3*a4+2] = dqtdx[11]
             i+=1
-            #print "%s" % ((a1,a2,a3,a4),)
 
         #print "printing bmatp"
         #print self.bmatp
@@ -1106,7 +1117,7 @@ class ICoord(object):
 
         #print("Hint elements")
         #print Hint
-        #print("Shape of Hint is %s" % (np.shape(self.Hint),))
+        print("Shape of Hint is %s" % (np.shape(self.Hint),))
 
         #if self.optCG==False or self.isTSNode==False:
         #    print "Not implemented"
@@ -1118,10 +1129,10 @@ class ICoord(object):
     def update_ic_eigen(self,gradq):
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
-        tmph = self.Hint
         lambda1 = 0.0
 
-        e,v_temp = np.linalg.eigh(tmph)
+        e,v_temp = np.linalg.eigh(self.Hint)
+        v = np.transpose(v_temp)
         e = np.reshape( e,(len(e),1))
         leig = e[0]
 
@@ -1131,7 +1142,8 @@ class ICoord(object):
             lambda1 = 0.005
         if abs(lambda1)<0.005: lambda1 = 0.005
 
-        gqe = np.matmul(v_temp,gradq)
+        # => grad in eigenvector basis <= #
+        gqe = np.matmul(v,gradq)
 
         #TODO why is this done if sign is going to overwrite it?
         dqe0 = np.divide(-gqe,e)
@@ -1196,7 +1208,7 @@ class ICoord(object):
 if __name__ == '__main__':
     from pytc import *
     
-    filepath="tests/fluoroethene.xyz"
+    filepath="tests/stretched_fluoroethene.xyz"
 
     # LOT object
     nocc=11
@@ -1227,4 +1239,4 @@ if __name__ == '__main__':
     #dq[:] = 0.05
     #ic1.ic_to_xyz_opt(dq)
 
-    ic1.optimize(1)
+    ic1.optimize(50)
