@@ -857,7 +857,7 @@ class ICoord(object):
         #TODO need to calc gradrms and pgradrms  and gradqprim
 
         self.gradrms = np.linalg.norm(gradq)
-        #print("gradrms = %1.4f" % self.gradrms)
+        print("gradrms = %1.4f" % self.gradrms)
 
         #Hessian update
         self.pgradqprim=self.gradqprim
@@ -1155,10 +1155,8 @@ class ICoord(object):
         self.dEpre = 0
         self.dEpre = np.dot(dq0,gradq)
         dEpre2 = 0.5*np.dot(dEtemp,dq0)
-
         self.dEpre +=dEpre2
         self.dEpre *=KCAL_MOL_PER_AU
-
         print( "predE: %5.2f " % self.dEpre) 
         return dq0
 
@@ -1168,19 +1166,18 @@ class ICoord(object):
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        opt_molecules.append(self.mol.OBMol)
+        opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
         self.pgradrms = 10000.
 
         for step in range(nsteps):
+            print("iteration step %i" %step)
             self.opt_step()
-            opt_molecules.append(self.mol.OBMol)
-
+            opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
             #step controller 
-
-        #write convergence
-        with open(xyzfile,'w') as f:
+            #write convergence
+            largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
             for mol in opt_molecules:
-                f.write(obconversion.WriteString(mol))
+                largeXyzFile.write(pb.readstring("xyz",mol))
 
     def opt_step(self):
         energy=0.
@@ -1188,11 +1185,13 @@ class ICoord(object):
         energy = self.lot.getEnergy()
         print("energy is %1.4f" % energy)
         grad = self.lot.getGrad()
+        self.bmatp_create()
+        self.bmat_create()
         gradq = self.grad_to_q(grad)
         dq = self.update_ic_eigen(gradq)
+        print("dq is ")
         print dq
         rflag = self.ic_to_xyz_opt(dq)
-
 
 if __name__ == '__main__':
     from pytc import *
@@ -1210,9 +1209,9 @@ if __name__ == '__main__':
     ic1=ICoord.from_options(mol=mol,lot=lot)
     lot.cas_from_geom()
 
-    dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
-    print dq
-    ic1.ic_to_xyz_opt(dq)
+    #dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
+    #print dq
+    #ic1.ic_to_xyz_opt(dq)
 
     #dq = np.zeros(ic1.nicd)
     #dq[:]=0.01
@@ -1228,4 +1227,4 @@ if __name__ == '__main__':
     #dq[:] = 0.05
     #ic1.ic_to_xyz_opt(dq)
 
-    #ic1.optimize(2)
+    ic1.optimize(1)

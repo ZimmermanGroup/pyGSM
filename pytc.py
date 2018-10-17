@@ -3,6 +3,7 @@ import psiw
 from base_lot import * 
 import numpy as np
 import manage_xyz as mx
+from units import *
 
 
 class PyTC(Base):
@@ -12,16 +13,14 @@ class PyTC(Base):
     """
 
     def compute_energy(self,S,index):
-        print("printing coords in lot")
-        print self.coords
-        T = ls.Tensor((np.shape(self.coords)))
-        T[...] = self.coords
-        self.lot.update_xyz(T)
-        return self.lot.compute_energy(S=S,index=index)
+        T = ls.Tensor.array(self.coords*ANGSTROM_TO_AU)
+        self.lot = self.lot.update_xyz(T)
+        tmp = self.lot.compute_energy(S=S,index=index)
+        return tmp*KCAL_MOL_PER_AU
 
     def compute_gradient(self,S,index):
         tmp=self.lot.compute_gradient(S=S,index=index)
-        return tmp[...]
+        return tmp[...]*ANGSTROM_TO_AU
 
     @staticmethod
     def from_options(**kwargs):
@@ -92,7 +91,7 @@ if __name__ == '__main__':
     import manage_xyz
     
     filepath="tests/fluoroethene.xyz"
-    nocc=23
+    nocc=11
     nactive=2
     #geom=manage_xyz.read_xyz(filepath,scale=1)
 
