@@ -7,8 +7,9 @@ import os
 from units import *
 import itertools
 
+from _icoord import Mixin
 
-class ICoord(object):
+class ICoord(Mixin):
 
     @staticmethod
     def default_options():
@@ -87,10 +88,6 @@ class ICoord(object):
 
         self.nretry = 0 
         
-    def print_xyz(self):
-        for a in ob.OBMolAtomIter(self.mol.OBMol):
-            print(" %1.4f %1.4f %1.4f" %(a.GetX(), a.GetY(), a.GetZ()) )
-
     def ic_create(self):
         self.natoms= len(self.mol.atoms)
         #print self.natoms
@@ -284,12 +281,6 @@ class ICoord(object):
         for torsion in unionTorsions:
             self.torsions.append(torsion)
 
-    def bond_exists(self,bond):
-        if bond in self.bonds:
-            return True
-        else:
-            return False
-
     def linear_ties(self):
         maxsize=0
         for anglev in self.anglev:
@@ -384,52 +375,6 @@ class ICoord(object):
 
         print(" nfrags: %i" % (self.nfrags))
 
-    def distance(self,i,j):
-        """ for some reason openbabel has this one based """
-        a1=self.mol.OBMol.GetAtom(i+1)
-        a2=self.mol.OBMol.GetAtom(j+1)
-        return a1.GetDistance(a2)
-
-    def get_angle(self,i,j,k):
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1)
-        c=self.mol.OBMol.GetAtom(k+1)
-        return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex #in degrees
-
-    def get_torsion(self,i,j,k,l):
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1)
-        c=self.mol.OBMol.GetAtom(k+1)
-        d=self.mol.OBMol.GetAtom(l+1)
-        tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
-        #if tval >3.14159:
-        if tval>=np.pi:
-            tval-=2.*np.pi
-        #if tval <-3.14159:
-        if tval<=-np.pi:
-            tval+=2.*np.pi
-        return tval*180./np.pi
-
-
-    def getIndex(self,i):
-        return self.mol.OBMol.GetAtom(i+1).GetIndex()
-
-    def getCoords(self,i):
-        a= self.mol.OBMol.GetAtom(i+1)
-        return [a.GetX(),a.GetY(),a.GetZ()]
-
-    def getAtomicNum(self,i):
-        return self.mol.OBMol.GetAtom(i+1).GetAtomicNum()
-
-    def isTM(self,i):
-        anum= self.getIndex(i)
-        if anum>20:
-            if anum<31:
-                return True
-            elif anum >38 and anum < 49:
-                return True
-            elif anum >71 and anum <81:
-                return True
 
 
     def bond_frags(self):
@@ -556,136 +501,6 @@ class ICoord(object):
                 if self.isOpt==2:
                     print("Checking for linear angles in newly added bond")
                     #TODO
-
-    def bmatp_dqbdx(self,i,j):
-        u = np.zeros(3,dtype=float)
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1)
-        coora=np.array([a.GetX(),a.GetY(),a.GetZ()])
-        coorb=np.array([b.GetX(),b.GetY(),b.GetZ()])
-        u=np.subtract(coora,coorb)
-        norm= np.linalg.norm(u)
-        u = u/norm
-        dqbdx = np.zeros(6,dtype=float)
-        dqbdx[0] = u[0]
-        dqbdx[1] = u[1]
-        dqbdx[2] = u[2]
-        dqbdx[3] = -u[0]
-        dqbdx[4] = -u[1]
-        dqbdx[5] = -u[2]
-        return dqbdx
-
-    def bmatp_dqadx(self,i,j,k):
-        u = np.zeros(3,dtype=float)
-        v = np.zeros(3,dtype=float)
-        w = np.zeros(3,dtype=float)
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1) #vertex
-        c=self.mol.OBMol.GetAtom(k+1)
-        coora=np.array([a.GetX(),a.GetY(),a.GetZ()])
-        coorb=np.array([b.GetX(),b.GetY(),b.GetZ()])
-        coorc=np.array([c.GetX(),c.GetY(),c.GetZ()])
-        u=np.subtract(coora,coorb)
-        v=np.subtract(coorc,coorb)
-        n1=self.distance(i,j)
-        n2=self.distance(j,k)
-        u=u/n1
-        v=v/n2
-
-        w=np.cross(u,v)
-        nw = np.linalg.norm(w)
-        if nw < 1e-3:
-            print(" linear angle detected")
-            vn = np.zeros(3,dtype=float)
-            vn[2]=1.
-            w=np.cross(u,vn)
-            nw = np.linalg.norm(w)
-            if nw < 1e-3:
-                vn[2]=0.
-                vn[1]=1.
-                w=np.cross(u,vn)
-
-        n3=np.linalg.norm(w)
-        w=w/n3
-        uw=np.cross(u,w)
-        wv=np.cross(w,v)
-        dqadx = np.zeros(9,dtype=float)
-        dqadx[0] = uw[0]/n1
-        dqadx[1] = uw[1]/n1
-        dqadx[2] = uw[2]/n1
-        dqadx[3] = -uw[0]/n1 + -wv[0]/n2
-        dqadx[4] = -uw[1]/n1 + -wv[1]/n2
-        dqadx[5] = -uw[2]/n1 + -wv[2]/n2
-        dqadx[6] = wv[0]/n2
-        dqadx[7] = wv[1]/n2
-        dqadx[8] = wv[2]/n2
-
-        return dqadx
-
-    def bmatp_dqtdx(self,i,j,k,l):
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1) 
-        c=self.mol.OBMol.GetAtom(k+1)
-        d=self.mol.OBMol.GetAtom(l+1)
-
-        angle1=self.mol.OBMol.GetAngle(a,b,c)*np.pi/180.
-        angle2=self.mol.OBMol.GetAngle(b,c,d)*np.pi/180.
-        if angle1>3.0 or angle2>3.0:
-            print(" near-linear angle")
-            return
-        u = np.zeros(3,dtype=float)
-        v = np.zeros(3,dtype=float)
-        w = np.zeros(3,dtype=float)
-        coora=np.array([a.GetX(),a.GetY(),a.GetZ()])
-        coorb=np.array([b.GetX(),b.GetY(),b.GetZ()])
-        coorc=np.array([c.GetX(),c.GetY(),c.GetZ()])
-        coord=np.array([d.GetX(),d.GetY(),d.GetZ()])
-        u=np.subtract(coora,coorb)
-        w=np.subtract(coorc,coorb)
-        v=np.subtract(coord,coorc)
-        
-        n1=self.distance(i,j)
-        n2=self.distance(j,k)
-        n3=self.distance(k,l)
-
-        u=u/n1
-        v=v/n1
-        w=w/n1
-
-        uw=np.cross(u,w)
-        vw=np.cross(v,w)
-
-        cosphiu = np.dot(u,w)
-        cosphiv = -1*np.dot(v,w)
-        sin2phiu = 1.-cosphiu*cosphiu
-        sin2phiv = 1.-cosphiv*cosphiv
-
-        #TODO why does this cause problems
-        #if sin2phiu < 1e-3 or sin2phiv <1e-3:
-        #    print("shouldn't be here\n")
-        #    print sin2phiu
-        #    print sin2phiv
-        #    return
-
-        #CPMZ possible error in uw calc
-        dqtdx = np.zeros(12,dtype=float)
-        dqtdx[0]  = uw[0]/(n1*sin2phiu);
-        dqtdx[1]  = uw[1]/(n1*sin2phiu);
-        dqtdx[2]  = uw[2]/(n1*sin2phiu);
-        dqtdx[3]   = -uw[0]/(n1*sin2phiu) + ( uw[0]*cosphiu/(n2*sin2phiu) + vw[0]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[4]   = -uw[1]/(n1*sin2phiu) + ( uw[1]*cosphiu/(n2*sin2phiu) + vw[1]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[5]   = -uw[2]/(n1*sin2phiu) + ( uw[2]*cosphiu/(n2*sin2phiu) + vw[2]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[6]   =  vw[0]/(n3*sin2phiv) - ( uw[0]*cosphiu/(n2*sin2phiu) + vw[0]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[7]   =  vw[1]/(n3*sin2phiv) - ( uw[1]*cosphiu/(n2*sin2phiu) + vw[1]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[8]   =  vw[2]/(n3*sin2phiv) - ( uw[2]*cosphiu/(n2*sin2phiu) + vw[2]*cosphiv/(n2*sin2phiv) )                  
-        dqtdx[9]   = -vw[0]/(n3*sin2phiv)                                                                                  
-        dqtdx[10]  = -vw[1]/(n3*sin2phiv)                                                                                  
-        dqtdx[11]  = -vw[2]/(n3*sin2phiv)
-
-        if np.isnan(dqtdx).any():
-            print "Error!"
-        return dqtdx
-
 
     def bmatp_create(self):
         self.num_ics = self.nbonds + self.nangles + self.ntor
@@ -856,6 +671,8 @@ class ICoord(object):
         #print self.bmatti
         #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
+
+    #TODO this could be a Mixin function if formatted properly
     def grad_to_q(self,grad):
         N3=self.natoms*3
         np.set_printoptions(precision=4)
@@ -877,16 +694,6 @@ class ICoord(object):
 
         return gradq
 
-    def close_bond(self,bond):
-        A = 0.2
-        d = self.distance(bond[0],bond[1])
-        #dr = (vdw_radii.radii[self.getAtomicNum(bond[0])] + vdw_radii.radii[self.getAtomicNum(bond[1])] )/2
-        a=self.getAtomicNum(bond[0])
-        b=self.getAtomicNum(bond[1])
-        dr = (self.Elements.from_atomic_number(a).vdw_radius + self.Elements.from_atomic_number(b).vdw_radius )/2.
-        val = np.exp(-A*(d-dr))
-        if val>1: val=1
-        return val
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -1126,6 +933,7 @@ class ICoord(object):
         tmp = np.matmul(self.Ut,self.Hintp)
         Hint = np.matmul(self.Ut,np.transpose(tmp))
 
+		#TODO this could be in mixin if formatted differently
     def update_ic_eigen(self,gradq):
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
@@ -1205,6 +1013,7 @@ class ICoord(object):
         print dq
         rflag = self.ic_to_xyz_opt(dq)
 
+
 if __name__ == '__main__':
     from pytc import *
     
@@ -1219,7 +1028,7 @@ if __name__ == '__main__':
     # ICoord object
     mol=pb.readfile("xyz",filepath).next()
     ic1=ICoord.from_options(mol=mol,lot=lot)
-    lot.cas_from_geom()
+    #lot.cas_from_geom()
 
     #dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
     #print dq
@@ -1239,4 +1048,4 @@ if __name__ == '__main__':
     #dq[:] = 0.05
     #ic1.ic_to_xyz_opt(dq)
 
-    ic1.optimize(50)
+    #ic1.optimize(50)
