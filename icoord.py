@@ -850,9 +850,9 @@ class ICoord(Mixin):
 
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
-            #print("iteration step %i" %n)
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
+            assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
             #TODO frozen
@@ -987,8 +987,11 @@ class ICoord(Mixin):
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
+        #opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
         self.energy = self.lot.getEnergy()
+        grmss = []
+        steps = []
+        energies=[]
 
         print "Initial energy is %1.4f\n" % self.energy
 
@@ -996,13 +999,31 @@ class ICoord(Mixin):
             print("iteration step %i" %step)
 
             # => Opt step <= #
-            self.opt_step()
+            smag =self.opt_step()
+            grmss.append(self.gradrms)
+            steps.append(smag)
+            energies.append(self.energy)
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             #write convergence
             largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
             for mol in opt_molecules:
                 largeXyzFile.write(pb.readstring("xyz",mol))
+            with open(xyzfile,'r+') as f:
+                content  =f.read()
+                f.seek(0,0)
+                f.write("[Molden Format]\n[Geometries] (XYZ)\n"+content)
+            with open(xyzfile, "a") as f:
+                f.write("[GEOCONV]\n")
+                f.write("energy\n")
+                for energy in energies:
+                    f.write('{}\n'.format(energy))
+                f.write("max-force\n")
+                for grms in grmss:
+                    f.write('{}\n'.format(grms))
+                f.write("max-step\n")
+                for step in steps:
+                    f.write('{}\n'.format(step))
 
             if self.gradrms<self.OPTTHRESH:
                 break
@@ -1035,8 +1056,8 @@ class ICoord(Mixin):
         print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
         if smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
-
-        print dq
+        else: 
+            dq = np.fromiter(( xi for xi in dq), dq.dtype)
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -1076,7 +1097,7 @@ class ICoord(Mixin):
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
 
-        return 
+        return  smag
 
 
     def update_bfgsp(self,dq):
@@ -1112,6 +1133,7 @@ if __name__ == '__main__':
 
     if 0:
         # fragment example -- not working properly -- 
+        # openbabel is not updating ICs as expected :,(
         filepath1="tests/SiH4.xyz"
         filepath2="tests/SiH2H2.xyz"
 
@@ -1147,4 +1169,12 @@ if __name__ == '__main__':
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        ic1.optimize(100)
+        ic1.optimize(10)
+        ic1.ic_create()
+        ic1.bmatp_create()
+        ic1.bmatp_to_U()
+        ic1.bmat_create()
+        ic1.make_Hint()
+        ic1.optimize(40)
+
+

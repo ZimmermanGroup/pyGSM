@@ -222,12 +222,12 @@ class Mixin:
         # => grad in eigenvector basis <= #
         gqe = np.matmul(v,gradq)
 
-        #TODO why is this done if sign is going to overwrite it?
-        dqe0 = np.divide(-gqe,e)
-        dqe0 = dqe0/lambda1/SCALE
-        dqe0 = np.fromiter((self.MAXAD*np.sign(xi) for xi in dqe0), dqe0.dtype)
+        dqe0 = np.divide(-gqe,e+lambda1)/SCALE
+        for i in dqe0:
+            if abs(i)>self.MAXAD:
+                i=np.sign(i)*self.MAXAD
 
-        dq0 = np.matmul(v_temp,np.transpose(dqe0))
+        dq0 = np.matmul(v_temp,dqe0)
 
         for i in dq0:
             if abs(i)>self.MAXAD:
