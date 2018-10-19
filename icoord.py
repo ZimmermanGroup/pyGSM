@@ -1106,7 +1106,8 @@ class ICoord(Mixin):
 
 
 if __name__ == '__main__':
-    from pytc import *
+    #from pytc import *
+    from qchem import *
     
 
     if 0:
@@ -1134,12 +1135,16 @@ if __name__ == '__main__':
 
     if 1:
         #optimize example 
-        filepath="tests/twisted_fluoroethene.xyz"
-        nocc=11
-        nactive=2
-        lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        lot1.cas_from_file(filepath)
+        filepath="tests/stretched_fluoroethene.xyz"
+        #nocc=11
+        #nactive=2
+        #lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        #lot1.cas_from_file(filepath)
+
+        geom=manage_xyz.read_xyz(filepath,scale=1)   
+        lot1=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+	
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        ic1.optimize(1)
+        ic1.optimize(100)

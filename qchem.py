@@ -1,34 +1,10 @@
 from base_lot import *
 import numpy as np
 import os
+from units import *
 
 class QChem(Base):
     
-    #def getEnergy(self):
-    #    print "Getting Energy"
-    #    energy =0.
-    #    average_over =0
-    #    for i in self.calc_states:
-    #        energy += self.compute_energy(average_over,S=i[0],index=i[1])
-    #        average_over+=1
-
-    #    final_energy = energy/average_over
-    #    print "Energy: %.9f"%final_energy
-    #    return final_energy
-
-    #def getGrad(self):
-    #    print "Getting Gradient"
-    #    average_over=0
-    #    grad = np.zeros((len(self.geom),3))
-    #    for i in self.calc_states:
-    #        tmp = self.read_gradients(average_over,S=i[0],index=i[1])
-    #        print(np.shape(tmp[...]))
-    #        grad += tmp[...] 
-    #        average_over+=1
-    #    final_grad = grad/average_over
-
-    #    return np.reshape(final_grad,(3*len(self.geom),1))
-
     def compute_energy(self,S=0,index=0):
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
@@ -48,6 +24,7 @@ class QChem(Base):
         tempfile.write('\n')
         tempfile.write('$molecule\n')
         tempfile.write('0 {}\n'.format(S))
+        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords) #updates geom
         for coord in self.geom:
             for i in coord:
                 tempfile.write(str(i)+' ')
@@ -69,7 +46,7 @@ class QChem(Base):
                 break
             if "$" in lines:
                 temp += 1
-        return energy
+        return energy*KCAL_MOL_PER_AU
 
     def compute_gradient(self,S=0,index=0,*args):
         """ Assuming grad already computed in compute_energy"""
@@ -87,7 +64,7 @@ class QChem(Base):
                 gradient.append([float(i) for i in tmpline])
             elif temp == 3:
                 break
-        return np.asarray(gradient)    
+        return np.asarray(gradient)*ANGSTROM_TO_AU
 
     @staticmethod
     def from_options(**kwargs):
@@ -96,8 +73,7 @@ class QChem(Base):
     
 if __name__ == '__main__':
 
-    from obutils import *
-    import icoords as ic
+    import icoord as ic
     import pybel as pb    
     import manage_xyz
 
@@ -106,5 +82,7 @@ if __name__ == '__main__':
     geom=manage_xyz.read_xyz(filepath,scale=1)   
 
     lot=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
-    lot.getEnergy()
-    lot.getGrad()
+    e=lot.getEnergy()
+    print e
+    g=lot.getGrad()
+    print g
