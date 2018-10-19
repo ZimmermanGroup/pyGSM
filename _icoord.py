@@ -203,6 +203,7 @@ class Mixin:
         return val
 
     def update_ic_eigen(self,gradq):
+        SCALE =self.SCALEQN
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
         lambda1 = 0.0
@@ -232,11 +233,6 @@ class Mixin:
             if abs(i)>self.MAXAD:
                 i=np.sign(i)*self.MAXAD
 
-        # regulate max overall step
-        smag = np.linalg.norm(dq0)
-        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
-        if smag>self.DMAX:
-            dq0 = np.fromiter(( xi*self.DMAX/smag for xi in dq0), dq0.dtype)
         return dq0
 
     def compute_predE(self,dq0):
@@ -244,19 +240,14 @@ class Mixin:
         dEtemp = np.matmul(self.Hint,dq0)
         dEpre = np.dot(dq0,self.gradq) + 0.5*np.dot(dEtemp,dq0)
         dEpre *=KCAL_MOL_PER_AU
-        print( "predE: %5.2f " % self.dEpre) 
+        print( "predE: %5.2f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
         N3=self.natoms*3
         np.set_printoptions(precision=4)
         np.set_printoptions(suppress=True)
-
         gradq = np.matmul(self.bmatti,grad)
         #print("Printing gradq")
         #print gradq
-        #TODO need to calc gradrms and pgradrms  and gradqprim
-
-        self.gradrms = np.linalg.norm(gradq)
-        print("gradrms = %1.4f" % self.gradrms)
         return gradq

@@ -94,8 +94,10 @@ class Base(object):
         self.functional=self.options['functional']
 
         if self.filepath is not None:
-            self.geom=manage_xyz.read_xyz(filepath,scale=1)
+            print "reading geom from %s" % self.filepath
+            self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
         if self.geom is not None:
+            print "setting coords from geom"
             self.coords = manage_xyz.xyz_to_np(self.geom)
 
         #if self.geom is None:
@@ -106,7 +108,6 @@ class Base(object):
     def getEnergy(self):
         energy =0.
         average_over =0
-        print(" in getEnergy")
         for i in self.calc_states:
             energy += self.compute_energy(S=i[0],index=i[1])
             average_over+=1

@@ -32,6 +32,13 @@ class ICoord(Mixin):
             doc='Maximum fragment distance considered for making fragments')
 
         opt.add_option(
+            key='OPTTHRESH',
+            value=0.0005,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
+        opt.add_option(
                 key="mol",
                 required=False,
                 allowed_types=[pb.Molecule],
@@ -106,12 +113,13 @@ class ICoord(Mixin):
         #for torsion in unionTorsions:
         #    torsions.append(torsion)
 
-        return icoordA
-        #return ICoord(icoordA.options.copy().set_values({
-        #    'bonds' : bonds,
-        #     'angles': angles,
-        #     'torsions': torsions,
-        #    }))
+        ic3 = ICoord(icoordA.options.copy().set_values({
+            'bonds' : bonds,
+             'angles': angles,
+             'torsions': torsions,
+            }))
+
+        return ic3
 
     
     def __init__(
@@ -126,6 +134,7 @@ class ICoord(Mixin):
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
         self.lot = self.options['lot']
+        self.OPTTHRESH = self.options['OPTTHRESH']
 
 
         #self.print_xyz()
@@ -136,14 +145,17 @@ class ICoord(Mixin):
         self.bmat_create()
 
         self.make_Hint()  
-        self.pgradqprim = np.zeros((self.num_ics),dtype=float)
-        self.gradqprim = np.zeros((self.num_ics),dtype=float)
+        self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
+        self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
         self.gradq = np.zeros((self.nicd,1),dtype=float)
+        self.pgradq = np.zeros((self.nicd,1),dtype=float)
+        self.gradrms = 1000.
         self.SCALEQN = 1.0
         self.MAXAD = 0.075
         self.DMAX = 0.1
-        self.dEpre = 0.0
         self.ixflag = 0
+        self.energy = 0.
+        self.DMIN0 =self.DMAX/50.
         self.lot.coords = np.zeros((len(self.mol.atoms),3))
         for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
             self.lot.coords[i,0] = a.GetX()
@@ -170,7 +182,6 @@ class ICoord(Mixin):
         self.make_nonbond() 
 
     def make_bonds(self):
-        MAX_BOND_DIST=0.
         self.nbonds=0
         self.bonds=[]
         self.bondd=[]
@@ -555,7 +566,7 @@ class ICoord(Mixin):
     def bmatp_create(self):
         self.num_ics = self.nbonds + self.nangles + self.ntor
         N3 = 3*self.natoms
-        print "Number of internal coordinates is %i " % self.num_ics
+        #print "Number of internal coordinates is %i " % self.num_ics
         self.bmatp=np.zeros((self.num_ics,N3),dtype=float)
         i=0
         for bond in self.bonds:
@@ -629,15 +640,12 @@ class ICoord(Mixin):
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
-        ##print "eigenvalues of BB^T" 
         #print e
         #print v
         
         lowev=0
-        print N3
-        print e
         self.nicd=N3-6
-        for eig in e:
+        for eig in e[self.nicd:0:-1]:
             if eig<0.001:
                 lowev+=1
         if lowev>0:
@@ -829,10 +837,9 @@ class ICoord(Mixin):
         dq = dq0
         #target IC values
         qn = self.q + dq 
-        #print("printing target q")
-        #print qn
-        #print("dq")
-        #print dq
+
+        #primitive internal values
+        qprim = np.concatenate((self.bondd,self.anglev,self.torv))
 
         opt_molecules=[]
         xyzfile=os.getcwd()+"/ic_to_xyz.xyz"
@@ -911,14 +918,29 @@ class ICoord(Mixin):
         elif self.ixflag>0:
             self.ixflag = 0
 
-        #regular GSM does things with qprim  not doing here
+        if retry==False:
+            self.update_ics()
+            torsions=[]
+            for i,j in zip(self.torv,qprim[self.nbonds+self.nangles:]):
+                tordiff = i-j
+                if tordiff>180.:
+                    torfix=-360.
+                elif tordiff<-180.:
+                    torfix=360.
+                else:
+                    torfix=0.
+                torsions.append((i+torfix))
+
+            qprim_cur = np.concatenate((self.bondd,self.anglev,torsions))
+            self.dqprim = qprim_cur - qprim
+            self.dqprim[self.nbonds:] *= np.pi/180.
+            self.dqprim = np.reshape(self.dqprim,(self.num_ics,1))
 
         #write convergence geoms to file 
-        largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
-        for mol in opt_molecules:
-            largeXyzFile.write(pb.readstring("xyz",mol))
+        #largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
+        #for mol in opt_molecules:
+        #    largeXyzFile.write(pb.readstring("xyz",mol))
        
-
         #print(" \n magall")
         #print magall
         #print(" \n dmagall")
@@ -945,7 +967,6 @@ class ICoord(Mixin):
         #    print i
         
         tmp = np.matmul(self.Ut,self.Hintp)
-        #print("Shape oftmp is %s" % (np.shape(tmp),))
         self.Hint = np.matmul(self.Ut,np.transpose(tmp))
         self.Hinv = np.linalg.inv(self.Hint)
 
@@ -967,7 +988,9 @@ class ICoord(Mixin):
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
         opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-        self.pgradrms = 10000.
+        self.energy = self.lot.getEnergy()
+
+        print "Initial energy is %1.4f\n" % self.energy
 
         for step in range(nsteps):
             print("iteration step %i" %step)
@@ -975,23 +998,30 @@ class ICoord(Mixin):
             # => Opt step <= #
             self.opt_step()
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-            # => step controller  <= #
 
             #write convergence
             largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
             for mol in opt_molecules:
                 largeXyzFile.write(pb.readstring("xyz",mol))
 
+            if self.gradrms<self.OPTTHRESH:
+                break
+
+
     def opt_step(self):
         energy=0.
-        grad = self.lot.getGrad()
-        energy = self.lot.getEnergy()
-        print("energy is %1.4f" % energy)
+
+        energyp = self.energy
         grad = self.lot.getGrad()
         self.bmatp_create()
         self.bmat_create()
+
+        # grad in ics
         self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
+        pgradrms = self.gradrms
+        self.gradrms = np.linalg.norm(self.gradq)
+        print("gradrms = %1.4f" % self.gradrms)
 
         # For Hessian update
         self.pgradqprim=self.gradqprim
@@ -1000,67 +1030,116 @@ class ICoord(Mixin):
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq)
 
-        # => Update Hessian <= #
-        self.update_bfgs(dq)
+        # regulate max overall step
+        smag = np.linalg.norm(dq)
+        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
+        if smag>self.DMAX:
+            dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
 
-        dEpre = self.compute_predE(dq)
+        print dq
+
+        # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
+        #TODO if rflag and ixflag
+      
+        # => Update Hessian <= #
+        self.update_bfgsp(dq)
 
-    def update_bfgs(self,dq):
+        # => calc energyat new position <= #
+        self.energy = self.lot.getEnergy()
+        print self.energy
 
-        print("In update bfgs")
+        # check goodness of step
+        dEstep = self.energy - energyp
+        dEpre = self.compute_predE(dq)
+        ratio = dEstep/dEpre
+        print "ratio is %1.4f" % ratio
+
+        # => step controller  <= #
+        if dEstep>0.001:
+            print("decreasing DMAX")
+            if smag <self.DMAX:
+                self.DMAX = smag/1.5
+            else: 
+                self.DMAX = self.DMAX/1.5
+        elif (ratio<0.2 or ratio>1.5) and abs(dEpre)>0.05:
+            print("decreasing DMAX")
+            if smag<self.DMAX:
+                self.DMAX = smag/1.1
+            else:
+                self.DMAX = smag/1.2
+        elif (ratio>0.75 and ratio<1.25) and self.gradrms<pgradrms*1.35:
+            print("increasing DMAX")
+            self.DMAX=self.DMAX*1.1
+            if self.DMAX>0.25:
+                self.DMAX=0.25
+        if self.DMAX<self.DMIN0:
+            self.DMAX=self.DMIN0
+
+        return 
+
+
+    def update_bfgsp(self,dq):
+        print("In update bfgsp")
         self.newHess-=1
-        dg = self.gradq - self.pgradq
-        Gdg = np.matmul(self.Hinv,dg)
-        print "shape of Gdg is %s" %(np.shape(Gdg),)
 
+        dx = self.dqprim
+        #print "shape of dx is %s" %(np.shape(dx),)
+        dg = self.gradqprim - self.pgradqprim
+        #print "shape of dg is %s" %(np.shape(dg),)
+        Hdx = np.matmul(self.Hintp,dx)
+        #print "shape of Hdx is %s" %(np.shape(Hdx),)
+        dxHdx = np.dot(np.transpose(dx),Hdx)
+        #print "shape of dxHdx is %s" %(np.shape(dxHdx),)
+        dgdg = np.outer(dg,dg)
+        #print "shape of dgdg is %s" %(np.shape(dgdg),)
+        dgtdx = np.dot(np.transpose(dg),dx)
+
+        if dgtdx>0.:
+            if dgtdx<0.001: dgtdx=0.001
+            self.Hintp += dgdg/dgtdx
+        if dxHdx>0.:
+            if dxHdx<0.001: dxHdx=0.001
+            self.Hintp -= np.outer(Hdx,Hdx)/dxHdx
+
+        self.Hintp_to_Hint()
 
 
 if __name__ == '__main__':
     from pytc import *
     
-    filepath1="tests/SiH4.xyz"
-    filepath2="tests/SiH2H2.xyz"
 
-    # LOT object
-    nocc=11
-    nactive=2
-    lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot2 = PyTC(lot1.options.copy())
+    if 0:
+        # fragment example -- not working properly -- 
+        filepath1="tests/SiH4.xyz"
+        filepath2="tests/SiH2H2.xyz"
 
-    #lot2=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    #lot.cas_from_geom()
+        # LOT object
+        nocc=11
+        nactive=2
+        lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot2 = PyTC(lot1.options.copy())
 
-    # ICoord object
-    mol1=pb.readfile("xyz",filepath1).next()
-    mol2=pb.readfile("xyz",filepath2).next()
-    print "ic1"
-    ic1=ICoord.from_options(mol=mol1,lot=lot1)
-    print "ic2"
-    ic2=ICoord.from_options(mol=mol2,lot=lot2)
-    ic3= ICoord.union_ic(ic1,ic2)
-    ic3.bmatp_create()
-    ic3.bmatp_to_U()
-    ic3.bmat_create()
-    
-    #lot.cas_from_geom()
+        # ICoord object
+        mol1=pb.readfile("xyz",filepath1).next()
+        mol2=pb.readfile("xyz",filepath2).next()
+        #print "ic1"
+        #ic1=ICoord.from_options(mol=mol1,lot=lot1)
+        print "ic2"
+        ic2=ICoord.from_options(mol=mol2,lot=lot2)
+        #ic3= ICoord.union_ic(ic2,ic1)
+        #ic3.bmatp_create()
+        #ic3.bmatp_to_U()
+        #ic3.bmat_create()
 
-    #dq = np.asarray([ 0.0289,0.0386,-0.0147,-0.0337,-0.0408,-0.,0.0216,0.0333,-0.0218,-0.0022, -0.0336,0.0383])
-    #print dq
-    #ic1.ic_to_xyz_opt(dq)
-
-    #dq = np.zeros(ic1.nicd)
-    #dq[:]=0.01
-    #ic1.ic_to_xyz(dq)
-
-    #for i in range(ic1.nicd):
-    #    print(" on test %i" % i)
-    #    dq = np.zeros(ic1.nicd)
-    #    dq[i]=0.1
-    #    ic1.ic_to_xyz_opt(dq)
-    #    filename = "test" + str(i) + ".xyz"
-    #    ic1.mol.write("xyz",filename,overwrite=True)
-    #dq[:] = 0.05
-    #ic1.ic_to_xyz_opt(dq)
-
-    #ic1.optimize(1)
+    if 1:
+        #optimize example 
+        filepath="tests/twisted_fluoroethene.xyz"
+        nocc=11
+        nactive=2
+        lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot1.cas_from_file(filepath)
+        print "ic1"
+        mol1=pb.readfile("xyz",filepath).next()
+        ic1=ICoord.from_options(mol=mol1,lot=lot1)
+        ic1.optimize(1)

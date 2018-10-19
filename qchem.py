@@ -4,32 +4,32 @@ import os
 
 class QChem(Base):
     
-    def getEnergy(self):
-        print "Getting Energy"
-        energy =0.
-        average_over =0
-        for i in self.calc_states:
-            energy += self.compute_energy(average_over,S=i[0],index=i[1])
-            average_over+=1
+    #def getEnergy(self):
+    #    print "Getting Energy"
+    #    energy =0.
+    #    average_over =0
+    #    for i in self.calc_states:
+    #        energy += self.compute_energy(average_over,S=i[0],index=i[1])
+    #        average_over+=1
 
-        final_energy = energy/average_over
-        print "Energy: %.9f"%final_energy
-        return final_energy
+    #    final_energy = energy/average_over
+    #    print "Energy: %.9f"%final_energy
+    #    return final_energy
 
-    def getGrad(self):
-        print "Getting Gradient"
-        average_over=0
-        grad = np.zeros((len(self.geom),3))
-        for i in self.calc_states:
-            tmp = self.read_gradients(average_over,S=i[0],index=i[1])
-            print(np.shape(tmp[...]))
-            grad += tmp[...] 
-            average_over+=1
-        final_grad = grad/average_over
+    #def getGrad(self):
+    #    print "Getting Gradient"
+    #    average_over=0
+    #    grad = np.zeros((len(self.geom),3))
+    #    for i in self.calc_states:
+    #        tmp = self.read_gradients(average_over,S=i[0],index=i[1])
+    #        print(np.shape(tmp[...]))
+    #        grad += tmp[...] 
+    #        average_over+=1
+    #    final_grad = grad/average_over
 
-        return np.reshape(final_grad,(3*len(self.geom),1))
+    #    return np.reshape(final_grad,(3*len(self.geom),1))
 
-    def compute_energy(self,runnum,S=0,index=0,*args):
+    def compute_energy(self,S=0,index=0):
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
         tempfile.write(' $rem\n')
@@ -54,11 +54,11 @@ class QChem(Base):
             tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
-        cmd = "qchem -np 1 -save {} {}.qchem.out{} {}.{}.{:05}".format(tempfilename,tempfilename,index,S,index,runnum)
+        cmd = "qchem -np 1 -save {} {}.qchem.out{} {}.{}".format(tempfilename,tempfilename,index,S,index)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
-        efilepath += '/{}.{}.{:05}/GRAD'.format(S,index,runnum)
+        efilepath += '/{}.{}/GRAD'.format(S,index)
         with open(efilepath) as efile:
             elines = efile.readlines()
         
@@ -71,9 +71,10 @@ class QChem(Base):
                 temp += 1
         return energy
 
-    def read_gradients(self,runnum,S=0,index=0,*args):
+    def compute_gradient(self,S=0,index=0,*args):
+        """ Assuming grad already computed in compute_energy"""
         gradfilepath = os.environ['QCSCRATCH']
-        gradfilepath += '/{}.{}.{:05}/GRAD'.format(S,index,runnum)
+        gradfilepath += '/{}.{}/GRAD'.format(S,index)
         with open(gradfilepath) as gradfile:
             gradlines = gradfile.readlines()
         gradient = []

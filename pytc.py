@@ -31,13 +31,14 @@ class PyTC(Base):
             self,
             ):
         raise NotImplementedError()
+        return
 
-    def cas_from_geom(
+    def cas_from_file(
             self,
+            filepath,
             ):
-
-        #mx.write_xyz("ls.xyz",self.geom,0,1)
-        molecule = ls.Molecule.from_xyz_file(self.filepath)    
+  
+        molecule = ls.Molecule.from_xyz_file(filepath)    
         resources = ls.ResourceList.build()
 
         nalpha = nbeta = self.nactive/2
@@ -89,18 +90,15 @@ if __name__ == '__main__':
 
     from pytc import *
     import manage_xyz
-    
-    filepath="tests/fluoroethene.xyz"
     nocc=11
     nactive=2
-    #geom=manage_xyz.read_xyz(filepath,scale=1)
 
-    #lot=PyTC.from_options(calc_states=[(0,0)],geom=geom,nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot.cas_from_geom()
+    lot=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    x="tests/fluoroethene.xyz"
+    lot.cas_from_file(x)
 
-    e=lot.getEnergy()
-    print e
-    g=lot.getGrad()
-    print g
+    #e=lot.getEnergy()
+    #print e
+    #g=lot.getGrad()
+    #print g
 
