@@ -37,7 +37,9 @@ class PyTC(Base):
             self,
             filepath,
             ):
-  
+ 
+        geom=manage_xyz.read_xyz(filepath,scale=1)
+        self.coords=manage_xyz.xyz_to_np(geom)
         molecule = ls.Molecule.from_xyz_file(filepath)    
         resources = ls.ResourceList.build()
 
@@ -93,12 +95,12 @@ if __name__ == '__main__':
     nocc=11
     nactive=2
 
-    lot=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
     x="tests/fluoroethene.xyz"
     lot.cas_from_file(x)
 
-    #e=lot.getEnergy()
-    #print e
-    #g=lot.getGrad()
-    #print g
+    e=lot.getEnergy()
+    print e
+    g=lot.getGrad()
+    print g
 

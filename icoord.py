@@ -1140,7 +1140,7 @@ if __name__ == '__main__':
         # LOT object
         nocc=11
         nactive=2
-        lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot2 = PyTC(lot1.options.copy())
 
         # ICoord object
@@ -1156,15 +1156,16 @@ if __name__ == '__main__':
         #ic3.bmat_create()
 
     if 1:
+        from pytc import *
         #optimize example 
         filepath="tests/stretched_fluoroethene.xyz"
-        #nocc=11
-        #nactive=2
-        #lot1=PyTC.from_options(calc_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        #lot1.cas_from_file(filepath)
+        nocc=11
+        nactive=2
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot1.cas_from_file(filepath)
 
         geom=manage_xyz.read_xyz(filepath,scale=1)   
-        lot1=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+        #lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 	
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()

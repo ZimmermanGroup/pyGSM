@@ -13,9 +13,14 @@ class Base(object):
         opt = options.Options() 
 
         opt.add_option(
-            key='calc_states',
+            key='E_states',
             value=(0,0),
             required=True,
+            allowed_types=[list],
+            doc='')
+
+        opt.add_option(
+            key='G_states',
             allowed_types=[list],
             doc='')
 
@@ -84,7 +89,8 @@ class Base(object):
 
         self.options = options
         # Cache some useful atributes
-        self.calc_states=self.options['calc_states']
+        self.E_states=self.options['E_states']
+        self.G_states=self.options['G_states']
         self.nstates=self.options['nstates']
         self.geom = self.options['geom']
         self.filepath = self.options['filepath']
@@ -100,17 +106,30 @@ class Base(object):
             print "setting coords from geom"
             self.coords = manage_xyz.xyz_to_np(self.geom)
 
-        #if self.geom is None:
-        #    self.geom=manage_xyz.read_xyz(self.filepath,scale=1)
-
-        #self.coords = manage_xyz.xyz_to_np(self.geom)
+        if self.G_states is None:
+            print "assuming G_states same as E_states"
+            self.G_states=self.E_states
 
     def getEnergy(self):
+        tmpE = []
         energy =0.
         average_over =0
-        for i in self.calc_states:
-            energy += self.compute_energy(S=i[0],index=i[1])
-            average_over+=1
+        # calculate E_states
+        for i in self.E_states:
+            c_E = self.compute_energy(S=i[0],index=i[1])
+            tmpE.append(c_E)
+            # average E of G_states:
+            # should only only used for crossing optimizations
+            if i in self.G_states:
+                energy += c_E
+                average_over+=1
+
+        # sort and save E states adiabatically
+        self.sort_index = np.argsort(tmpE)
+        self.E=[]
+        for i in self.sort_index:
+            self.E.append(tmpE[i])
+        
         return energy/average_over
 
     def compute_energy(self,spin,index):
@@ -119,7 +138,8 @@ class Base(object):
     def getGrad(self):
         average_over=0
         grad = np.zeros((np.shape(self.coords)))
-        for i in self.calc_states:
+
+        for i in self.G_states:
             grad += self.compute_gradient(S=i[0],index=i[1])
             average_over+=1
         final_grad = grad/average_over

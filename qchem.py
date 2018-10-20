@@ -81,7 +81,7 @@ if __name__ == '__main__':
     filepath="tests/fluoroethene.xyz"
     geom=manage_xyz.read_xyz(filepath,scale=1)   
 
-    lot=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+    lot=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
     e=lot.getEnergy()
     print e
     g=lot.getGrad()
