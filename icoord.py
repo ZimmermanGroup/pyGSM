@@ -728,8 +728,8 @@ class ICoord(Mixin):
         bbti = np.linalg.inv(bbt)
         #print("bmatti formation")
         self.bmatti = np.matmul(bbti,bmat)
-        #print self.bmatti
-        #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
+        print self.bmatti
+        print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -850,6 +850,7 @@ class ICoord(Mixin):
 
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
+            print "ic iteration %i" % n
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
@@ -900,9 +901,10 @@ class ICoord(Mixin):
             self.ixflag +=1
             maglow = 100.
             nlow = -1
-            for mag in magall:
+            for n,mag in enumerate(magall):
                 if mag<maglow:
                     maglow=mag
+                    nlow =n
             if maglow<MAXMAG:
                 coords = xyzall[nlow]
                 print("Wb(%6.5f/%i)" %(maglow,nlow))
@@ -915,6 +917,7 @@ class ICoord(Mixin):
                 self.nretry+=1
                 if self.nretry>100:
                     retry=False
+                    print "Max retries"
         elif self.ixflag>0:
             self.ixflag = 0
 
@@ -1042,7 +1045,7 @@ class ICoord(Mixin):
         self.gradq = self.grad_to_q(grad)
         pgradrms = self.gradrms
         self.gradrms = np.linalg.norm(self.gradq)
-        print("gradrms = %1.4f" % self.gradrms)
+        print("gradrms = %1.5f" % self.gradrms)
 
         # For Hessian update
         self.pgradqprim=self.gradqprim
@@ -1050,7 +1053,8 @@ class ICoord(Mixin):
 
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq)
-
+        print "dq" 
+        print dq
         # regulate max overall step
         smag = np.linalg.norm(dq)
         print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
@@ -1062,6 +1066,12 @@ class ICoord(Mixin):
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
         #TODO if rflag and ixflag
+
+        ## => update ICs <= #
+        #self.update_ics()
+        #self.bmatp_create()
+        #self.bmatp_to_U()
+        #self.bmat_create()
       
         # => Update Hessian <= #
         self.update_bfgsp(dq)
@@ -1096,7 +1106,6 @@ class ICoord(Mixin):
                 self.DMAX=0.25
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
-
         return  smag
 
 
@@ -1127,11 +1136,10 @@ class ICoord(Mixin):
 
 
 if __name__ == '__main__':
-    #from pytc import *
-    from qchem import *
     
 
     if 0:
+        from pytc import *
         # fragment example -- not working properly -- 
         # openbabel is not updating ICs as expected :,(
         filepath1="tests/SiH4.xyz"
@@ -1155,17 +1163,13 @@ if __name__ == '__main__':
         #ic3.bmatp_to_U()
         #ic3.bmat_create()
 
-    if 1:
-        from pytc import *
-        #optimize example 
-        filepath="tests/stretched_fluoroethene.xyz"
-        nocc=11
-        nactive=2
-        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        lot1.cas_from_file(filepath)
-
+    if 0:
+        #qchem example
+        from qchem import *
+        #filepath="tests/stretched_fluoroethene.xyz"
+        filepath="tests/benzene.xyz"
         geom=manage_xyz.read_xyz(filepath,scale=1)   
-        #lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+        lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 	
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
@@ -1178,4 +1182,33 @@ if __name__ == '__main__':
         ic1.make_Hint()
         ic1.optimize(40)
 
+    if 0:
+        from pytc import *
+        #optimize example 
+        filepath="tests/benzene.xyz"
+        nocc=19
+        nactive=4
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        #lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot1.cas_from_file(filepath)
+
+        print "ic1"
+        mol1=pb.readfile("xyz",filepath).next()
+        ic1=ICoord.from_options(mol=mol1,lot=lot1)
+        ic1.optimize(10)
+        ic1.ic_create()
+        ic1.bmatp_create()
+        ic1.bmatp_to_U()
+        ic1.bmat_create()
+        ic1.make_Hint()
+        ic1.optimize(40)
+        
+        #lot2 = PyTC(lot1.options.copy().set_values({
+        #    'E_states' : [(0,0),(0,1)],
+        #    'G_states' : [(0,1)],
+        #    }))
+        #ic2=ICoord(ic1.options.copy().set_values({
+        #    }))
+        #
+        #ic2.optimize(10)
 

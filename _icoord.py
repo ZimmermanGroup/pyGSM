@@ -131,12 +131,13 @@ class Mixin:
         b=self.mol.OBMol.GetAtom(j+1) 
         c=self.mol.OBMol.GetAtom(k+1)
         d=self.mol.OBMol.GetAtom(l+1)
+        dqtdx = np.zeros(12,dtype=float)
 
         angle1=self.mol.OBMol.GetAngle(a,b,c)*np.pi/180.
         angle2=self.mol.OBMol.GetAngle(b,c,d)*np.pi/180.
-        if angle1>3.0 or angle2>3.0:
+        if angle1>3.1 or angle2>3.1:
             print(" near-linear angle")
-            return
+            return dqtdx
         u = np.zeros(3,dtype=float)
         v = np.zeros(3,dtype=float)
         w = np.zeros(3,dtype=float)
@@ -165,14 +166,10 @@ class Mixin:
         sin2phiv = 1.-cosphiv*cosphiv
 
         #TODO why does this cause problems
-        #if sin2phiu < 1e-3 or sin2phiv <1e-3:
-        #    print("shouldn't be here\n")
-        #    print sin2phiu
-        #    print sin2phiv
-        #    return
+        if sin2phiu < 1e-3 or sin2phiv <1e-3:
+            return dqtdx
 
         #CPMZ possible error in uw calc
-        dqtdx = np.zeros(12,dtype=float)
         dqtdx[0]  = uw[0]/(n1*sin2phiu);
         dqtdx[1]  = uw[1]/(n1*sin2phiu);
         dqtdx[2]  = uw[2]/(n1*sin2phiu);
@@ -240,14 +237,16 @@ class Mixin:
         dEtemp = np.matmul(self.Hint,dq0)
         dEpre = np.dot(dq0,self.gradq) + 0.5*np.dot(dEtemp,dq0)
         dEpre *=KCAL_MOL_PER_AU
-        print( "predE: %5.2f " % dEpre) 
+        print( "predE: %1.4f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
-        N3=self.natoms*3
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
+        #np.set_printoptions(precision=4)
+        #np.set_printoptions(suppress=True)
+        print grad
+        print self.bmatti[0,:]
+        print "%1.12f" % np.dot(self.bmatti[0,:],grad)
         gradq = np.matmul(self.bmatti,grad)
-        #print("Printing gradq")
-        #print gradq
+        print("Printing gradq")
+        print gradq
         return gradq
