@@ -17,20 +17,20 @@ class Mixin:
 
     def distance(self,i,j):
         """ for some reason openbabel has this one based """
-        a1=self.mol.OBMol.GetAtom(i+1)
-        a2=self.mol.OBMol.GetAtom(j+1)
+        a1=self.mol.OBMol.GetAtom(i)
+        a2=self.mol.OBMol.GetAtom(j)
         return a1.GetDistance(a2)
     def get_angle(self,i,j,k):
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1)
-        c=self.mol.OBMol.GetAtom(k+1)
+        a=self.mol.OBMol.GetAtom(i)
+        b=self.mol.OBMol.GetAtom(j)
+        c=self.mol.OBMol.GetAtom(k)
         return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex #in degrees
 
     def get_torsion(self,i,j,k,l):
-        a=self.mol.OBMol.GetAtom(i+1)
-        b=self.mol.OBMol.GetAtom(j+1)
-        c=self.mol.OBMol.GetAtom(k+1)
-        d=self.mol.OBMol.GetAtom(l+1)
+        a=self.mol.OBMol.GetAtom(i)
+        b=self.mol.OBMol.GetAtom(j)
+        c=self.mol.OBMol.GetAtom(k)
+        d=self.mol.OBMol.GetAtom(l)
         tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
         #if tval >3.14159:
         if tval>=np.pi:
@@ -49,7 +49,7 @@ class Mixin:
         return [a.GetX(),a.GetY(),a.GetZ()]
 
     def getAtomicNum(self,i):
-        return self.mol.OBMol.GetAtom(i+1).GetAtomicNum()
+        return self.mol.OBMol.GetAtom(i).GetAtomicNum()
 
     def isTM(self,i):
         anum= self.getIndex(i)
@@ -91,10 +91,11 @@ class Mixin:
         coorc=np.array([c.GetX(),c.GetY(),c.GetZ()])
         u=np.subtract(coora,coorb)
         v=np.subtract(coorc,coorb)
-        n1=self.distance(i,j)
-        n2=self.distance(j,k)
+        n1=self.distance(i+1,j+1)
+        n2=self.distance(j+1,k+1)
         u=u/n1
         v=v/n2
+
 
         w=np.cross(u,v)
         nw = np.linalg.norm(w)
@@ -124,6 +125,7 @@ class Mixin:
         dqadx[7] = wv[1]/n2
         dqadx[8] = wv[2]/n2
 
+
         return dqadx
 
     def bmatp_dqtdx(self,i,j,k,l):
@@ -135,7 +137,7 @@ class Mixin:
 
         angle1=self.mol.OBMol.GetAngle(a,b,c)*np.pi/180.
         angle2=self.mol.OBMol.GetAngle(b,c,d)*np.pi/180.
-        if angle1>3.1 or angle2>3.1:
+        if angle1>3. or angle2>3.:
             print(" near-linear angle")
             return dqtdx
         u = np.zeros(3,dtype=float)
@@ -149,13 +151,13 @@ class Mixin:
         w=np.subtract(coorc,coorb)
         v=np.subtract(coord,coorc)
         
-        n1=self.distance(i,j)
-        n2=self.distance(j,k)
-        n3=self.distance(k,l)
+        n1=self.distance(i+1,j+1)
+        n2=self.distance(j+1,k+1)
+        n3=self.distance(k+1,l+1)
 
         u=u/n1
-        v=v/n1
-        w=w/n1
+        v=v/n3
+        w=w/n2
 
         uw=np.cross(u,w)
         vw=np.cross(v,w)
@@ -164,9 +166,12 @@ class Mixin:
         cosphiv = -1*np.dot(v,w)
         sin2phiu = 1.-cosphiu*cosphiu
         sin2phiv = 1.-cosphiv*cosphiv
+        #print(" cos's: %1.4f %1.4f vs %1.4f %1.4f " % (cosphiu,cosphiv,np.cos(angle1),np.cos(angle2))) 
+        #print(" sin2's: %1.4f %1.4f vs %1.4f %1.4f " % (sin2phiu,sin2phiv,np.sin(angle1)*np.sin(angle1),np.sin(angle2)*np.sin(angle2)))
 
         #TODO why does this cause problems
         if sin2phiu < 1e-3 or sin2phiv <1e-3:
+            #print "sin2phiu"
             return dqtdx
 
         #CPMZ possible error in uw calc

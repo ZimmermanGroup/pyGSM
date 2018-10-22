@@ -169,6 +169,8 @@ class ICoord(Mixin):
         self.natoms= len(self.mol.atoms)
         #print self.natoms
         self.make_bonds()
+        #test for SiH2H2
+        #self.bonds =[self.bonds[1],self.bonds[2],self.bonds[0]]
         if self.isOpt>0:
             print(" isOpt: %i" %self.isOpt)
             self.make_frags()
@@ -176,10 +178,10 @@ class ICoord(Mixin):
         self.coord_num()
         self.make_angles()
         self.make_torsions()
-        self.make_imptor()
+        #self.make_imptor()
         if self.isOpt==1:
             self.linear_ties()
-        self.make_nonbond() 
+        #self.make_nonbond() 
 
     def make_bonds(self):
         self.nbonds=0
@@ -187,8 +189,8 @@ class ICoord(Mixin):
         self.bondd=[]
         for bond in ob.OBMolBondIter(self.mol.OBMol):
             self.nbonds+=1
-            a=bond.GetBeginAtomIdx()-1
-            b=bond.GetEndAtomIdx()-1
+            a=bond.GetBeginAtomIdx()
+            b=bond.GetEndAtomIdx()
             if a>b:
                 self.bonds.append((a,b))
             else:
@@ -213,24 +215,77 @@ class ICoord(Mixin):
         self.nangles=0
         self.angles=[]
         self.anglev=[]
-        for angle in ob.OBMolAngleIter(self.mol.OBMol):
-            self.nangles+=1
-            self.angles.append(angle)
-            self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
+        # doesn't work because not updating properly
+        #for angle in ob.OBMolAngleIter(self.mol.OBMol):
+        #    self.nangles+=1
+        #    self.angles.append(angle)
+        #    self.anglev.append(self.get_angle(angle[0],angle[1],angle[2]))
+        for i,bond1 in enumerate(self.bonds):
+            for bond2 in self.bonds[:i]:
+                found=False
+                if bond1[0] == bond2[0]:
+                    angle = (bond1[1],bond1[0],bond2[1])
+                    found=True
+                elif bond1[0] == bond2[1]:
+                    angle = (bond1[1],bond1[0],bond2[0])
+                    found=True
+                elif bond1[1] == bond2[0]:
+                    angle = (bond1[0],bond1[1],bond2[1])
+                    found=True
+                elif bond1[1] == bond2[1]:
+                    angle = (bond1[0],bond1[1],bond2[0])
+                    found=True
+                if found==True:
+                    angv = self.get_angle(angle[1],angle[0],angle[2])
+                    print "%s %1.2f" %(angle,angv)
+                    if angv>30.:
+                        self.anglev.append(angv)
+                        self.angles.append(angle)
+                        self.nangles +=1
+
         print "number of angles is %i" %self.nangles
         print "printing angles"
-        for n,angle in enumerate(self.angles):
-            print "%s: %1.2f" %(angle, self.anglev[n])
+        for angle,anglev in zip(self.angles,self.anglev):
+            print "%s %1.2f" %(angle,anglev)
 
 
     def make_torsions(self):
         self.ntor=0
         self.torsions=[]
         self.torv=[]
-        for torsion in ob.OBMolTorsionIter(self.mol.OBMol):
-            self.ntor+=1
-            self.torsions.append(torsion)
-            self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
+        # doesn't work because not updating properly
+        #for torsion in ob.OBMolTorsionIter(self.mol.OBMol):
+        #    self.ntor+=1
+        #    self.torsions.append(torsion)
+        #    self.torv.append(self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]))
+        for i,angle1 in enumerate(self.angles):
+            for angle2 in self.angles[:i]:
+                found = False
+                a1=angle1[0]
+                b1=angle1[1]
+                c1=angle1[2]
+                a2=angle2[0]
+                b2=angle2[1]
+                c2=angle2[2]
+
+                if b1==c2 and b2==c2:
+                    torsion = (a1,b1,b2,a2)
+                    found = True
+                elif b1==a2 and b2==c1:
+                    torsion = (a1,b1,b2,c2)
+                    found = True
+                elif b1==c2 and b2==a1:
+                    torsion = (c1,b1,b2,a2)
+                    found = True
+                elif b1==a2 and b2==a1:
+                    torsion = (c1,b1,b2,c2)
+                    found = True
+                if found==True and (torsion[0] != torsion[2]) and torsion[0] != torsion[3] : 
+                    self.ntor+=1
+                    self.torsions.append(torsion)
+                    torv = self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])
+                    self.torv.append(torv)
+
         print "number of torsions is %i" %self.ntor
         print "printing torsions"
         for n,torsion in enumerate(self.torsions):
@@ -416,16 +471,16 @@ class ICoord(Mixin):
         for n,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
             found=False
             if n==0:
-                frag1.append((0,n))
+                frag1.append((0,n+1))
             else:
                 found=False
                 for nbr in ob.OBAtomAtomIter(a):
-                    if (0,nbr.GetIndex()) in frag1:
+                    if (0,nbr.GetIndex()+1) in frag1:
                         found=True
                 if found==True:
-                    frag1.append((0,a.GetIndex()))
+                    frag1.append((0,a.GetIndex()+1))
                 if found==False:
-                    frag2.append((1,a.GetIndex()))
+                    frag2.append((1,a.GetIndex()+1))
 
         if not frag2:
             self.nfrags=1
@@ -445,6 +500,7 @@ class ICoord(Mixin):
         found4=0
 
         frags= [i[0] for i in self.frags]
+        print frags
         for n1 in range(self.nfrags):
             for n2 in range(n1):
                 print(" Connecting frag %i to %i" %(n1,n2))
@@ -560,8 +616,8 @@ class ICoord(Mixin):
         self.bmatp=np.zeros((self.num_ics,N3),dtype=float)
         i=0
         for bond in self.bonds:
-            a1=bond[0]
-            a2=bond[1]
+            a1=bond[0]-1
+            a2=bond[1]-1
             dqbdx = self.bmatp_dqbdx(a1,a2)
             self.bmatp[i,3*a1+0] = dqbdx[0]
             self.bmatp[i,3*a1+1] = dqbdx[1]
@@ -573,9 +629,9 @@ class ICoord(Mixin):
             #print "%s" % ((a1,a2),)
 
         for angle in self.angles:
-            a1=angle[1]
-            a2=angle[0] #vertex
-            a3=angle[2]
+            a1=angle[0]-1
+            a2=angle[1]-1 #vertex
+            a3=angle[2]-1
             dqadx = self.bmatp_dqadx(a1,a2,a3)
             self.bmatp[i,3*a1+0] = dqadx[0]
             self.bmatp[i,3*a1+1] = dqadx[1]
@@ -591,10 +647,10 @@ class ICoord(Mixin):
             #print "%s" % ((a1,a2,a3),)
 
         for torsion in self.torsions:
-            a1=torsion[0]
-            a2=torsion[1]
-            a3=torsion[2]
-            a4=torsion[3]
+            a1=torsion[0]-1
+            a2=torsion[1]-1
+            a3=torsion[2]-1
+            a4=torsion[3]-1
             #print "%s" % ((a1,a2,a3,a4),)
             dqtdx = self.bmatp_dqtdx(a1,a2,a3,a4)
             self.bmatp[i,3*a1+0] = dqtdx[0]
@@ -630,12 +686,13 @@ class ICoord(Mixin):
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
+        #print(" eigen")
         #print e
         #print v
         
         lowev=0
         self.nicd=N3-6
-        for eig in e[self.nicd:0:-1]:
+        for eig in e[self.nicd-1:0:-1]:
             if eig<0.001:
                 lowev+=1
         if lowev>0:
@@ -1092,7 +1149,6 @@ class ICoord(Mixin):
                 self.bmatp_create()
                 self.bmatp_to_U()
                 self.bmat_create()
-                self.make_Hint()
                 self.Hintp_to_Hint()
                 self.do_bfgs=False
                 self.opt_step()
@@ -1161,6 +1217,7 @@ if __name__ == '__main__':
         #ic1=ICoord.from_options(mol=mol1,lot=lot1)
         print "ic2"
         ic2=ICoord.from_options(mol=mol2,lot=lot2)
+
         #ic3= ICoord.union_ic(ic2,ic1)
         #ic3.bmatp_create()
         #ic3.bmatp_to_U()
@@ -1185,39 +1242,62 @@ if __name__ == '__main__':
         ic1.make_Hint()
         ic1.optimize(40)
 
-    if 1:
+    if 0:
         from pytc import *
         #optimize example 
-        filepath="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
-        nocc=61
-        nactive=6
+        #normal reference
+        #filepath="tests/pent-4-enylbenzene.xyz"
+        #nocc=37
+        #nactive=6
         #filepath="tests/stretched_fluoroethene.xyz"
         #nocc=11
         #nactive=2
-        #filepath="tests/benzene.xyz"
-        #nocc=19
-        #nactive=4
-        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        #lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        filepath="tests/benzene.xyz"
+        nocc=19
+        nactive=4
+        #filepath="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
+        #nocc=61
+        #nactive=6
+        lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot1.cas_from_file(filepath)
 
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
         ic1.optimize(50)
-        #ic1.ic_create()
-        #ic1.bmatp_create()
-        #ic1.bmatp_to_U()
-        #ic1.bmat_create()
-        #ic1.make_Hint()
-        #ic1.optimize(40)
-        
-        #lot2 = PyTC(lot1.options.copy().set_values({
-        #    'E_states' : [(0,0),(0,1)],
-        #    'G_states' : [(0,1)],
-        #    }))
-        #ic2=ICoord(ic1.options.copy().set_values({
-        #    }))
-        #
-        #ic2.optimize(10)
 
+    if 0:
+        from pytc import *
+        #optimize example 
+        # from reference
+        filepath1="tests/benzene.xyz"
+        nocc1=19
+        filepath2="tests/bent_benzene.xyz"
+        nocc2=19
+        nactive=4
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc2,nactive=nactive,basis='6-31gs')
+        lot1.casci_from_file_from_template(filepath1,filepath2,nocc1,nocc2)
+
+        print "ic1"
+        mol2=pb.readfile("xyz",filepath2).next()
+        ic1=ICoord.from_options(mol=mol2,lot=lot1)
+        ic1.optimize(100)
+
+    if 1:
+        from pytc import *
+        #optimize example 
+        # from reference
+        filepath1="tests/pent-4-enylbenzene.xyz"
+        nocc1=37
+        nactive=6
+        filepath2="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
+        nocc2=61
+        nactive=6
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc2,nactive=nactive,basis='6-31gs')
+        lot1.casci_from_file_from_template(filepath1,filepath2,nocc1,nocc2)
+
+        print "ic1"
+        mol2=pb.readfile("xyz",filepath2).next()
+        mol2.OBMol.AddBond(2,11,1)
+        ic1=ICoord.from_options(mol=mol2,lot=lot1)
+        ic1.optimize(50)
