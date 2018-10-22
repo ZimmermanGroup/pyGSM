@@ -344,6 +344,7 @@ class BaseGSM(object):
         newic = ico.ICoord.from_options(mol=mol,lot=self.icoords[iR].lot)
         intic = ico.ICoord.from_options(mol=mol2,lot=self.icoords[iP].lot)
         dq0 = [0.] * newic.nicd
+        dq0 = np.asarray(dq0).reshape(newic.nicd,1)
         ictan = BaseGSM.tangent_1(newic,intic)
 
         dqmag = 0.0
@@ -392,14 +393,14 @@ class BaseGSM(object):
        # self.icoords[n2].mol.write("xyz","noden2.xyz")
        # self.icoords[n3].mol.write("xyz","noden3.xyz")
        # print "ictan: ",ictan0
-       # print "\niR xyz:"
-       # self.icoords[iR].print_xyz()
+        print "\niR xyz:"
+        self.icoords[iR].print_xyz()
 
-       # print "\niN xyz:"
-       # self.icoords[iN].print_xyz()
+        print "\niN xyz:"
+        self.icoords[iN].print_xyz()
 
-       # print "\niP xyz:"
-       # self.icoords[iP].print_xyz()
+        print "\niP xyz:"
+        self.icoords[iP].print_xyz()
 
     def add_node_SSM(self,n1,n2):
         if not self.isSSM:

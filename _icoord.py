@@ -42,7 +42,7 @@ class Mixin:
 
 
     def getIndex(self,i):
-        return self.mol.OBMol.GetAtom(i+1).GetIndex()
+        return self.mol.OBMol.GetAtom(i).GetIndex()
 
     def getCoords(self,i):
         a= self.mol.OBMol.GetAtom(i+1)
