@@ -20,11 +20,11 @@ class GSM(BaseGSM):
         return
 
 if __name__ == '__main__':
-    from icoords import *
+    from icoord import *
     from qchem import *
     import manage_xyz
     filepath="tests/fluoroethene.xyz"
-    filepath2="tests/fluoroethene_2.xyz"
+    filepath2="tests/stretched_fluoroethene.xyz"
 
     # LOT object
 #    nocc=23
@@ -40,12 +40,15 @@ if __name__ == '__main__':
     lot=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
     lot2=QChem.from_options(calc_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 
-
+    print "\n IC1 \n\n"
     ic1=ICoord.from_options(mol=mol,lot=lot)
+    print "\n IC2 \n\n"
     ic2=ICoord.from_options(mol=mol2,lot=lot2)
 
+    print "\n Starting GSM \n\n"
     gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9)
     gsm.add_node(0,1,8)
-
-    gsm2 = GSM.from_options(ICoord1=ic1,nnodes=9,isomers=[('torsions',3,2,1,5,90)]) 
-
+    
+    print '\n\n ############ STARTING GSM 2 ############# \n\n'
+    gsm2 = GSM.from_options(ICoord1=ic1,nnodes=9,isomers=[('torsions',3,1,2,5,90.)],isSSM=True) 
+    gsm2.add_node_SSM(0,1)
