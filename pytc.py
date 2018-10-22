@@ -14,7 +14,9 @@ class PyTC(Base):
 
     def compute_energy(self,S,index):
         T = ls.Tensor.array(self.coords*ANGSTROM_TO_AU)
-        self.lot = self.lot.update_xyz(T)
+        #self.lot = self.lot.update_xyz(T)
+        geom = self.lot.casci.geometry.update_xyz(T)
+        self.casci_from_template(geom,self.nocc)
         tmp = self.lot.compute_energy(S=S,index=index)
         return tmp*KCAL_MOL_PER_AU
 
@@ -32,6 +34,59 @@ class PyTC(Base):
             ):
         raise NotImplementedError()
         return
+
+    def casci_from_template(
+            self,
+            geometry2,
+            fomo_nocc2,
+            ):
+    
+        # => Setup RHF of  the new molecule? <= #
+        ref2 = psiw.RHF(self.lot.casci.reference.options.copy().set_values(dict(
+            geometry=geometry2,
+            fomo_nocc=fomo_nocc2,
+            )))
+        ref2.initialize()
+    
+        Cact1 = self.lot.casci.reference.tensors['Cact']
+        #print Cact1
+    
+        pairlist12 = ls.PairList.build_schwarz(
+            self.lot.casci.reference.basis,
+            ref2.basis,
+            False,
+            self.lot.casci.reference.pairlist.thre)
+        S12 = ls.IntBox.overlap(
+            self.lot.casci.resources,
+            pairlist12)
+        X2 = ref2.tensors['X']
+    
+        M = ls.Tensor.chain([Cact1, S12, X2], [True, False, False])
+        
+        U, s, V = ls.Tensor.svd(M, full_matrices=False)
+        #print s
+    
+        Cact_mom2 = ls.Tensor.chain([X2, V], [False, True])
+        
+        O = ls.Tensor.chain([Cact1, S12, Cact_mom2], [True, False, False])
+        #print O
+        
+        # => Calculate RHF of  the new molecule? <= #
+        ref2.compute_energy(Cact_mom=Cact_mom2)
+        ref2.save_molden_file('rhf2.molden')
+    
+        casci2 = psiw.CASCI(self.lot.casci.options.copy().set_values(dict(
+            reference=ref2,
+            nocc=fomo_nocc2,
+            )))
+    
+        casci2.compute_energy()
+
+        self.lot = psiw.CASCI_LOT.from_options(
+        	  casci=casci2,
+            print_level=0,
+        		)
+
 
     def cas_from_file(
             self,
@@ -78,8 +133,8 @@ class PyTC(Base):
             S_nstates=S_nstates,
             print_level=0,
             )
-        casci1.compute_energy()
 
+        casci1.compute_energy()
         self.lot = psiw.CASCI_LOT.from_options(
             casci=casci1,
             print_level=0,

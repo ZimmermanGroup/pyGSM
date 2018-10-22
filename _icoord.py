@@ -234,19 +234,18 @@ class Mixin:
 
     def compute_predE(self,dq0):
         # compute predicted change in energy 
+        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
+        assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
+        assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
         dEtemp = np.matmul(self.Hint,dq0)
-        dEpre = np.dot(dq0,self.gradq) + 0.5*np.dot(dEtemp,dq0)
+        dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
         dEpre *=KCAL_MOL_PER_AU
+        if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
         print( "predE: %1.4f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
         #np.set_printoptions(precision=4)
         #np.set_printoptions(suppress=True)
-        print grad
-        print self.bmatti[0,:]
-        print "%1.12f" % np.dot(self.bmatti[0,:],grad)
         gradq = np.matmul(self.bmatti,grad)
-        print("Printing gradq")
-        print gradq
         return gradq

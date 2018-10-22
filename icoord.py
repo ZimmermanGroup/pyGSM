@@ -152,7 +152,7 @@ class ICoord(Mixin):
         self.gradrms = 1000.
         self.SCALEQN = 1.0
         self.MAXAD = 0.075
-        self.DMAX = 0.1
+        self.DMAX = 0.2
         self.ixflag = 0
         self.energy = 0.
         self.DMIN0 =self.DMAX/50.
@@ -434,10 +434,7 @@ class ICoord(Mixin):
         self.frags=frag1+frag2
         for i in self.frags:
             print(" atom[%i]: %i " % (i[1],i[0]))
-
         print(" nfrags: %i" % (self.nfrags))
-
-
 
     def bond_frags(self):
         if self.nfrags<2:
@@ -456,17 +453,10 @@ class ICoord(Mixin):
                 found3=0
                 found4=0
                 close=0.
+                a1=a2=b1=b2=c1=c2=d1=d2=-1
                 mclose=1000.
-                a1=-1
-                a2=-1
-                b1=-1
-                b2=-1
                 mclose2=1000.
-                c1=-1
-                c2=-1
                 mclose3=1000.
-                d1 = -1;
-                d2 = -1
                 mclose4 = 1000.
 
                 frag0 = filter(lambda x: x[0]==n1, self.frags)
@@ -660,11 +650,6 @@ class ICoord(Mixin):
         redset = self.num_ics - self.nicd
         #print "\nU matrix  i.e. diag(BB^T)"
         self.Ut=v[0:self.nicd,:]
-        #print("U eigenvalues")
-        #print e
-        #print("printing non-redundant vectors of U")
-        #print self.Ut
-        #print "Shape of U is %s\n" % (np.shape(self.Ut),)
 
         self.torv0 = list(self.torv)
         
@@ -674,7 +659,7 @@ class ICoord(Mixin):
 
         #print(" Determining q in ICs")
         N3=3*self.natoms
-        self.q = np.zeros(self.nicd)
+        self.q = np.zeros((self.nicd,1),dtype=float)
         #print "Number of ICs %i" % self.num_ics
         #print "Number of IC dimensions %i" %self.nicd
         np.set_printoptions(precision=4)
@@ -728,8 +713,8 @@ class ICoord(Mixin):
         bbti = np.linalg.inv(bbt)
         #print("bmatti formation")
         self.bmatti = np.matmul(bbti,bmat)
-        print self.bmatti
-        print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
+        #print self.bmatti
+        #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -742,15 +727,8 @@ class ICoord(Mixin):
         self.bmat_create()
 
         SCALEBT = 1.5
-        #print("q at beginning is")
-        #print self.q
         N3=self.natoms*3
         qn = self.q + dq  #target IC values
-        #print(" qn is ")
-        #print qn
-        #print("dq at start is")
-        #print dq
-        #print("\n")
         xyzall=[]
         magall=[]
         magp=100
@@ -788,9 +766,6 @@ class ICoord(Mixin):
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             dq = qn - self.q
-            #print dq
-            #dqmag = np.linalg.norm(dq)
-            #print dqmag
 
             if mag<0.00005: break
         print("\n magall ")
@@ -850,7 +825,7 @@ class ICoord(Mixin):
 
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
-            print "ic iteration %i" % n
+            #print "ic iteration %i" % n
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
@@ -965,12 +940,20 @@ class ICoord(Mixin):
             Hdiagp.append(0.035)
 
         self.Hintp=np.diag(Hdiagp)
+        Hdiagp=np.asarray(Hdiagp)
+        Hdiagp=np.reshape(Hdiagp,(self.num_ics,1))
         #print(" Hdiagp elements")
         #for i in Hdiagp:
         #    print i
-        
-        tmp = np.matmul(self.Ut,self.Hintp)
-        self.Hint = np.matmul(self.Ut,np.transpose(tmp))
+       
+        #TODO is this right?
+        #tmp = np.matmul(self.Ut,self.Hintp)
+        tmp = np.zeros((self.nicd,self.num_ics),dtype=float)
+        for i in range(self.nicd): 
+            for k in range(self.num_ics):
+                tmp[i,k] = self.Ut[i,k]*Hdiagp[k]
+
+        self.Hint = np.matmul(tmp,np.transpose(self.Ut))
         self.Hinv = np.linalg.inv(self.Hint)
 
         #print("Hint elements")
@@ -995,11 +978,12 @@ class ICoord(Mixin):
         grmss = []
         steps = []
         energies=[]
+        self.do_bfgs=False # gets reset after each step
 
         print "Initial energy is %1.4f\n" % self.energy
 
         for step in range(nsteps):
-            print("iteration step %i" %step)
+            print("\niteration step %i" %step)
 
             # => Opt step <= #
             smag =self.opt_step()
@@ -1039,13 +1023,14 @@ class ICoord(Mixin):
         grad = self.lot.getGrad()
         self.bmatp_create()
         self.bmat_create()
+        coorp = np.copy(self.lot.coords)
 
         # grad in ics
         self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
         pgradrms = self.gradrms
-        self.gradrms = np.linalg.norm(self.gradq)
-        print("gradrms = %1.5f" % self.gradrms)
+        self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd)
+        print("gradrms = %1.5f" % self.gradrms),
 
         # For Hessian update
         self.pgradqprim=self.gradqprim
@@ -1053,55 +1038,73 @@ class ICoord(Mixin):
 
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq)
-        print "dq" 
-        print dq
         # regulate max overall step
         smag = np.linalg.norm(dq)
-        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX))
+        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX)),
         if smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
-        else: 
-            dq = np.fromiter(( xi for xi in dq), dq.dtype)
+        dq= np.asarray(dq).reshape(self.nicd,1)
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
+
         #TODO if rflag and ixflag
+        if rflag==True:
+            self.DMAX=self.DMAX/1.6
+            dq=self.update_ic_eigen(self.gradq)
+            self.ic_to_xyz_opt(dq)
+            self.do_bfgs=False
 
         ## => update ICs <= #
         #self.update_ics()
         #self.bmatp_create()
         #self.bmatp_to_U()
         #self.bmat_create()
+        #self.Hintp_to_Hint()
       
         # => Update Hessian <= #
-        self.update_bfgsp(dq)
+        if self.do_bfgs == True:
+            self.update_bfgsp(dq)
+        self.do_bfgs = True
 
         # => calc energyat new position <= #
         self.energy = self.lot.getEnergy()
-        print self.energy
+        print "E is %4.5f" % self.energy,
 
         # check goodness of step
         dEstep = self.energy - energyp
         dEpre = self.compute_predE(dq)
+
         ratio = dEstep/dEpre
-        print "ratio is %1.4f" % ratio
+        print "ratio is %1.4f" % ratio,
 
         # => step controller  <= #
         if dEstep>0.001:
-            print("decreasing DMAX")
+            print("decreasing DMAX"),
             if smag <self.DMAX:
                 self.DMAX = smag/1.5
             else: 
                 self.DMAX = self.DMAX/1.5
-        elif (ratio<0.2 or ratio>1.5) and abs(dEpre)>0.05:
-            print("decreasing DMAX")
+            if dEstep > 2.0:
+                print("redoing opt step")
+                self.lot.coords = coorp
+                self.update_ics()
+                self.bmatp_create()
+                self.bmatp_to_U()
+                self.bmat_create()
+                self.make_Hint()
+                self.Hintp_to_Hint()
+                self.do_bfgs=False
+                self.opt_step()
+        elif ratio<0.25:
+            print("decreasing DMAX"),
             if smag<self.DMAX:
                 self.DMAX = smag/1.1
             else:
-                self.DMAX = smag/1.2
-        elif (ratio>0.75 and ratio<1.25) and self.gradrms<pgradrms*1.35:
-            print("increasing DMAX")
-            self.DMAX=self.DMAX*1.1
+                self.DMAX = self.DMAX/1.2
+        elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
+            print("increasing DMAX"),
+            self.DMAX=self.DMAX*1.1 + 0.001
             if self.DMAX>0.25:
                 self.DMAX=0.25
         if self.DMAX<self.DMIN0:
@@ -1110,7 +1113,7 @@ class ICoord(Mixin):
 
 
     def update_bfgsp(self,dq):
-        print("In update bfgsp")
+        #print("In update bfgsp")
         self.newHess-=1
 
         dx = self.dqprim
@@ -1182,12 +1185,18 @@ if __name__ == '__main__':
         ic1.make_Hint()
         ic1.optimize(40)
 
-    if 0:
+    if 1:
         from pytc import *
         #optimize example 
-        filepath="tests/benzene.xyz"
-        nocc=19
-        nactive=4
+        filepath="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
+        nocc=61
+        nactive=6
+        #filepath="tests/stretched_fluoroethene.xyz"
+        #nocc=11
+        #nactive=2
+        #filepath="tests/benzene.xyz"
+        #nocc=19
+        #nactive=4
         lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         #lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot1.cas_from_file(filepath)
@@ -1195,13 +1204,13 @@ if __name__ == '__main__':
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        ic1.optimize(10)
-        ic1.ic_create()
-        ic1.bmatp_create()
-        ic1.bmatp_to_U()
-        ic1.bmat_create()
-        ic1.make_Hint()
-        ic1.optimize(40)
+        ic1.optimize(50)
+        #ic1.ic_create()
+        #ic1.bmatp_create()
+        #ic1.bmatp_to_U()
+        #ic1.bmat_create()
+        #ic1.make_Hint()
+        #ic1.optimize(40)
         
         #lot2 = PyTC(lot1.options.copy().set_values({
         #    'E_states' : [(0,0),(0,1)],
