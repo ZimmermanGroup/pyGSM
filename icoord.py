@@ -1193,6 +1193,39 @@ class ICoord(Mixin):
 
         self.Hintp_to_Hint()
 
+    def opt_constraint(self,ictan):
+        len_d = self.nbonds + self.nangles + self.ntor
+        nicd = self.nicd
+        nicd -= 1
+        norm = np.linalg.norm(ictan)
+        ictan = ictan/norm
+
+        dots = np.matmul(self.Ut,ictan)
+        Cn = np.matmul(dots,self.Ut)
+        norm = np.linalg.norm(Cn)
+        Cn = Cn/norm
+
+        dots = np.matmul(self.Ut,Cn)
+
+        for i in range(self.nicd):
+            if i != self.nicd-1:
+                for j in range(len_d):
+                    self.Ut[i,j] -= dots[i]*Cn[j]
+            for k in range(i):
+                dot2 = 0
+                for j in range(len_d):
+                    dot2 += self.Ut[i,j]*self.Ut[k,j]
+                for j in range(len_d):
+                    self.Ut[i,j] -= dot2 * self.Ut[k,j]
+            norm = np.linalg.norm(self.Ut[i,:])
+            if abs(norm)<0.00001:
+                norm = 1
+                print " Warning small norm: %1.7f \n"%norm
+            self.Ut[i,:] = self.Ut[i,:]/norm
+        for j in range(len_d):
+            self.Ut[self.nicd-1,j] = Cn[j]
+
+
 
 if __name__ == '__main__':
     
