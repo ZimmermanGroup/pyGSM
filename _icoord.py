@@ -24,7 +24,7 @@ class Mixin:
         a=self.mol.OBMol.GetAtom(i)
         b=self.mol.OBMol.GetAtom(j)
         c=self.mol.OBMol.GetAtom(k)
-        return self.mol.OBMol.GetAngle(b,a,c) #a is the vertex #in degrees
+        return self.mol.OBMol.GetAngle(a,b,c) #b is the vertex #in degrees
 
     def get_torsion(self,i,j,k,l):
         a=self.mol.OBMol.GetAtom(i)

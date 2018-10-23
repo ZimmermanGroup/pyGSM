@@ -8,6 +8,8 @@ from units import *
 import itertools
 
 from _icoord import Mixin
+np.set_printoptions(precision=3)
+np.set_printoptions(suppress=True)
 
 class ICoord(Mixin):
 
@@ -88,9 +90,9 @@ class ICoord(Mixin):
         unionAngles   = list(set(icoordA.angles) | set(icoordB.angles))
         unionTorsions = list(set(icoordA.torsions) | set(icoordB.torsions))
 
-        print icoordA.bonds
-        print icoordB.bonds
-        print unionBonds
+        #print icoordA.bonds
+        #print icoordB.bonds
+        #print unionBonds
         #print unionAngles
         #print unionTorsions
         #print "Saving bond union"
@@ -183,6 +185,8 @@ class ICoord(Mixin):
             self.update_bonds()
         #test for SiH2H2
         #self.bonds =[self.bonds[1],self.bonds[2],self.bonds[0]]
+        self.bonds = sorted(self.bonds)
+        self.update_bonds()
         self.coord_num()
         self.make_angles()
         self.make_torsions()
@@ -244,7 +248,7 @@ class ICoord(Mixin):
                     angle = (bond1[0],bond1[1],bond2[0])
                     found=True
                 if found==True:
-                    angv = self.get_angle(angle[1],angle[0],angle[2])
+                    angv = self.get_angle(angle[0],angle[1],angle[2])
                     if angv>30.:
                         self.anglev.append(angv)
                         self.angles.append(angle)
@@ -274,8 +278,7 @@ class ICoord(Mixin):
                 a2=angle2[0]
                 b2=angle2[1]
                 c2=angle2[2]
-
-                if b1==c2 and b2==c2:
+                if b1==c2 and b2==c1:
                     torsion = (a1,b1,b2,a2)
                     found = True
                 elif b1==a2 and b2==c1:
@@ -689,15 +692,13 @@ class ICoord(Mixin):
 
     def bmatp_to_U(self):
         N3=3*self.natoms
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
 
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
-        #print(" eigen")
-        #print e
+        print(" eigen")
+        print e
         #print v
         
         lowev=0
@@ -716,7 +717,10 @@ class ICoord(Mixin):
         #print(" Number of internal coordinate dimensions %i" %self.nicd)
         redset = self.num_ics - self.nicd
         #print "\nU matrix  i.e. diag(BB^T)"
-        self.Ut=v[0:self.nicd,:]
+        idx = e.argsort()[::-1]
+        v = v[idx[::-1]]
+        self.Ut=v[redset:,:]
+        #print self.Ut
 
         self.torv0 = list(self.torv)
         
@@ -729,8 +733,6 @@ class ICoord(Mixin):
         self.q = np.zeros((self.nicd,1),dtype=float)
         #print "Number of ICs %i" % self.num_ics
         #print "Number of IC dimensions %i" %self.nicd
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
 
         dists=[self.distance(bond[0],bond[1]) for bond in self.bonds ]
         angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.angles ]
@@ -747,28 +749,24 @@ class ICoord(Mixin):
             torsions.append((j+torfix)*np.pi/180.)
             n=+1
 
-        print "printing IC values"
+        #print "printing IC values"
         #print dists
-        print angles
+        #print angles
         #print torsions
-        for i,row in enumerate(self.Ut):
-            Ubond = row[0:self.nbonds]
-            Uangle =row[self.nbonds:self.nangles+self.nbonds]
-            Utorsion = row[self.nbonds+self.nangles:self.nbonds+self.nangles+self.ntor]
-            self.q[i] = np.dot(Ubond,dists) + np.dot(Uangle,angles) + np.dot(Utorsion,torsions)
+        #print "done"
+        for i in range(self.nicd):
+            self.q[i] = np.dot(self.Ut[i,0:self.nbonds],dists) + \
+                    np.dot(self.Ut[i,self.nbonds:self.nangles+self.nbonds],angles) \
+                    + np.dot(self.Ut[i,self.nbonds+self.nangles:],torsions)
 
         #print("Printing q")
-        #print self.q
+        #print np.transpose(self.q)
 
 
     def bmat_create(self):
 
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
 
         #print(" In bmat create")
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
         self.q_create()
 
         bmat = np.matmul(self.Ut,self.bmatp)
@@ -787,14 +785,11 @@ class ICoord(Mixin):
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
 
-        np.set_printoptions(precision=3)
-        np.set_printoptions(suppress=True)
-
         self.update_ics()
         self.bmatp_create()
         self.bmat_create()
 
-        SCALEBT = 10.
+        SCALEBT = 1.5
         N3=self.natoms*3
         print np.transpose(dq)
         qn = self.q + dq  #target IC values
@@ -811,7 +806,7 @@ class ICoord(Mixin):
         obconversion.SetOutFormat(output_format)
         opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
-        for n in range(8):
+        for n in range(10):
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
@@ -825,13 +820,12 @@ class ICoord(Mixin):
 
             if mag>magp:
                 SCALEBT *=1.5
-               #print "increasing scale"
             magp=mag
 
             # update coords
             xyz1 = self.lot.coords + xyzd/SCALEBT 
             xyzall.append(xyz1)
-            self.lot.coords = xyz1
+            self.lot.coords = np.copy(xyz1)
             self.update_ics()
             self.bmatp_create()
             self.bmat_create()
@@ -840,6 +834,7 @@ class ICoord(Mixin):
 
             dq = qn - self.q
             #print np.transpose(self.q)
+            #print "dq:"
             #print np.transpose(dq)
 
             if mag<0.00005: break
@@ -1028,7 +1023,7 @@ class ICoord(Mixin):
 
         #print("Hint elements")
         #print Hint
-        print("Shape of Hint is %s" % (np.shape(self.Hint),))
+        #print("Shape of Hint is %s" % (np.shape(self.Hint),))
 
         #if self.optCG==False or self.isTSNode==False:
         #    print "Not implemented"
@@ -1236,7 +1231,7 @@ class ICoord(Mixin):
         ICoordA.bmat_create()
         #if self.nnodes-self.nn != 1:
         if 1:
-            dq0[ICoordA.nicd-1] = -dqmag/2
+            dq0[ICoordA.nicd-1] = -dqmag/7.
             #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
         else:
             dq0[ICoordA.nicd-1] = -dqmag/2.0;
