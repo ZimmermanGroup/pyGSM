@@ -99,11 +99,11 @@ class ICoord(Mixin):
         torsions = []
         #for bond in b:
         for bond in unionBonds:
-            if bond not in icoordA.bonds:
-                print "need to add bond to %s" % (bond,)
-                isOkay = icoordA.mol.OBMol.AddBond(bond[0]+1,bond[1]+1,1)
-                print "Bond: %s added okay? %r" % (bond,isOkay)
-                bonds.append(bond)
+            #if bond not in icoordA.bonds:
+                #print "need to add bond to %s" % (bond,)
+                #isOkay = icoordA.mol.OBMol.AddBond(bond[0]+1,bond[1]+1,1)
+                #print "Bond: %s added okay? %r" % (bond,isOkay)
+            bonds.append(bond)
         #for angle in unionAngles:
         #    #print angle
         #    if bond not in icoordA.angles or bond not in icoordB.angles:
@@ -113,10 +113,11 @@ class ICoord(Mixin):
         #for torsion in unionTorsions:
         #    torsions.append(torsion)
 
+        icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1=pb.readfile('xyz','tmp1.xyz').next()
         ic3 = ICoord(icoordA.options.copy().set_values({
             'bonds' : bonds,
-             'angles': angles,
-             'torsions': torsions,
+            'mol' : mol1,
             }))
 
         return ic3
@@ -135,32 +136,34 @@ class ICoord(Mixin):
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
         self.lot = self.options['lot']
         self.OPTTHRESH = self.options['OPTTHRESH']
+        self.bonds = self.options['bonds']
 
 
         #self.print_xyz()
         self.Elements = elements.ElementData()
-        self.ic_create()
-        self.bmatp_create()
-        self.bmatp_to_U()
-        self.bmat_create()
 
-        self.make_Hint()  
-        self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
-        self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
-        self.gradq = np.zeros((self.nicd,1),dtype=float)
-        self.pgradq = np.zeros((self.nicd,1),dtype=float)
-        self.gradrms = 1000.
-        self.SCALEQN = 1.0
-        self.MAXAD = 0.075
-        self.DMAX = 0.2
-        self.ixflag = 0
-        self.energy = 0.
-        self.DMIN0 =self.DMAX/50.
-        self.lot.coords = np.zeros((len(self.mol.atoms),3))
-        for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-            self.lot.coords[i,0] = a.GetX()
-            self.lot.coords[i,1] = a.GetY()
-            self.lot.coords[i,2] = a.GetZ()
+        if self.isOpt>0:
+            self.ic_create()
+            self.bmatp_create()
+            self.bmatp_to_U()
+            self.bmat_create()
+            self.make_Hint()  
+            self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
+            self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
+            self.gradq = np.zeros((self.nicd,1),dtype=float)
+            self.pgradq = np.zeros((self.nicd,1),dtype=float)
+            self.gradrms = 1000.
+            self.SCALEQN = 1.0
+            self.MAXAD = 0.075
+            self.DMAX = 0.2
+            self.ixflag = 0
+            self.energy = 0.
+            self.DMIN0 =self.DMAX/50.
+            self.lot.coords = np.zeros((len(self.mol.atoms),3))
+            for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
+                self.lot.coords[i,0] = a.GetX()
+                self.lot.coords[i,1] = a.GetY()
+                self.lot.coords[i,2] = a.GetZ()
 
 
         self.nretry = 0 
@@ -168,13 +171,18 @@ class ICoord(Mixin):
     def ic_create(self):
         self.natoms= len(self.mol.atoms)
         #print self.natoms
-        self.make_bonds()
+        if self.bonds is None:
+            print "making bonds"
+            self.make_bonds()
+            if self.isOpt>0:
+                print(" isOpt: %i" %self.isOpt)
+                self.make_frags()
+                self.bond_frags()
+        else:
+            self.nbonds=len(self.bonds)
+            self.update_bonds()
         #test for SiH2H2
         #self.bonds =[self.bonds[1],self.bonds[2],self.bonds[0]]
-        if self.isOpt>0:
-            print(" isOpt: %i" %self.isOpt)
-            self.make_frags()
-            self.bond_frags()
         self.coord_num()
         self.make_angles()
         self.make_torsions()
@@ -237,7 +245,6 @@ class ICoord(Mixin):
                     found=True
                 if found==True:
                     angv = self.get_angle(angle[1],angle[0],angle[2])
-                    print "%s %1.2f" %(angle,angv)
                     if angv>30.:
                         self.anglev.append(angv)
                         self.angles.append(angle)
@@ -378,6 +385,12 @@ class ICoord(Mixin):
         self.update_angles()
         self.update_torsions()
 
+    def set_xyz(self,coords):
+        self.lot.coords = np.copy(coords)
+        for i,xyz in enumerate(coords):
+            self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
+
+
     def update_xyz(self):
         """ Updates the mol.OBMol object coords: Important for ICs"""
         for i,xyz in enumerate(self.lot.coords):
@@ -433,8 +446,8 @@ class ICoord(Mixin):
             a1=blist[i][1]
             a2=blist[i][2] # not vertices
             bond=(a1,a2)
-            if bond_exists(bond) == False:
-                print(" adding bond via linear ties %s" % bond)
+            if self.bond_exists(bond) == False:
+                print(" adding bond via linear ties %s" % (bond,))
                 self.bonds.append(bond)
             for j in range(m[i]):
                 for k in range(j):
@@ -447,13 +460,13 @@ class ICoord(Mixin):
                         elif b2==angle[1] and b1==angle[2]:
                             found=True
                     if found==False:
-                        if bond_exists((b1,a1))==True:
+                        if self.bond_exists((b1,a1))==True:
                             c1=b1
-                        if bond_exists(b2,a1)==True:
+                        if self.bond_exists(b2,a1)==True:
                             c1=b2
-                        if bond_exists(b1,a2)==True:
+                        if self.bond_exists(b1,a2)==True:
                             c2=b1
-                        if bond_exists(b2,a2)==True:
+                        if self.bond_exists(b2,a2)==True:
                             c2=b2
                         torsion= (c1,a1,a2,c2)
                         print(" adding torsion via linear ties %s" %torsion)
@@ -493,14 +506,14 @@ class ICoord(Mixin):
 
     def bond_frags(self):
         if self.nfrags<2:
-            return
+            return 
         found=0
         found2=0
         found3=0
         found4=0
 
         frags= [i[0] for i in self.frags]
-        print frags
+        isOkay=False
         for n1 in range(self.nfrags):
             for n2 in range(n1):
                 print(" Connecting frag %i to %i" %(n1,n2))
@@ -589,6 +602,8 @@ class ICoord(Mixin):
                     self.nbonds+=1
                     self.bondd.append(mclose)
                     print "bond dist: %1.4f" % mclose
+                    isOkay = self.mol.OBMol.AddBond(bond1[0]+1,bond1[1]+1,1)
+                    print "Bond added okay? %r" % isOkay
                 bond2=(b1,b2)
                 if found2>0 and self.bond_exists(bond2)==False:
                     self.bonds.append(bond2)
@@ -602,12 +617,11 @@ class ICoord(Mixin):
                     self.bonds.append(bond4)
                     print("bond pair2 added : %s" % (bond24,))
 
-                isOkay = self.mol.OBMol.AddBond(bond1[0]+1,bond1[1]+1,1)
-                print "Bond added okay? %r" % isOkay
 
                 if self.isOpt==2:
                     print("Checking for linear angles in newly added bond")
                     #TODO
+        return isOkay
 
     def bmatp_create(self):
         self.num_ics = self.nbonds + self.nangles + self.ntor
@@ -671,10 +685,6 @@ class ICoord(Mixin):
         #print self.bmatp
         #print "\n"
         #print "shape of bmatp is %s" %(np.shape(self.bmatp),)
-
-        np.set_printoptions(precision=4)
-        np.set_printoptions(suppress=True)
-
         #print self.bmatp
 
     def bmatp_to_U(self):
@@ -737,7 +747,10 @@ class ICoord(Mixin):
             torsions.append((j+torfix)*np.pi/180.)
             n=+1
 
-
+        print "printing IC values"
+        #print dists
+        print angles
+        #print torsions
         for i,row in enumerate(self.Ut):
             Ubond = row[0:self.nbonds]
             Uangle =row[self.nbonds:self.nangles+self.nbonds]
@@ -759,11 +772,9 @@ class ICoord(Mixin):
         self.q_create()
 
         bmat = np.matmul(self.Ut,self.bmatp)
-        """
-        print("printing bmat")
-        print bmat
-        print(" Shape of bmat %s" %(np.shape(bmat),))
-        """
+        #print("printing bmat")
+        #print bmat
+        #print(" Shape of bmat %s" %(np.shape(bmat),))
 
         bbt = np.matmul(bmat,np.transpose(bmat))
         #print(" Shape of bbt %s" %(np.shape(bbt),))
@@ -783,9 +794,12 @@ class ICoord(Mixin):
         self.bmatp_create()
         self.bmat_create()
 
-        SCALEBT = 1.5
+        SCALEBT = 10.
         N3=self.natoms*3
+        print np.transpose(dq)
         qn = self.q + dq  #target IC values
+        print "target IC values"
+        print np.transpose(qn)
         xyzall=[]
         magall=[]
         magp=100
@@ -797,9 +811,10 @@ class ICoord(Mixin):
         obconversion.SetOutFormat(output_format)
         opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
-        for n in range(10):
+        for n in range(8):
             btit = np.transpose(self.bmatti)
             xyzd=np.matmul(btit,dq)
+            assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
             #TODO Frozen
@@ -810,6 +825,7 @@ class ICoord(Mixin):
 
             if mag>magp:
                 SCALEBT *=1.5
+               #print "increasing scale"
             magp=mag
 
             # update coords
@@ -823,6 +839,8 @@ class ICoord(Mixin):
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             dq = qn - self.q
+            #print np.transpose(self.q)
+            #print np.transpose(dq)
 
             if mag<0.00005: break
         print("\n magall ")
@@ -856,11 +874,6 @@ class ICoord(Mixin):
         self.update_ics()
 
         #Current coords
-        for i in range(self.natoms):
-            tmpvec = self.getCoords(i)
-            self.lot.coords[i,0] = tmpvec[0]
-            self.lot.coords[i,1] = tmpvec[1]
-            self.lot.coords[i,2] = tmpvec[2]
         xyzall.append(self.lot.coords)
 
         magp=100
@@ -1171,17 +1184,11 @@ class ICoord(Mixin):
     def update_bfgsp(self,dq):
         #print("In update bfgsp")
         self.newHess-=1
-
         dx = self.dqprim
-        #print "shape of dx is %s" %(np.shape(dx),)
         dg = self.gradqprim - self.pgradqprim
-        #print "shape of dg is %s" %(np.shape(dg),)
         Hdx = np.matmul(self.Hintp,dx)
-        #print "shape of Hdx is %s" %(np.shape(Hdx),)
         dxHdx = np.dot(np.transpose(dx),Hdx)
-        #print "shape of dxHdx is %s" %(np.shape(dxHdx),)
         dgdg = np.outer(dg,dg)
-        #print "shape of dgdg is %s" %(np.shape(dgdg),)
         dgtdx = np.dot(np.transpose(dg),dx)
 
         if dgtdx>0.:
@@ -1194,37 +1201,57 @@ class ICoord(Mixin):
         self.Hintp_to_Hint()
 
     def opt_constraint(self,ictan):
-        len_d = self.nbonds + self.nangles + self.ntor
-        nicd = self.nicd
-        nicd -= 1
         norm = np.linalg.norm(ictan)
         ictan = ictan/norm
 
         dots = np.matmul(self.Ut,ictan)
-        Cn = np.matmul(dots,self.Ut)
+        Cn = np.matmul(np.transpose(self.Ut),dots)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
 
-        dots = np.matmul(self.Ut,Cn)
+        basis=np.zeros((self.nicd,self.num_ics),dtype=float)
+        #print np.shape(Cn)
+        basis[-1,:] = list(Cn)
+        for i,v in enumerate(self.Ut):
+            w = v - np.sum( np.dot(v,b)*b  for b in basis )
+            tmp = w/np.linalg.norm(w)
+            if (w > 1e-10).any():  
+                basis[i,:] =tmp
+        #print basis
+        self.Ut = np.array(basis)
 
-        for i in range(self.nicd):
-            if i != self.nicd-1:
-                for j in range(len_d):
-                    self.Ut[i,j] -= dots[i]*Cn[j]
-            for k in range(i):
-                dot2 = 0
-                for j in range(len_d):
-                    dot2 += self.Ut[i,j]*self.Ut[k,j]
-                for j in range(len_d):
-                    self.Ut[i,j] -= dot2 * self.Ut[k,j]
-            norm = np.linalg.norm(self.Ut[i,:])
-            if abs(norm)<0.00001:
-                norm = 1
-                print " Warning small norm: %1.7f \n"%norm
-            self.Ut[i,:] = self.Ut[i,:]/norm
-        for j in range(len_d):
-            self.Ut[self.nicd-1,j] = Cn[j]
+        #print "Check if Ut is orthonormal"
+        #dots = np.matmul(self.Ut,np.transpose(self.Ut))
 
+
+
+    @staticmethod
+    def add_node(ICoordA,ICoordB):
+        dq0 = np.zeros((ICoordA.nicd,1))
+        ictan = ICoord.tangent_1(ICoordA,ICoordB)
+        ICoordA.opt_constraint(ictan)
+        dqmag = np.dot(ICoordA.Ut[-1,:],ictan)
+        print " dqmag: %1.3f"%dqmag
+        ICoordA.bmatp_create()
+        ICoordA.bmat_create()
+        #if self.nnodes-self.nn != 1:
+        if 1:
+            dq0[ICoordA.nicd-1] = -dqmag/2
+            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
+        else:
+            dq0[ICoordA.nicd-1] = -dqmag/2.0;
+        
+        print " dq0[constraint]: %1.3f" % dq0[ICoordA.nicd-1]
+        ICoordA.ic_to_xyz(dq0)
+        ICoordA.update_ics()
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1=pb.readfile('xyz','tmp1.xyz').next()
+        ICoordC = ICoord(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.bonds,
+            }))
+
+        return ICoordC
 
 
 if __name__ == '__main__':
@@ -1232,8 +1259,7 @@ if __name__ == '__main__':
 
     if 0:
         from pytc import *
-        # fragment example -- not working properly -- 
-        # openbabel is not updating ICs as expected :,(
+        # fragment example 
         filepath1="tests/SiH4.xyz"
         filepath2="tests/SiH2H2.xyz"
 
@@ -1246,15 +1272,18 @@ if __name__ == '__main__':
         # ICoord object
         mol1=pb.readfile("xyz",filepath1).next()
         mol2=pb.readfile("xyz",filepath2).next()
-        #print "ic1"
-        #ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        print "ic2"
+        print "########## ic1 ######\n\n"
+        ic1=ICoord.from_options(mol=mol1,lot=lot1)
+        print "########## ic2 #######\n\n" 
         ic2=ICoord.from_options(mol=mol2,lot=lot2)
+        # union
+        print '\n\n ############ FORMING UNION ############# \n\n'
+        ic1 = ICoord.union_ic(ic1,ic2)
+        ic2 = ICoord.union_ic(ic2,ic1)
 
-        #ic3= ICoord.union_ic(ic2,ic1)
-        #ic3.bmatp_create()
-        #ic3.bmatp_to_U()
-        #ic3.bmat_create()
+        print '\n\n ############ ADDED Node ############# \n\n'
+        ic3 = ICoord.add_node(ic1,ic2)
+        ic3.mol.write('xyz','added.xyz',overwrite=True)
 
     if 0:
         #qchem example
@@ -1282,12 +1311,12 @@ if __name__ == '__main__':
         #filepath="tests/pent-4-enylbenzene.xyz"
         #nocc=37
         #nactive=6
-        #filepath="tests/stretched_fluoroethene.xyz"
-        #nocc=11
-        #nactive=2
-        filepath="tests/benzene.xyz"
-        nocc=19
-        nactive=4
+        filepath="tests/stretched_fluoroethene.xyz"
+        nocc=11
+        nactive=2
+        #filepath="tests/benzene.xyz"
+        #nocc=19
+        #nactive=4
         #filepath="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
         #nocc=61
         #nactive=6
@@ -1316,7 +1345,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
         ic1.optimize(100)
 
-    if 1:
+    if 0:
         from pytc import *
         #optimize example 
         # from reference
@@ -1334,3 +1363,29 @@ if __name__ == '__main__':
         mol2.OBMol.AddBond(2,11,1)
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
         ic1.optimize(50)
+
+    if 1:
+        from pytc import *
+        filepath="tests/fluoroethene.xyz"
+        filepath2="tests/stretched_fluoroethene.xyz"
+        nocc=11
+        nactive=2
+        lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot2=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        mol=pb.readfile("xyz",filepath).next()
+        mol2=pb.readfile("xyz",filepath2).next()
+        print "\n IC1 \n\n"
+        ic1=ICoord.from_options(mol=mol,lot=lot1)
+        print "\n IC2 \n\n"
+        ic2=ICoord.from_options(mol=mol2,lot=lot2)
+
+        # union
+        print '\n\n ############ FORMING UNION ############# \n\n'
+        print "ic1"
+        ic1 = ICoord.union_ic(ic1,ic2)
+        print "ic2"
+        ic2 = ICoord.union_ic(ic2,ic1)
+
+        print '\n\n ############ ADDED Node ############# \n\n'
+        ic3 = ICoord.add_node(ic1,ic2)
+        ic3.mol.write('xyz','added.xyz',overwrite=True)
