@@ -2,6 +2,7 @@ import numpy as np
 import options
 import os
 from base_gsm import *
+from icoord import *
 
 class GSM(BaseGSM):
 
@@ -19,8 +20,27 @@ class GSM(BaseGSM):
         #find TS
         return
 
+    def interpolate(self,newnodes=1):
+        count = 0
+        while count < newnodes:
+            self.icoords[self.nn-1] = ICoord.add_node(self.icoords[self.nn-2],self.icoords[-1])
+            self.nn+=1
+            count+=1
+
+    def writenodes(self):
+        count = 0
+        for ico in self.icoords:
+            if ico != 0:
+                ico.mol.write('xyz','temp{:02}.xyz'.format(count),overwrite=True)
+            count+=1
+
+    @staticmethod
+    def from_options(**kwargs):
+        return GSM(GSM.default_options().set_values(kwargs))
+
+
 if __name__ == '__main__':
-    from icoord import *
+#    from icoord import *
     from qchem import *
     import manage_xyz
     filepath="tests/fluoroethene.xyz"
@@ -47,8 +67,17 @@ if __name__ == '__main__':
 
     print "\n Starting GSM \n\n"
     gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9)
-    gsm.add_node(0,1,8)
-    
-    print '\n\n ############ STARTING GSM 2 ############# \n\n'
-    gsm2 = GSM.from_options(ICoord1=ic1,nnodes=9,isomers=[('torsions',3,1,2,5,90.)],isSSM=True) 
-    gsm2.add_node_SSM(0,1)
+#    gsm.icoords[1]=ICoord.add_node(gsm.icoords[0],gsm.icoords[8])
+    gsm.interpolate(7) 
+    gsm.writenodes()
+    gsm.icoords[1].optimize(20,1)
+    gsm.icoords[1].ic_create()
+    gsm.icoords[1].bmatp_create()
+    gsm.icoords[1].bmatp_to_U()
+    gsm.icoords[1].make_Hint()
+#    for ico in gsm.icoords:
+#        if ico != 0:
+#            ico.optimize(20,1)
+   
+
+

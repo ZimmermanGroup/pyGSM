@@ -1032,7 +1032,7 @@ class ICoord(Mixin):
         tmp = np.matmul(self.Ut,self.Hintp)
         Hint = np.matmul(self.Ut,np.transpose(tmp))
 
-    def optimize(self,nsteps):
+    def optimize(self,nsteps,nconstraints=0):
         xyzfile=os.getcwd()+"/xyzfile.xyz"
         output_format = 'xyz'
         obconversion = ob.OBConversion()
@@ -1051,7 +1051,7 @@ class ICoord(Mixin):
             print("\niteration step %i" %step)
 
             # => Opt step <= #
-            smag =self.opt_step()
+            smag =self.opt_step(nconstraints)
             grmss.append(self.gradrms)
             steps.append(smag)
             energies.append(self.energy)
@@ -1081,7 +1081,7 @@ class ICoord(Mixin):
                 break
 
 
-    def opt_step(self):
+    def opt_step(self,nconstraints):
         energy=0.
 
         energyp = self.energy
@@ -1102,7 +1102,7 @@ class ICoord(Mixin):
         self.gradqprim = np.matmul(np.transpose(self.Ut),self.gradq)
 
         # => Take Eigenvector Step <=#
-        dq = self.update_ic_eigen(self.gradq)
+        dq = self.update_ic_eigen(self.gradq,nconstraints)
         # regulate max overall step
         smag = np.linalg.norm(dq)
         print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX)),
@@ -1116,7 +1116,7 @@ class ICoord(Mixin):
         #TODO if rflag and ixflag
         if rflag==True:
             self.DMAX=self.DMAX/1.6
-            dq=self.update_ic_eigen(self.gradq)
+            dq=self.update_ic_eigen(self.gradq,nconstraints)
             self.ic_to_xyz_opt(dq)
             self.do_bfgs=False
 
@@ -1159,7 +1159,7 @@ class ICoord(Mixin):
                 self.bmat_create()
                 self.Hintp_to_Hint()
                 self.do_bfgs=False
-                self.opt_step()
+                self.opt_step(nconstraints)
         elif ratio<0.25:
             print("decreasing DMAX"),
             if smag<self.DMAX:
@@ -1280,11 +1280,11 @@ if __name__ == '__main__':
         ic3 = ICoord.add_node(ic1,ic2)
         ic3.mol.write('xyz','added.xyz',overwrite=True)
 
-    if 0:
+    if 1:
         #qchem example
         from qchem import *
-        #filepath="tests/stretched_fluoroethene.xyz"
-        filepath="tests/benzene.xyz"
+        filepath="tests/stretched_fluoroethene.xyz"
+        #filepath="tests/benzene.xyz"
         geom=manage_xyz.read_xyz(filepath,scale=1)   
         lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 	
@@ -1359,7 +1359,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
         ic1.optimize(50)
 
-    if 1:
+    if 0:
         from pytc import *
         filepath="tests/fluoroethene.xyz"
         filepath2="tests/stretched_fluoroethene.xyz"

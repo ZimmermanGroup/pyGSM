@@ -117,7 +117,7 @@ class BaseGSM(object):
         for bond1,bond2 in zip(ICoord1.bondd,ICoord2.bondd):
             ictan.append(bond1 - bond2)
         for angle1,angle2 in zip(ICoord1.anglev,ICoord2.anglev):
-            ictan.append(angle1-angle2)
+            ictan.append((angle1-angle2)*np.pi/180.)
         for torsion1,torsion2 in zip(ICoord1.torv,ICoord2.torv):
             temptorsion = (torsion1-torsion2)*np.pi/180.0
             if temptorsion > np.pi:
@@ -141,7 +141,7 @@ class BaseGSM(object):
         for angle1,anglev1 in zip(ICoord1.angles,ICoord1.anglev):
             for angle2,anglev2 in zip(ICoord2.angles,ICoord2.anglev):
                 if (angle1==angle2) or (angle1[::-1]==angle2):
-                    ictan.append(anglev1 - anglev2)
+                    ictan.append((anglev1 - anglev2)*np.pi/180.)
                     break
         for torsion1,torsionv1 in zip(ICoord1.torsions,ICoord1.torv):
             for torsion2,torsionv2 in zip(ICoord2.torsions,ICoord2.torv):
@@ -341,8 +341,17 @@ class BaseGSM(object):
         print " iR,iP: %d %d iN: %d "%(iR,iP,iN)
         mol = pb.Molecule(pb.ob.OBMol(self.icoords[iR].mol.OBMol))
         mol2 = pb.Molecule(pb.ob.OBMol(self.icoords[iP].mol.OBMol))
-        newic = ico.ICoord.from_options(mol=mol,lot=self.icoords[iR].lot)
-        intic = ico.ICoord.from_options(mol=mol2,lot=self.icoords[iP].lot)
+        lot = deepcopy(self.icoords[iR].lot)
+        lot2 = deepcopy(self.icoords[iP].lot)
+        newic = ico.ICoord.from_options(mol=mol,lot=lot)
+        intic = ico.ICoord.from_options(mol=mol2,lot=lot2)
+
+        newic = ico.ICoord.union_ic(newic,intic)
+        intic = ico.ICoord.union_ic(intic,newic)
+
+        newic.update_ics()
+        intic.update_ics()
+
         dq0 = [0.] * newic.nicd
         dq0 = np.asarray(dq0).reshape(newic.nicd,1)
         ictan = BaseGSM.tangent_1(newic,intic)
@@ -401,6 +410,10 @@ class BaseGSM(object):
 
         print "\niP xyz:"
         self.icoords[iP].print_xyz()
+        
+        self.icoords[iR].mol.write('xyz','temp{:02}.xyz'.format(iR),overwrite=True)
+        self.icoords[iN].mol.write('xyz','temp{:02}.xyz'.format(iN),overwrite=True)
+        self.icoords[iP].mol.write('xyz','temp{:02}.xyz'.format(iP),overwrite=True)
 
     def add_node_SSM(self,n1,n2):
         if not self.isSSM:
@@ -470,5 +483,4 @@ class BaseGSM(object):
 #            return True
 #        else:
 #            return False
-
 

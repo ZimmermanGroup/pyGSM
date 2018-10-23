@@ -204,13 +204,15 @@ class Mixin:
         if val>1: val=1
         return val
 
-    def update_ic_eigen(self,gradq):
+    def update_ic_eigen(self,gradq,nconstraints=0):
         SCALE =self.SCALEQN
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
         lambda1 = 0.0
 
-        e,v_temp = np.linalg.eigh(self.Hint)
+        nicd_c = self.nicd-nconstraints
+        temph = self.Hint[:nicd_c,:nicd_c]
+        e,v_temp = np.linalg.eigh(temph)
         v = np.transpose(v_temp)
         e = np.reshape( e,(len(e),1))
         leig = e[0]
@@ -222,6 +224,7 @@ class Mixin:
         if abs(lambda1)<0.005: lambda1 = 0.005
 
         # => grad in eigenvector basis <= #
+        gradq = gradq[:nicd_c,:nicd_c]
         gqe = np.matmul(v,gradq)
 
         dqe0 = np.divide(-gqe,e+lambda1)/SCALE
@@ -234,8 +237,10 @@ class Mixin:
         for i in dq0:
             if abs(i)>self.MAXAD:
                 i=np.sign(i)*self.MAXAD
-
-        return dq0
+        dq_c = np.zeros((self.nicd,1))
+        for i in range(nicd_c):
+            dq_c[i,0] = dq0[i,0]
+        return dq_c
 
     def compute_predE(self,dq0):
         # compute predicted change in energy 
