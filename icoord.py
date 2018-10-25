@@ -6,6 +6,8 @@ import elements
 import os
 from units import *
 import itertools
+from copy import deepcopy
+import manage_xyz
 
 from _icoord import Mixin
 np.set_printoptions(precision=3)
@@ -1040,6 +1042,8 @@ class ICoord(Mixin):
         opt_molecules=[]
         #opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
         self.energy = self.lot.getEnergy()
+#
+        self.grad = self.lot.getGrad()
         grmss = []
         steps = []
         energies=[]
@@ -1085,7 +1089,8 @@ class ICoord(Mixin):
         energy=0.
 
         energyp = self.energy
-        grad = self.lot.getGrad()
+#        grad = self.lot.getGrad()
+        grad = self.grad
         self.bmatp_create()
         self.bmat_create()
         coorp = np.copy(self.lot.coords)
@@ -1103,6 +1108,7 @@ class ICoord(Mixin):
 
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
+        #print "\ndq: \n",dq
         # regulate max overall step
         smag = np.linalg.norm(dq)
         print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX)),
@@ -1203,7 +1209,7 @@ class ICoord(Mixin):
         Cn = np.matmul(np.transpose(self.Ut),dots)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
-
+#        print "Cn:\n",Cn
         basis=np.zeros((self.nicd,self.num_ics),dtype=float)
         #print np.shape(Cn)
         basis[-1,:] = list(Cn)
@@ -1213,8 +1219,9 @@ class ICoord(Mixin):
             if (w > 1e-10).any():  
                 basis[i,:] =tmp
         #print basis
+#        print "before np.array(basis)\n",self.Ut
         self.Ut = np.array(basis)
-
+#        print "end opt_constriant, UT:\n",self.Ut
         #print "Check if Ut is orthonormal"
         #dots = np.matmul(self.Ut,np.transpose(self.Ut))
 
@@ -1223,28 +1230,36 @@ class ICoord(Mixin):
     @staticmethod
     def add_node(ICoordA,ICoordB):
         dq0 = np.zeros((ICoordA.nicd,1))
-        ictan = ICoord.tangent_1(ICoordA,ICoordB)
-        ICoordA.opt_constraint(ictan)
-        dqmag = np.dot(ICoordA.Ut[-1,:],ictan)
-        print " dqmag: %1.3f"%dqmag
-        ICoordA.bmatp_create()
-        ICoordA.bmat_create()
-        #if self.nnodes-self.nn != 1:
-        if 1:
-            dq0[ICoordA.nicd-1] = -dqmag/7.
-            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
-        else:
-            dq0[ICoordA.nicd-1] = -dqmag/2.0;
-        
-        print " dq0[constraint]: %1.3f" % dq0[ICoordA.nicd-1]
-        ICoordA.ic_to_xyz(dq0)
-        ICoordA.update_ics()
+
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1=pb.readfile('xyz','tmp1.xyz').next()
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = deepcopy(ICoordA.lot)
         ICoordC = ICoord(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.bonds,
+            "lot" : lot1
             }))
+
+        ictan = ICoord.tangent_1(ICoordA,ICoordB)
+        ICoordC.opt_constraint(ictan)
+        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
+        print " dqmag: %1.3f"%dqmag
+        ICoordC.bmatp_create()
+        ICoordC.bmat_create()
+        #if self.nnodes-self.nn != 1:
+        if 1:
+            dq0[ICoordC.nicd-1] = -dqmag/7.
+            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
+        else:
+            dq0[ICoordC.nicd-1] = -dqmag/2.0;
+        
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+
+#        ICoordC.mol.write('xyz','tmp1.xyz',overwrite=True)
+#        geom = manage_xyz.read_xyz('tmp1.xyz',scale=1)
+#        ICoordC.lot.geom = geom
 
         return ICoordC
 

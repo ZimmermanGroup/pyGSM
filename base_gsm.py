@@ -61,6 +61,12 @@ class BaseGSM(object):
             allowed_types=[bool],
             doc='specify isMAP_SE')
 
+        opt.add_option(
+            key='nconstraints',
+            required=False,
+            value=0,
+            allowed_types=[int])
+
         BaseGSM._default_options = opt
         return BaseGSM._default_options.copy()
 
@@ -90,11 +96,12 @@ class BaseGSM(object):
         self.nP = 1        
         self.isSSM = self.options['isSSM']
         self.isMAP_SE = self.options['isMAP_SE']
-        self.active = [-1] * self.nnodes
-        self.active[0] = -2
-        self.active[-1] = -2
+        self.active = [False] * self.nnodes
+        #self.active[0] = True
+        #self.active[-1] = True
         self.isomers = self.options['isomers']
         self.isomer_init()
+        self.nconstraints = self.options['nconstraints']
 
     @staticmethod
     def get_ssm_dqmag(bdist):
@@ -354,7 +361,7 @@ class BaseGSM(object):
 
         dq0 = [0.] * newic.nicd
         dq0 = np.asarray(dq0).reshape(newic.nicd,1)
-        ictan = BaseGSM.tangent_1(newic,intic)
+        ictan = ic.ICoord.tangent_1(newic,intic)
 
         dqmag = 0.0
         
