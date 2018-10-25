@@ -1033,8 +1033,8 @@ class ICoord(Mixin):
         #    print "Not implemented"
 
     def Hintp_to_Hint(self):
-        tmp = np.matmul(self.Ut,self.Hintp)
-        Hint = np.matmul(self.Ut,np.transpose(tmp))
+        tmp = np.matmul(self.Ut,np.transpose(self.Hintp))
+        self.Hint = np.matmul(self.Ut,np.transpose(tmp))
 
     def optimize(self,nsteps,nconstraints=0):
         xyzfile=os.getcwd()+"/xyzfile.xyz"
@@ -1050,7 +1050,7 @@ class ICoord(Mixin):
         energies=[]
         self.do_bfgs=False # gets reset after each step
 
-        print "Initial energy is %1.4f\n" % self.energy
+        print "Initial energy is %1.4f\n" % self.V0
 
         for step in range(nsteps):
             print("\niteration step %i" %step)
@@ -1084,7 +1084,7 @@ class ICoord(Mixin):
 
             if self.gradrms<self.OPTTHRESH:
                 break
-
+        print "Final energy is %2.5f" % (self.V0 + self.energy)
 
     def opt_step(self,nconstraints):
         energy=0.
@@ -1092,8 +1092,7 @@ class ICoord(Mixin):
         #print "in opt step: coordinates at current step are"
         #print self.lot.coords
         energyp = self.energy
-#        grad = self.lot.getGrad()
-        grad = self.grad
+        grad = self.lot.getGrad()
         self.bmatp_create()
         self.bmat_create()
         coorp = np.copy(self.lot.coords)
@@ -1155,7 +1154,7 @@ class ICoord(Mixin):
         print "ratio is %1.4f" % ratio,
 
         # => step controller  <= #
-        if dEstep>0.001:
+        if dEstep>0.01:
             print("decreasing DMAX"),
             if smag <self.DMAX:
                 self.DMAX = smag/1.5
@@ -1345,7 +1344,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
         ic1.optimize(50)
 
-    if 0:
+    if 1:
         from pytc import *
         #optimize example 
         # from reference
@@ -1362,7 +1361,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
         ic1.optimize(100)
 
-    if 1:
+    if 0:
         from pytc import *
         #optimize example 
         # from reference
