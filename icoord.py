@@ -35,7 +35,7 @@ class ICoord(Mixin):
 
         opt.add_option(
             key='OPTTHRESH',
-            value=0.0005,
+            value=0.001,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold')
@@ -697,8 +697,8 @@ class ICoord(Mixin):
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
-        print(" eigen")
-        print e
+        #print(" eigen")
+        #print e
         #print v
         
         lowev=0
@@ -747,7 +747,6 @@ class ICoord(Mixin):
             else:
                 torfix=0.
             torsions.append((j+torfix)*np.pi/180.)
-            n=+1
 
         #print "printing IC values"
         #print dists
@@ -963,7 +962,7 @@ class ICoord(Mixin):
 
         if retry==False:
             self.update_ics()
-            torsions=[]
+            torsion_diff=[]
             for i,j in zip(self.torv,qprim[self.nbonds+self.nangles:]):
                 tordiff = i-j
                 if tordiff>180.:
@@ -972,10 +971,13 @@ class ICoord(Mixin):
                     torfix=360.
                 else:
                     torfix=0.
-                torsions.append((i+torfix))
+                torsion_diff.append((i+torfix))
 
-            qprim_cur = np.concatenate((self.bondd,self.anglev,torsions))
-            self.dqprim = qprim_cur - qprim
+            #qprim_cur = np.concatenate((self.bondd,self.anglev,torsions))
+            #self.dqprim = qprim_cur - qprim
+            bond_diff = self.bondd - qprim[:self.nbonds]
+            angle_diff = self.anglev - qprim[self.nbonds:self.nangles+self.nbonds]
+            self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
             self.dqprim[self.nbonds:] *= np.pi/180.
             self.dqprim = np.reshape(self.dqprim,(self.num_ics,1))
 
@@ -1039,7 +1041,8 @@ class ICoord(Mixin):
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
         #opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-        self.energy = self.lot.getEnergy()
+        self.V0 = self.lot.getEnergy()
+        self.energy=0
         grmss = []
         steps = []
         energies=[]
@@ -1084,6 +1087,8 @@ class ICoord(Mixin):
     def opt_step(self,nconstraints):
         energy=0.
 
+        #print "in opt step: coordinates at current step are"
+        #print self.lot.coords
         energyp = self.energy
         grad = self.lot.getGrad()
         self.bmatp_create()
@@ -1106,9 +1111,11 @@ class ICoord(Mixin):
         # regulate max overall step
         smag = np.linalg.norm(dq)
         print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX)),
+        #print "dq before\n", dq.T
         if smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
         dq= np.asarray(dq).reshape(self.nicd,1)
+        #print "dq after\n", dq.T
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -1133,7 +1140,7 @@ class ICoord(Mixin):
         self.do_bfgs = True
 
         # => calc energyat new position <= #
-        self.energy = self.lot.getEnergy()
+        self.energy = self.lot.getEnergy() - self.V0
         print "E is %4.5f" % self.energy,
 
         # check goodness of step
@@ -1151,26 +1158,27 @@ class ICoord(Mixin):
             else: 
                 self.DMAX = self.DMAX/1.5
             if dEstep > 2.0:
-                print("redoing opt step")
+                print "resetting coords to coorp"
                 self.lot.coords = coorp
+                #print self.lot.coords
+                self.energy = self.lot.getEnergy() - self.V0
                 self.update_ics()
                 self.bmatp_create()
                 self.bmatp_to_U()
                 self.bmat_create()
                 self.Hintp_to_Hint()
                 self.do_bfgs=False
-                self.opt_step(nconstraints)
-        elif ratio<0.25:
-            print("decreasing DMAX"),
-            if smag<self.DMAX:
-                self.DMAX = smag/1.1
-            else:
-                self.DMAX = self.DMAX/1.2
-        elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
-            print("increasing DMAX"),
-            self.DMAX=self.DMAX*1.1 + 0.001
-            if self.DMAX>0.25:
-                self.DMAX=0.25
+        #elif ratio<0.25:
+        #    print("decreasing DMAX"),
+        #    if smag<self.DMAX:
+        #        self.DMAX = smag/1.1
+        #    else:
+        #        self.DMAX = self.DMAX/1.2
+        #elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
+        #    print("increasing DMAX"),
+        #    self.DMAX=self.DMAX*1.1 + 0.001
+        #    if self.DMAX>0.25:
+        #        self.DMAX=0.25
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
         return  smag
@@ -1181,7 +1189,8 @@ class ICoord(Mixin):
         self.newHess-=1
         dx = self.dqprim
         dg = self.gradqprim - self.pgradqprim
-        Hdx = np.matmul(self.Hintp,dx)
+        #Hdx = np.matmul(self.Hintp,dx)
+        Hdx = np.dot(self.Hintp,dx)
         dxHdx = np.dot(np.transpose(dx),Hdx)
         dgdg = np.outer(dg,dg)
         dgtdx = np.dot(np.transpose(dg),dx)
@@ -1280,7 +1289,7 @@ if __name__ == '__main__':
         ic3 = ICoord.add_node(ic1,ic2)
         ic3.mol.write('xyz','added.xyz',overwrite=True)
 
-    if 1:
+    if 0:
         #qchem example
         from qchem import *
         filepath="tests/stretched_fluoroethene.xyz"
@@ -1340,7 +1349,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
         ic1.optimize(100)
 
-    if 0:
+    if 1:
         from pytc import *
         #optimize example 
         # from reference
@@ -1357,6 +1366,14 @@ if __name__ == '__main__':
         mol2=pb.readfile("xyz",filepath2).next()
         mol2.OBMol.AddBond(2,11,1)
         ic1=ICoord.from_options(mol=mol2,lot=lot1)
+        ic1.optimize(15)
+        ic1.bmatp_create()
+        ic1.bmatp_to_U()
+        ic1.bmat_create()
+        ic1.optimize(15)
+        ic1.bmatp_create()
+        ic1.bmatp_to_U()
+        ic1.bmat_create()
         ic1.optimize(50)
 
     if 0:
