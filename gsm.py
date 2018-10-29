@@ -25,7 +25,7 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP])
+            self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP],self.nnodes,self.nn)
             self.active[self.nR] = True
 #            ictan = ICoord.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
@@ -37,7 +37,7 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1])
+            self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1],self.nnodes,self.nn)
 #            ictan = ICoord.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
@@ -86,7 +86,61 @@ class GSM(BaseGSM):
                 opt_mols.append(obconversion.WriteString(ico.mol.OBMol))
         for mol in opt_mols:
             nodesXYZ.write(pb.readstring("xyz",mol))
-    
+
+    def get_tangents_1g(self):
+        size_ic = self.icoords[0].nbonds+self.icoords[0].nangles+self.icoords[0].ntor
+        ictan0 = [0]*self.nnodes
+        ictan = [[],]*self.nnodes
+        nlist = [0]*(2*self.nnodes)
+        ncurrent = 0
+        dqmaga = [0.]*self.nnodes
+        dqa = [[],]*self.nnodes
+
+        for n in range(self.nR):
+            nlist[2*ncurrent] = n
+            nlist[2*ncurrent+1] = n+1
+            ncurrent += 1
+
+        for n in range(self.nnodes-self.nP+1,self.nnodes):
+            nlist[2*ncurrent] = n
+            nlist[2*ncurrent+1] = n-1
+            ncurrent += 1
+
+        nlist[2*ncurrent] = self.nR -1
+        nlist[2*ncurrent+1] = self.nnodes - self.nP
+
+        if False:
+            nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
+
+        #TODO is this actually used?
+        if self.nR == 0: 
+            nlist[2*ncurrent+1] += 1
+        if self.nP == 0:
+            nlist[2*ncurrent] -= 1
+        ncurrent += 1
+
+        for n in range(ncurrent):
+            newic = self.icoords[nlist[2*n+1]]
+            intic = self.icoords[nlist[2*n+0]]
+
+            if self.isSSM:
+                pass #do tangent_1b()
+            else:
+                ictan[nlist[2*n]] = ICoord.tangent_1(newic,intic)
+
+            ictan0 = np.copy(ictan[nlist[2*n]])
+
+            if True:
+                newic.bmatp_create()
+                newic.bmatp_to_U()
+                newic.opt_constraint(ictan[nlist[2*n]])
+            newic.bmat_create()
+        
+            dqmaga[nlist[2*n]] = np.dot(ictan0.T,newic.Ut[-1,:])
+            dqmaga[nlist[2*n]] = float(np.sqrt(dqmaga[nlist[2*n]]))
+
+        self.dqmaga = dqmaga
+        self.ictan = ictan
 
     @staticmethod
     def from_options(**kwargs):
@@ -120,10 +174,18 @@ if __name__ == '__main__':
     ic2=ICoord.from_options(mol=mol2,lot=lot2)
 
     print "\n Starting GSM \n\n"
-    gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=10,nconstraints=1)
+    gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
 
-    gsm.interpolate() 
-#    gsm.write_node_xyz("nodes_xyz_file0.xyz")
+    gsm.interpolate(7) 
+    gsm.write_node_xyz("nodes_xyz_file0.xyz")
+
+    gsm.get_tangents_1g()
+    print "DQMAGA:",gsm.dqmaga
+
+    print "Printing Tangents:"
+    for tan in gsm.ictan:
+        print np.transpose(tan)
+
 #    gsm.growth_iters(maxrounds=1,nconstraints=1)
 #    gsm.write_node_xyz()
 
