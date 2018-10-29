@@ -162,7 +162,7 @@ class ICoord(Mixin):
             self.DMAX = 0.2
             self.ixflag = 0
             self.energy = 0.
-            self.DMIN0 =self.DMAX/50.
+            self.DMIN0 =self.DMAX/10.
             self.lot.coords = np.zeros((len(self.mol.atoms),3))
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
                 self.lot.coords[i,0] = a.GetX()
@@ -426,56 +426,75 @@ class ICoord(Mixin):
         for anglev,angle in zip(self.anglev,self.angles):
             if anglev>160.:
                 blist.append(angle)
-                print(" linear angle %i of %i: %s (%4.2f)",n+1,maxsize,angle,anglev)
+                print(" linear angle %i of %i: %s (%4.2f)" %(n+1,maxsize,angle,anglev))
                 n+=1
 
         # atoms attached to linear atoms
         clist=[[]]
-        m=np.zeros((n)) #number of nbr atoms?
+        m =[]
+        print "blist"
+        print blist
         for i in range(n):
-            # a is the vertex and not included
+            # b is the vertex 
+            a=self.mol.OBMol.GetAtom(blist[i][0])
             b=self.mol.OBMol.GetAtom(blist[i][1])
             c=self.mol.OBMol.GetAtom(blist[i][2])
-            for nbr in ob.OBAtomAtomIter(b):
-                if nbr.GetIndex() != c.GetIndex():
-                    clist[i].append(nbr.GetIndex())
-                    m[i]+=1
-                    
+            tmp=0
+            for nbr in ob.OBAtomAtomIter(a):
+                if nbr.GetIndex() != b.GetIndex():
+                    clist[i].append(nbr.GetIndex()+1)
+                    tmp+=1
             for nbr in ob.OBAtomAtomIter(c):
                 if nbr.GetIndex() != b.GetIndex():
-                    clist[i].append(nbr.GetIndex())
-                    m[i]+=1
+                    clist[i].append(nbr.GetIndex()+1)
+                    tmp+=1
+            m.append(tmp)
 
+        print("atoms connected to linear atoms")
+        print clist
+        print m
         # cross linking 
         for i in range(n):
-            a1=blist[i][1]
+            a1=blist[i][0]
             a2=blist[i][2] # not vertices
             bond=(a1,a2)
             if self.bond_exists(bond) == False:
                 print(" adding bond via linear ties %s" % (bond,))
                 self.bonds.append(bond)
+                self.nbonds +=1
             for j in range(m[i]):
                 for k in range(j):
                     b1=clist[i][j]
                     b2=clist[i][k]
                     found=False
                     for angle in self.angles:
-                        if b1==angle[1] and b2==angle[2]: #0 is the vertex and don't want?
+                        if b1==angle[0] and b2==angle[2]: 
                             found=True
-                        elif b2==angle[1] and b1==angle[2]:
+                        elif b2==angle[0] and b1==angle[2]:
                             found=True
+                    print a1,a2,b1,b2
+                    print found
+                    print b1,a1
+                    print b2,a1
+                    print b1,a2
+                    print b2,a2
                     if found==False:
                         if self.bond_exists((b1,a1))==True:
                             c1=b1
-                        if self.bond_exists(b2,a1)==True:
+                            print "c1=b1"
+                        if self.bond_exists((b2,a1))==True:
                             c1=b2
-                        if self.bond_exists(b1,a2)==True:
+                            print "c1=b2"
+                        if self.bond_exists((b1,a2))==True:
                             c2=b1
-                        if self.bond_exists(b2,a2)==True:
+                            print "c2=b1"
+                        if self.bond_exists((b2,a2))==True:
                             c2=b2
+                            print "c2=b2"
                         torsion= (c1,a1,a2,c2)
                         print(" adding torsion via linear ties %s" %torsion)
                         self.torsions.append(torsion)
+                        self.ntor +=1
 
     def make_frags(self):
         """ Currently only works for two fragments """
@@ -555,6 +574,7 @@ class ICoord(Mixin):
                     dist22 = (dia2+dja2)/2.
 
                     #TODO changed from 4.5 to 4
+                    #TODO what is getIndex doing here?
                     if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4. and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
                         mclose2 = close
                         b1=i
@@ -708,8 +728,8 @@ class ICoord(Mixin):
         for eig in e[self.nicd-1:0:-1]:
             if eig<0.001:
                 lowev+=1
-        if lowev>0:
-            print("!!!!! lowev: %i" % lowev)
+        #if lowev>0:
+        #    print("!!!!! lowev: %i" % lowev)
 
         self.nicd -= lowev
         if lowev>3:
@@ -1085,6 +1105,7 @@ class ICoord(Mixin):
             if self.gradrms<self.OPTTHRESH:
                 break
         print "Final energy is %2.5f" % (self.V0 + self.energy)
+        return smag
 
     def opt_step(self,nconstraints):
         energy=0.
@@ -1163,7 +1184,6 @@ class ICoord(Mixin):
             if dEstep > 2.0:
                 print "resetting coords to coorp"
                 self.lot.coords = coorp
-                #print self.lot.coords
                 self.energy = self.lot.getEnergy() - self.V0
                 self.update_ics()
                 self.bmatp_create()

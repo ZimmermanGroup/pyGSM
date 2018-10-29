@@ -42,6 +42,7 @@ class Mixin:
 
 
     def getIndex(self,i):
+        """ be careful here I think it's 0 based"""
         return self.mol.OBMol.GetAtom(i).GetIndex()
 
     def getCoords(self,i):
@@ -138,7 +139,6 @@ class Mixin:
         angle1=self.mol.OBMol.GetAngle(a,b,c)*np.pi/180.
         angle2=self.mol.OBMol.GetAngle(b,c,d)*np.pi/180.
         if angle1>3. or angle2>3.:
-            print(" near-linear angle")
             return dqtdx
         u = np.zeros(3,dtype=float)
         v = np.zeros(3,dtype=float)
@@ -248,15 +248,19 @@ class Mixin:
         assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
         assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
         dEtemp = np.matmul(self.Hint,dq0)
-        dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
+        #dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
+        #print "gradq"
+        #print self.gradq.T
+        dEpre = np.dot(dq0.T,self.gradq)
+        #print "\n dEpre1 ", dEpre*KCAL_MOL_PER_AU
+        dEpre += 0.5*np.dot(dEtemp.T,dq0)
+        #print " dEpre2 ", dEpre*KCAL_MOL_PER_AU
         dEpre *=KCAL_MOL_PER_AU
         if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
         print( "predE: %1.4f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
-        #np.set_printoptions(precision=4)
-        #np.set_printoptions(suppress=True)
         gradq = np.matmul(self.bmatti,grad)
         return gradq
 
