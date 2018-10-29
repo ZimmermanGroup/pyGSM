@@ -110,6 +110,14 @@ class Base(object):
             print "assuming G_states same as E_states"
             self.G_states=self.E_states
 
+        # used for taking difference of states
+        self.wstates=[]
+        for n,i in enumerate(self.E_states):
+            for j in self.G_states:
+                if i==j:
+                    self.wstates.append(n)
+        print self.wstates
+
     def getEnergy(self):
         tmpE = []
         energy =0.
@@ -136,13 +144,22 @@ class Base(object):
         raise NotImplementedError()
 
     def getGrad(self):
-        average_over=0
         grad = np.zeros((np.shape(self.coords)))
 
+        average_over=0
+        tmpGrad = []
         for i in self.G_states:
-            grad += self.compute_gradient(S=i[0],index=i[1])
+            tmp = self.compute_gradient(S=i[0],index=i[1])
+            grad += tmp
+            tmpGrad.append(tmp)
             average_over+=1
+
         final_grad = grad/average_over
+
+        # sort and save grads adiabatically
+        self.grada = []
+        for i in self.sort_index:
+            self.grada.append(tmpGrad[i])
 
         return np.reshape(final_grad,(3*len(self.coords),1))
 

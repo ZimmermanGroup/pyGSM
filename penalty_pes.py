@@ -1,80 +1,81 @@
 import options
+from base_lot import * 
 
-class Base(object):
+class Penalty_PES(object):
     """ Base object for potential energy surface calculators """
 
     @staticmethod
     def default_options():
         """ Base default options. """
 
-        if hasattr(Base, '_default_options'): return Base._default_options.copy()
+        if hasattr(Penalty_PES, '_default_options'): return Penalty_PES._default_options.copy()
         opt = options.Options() 
 
         opt.add_option(
-            key='calc_states',
-            value=(0,0),
+            key='PES',
             required=True,
-            allowed_types=[list],
             doc='')
 
         opt.add_option(
-                key='nocc',
-                value=0,
+                key='sigma',
                 required=False,
-                allowed_types=[int],
-                doc='number of occupied orbitals (for CAS)')
+                value=3.5,
+                doc='')
 
         opt.add_option(
-                key='nactive',
-                value=0,
+                key='alpha',
                 required=False,
-                allowed_types=[int],
-                doc='number of active orbitals (for CAS)')
+                value=0.02*KCAL_MOL_TO_AU,
+                doc='')
 
-        opt.add_option(
-                key='nstates',
-                value=1,
-                required=False,
-                allowed_types=[int],
-                doc='Number of states')
-
-        opt.add_option(
-                key='basis',
-                value=0,
-                required=False,
-                allowed_types=[str],
-                doc='Basis set')
-
-        opt.add_option(
-                key='filepath',
-                value='initial0000.xyz',
-                required=False,
-                allowed_types=[str],
-                doc='path to xyz file')
 
         Base._default_options = opt
         return Base._default_options.copy()
+
+    @staticmethod
+    def from_options(**kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return Penalty_PES(Penalty_PES.default_options().set_values(kwargs))
 
     def __init__(self,
             options,
             ):
         """ Constructor """
-        self.options = options
         # Cache some useful atributes
-        self.calc_states=self.options['calc_states']
-        self.nstates=self.options['nstates']
-        self.filepath = self.options['filepath']
-        self.nocc=self.options['nocc']
-        self.nactive=self.options['nactive']
-        self.basis=self.options['basis']
-
-    def getEnergy(self):
-        raise NotImplementedError()
+        self.options = options
+        self.PES = self.options['PES'] 
+        self.sigma = self.options['sigma'] 
+        self.alpha = self.options['alpha'] 
 
     def getGrad(self):
-        raise NotImplementedError()
+        print "hello"
+        avg_grad = self.PES.getGrad() 
+        avg_grad = avg_grad.reshape((np.shape(self.PES.coords)))
+        dgrad = self.PES.grada[1] - self.PES.grada[0]
 
-    def finite_difference(self):
-        self.getEnergy() 
-        print("Not yet implemented")
-        return 0
+        # wstates can only be len=2
+        dE= self.PES.E[self.PES.wstate[1]] - self.PES.E[self.PES.wstate[0]]
+
+        prefactor = (dE**2. + 2.*self.alpha*dE)/(2*dE + self.alpha)**2.
+        grad = avg_grad + self.sigma*prefactor*dgrad
+
+        print grad
+
+    def getEnergy(self):
+        self.PES.getEnergy()
+
+
+if __name__ == '__main__':
+    if 1:
+        from pytc import *
+        filepath="tests/stretched_fluoroethene.xyz"
+        nocc=11
+        nactive=2
+        lot=PyTC.from_options(E_states=[(0,0),(0,1)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot.cas_from_file(filepath)
+        p = Penalty_PES.from_options(PES=lot)
+        p.getEnergy()
+        p.getGrad()
+        print p.PES.E
+        print p.PES.grada
+
