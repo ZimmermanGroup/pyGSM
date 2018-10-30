@@ -15,16 +15,19 @@ class PyTC(Base):
     def compute_energy(self,S,index):
 
         #normal update
+        #print "Coords at E source are"
+        #print self.coords
         T = ls.Tensor.array(self.coords*ANGSTROM_TO_AU)
-        #self.lot = self.lot.update_xyz(T)
+        self.lot = self.lot.update_xyz(T)
 
         # from template
-        geom = self.lot.casci.geometry.update_xyz(T)
-        self.casci_from_template(geom,self.nocc)
+        #geom = self.lot.casci.geometry.update_xyz(T)
+        #self.casci_from_template(geom,self.nocc)
         tmp = self.lot.compute_energy(S=S,index=index)
         return tmp*KCAL_MOL_PER_AU
 
     def compute_gradient(self,S,index):
+        #print "computing gradient for state %i" % index
         tmp=self.lot.compute_gradient(S=S,index=index)
         return tmp[...]*ANGSTROM_TO_AU
 
@@ -83,6 +86,7 @@ class PyTC(Base):
         casci2 = psiw.CASCI(self.casci1.options.copy().set_values(dict(
             reference=ref2,
             nocc=fomo_nocc2,
+            grad_thre_dp = 1.0E-8,
             )))
     
         casci2.compute_energy()
@@ -114,7 +118,7 @@ class PyTC(Base):
         fomo_temp = 0.3
         
         S_inds = [0]
-        S_nstates = [2]
+        S_nstates = [3]
 
         geom1 = psiw.Geometry.build(
             resources=resources,
@@ -172,7 +176,7 @@ class PyTC(Base):
         fomo_temp = 0.3
         
         S_inds = [0]
-        S_nstates = [2]
+        S_nstates = [3]
 
         geom1 = psiw.Geometry.build(
             resources=resources,
@@ -201,6 +205,7 @@ class PyTC(Base):
             S_inds=S_inds,
             S_nstates=S_nstates,
             print_level=0,
+            grad_thre_dp = 1.0E-8,
             )
 
         casci1.compute_energy()

@@ -43,6 +43,13 @@ class ICoord(Mixin):
             doc='Convergence threshold')
 
         opt.add_option(
+            key='resetopt',
+            value=True,
+            required=False,
+            allowed_types=[bool],
+            doc='Whether to reset geom during optimization')
+
+        opt.add_option(
                 key="mol",
                 required=False,
                 allowed_types=[pb.Molecule],
@@ -141,7 +148,7 @@ class ICoord(Mixin):
         self.lot = self.options['lot']
         self.OPTTHRESH = self.options['OPTTHRESH']
         self.bonds = self.options['bonds']
-
+        self.resetopt = self.options['resetopt']
 
         #self.print_xyz()
         self.Elements = elements.ElementData()
@@ -159,16 +166,15 @@ class ICoord(Mixin):
             self.gradrms = 1000.
             self.SCALEQN = 1.0
             self.MAXAD = 0.075
-            self.DMAX = 0.2
             self.ixflag = 0
             self.energy = 0.
-            self.DMIN0 =self.DMAX/10.
+            self.DMAX = 0.1
+            self.DMIN0 =self.DMAX/100.
             self.lot.coords = np.zeros((len(self.mol.atoms),3))
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
                 self.lot.coords[i,0] = a.GetX()
                 self.lot.coords[i,1] = a.GetY()
                 self.lot.coords[i,2] = a.GetZ()
-
 
         self.nretry = 0 
         
@@ -209,7 +215,6 @@ class ICoord(Mixin):
                 self.bonds.append((a,b))
             else:
                 self.bonds.append((b,a))
-            #self.bonds.append((bond.GetBeginAtomIdx()-1,bond.GetEndAtomIdx()-1))
             self.bondd.append(bond.GetLength())
         print "number of bonds is %i" %self.nbonds
         print "printing bonds"
@@ -432,8 +437,6 @@ class ICoord(Mixin):
         # atoms attached to linear atoms
         clist=[[]]
         m =[]
-        print "blist"
-        print blist
         for i in range(n):
             # b is the vertex 
             a=self.mol.OBMol.GetAtom(blist[i][0])
@@ -450,9 +453,6 @@ class ICoord(Mixin):
                     tmp+=1
             m.append(tmp)
 
-        print("atoms connected to linear atoms")
-        print clist
-        print m
         # cross linking 
         for i in range(n):
             a1=blist[i][0]
@@ -472,25 +472,15 @@ class ICoord(Mixin):
                             found=True
                         elif b2==angle[0] and b1==angle[2]:
                             found=True
-                    print a1,a2,b1,b2
-                    print found
-                    print b1,a1
-                    print b2,a1
-                    print b1,a2
-                    print b2,a2
                     if found==False:
                         if self.bond_exists((b1,a1))==True:
                             c1=b1
-                            print "c1=b1"
                         if self.bond_exists((b2,a1))==True:
                             c1=b2
-                            print "c1=b2"
                         if self.bond_exists((b1,a2))==True:
                             c2=b1
-                            print "c2=b1"
                         if self.bond_exists((b2,a2))==True:
                             c2=b2
-                            print "c2=b2"
                         torsion= (c1,a1,a2,c2)
                         print(" adding torsion via linear ties %s" %torsion)
                         self.torsions.append(torsion)
@@ -829,7 +819,7 @@ class ICoord(Mixin):
 
         for n in range(10):
             btit = np.transpose(self.bmatti)
-            xyzd=np.matmul(btit,dq)
+            xyzd = np.dot(btit,dq)
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
@@ -995,8 +985,6 @@ class ICoord(Mixin):
                     torfix=0.
                 torsion_diff.append((i+torfix))
 
-            #qprim_cur = np.concatenate((self.bondd,self.anglev,torsions))
-            #self.dqprim = qprim_cur - qprim
             bond_diff = self.bondd - qprim[:self.nbonds]
             angle_diff = self.anglev - qprim[self.nbonds:self.nangles+self.nbonds]
             self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
@@ -1036,7 +1024,6 @@ class ICoord(Mixin):
         #    print i
        
         #TODO is this right?
-        #tmp = np.matmul(self.Ut,self.Hintp)
         tmp = np.zeros((self.nicd,self.num_ics),dtype=float)
         for i in range(self.nicd): 
             for k in range(self.num_ics):
@@ -1054,7 +1041,8 @@ class ICoord(Mixin):
 
     def Hintp_to_Hint(self):
         tmp = np.matmul(self.Ut,np.transpose(self.Hintp))
-        self.Hint = np.matmul(self.Ut,np.transpose(tmp))
+        #self.Hint = np.matmul(self.Ut,np.transpose(tmp))
+        self.Hint = np.matmul(tmp,np.transpose(self.Ut))
 
     def optimize(self,nsteps,nconstraints=0):
         xyzfile=os.getcwd()+"/xyzfile.xyz"
@@ -1068,6 +1056,7 @@ class ICoord(Mixin):
         grmss = []
         steps = []
         energies=[]
+        Es =[]
         self.do_bfgs=False # gets reset after each step
 
         print "Initial energy is %1.4f\n" % self.V0
@@ -1080,6 +1069,7 @@ class ICoord(Mixin):
             grmss.append(self.gradrms)
             steps.append(smag)
             energies.append(self.energy)
+            Es.append((self.lot.E))
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             #write convergence
@@ -1095,12 +1085,24 @@ class ICoord(Mixin):
                 f.write("energy\n")
                 for energy in energies:
                     f.write('{}\n'.format(energy))
-                f.write("max-force\n")
-                for grms in grmss:
-                    f.write('{}\n'.format(grms))
-                f.write("max-step\n")
-                for step in steps:
-                    f.write('{}\n'.format(step))
+                if len(self.lot.E)<2:
+                    f.write("max-force\n")
+                    for grms in grmss:
+                        f.write('{}\n'.format(grms))
+                    f.write("max-step\n")
+                    for step in steps:
+                        f.write('{}\n'.format(step))
+                elif len(self.lot.E) == 2:
+                    f.write("max-force\n")
+                    for grms in grmss:
+                        f.write('{}\n'.format(grms))
+                    f.write("max-step\n")
+                    for E in Es:
+                        f.write('{}\n'.format(E[0]))
+                    f.write("rms-step\n")
+                    for E in Es:
+                        f.write('{}\n'.format(E[1]))
+
 
             if self.gradrms<self.OPTTHRESH:
                 break
@@ -1127,7 +1129,7 @@ class ICoord(Mixin):
 
         # For Hessian update
         self.pgradqprim=self.gradqprim
-        self.gradqprim = np.matmul(np.transpose(self.Ut),self.gradq)
+        self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
 
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
@@ -1146,17 +1148,18 @@ class ICoord(Mixin):
 
         #TODO if rflag and ixflag
         if rflag==True:
+            print "rflag" 
             self.DMAX=self.DMAX/1.6
             dq=self.update_ic_eigen(self.gradq,nconstraints)
             self.ic_to_xyz_opt(dq)
             self.do_bfgs=False
 
         ## => update ICs <= #
-        #self.update_ics()
-        #self.bmatp_create()
-        #self.bmatp_to_U()
-        #self.bmat_create()
-        #self.Hintp_to_Hint()
+        self.update_ics()
+        self.bmatp_create()
+        self.bmatp_to_U()
+        self.bmat_create()
+        self.Hintp_to_Hint()
       
         # => Update Hessian <= #
         if self.do_bfgs == True:
@@ -1181,9 +1184,10 @@ class ICoord(Mixin):
                 self.DMAX = smag/1.5
             else: 
                 self.DMAX = self.DMAX/1.5
-            if dEstep > 2.0:
+            if dEstep > 2.0 and self.resetopt==True:
                 print "resetting coords to coorp"
                 self.lot.coords = coorp
+                #print self.lot.coords
                 self.energy = self.lot.getEnergy() - self.V0
                 self.update_ics()
                 self.bmatp_create()
@@ -1191,17 +1195,18 @@ class ICoord(Mixin):
                 self.bmat_create()
                 self.Hintp_to_Hint()
                 self.do_bfgs=False
-        #elif ratio<0.25:
-        #    print("decreasing DMAX"),
-        #    if smag<self.DMAX:
-        #        self.DMAX = smag/1.1
-        #    else:
-        #        self.DMAX = self.DMAX/1.2
-        #elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
-        #    print("increasing DMAX"),
-        #    self.DMAX=self.DMAX*1.1 + 0.001
-        #    if self.DMAX>0.25:
-        #        self.DMAX=0.25
+        elif ratio<0.25:
+            print("decreasing DMAX"),
+            if smag<self.DMAX:
+                self.DMAX = smag/1.1
+            else:
+                self.DMAX = self.DMAX/1.2
+            self.make_Hint()
+        elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
+            print("increasing DMAX"),
+            self.DMAX=self.DMAX*1.1 + 0.01
+            if self.DMAX>0.25:
+                self.DMAX=0.25
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
         return  smag
@@ -1212,7 +1217,6 @@ class ICoord(Mixin):
         self.newHess-=1
         dx = self.dqprim
         dg = self.gradqprim - self.pgradqprim
-        #Hdx = np.matmul(self.Hintp,dx)
         Hdx = np.dot(self.Hintp,dx)
         dxHdx = np.dot(np.transpose(dx),Hdx)
         dgdg = np.outer(dg,dg)
@@ -1300,10 +1304,12 @@ if __name__ == '__main__':
         filepath2="tests/SiH2H2.xyz"
 
         # LOT object
-        nocc=11
+        nocc=8
         nactive=2
         lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot2 = PyTC(lot1.options.copy())
+        #lot2.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
+        lot1.cas_from_file(filepath1)
 
         # ICoord object
         mol1=pb.readfile("xyz",filepath1).next()
@@ -1316,16 +1322,18 @@ if __name__ == '__main__':
         print '\n\n ############ FORMING UNION ############# \n\n'
         ic1 = ICoord.union_ic(ic1,ic2)
         ic2 = ICoord.union_ic(ic2,ic1)
+        
+        ic1.optimize(50)
 
-        print '\n\n ############ ADDED Node ############# \n\n'
-        ic3 = ICoord.add_node(ic1,ic2)
-        ic3.mol.write('xyz','added.xyz',overwrite=True)
+        #print '\n\n ############ ADDED Node ############# \n\n'
+        #ic3 = ICoord.add_node(ic1,ic2)
+        #ic3.mol.write('xyz','added.xyz',overwrite=True)
 
     if 0:
         #qchem example
         from qchem import *
-        filepath="tests/stretched_fluoroethene.xyz"
-        #filepath="tests/benzene.xyz"
+        #filepath="tests/stretched_fluoroethene.xyz"
+        filepath="tests/benzene.xyz"
         geom=manage_xyz.read_xyz(filepath,scale=1)   
         lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
 	
@@ -1356,13 +1364,26 @@ if __name__ == '__main__':
         #filepath="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
         #nocc=61
         #nactive=6
-        lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot1.cas_from_file(filepath)
 
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
         ic1.optimize(50)
+
+    if 0:
+        from pytc import *
+        #optimize example 
+        filepath="tests/benzene.xyz"
+        nocc1=19
+        nactive=4
+        lot1=PyTC.from_options(E_states=[(0,0),(0,1)],G_states=[(0,1)],nocc=nocc1,nactive=nactive,basis='6-31gs')
+        lot1.cas_from_file(filepath)
+        print "ic1"
+        mol=pb.readfile("xyz",filepath).next()
+        ic1=ICoord.from_options(mol=mol,lot=lot1,OPTTHRESH=0.0005)
+        ic1.optimize(100)
 
     if 1:
         from pytc import *

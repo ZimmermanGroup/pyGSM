@@ -214,7 +214,6 @@ class Mixin:
         temph = self.Hint[:nicd_c,:nicd_c]
         e,v_temp = np.linalg.eigh(temph)
         v = np.transpose(v_temp)
-        e = np.reshape( e,(len(e),1))
         leig = e[0]
 
         if leig < 0:
@@ -224,22 +223,17 @@ class Mixin:
         if abs(lambda1)<0.005: lambda1 = 0.005
 
         # => grad in eigenvector basis <= #
-        gradq = gradq[:nicd_c,:nicd_c]
-        gqe = np.matmul(v,gradq)
+        gradq = gradq[:nicd_c,0]
+        gqe = np.dot(v,gradq)
 
         dqe0 = np.divide(-gqe,e+lambda1)/SCALE
-        for i in dqe0:
-            if abs(i)>self.MAXAD:
-                i=np.sign(i)*self.MAXAD
+        dqe0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dqe0 ]
 
-        dq0 = np.matmul(v_temp,dqe0)
-
-        for i in dq0:
-            if abs(i)>self.MAXAD:
-                i=np.sign(i)*self.MAXAD
+        dq0 = np.dot(v_temp,dqe0)
+        dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
         dq_c = np.zeros((self.nicd,1))
         for i in range(nicd_c):
-            dq_c[i,0] = dq0[i,0]
+            dq_c[i,0] = dq0[i]
         return dq_c
 
     def compute_predE(self,dq0):
@@ -256,12 +250,15 @@ class Mixin:
         dEpre += 0.5*np.dot(dEtemp.T,dq0)
         #print " dEpre2 ", dEpre*KCAL_MOL_PER_AU
         dEpre *=KCAL_MOL_PER_AU
-        if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
+        if abs(dEpre)<0.005: dEpre = np.sign(dEpre)*0.005
         print( "predE: %1.4f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
-        gradq = np.matmul(self.bmatti,grad)
+        #gradq = np.matmul(self.bmatti,grad)
+        #print grad
+        #print "gradms in C %1.4f" %np.linalg.norm(grad)
+        gradq = np.dot(self.bmatti,grad)
         return gradq
 
     @staticmethod

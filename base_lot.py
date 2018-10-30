@@ -1,6 +1,7 @@
 import options
 import manage_xyz
 import numpy as np
+from units import *
 
 class Base(object):
     """ Base object for potential energy surface calculators """
@@ -66,6 +67,12 @@ class Base(object):
                 doc='geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)')
 
         opt.add_option(
+                key='coords',
+                value=None,
+                required=False,
+                doc='coords ((natoms,3) np.ndarray) - system geometry (x,y,z)')
+
+        opt.add_option(
                 key='filepath',
                 required=False,
                 allowed_types=[str],
@@ -77,7 +84,23 @@ class Base(object):
                 required=False,
                 allowed_types=[int],
                 doc='charge of molecule')
-                
+
+        opt.add_option(
+            key='PES',
+            required=False,
+            doc='')
+
+        opt.add_option(
+                key='sigma',
+                required=False,
+                value=3.5,
+                doc='')
+
+        opt.add_option(
+                key='alpha',
+                required=False,
+                value=0.02*KCAL_MOL_PER_AU,
+                doc='')
 
         Base._default_options = opt
         return Base._default_options.copy()
@@ -98,6 +121,10 @@ class Base(object):
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
         self.functional=self.options['functional']
+        self.PES = self.options['PES'] 
+        self.sigma = self.options['sigma'] 
+        self.alpha = self.options['alpha'] 
+        self.coords = self.options['coords']
 
         if self.filepath is not None:
             print "reading geom from %s" % self.filepath
@@ -105,6 +132,7 @@ class Base(object):
         if self.geom is not None:
             print "setting coords from geom"
             self.coords = manage_xyz.xyz_to_np(self.geom)
+            self.options['coords'] = self.coords
 
         if self.G_states is None:
             print "assuming G_states same as E_states"
@@ -116,7 +144,10 @@ class Base(object):
             for j in self.G_states:
                 if i==j:
                     self.wstates.append(n)
-        print self.wstates
+        #print "in init"
+        #print self.wstates
+        self.dE = 1000.
+
 
     def getEnergy(self):
         tmpE = []
@@ -138,14 +169,13 @@ class Base(object):
         for i in self.sort_index:
             self.E.append(tmpE[i])
         
-        return energy/average_over
+        return energy/float(average_over)
 
     def compute_energy(self,spin,index):
         raise NotImplementedError()
 
     def getGrad(self):
         grad = np.zeros((np.shape(self.coords)))
-
         average_over=0
         tmpGrad = []
         for i in self.G_states:
@@ -154,12 +184,13 @@ class Base(object):
             tmpGrad.append(tmp)
             average_over+=1
 
-        final_grad = grad/average_over
+        final_grad = grad/float(average_over)
 
         # sort and save grads adiabatically
-        self.grada = []
-        for i in self.sort_index:
-            self.grada.append(tmpGrad[i])
+        if len(self.wstates)>1:
+            self.grada = []
+            for i in self.sort_index:
+                self.grada.append(tmpGrad[i])
 
         return np.reshape(final_grad,(3*len(self.coords),1))
 
