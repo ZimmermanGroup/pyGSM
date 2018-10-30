@@ -3,6 +3,7 @@ import options
 import os
 from base_gsm import *
 from icoord import *
+import pybel as pb
 
 class GSM(BaseGSM):
 
@@ -25,7 +26,7 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP],self.nnodes,self.nn)
+            self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP])
             self.active[self.nR] = True
 #            ictan = ICoord.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
@@ -37,7 +38,7 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1],self.nnodes,self.nn)
+            self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1])
 #            ictan = ICoord.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
@@ -65,6 +66,49 @@ class GSM(BaseGSM):
     def growth_iters(self,maxrounds=1,maxopt=1,nconstraints=0):
         for n in range(maxrounds):
             self.opt_step(maxopt,nconstraints)
+        xyzfile = os.getcwd()+'/'+'opt_nodes.xyz'
+        stringxyz = pb.Outputfile('xyz',xyzfile,overwrite=True)
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat('xyz')
+        opt_nodes = []
+        for ico,act in zip(self.icoords,self.active):
+            if act:
+                mol = obconversion.WriteString(ico.mol.OBMol)
+                opt_nodes.append(mol)
+            elif ico != 0:
+                mol = obconversion.WriteString(ico.mol.OBMol)
+                opt_nodes.append(mol)
+
+        for mol in opt_nodes:
+            stringxyz.write(pb.readstring('xyz',mol))
+
+        with open(xyzfile,'r+') as f:
+            content = f.read()
+            f.seek(0,0)
+            f.write("[Molden Format]\n[Geometries] (XYZ)\n"+content)
+#            print "writing geometries to",xyzfile
+        with open(xyzfile, 'a') as f:
+            f.write("[GEOCONV]\n")
+            f.write('energy\n')
+            for ico,act in zip(self.icoords,self.active):
+                if act:
+                    f.write('{}\n'.format(ico.V0+ico.energy))
+                elif ico != 0:
+                    f.write('{}\n'.format(ico.lot.getEnergy()))
+#            print "writing energies to",xyzfile
+            f.write("max-force\n")
+            for ico,act in zip(self.icoords,self.active):
+                if act:
+                    f.write('{}\n'.format(ico.gradrms))
+                elif ico != 0:
+                    f.write('{}\n'.format(ico.lot.getGrad()))
+            f.write('max-step \n')
+            for ico,act in zip(self.icoords,self.active):
+                if act:
+                    f.write('{}\n'.format(ico.smag))
+                elif ico != 0:
+                    f.write('{}\n'.format(0.))
+        f.close()
 
     def opt_step(self,maxopt,nconstraints):
         for i in range(maxopt):
@@ -73,7 +117,7 @@ class GSM(BaseGSM):
                     if self.icoords[n].gradrms < 5e-3:
                         self.active[n] = False
                 if self.active[n] == True:
-                    self.icoords[n].optimize(1,nconstraints)
+                    self.icoords[n].smag = self.icoords[n].optimize(1,nconstraints)
 
     def write_node_xyz(self,xyzfile = "nodes_xyz_file.xyz"):
         xyzfile = os.getcwd()+"/"+xyzfile
@@ -165,40 +209,32 @@ if __name__ == '__main__':
     mol2=pb.readfile("xyz",filepath2).next()
     geom = manage_xyz.read_xyz(filepath,scale=1)
     geom2 = manage_xyz.read_xyz(filepath2,scale=1)
-    lot=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
-    lot2=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+    lot=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP',nproc=2)
+    lot2=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP',nproc=2)
 
     print "\n IC1 \n\n"
     ic1=ICoord.from_options(mol=mol,lot=lot)
     print "\n IC2 \n\n"
     ic2=ICoord.from_options(mol=mol2,lot=lot2)
 
-    print "\n Starting GSM \n\n"
-    gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
+    if True:
+        print "\n Starting GSM \n\n"
+        gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
 
-    gsm.interpolate(7) 
-    gsm.write_node_xyz("nodes_xyz_file0.xyz")
+        gsm.interpolate(7) 
+        gsm.write_node_xyz("nodes_xyz_file0.xyz")
 
-    gsm.get_tangents_1g()
-    print "DQMAGA:",gsm.dqmaga
+    if False:
+        gsm.get_tangents_1g()
+        print "DQMAGA:",gsm.dqmaga
+        print "Printing Tangents:"
+        for tan in gsm.ictan:
+            print np.transpose(tan)
 
-    print "Printing Tangents:"
-    for tan in gsm.ictan:
-        print np.transpose(tan)
+    if True:
+        gsm.growth_iters(maxrounds=3,nconstraints=1)
+        gsm.write_node_xyz()
 
-#    gsm.growth_iters(maxrounds=1,nconstraints=1)
-#    gsm.write_node_xyz()
-
-#    gsm.interpolate()
-#    gsm.write_node_xyz()
-#    gsm.icoords[1].optimize(20,1)
-#    gsm.icoords[1].ic_create()
-#    gsm.icoords[1].bmatp_create()
-#    gsm.icoords[1].bmatp_to_U()
-#    gsm.icoords[1].make_Hint()
-#    for ico in gsm.icoords:
-#        if ico != 0:
-#            ico.optimize(20,1)
    
 
 

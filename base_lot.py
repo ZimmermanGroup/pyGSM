@@ -91,6 +91,12 @@ class Base(object):
             doc='')
 
         opt.add_option(
+                key='nproc',
+                required=False,
+                value=1,
+                )
+
+        opt.add_option(
                 key='sigma',
                 required=False,
                 value=3.5,
@@ -124,6 +130,7 @@ class Base(object):
         self.PES = self.options['PES'] 
         self.sigma = self.options['sigma'] 
         self.alpha = self.options['alpha'] 
+        self.nproc=self.options['nproc']
         self.coords = self.options['coords']
 
         if self.filepath is not None:

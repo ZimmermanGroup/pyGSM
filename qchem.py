@@ -31,7 +31,7 @@ class QChem(Base):
             tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
-        cmd = "qchem -np 1 -save {} {}.qchem.out{} {}.{}".format(tempfilename,tempfilename,index,S,index)
+        cmd = "qchem -nt {} -save {} {}.qchem.out{} {}.{}".format(self.nproc,tempfilename,tempfilename,index,S,index)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
