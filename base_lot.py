@@ -2,6 +2,9 @@ import options
 import manage_xyz
 import numpy as np
 from units import *
+import elements 
+
+ELEMENT_TABLE = elements.ElementData()
 
 class Base(object):
     """ Base object for potential energy surface calculators """
@@ -14,14 +17,19 @@ class Base(object):
         opt = options.Options() 
 
         opt.add_option(
-            key='E_states',
-            value=(0,0),
-            required=True,
+            key='multiplicity',
+            value=None,
+            required=False,
+            doc="List of Spin Mulitplicities (2S+1)  (e.g., [1, 3, 5] for singlet, triplet, quintet, will be assigned a value of 1 or 2 if None")
+
+        opt.add_option(
+            key='states',
             allowed_types=[list],
-            doc='')
+            doc='list of states 0-indexed')
 
         opt.add_option(
             key='G_states',
+            value=None,
             allowed_types=[list],
             doc='')
 
@@ -118,7 +126,7 @@ class Base(object):
 
         self.options = options
         # Cache some useful atributes
-        self.E_states=self.options['E_states']
+        self.states =self.options['states']
         self.G_states=self.options['G_states']
         self.nstates=self.options['nstates']
         self.geom = self.options['geom']
@@ -132,6 +140,8 @@ class Base(object):
         self.alpha = self.options['alpha'] 
         self.nproc=self.options['nproc']
         self.coords = self.options['coords']
+        self.charge = self.options['charge']
+        self.multiplicity=[]
 
         if self.filepath is not None:
             print "reading geom from %s" % self.filepath
@@ -141,15 +151,61 @@ class Base(object):
             self.coords = manage_xyz.xyz_to_np(self.geom)
             self.options['coords'] = self.coords
 
+        atoms = manage_xyz.get_atoms(self.geom)
+        print atoms
+
+        elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
+        atomic_num = [ele.atomic_num for ele in elements]
+
+        self.n_electrons = sum(atomic_num) - self.charge                                       
+        if self.n_electrons < 0:
+            raise ValueError("Molecule has fewer than 0 electrons!!!")                         
+
+        multiplicity = self.options['multiplicity']
+
+        for i in multiplicity:
+            if multiplicity is None:                                                               
+                self.multiplicity.append(1)
+                infer_multiplicity = True                                                          
+            else:
+                self.multiplicity.append(i)
+                infer_multiplicity = False   
+
+
+        if not isinstance(self.charge, int) or not isinstance(multiplicity,list):                   
+            raise TypeError("Charge and spin must be integers")                                
+     
+        # set multiplicty to 2 if needed
+        for n,i in enumerate(self.multiplicity):
+            if i < 1:
+                raise ValueError("Spin multiplicity must be at least 1")       
+            if (self.n_electrons + i + 1) % 2:    #true if odd
+                if infer_multiplicity:
+                    self.multiplicity[n] = 2                                                          
+                    print(" self.multiplicity to 2")
+                else:
+                    raise ValueError("Inconsistent charge and multiplicity.")
+
+        for i in self.multiplicity:
+            if i > self.n_electrons + 1:
+                raise ValueError("Spin multiplicity too high.")                                    
+
+
         if self.G_states is None:
-            print "assuming G_states same as E_states"
-            self.G_states=self.E_states
+            self.G_states=[]
+            print "creating G states [(mult,state)]"
+            for m,s in zip(self.multiplicity,self.states):
+                self.G_states.append((m,s))
+
+        print self.G_states
+        print self.multiplicity
+        print self.states
 
         # used for taking difference of states
         self.wstates=[]
-        for n,i in enumerate(self.E_states):
+        for n,i in enumerate(self.states):
             for j in self.G_states:
-                if i==j:
+                if i==j[1]:
                     self.wstates.append(n)
         #print "in init"
         #print self.wstates
@@ -161,12 +217,13 @@ class Base(object):
         energy =0.
         average_over =0
         # calculate E_states
-        for i in self.E_states:
-            c_E = self.compute_energy(S=i[0],index=i[1])
+        #for i in self.E_states:
+        for m,s in zip(self.multiplicity,self.states):
+            c_E = self.compute_energy(m,self.charge,s)
             tmpE.append(c_E)
             # average E of G_states:
             # should only only used for crossing optimizations
-            if i in self.G_states:
+            if (m,s) in self.G_states:
                 energy += c_E
                 average_over+=1
 
@@ -178,7 +235,7 @@ class Base(object):
         
         return energy/float(average_over)
 
-    def compute_energy(self,spin,index):
+    def compute_energy(self,mulitplicity,charge,state):
         raise NotImplementedError()
 
     def getGrad(self):
@@ -186,7 +243,7 @@ class Base(object):
         average_over=0
         tmpGrad = []
         for i in self.G_states:
-            tmp = self.compute_gradient(S=i[0],index=i[1])
+            tmp = self.compute_gradient(i[0],self.charge,i[1])
             grad += tmp
             tmpGrad.append(tmp)
             average_over+=1
@@ -201,7 +258,7 @@ class Base(object):
 
         return np.reshape(final_grad,(3*len(self.coords),1))
 
-    def compute_gradient(self,S,index):
+    def compute_gradient(self,multiplicity,charge,state):
         raise NotImplementedError()
 
     def finite_difference(self):

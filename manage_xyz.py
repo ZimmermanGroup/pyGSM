@@ -32,6 +32,14 @@ def read_xyz(
             ))
     return geom
 
+def get_atoms(
+        geom
+        ):
+    atoms=[]
+    for atom in geom:
+        atoms.append(atom[0])
+    return atoms
+
 def write_xyz(
     filename, 
     geom, 

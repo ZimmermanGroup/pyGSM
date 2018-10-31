@@ -5,7 +5,7 @@ from units import *
 
 class QChem(Base):
     
-    def compute_energy(self,S=0,index=0):
+    def compute_energy(self,multiplicity,charge,state):
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
         tempfile.write(' $rem\n')
@@ -23,7 +23,7 @@ class QChem(Base):
         tempfile.write(' $end\n')
         tempfile.write('\n')
         tempfile.write('$molecule\n')
-        tempfile.write('0 {}\n'.format(S))
+        tempfile.write('{} {}\n'.format(charge,multiplicity))
         self.geom = manage_xyz.np_to_xyz(self.geom,self.coords) #updates geom
         for coord in self.geom:
             for i in coord:
@@ -31,11 +31,11 @@ class QChem(Base):
             tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
-        cmd = "qchem -nt {} -save {} {}.qchem.out{} {}.{}".format(self.nproc,tempfilename,tempfilename,index,S,index)
+        cmd = "qchem -nt {} -save {} {}.qchem.out{} {}.{}".format(self.nproc,tempfilename,tempfilename,state,multiplicity,state)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
-        efilepath += '/{}.{}/GRAD'.format(S,index)
+        efilepath += '/{}.{}/GRAD'.format(multiplicity,state)
         with open(efilepath) as efile:
             elines = efile.readlines()
         
@@ -48,10 +48,10 @@ class QChem(Base):
                 temp += 1
         return energy*KCAL_MOL_PER_AU
 
-    def compute_gradient(self,S=0,index=0,*args):
+    def compute_gradient(self,multiplicity,charge,state):
         """ Assuming grad already computed in compute_energy"""
         gradfilepath = os.environ['QCSCRATCH']
-        gradfilepath += '/{}.{}/GRAD'.format(S,index)
+        gradfilepath += '/{}.{}/GRAD'.format(multiplicity,state)
         with open(gradfilepath) as gradfile:
             gradlines = gradfile.readlines()
         gradient = []
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     filepath="tests/fluoroethene.xyz"
     geom=manage_xyz.read_xyz(filepath,scale=1)   
 
-    lot=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+    lot=QChem.from_options(states=[0],multiplicity=[1],charge=0,geom=geom,basis='6-31g(d)',functional='B3LYP')
     e=lot.getEnergy()
     print e
     g=lot.getGrad()
