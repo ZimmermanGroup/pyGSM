@@ -26,7 +26,12 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP])
+            tempR = ICoord.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
+            tempP = ICoord.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            #self.icoords[self.nR-1] = tempR
+            #self.icoords[-self.nP] = tempP
+            #self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP])
+            self.icoords[self.nR] = ICoord.add_node(tempR,tempP)
             self.active[self.nR] = True
 #            ictan = ICoord.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
@@ -38,7 +43,12 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1])
+            tempP = ICoord.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            tempR = ICoord.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
+            #self.icoords[-self.nP] = tempP
+            #self.icoords[self.nR-1] = tempR
+            #self.icoords[-self.nP-1] = ICoord.add_node(self.icoords[-self.nP],self.icoords[self.nR-1])
+            self.icoords[-self.nP-1] = ICoord.add_node(tempP,tempR)
 #            ictan = ICoord.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
@@ -55,6 +65,17 @@ class GSM(BaseGSM):
                 self.interpolateR()
             else:
                 self.interpolateP()
+
+    def interpolate2(self,newnodes=1):
+        sign = -1
+        for i in range(newnodes):
+            sign *= -1
+            if sign == 1:
+                self.add_node(self.nR-1,self.nR,-self.nP)
+                self.nR += 1
+            elif sign == -1:
+                self.add_node(-self.nP,-self.nP-1,self.nR-1)
+                self.nP += 1            
 
     def writenodes(self):
         count = 0
@@ -195,15 +216,14 @@ if __name__ == '__main__':
 #    from icoord import *
     from qchem import *
     import manage_xyz
-    filepath="tests/fluoroethene.xyz"
-    filepath2="tests/stretched_fluoroethene.xyz"
 
-    # LOT object
-#    nocc=23
-#    nactive=2
-#    lot=PyTC.from_options(calc_states=[(0,0)],filepath=filepath,nocc=nocc,nactive=nactive,basis='6-31gs')
-    #lot.cas_from_geom()
+    if True:
+        filepath="tests/fluoroethene.xyz"
+        filepath2="tests/stretched_fluoroethene.xyz"
 
+    if True:
+        filepath2="tests/SiH2H2.xyz"
+        filepath="tests/SiH4.xyz"
 
     mol=pb.readfile("xyz",filepath).next()
     mol2=pb.readfile("xyz",filepath2).next()
@@ -222,6 +242,7 @@ if __name__ == '__main__':
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
 
         gsm.interpolate(7) 
+        #gsm.interpolate2(7)
         gsm.write_node_xyz("nodes_xyz_file0.xyz")
 
     if False:
@@ -231,7 +252,7 @@ if __name__ == '__main__':
         for tan in gsm.ictan:
             print np.transpose(tan)
 
-    if True:
+    if False:
         gsm.growth_iters(maxrounds=3,nconstraints=1)
         gsm.write_node_xyz()
 

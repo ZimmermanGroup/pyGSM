@@ -345,6 +345,12 @@ class BaseGSM(object):
         iP = n3
         iN = n2
 
+
+        self.icoords[iR] = ico.ICoord.union_ic(self.icoords[iR],self.icoords[iP])
+        self.icoords[iP] = ico.ICoord.union_ic(self.icoords[iP],self.icoords[iR])
+        self.icoords[iR].update_ics()
+        self.icoords[iP].update_ics()
+
         print " iR,iP: %d %d iN: %d "%(iR,iP,iN)
         mol = pb.Molecule(pb.ob.OBMol(self.icoords[iR].mol.OBMol))
         mol2 = pb.Molecule(pb.ob.OBMol(self.icoords[iP].mol.OBMol))
@@ -361,7 +367,7 @@ class BaseGSM(object):
 
         dq0 = [0.] * newic.nicd
         dq0 = np.asarray(dq0).reshape(newic.nicd,1)
-        ictan = ic.ICoord.tangent_1(newic,intic)
+        ictan = ico.ICoord.tangent_1(newic,intic)
 
         dqmag = 0.0
         
@@ -399,7 +405,7 @@ class BaseGSM(object):
         self.icoords[iN].make_Hint()
         self.icoords[iN].newHess = 5
         
-        self.active[iN] = 1;
+        self.active[iN] = True;
 
         success = True
         

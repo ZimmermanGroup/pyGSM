@@ -61,15 +61,18 @@ class ICoord(Mixin):
                 doc='level of theory object')
 
         opt.add_option(
-                key="bonds"
+                key="bonds",
+                required=False,
                 )
 
         opt.add_option(
-                key="angles"
+                key="angles",
+                required=False,
                 )
 
         opt.add_option(
-                key="torsions"
+                key="torsions",
+                required=False,
                 )
 
         ICoord._default_options = opt
@@ -97,6 +100,7 @@ class ICoord(Mixin):
         #print b
 
         unionAngles   = list(set(icoordA.angles) | set(icoordB.angles))
+        print "Union Angles",unionAngles
         unionTorsions = list(set(icoordA.torsions) | set(icoordB.torsions))
 
         #print icoordA.bonds
@@ -115,20 +119,24 @@ class ICoord(Mixin):
                 #isOkay = icoordA.mol.OBMol.AddBond(bond[0]+1,bond[1]+1,1)
                 #print "Bond: %s added okay? %r" % (bond,isOkay)
             bonds.append(bond)
-        #for angle in unionAngles:
+        for angle in unionAngles:
         #    #print angle
         #    if bond not in icoordA.angles or bond not in icoordB.angles:
         #        pass
         #        #print "need to add angle to %i" % angle[0]
-        #    angles.append(angle)
-        #for torsion in unionTorsions:
-        #    torsions.append(torsion)
+            angles.append(angle)
+        for torsion in unionTorsions:
+            torsions.append(torsion)
 
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = deepcopy(icoordA.lot)
         ic3 = ICoord(icoordA.options.copy().set_values({
             'bonds' : bonds,
+            'angles': angles,
+            'torsions': torsions,
             'mol' : mol1,
+            'lot' : lot1,
             }))
 
         return ic3
@@ -149,6 +157,8 @@ class ICoord(Mixin):
         self.OPTTHRESH = self.options['OPTTHRESH']
         self.bonds = self.options['bonds']
         self.resetopt = self.options['resetopt']
+        self.angles = self.options['angles']
+        self.torsions = self.options['torsions']
 
         #self.print_xyz()
         self.Elements = elements.ElementData()
@@ -196,8 +206,26 @@ class ICoord(Mixin):
         self.bonds = sorted(self.bonds)
         self.update_bonds()
         self.coord_num()
-        self.make_angles()
-        self.make_torsions()
+        if self.angles is None:
+            self.make_angles()
+        else:
+            self.anglev = []
+            self.nangles = 0
+            for ang in self.angles:
+                angv = self.get_angle(ang[0],ang[1],ang[2])
+                self.anglev.append(angv)
+                self.nangles += 1
+
+        if self.torsions is None:
+            self.make_torsions()
+        else:
+            self.torv = []
+            self.ntor = 0
+            for torsion in self.torsions:
+                torv = self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])
+                self.torv.append(torv)
+                self.ntor += 1
+
         #self.make_imptor()
         if self.isOpt==1:
             self.linear_ties()
