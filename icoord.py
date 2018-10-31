@@ -10,7 +10,7 @@ from copy import deepcopy
 import manage_xyz
 
 from _icoord import Mixin
-np.set_printoptions(precision=3)
+np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
 
 class ICoord(Mixin):
@@ -204,6 +204,7 @@ class ICoord(Mixin):
         #test for SiH2H2
         #self.bonds =[self.bonds[1],self.bonds[2],self.bonds[0]]
         self.bonds = sorted(self.bonds)
+        print self.bonds
         self.update_bonds()
         self.coord_num()
         if self.angles is None:
@@ -700,7 +701,6 @@ class ICoord(Mixin):
             self.bmatp[i,3*a3+1] = dqadx[7]
             self.bmatp[i,3*a3+2] = dqadx[8]
             i+=1
-            #print i
             #print "%s" % ((a1,a2,a3),)
 
         for torsion in self.torsions:
@@ -737,17 +737,12 @@ class ICoord(Mixin):
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
-        #print(" eigen")
-        #print e
-        #print v
         
         lowev=0
         self.nicd=N3-6
         for eig in e[self.nicd-1:0:-1]:
             if eig<0.001:
                 lowev+=1
-        #if lowev>0:
-        #    print("!!!!! lowev: %i" % lowev)
 
         self.nicd -= lowev
         if lowev>3:
@@ -756,11 +751,9 @@ class ICoord(Mixin):
 
         #print(" Number of internal coordinate dimensions %i" %self.nicd)
         redset = self.num_ics - self.nicd
-        #print "\nU matrix  i.e. diag(BB^T)"
         idx = e.argsort()[::-1]
         v = v[idx[::-1]]
         self.Ut=v[redset:,:]
-        #print self.Ut
 
         self.torv0 = list(self.torv)
         
@@ -771,8 +764,6 @@ class ICoord(Mixin):
         #print(" Determining q in ICs")
         N3=3*self.natoms
         self.q = np.zeros((self.nicd,1),dtype=float)
-        #print "Number of ICs %i" % self.num_ics
-        #print "Number of IC dimensions %i" %self.nicd
 
         dists=[self.distance(bond[0],bond[1]) for bond in self.bonds ]
         angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.angles ]
@@ -1159,17 +1150,21 @@ class ICoord(Mixin):
         self.pgradqprim=self.gradqprim
         self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
 
+        # => Update Hessian <= #
+        if self.do_bfgs == True:
+            self.update_bfgsp()
+        self.do_bfgs = True
+
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
-        #print "\ndq: \n",dq
+
         # regulate max overall step
         smag = np.linalg.norm(dq)
-        print(" ss: %1.3f (DMAX: %1.3f)" %(smag,self.DMAX)),
-        #print "dq before\n", dq.T
+        print(" ss: %1.5f (DMAX: %1.3f)" %(smag,self.DMAX)),
+
         if smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
         dq= np.asarray(dq).reshape(self.nicd,1)
-        #print "dq after\n", dq.T
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -1188,12 +1183,7 @@ class ICoord(Mixin):
         self.bmatp_to_U()
         self.bmat_create()
         self.Hintp_to_Hint()
-      
-        # => Update Hessian <= #
-        if self.do_bfgs == True:
-            self.update_bfgsp(dq)
-        self.do_bfgs = True
-
+     
         # => calc energyat new position <= #
         self.energy = self.lot.getEnergy() - self.V0
         print "E is %4.5f" % self.energy,
@@ -1215,7 +1205,6 @@ class ICoord(Mixin):
             if dEstep > 2.0 and self.resetopt==True:
                 print "resetting coords to coorp"
                 self.lot.coords = coorp
-                #print self.lot.coords
                 self.energy = self.lot.getEnergy() - self.V0
                 self.update_ics()
                 self.bmatp_create()
@@ -1240,7 +1229,7 @@ class ICoord(Mixin):
         return  smag
 
 
-    def update_bfgsp(self,dq):
+    def update_bfgsp(self):
         #print("In update bfgsp")
         self.newHess-=1
         dx = self.dqprim
@@ -1249,14 +1238,12 @@ class ICoord(Mixin):
         dxHdx = np.dot(np.transpose(dx),Hdx)
         dgdg = np.outer(dg,dg)
         dgtdx = np.dot(np.transpose(dg),dx)
-
         if dgtdx>0.:
             if dgtdx<0.001: dgtdx=0.001
             self.Hintp += dgdg/dgtdx
         if dxHdx>0.:
             if dxHdx<0.001: dxHdx=0.001
             self.Hintp -= np.outer(Hdx,Hdx)/dxHdx
-
         self.Hintp_to_Hint()
 
     def opt_constraint(self,ictan):
@@ -1267,9 +1254,8 @@ class ICoord(Mixin):
         Cn = np.matmul(np.transpose(self.Ut),dots)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
-#        print "Cn:\n",Cn
+#       print "Cn:\n",Cn
         basis=np.zeros((self.nicd,self.num_ics),dtype=float)
-        #print np.shape(Cn)
         basis[-1,:] = list(Cn)
         for i,v in enumerate(self.Ut):
             w = v - np.sum( np.dot(v,b)*b  for b in basis )
@@ -1325,8 +1311,9 @@ class ICoord(Mixin):
 if __name__ == '__main__':
     
 
-    if 0:
-        from pytc import *
+    if 1:
+        #from pytc import *
+        from qchem import *
         # fragment example 
         filepath1="tests/SiH4.xyz"
         filepath2="tests/SiH2H2.xyz"
@@ -1334,24 +1321,29 @@ if __name__ == '__main__':
         # LOT object
         nocc=8
         nactive=2
-        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        lot2 = PyTC(lot1.options.copy())
+        #lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        #lot2 = PyTC(lot1.options.copy())
+        geom1=manage_xyz.read_xyz(filepath1,scale=1)   
+        geom2=manage_xyz.read_xyz(filepath2,scale=1)   
+        lot1=QChem.from_options(E_states=[(1,0)],geom=geom1,basis='6-31g(d)',functional='B3LYP')
+        lot2 = QChem(lot1.options.copy().set_values({"geom":geom2}))
+
         #lot2.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
-        lot1.cas_from_file(filepath1)
+        #lot1.cas_from_file(filepath1)
 
         # ICoord object
         mol1=pb.readfile("xyz",filepath1).next()
         mol2=pb.readfile("xyz",filepath2).next()
         print "########## ic1 ######\n\n"
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        print "########## ic2 #######\n\n" 
-        ic2=ICoord.from_options(mol=mol2,lot=lot2)
-        # union
-        print '\n\n ############ FORMING UNION ############# \n\n'
-        ic1 = ICoord.union_ic(ic1,ic2)
-        ic2 = ICoord.union_ic(ic2,ic1)
+        #print "########## ic2 #######\n\n" 
+        #ic2=ICoord.from_options(mol=mol2,lot=lot2)
+        ## union
+        #print '\n\n ############ FORMING UNION ############# \n\n'
+        #ic1 = ICoord.union_ic(ic1,ic2)
+        #ic2 = ICoord.union_ic(ic2,ic1)
         
-        ic1.optimize(50)
+        ic1.optimize(2)
 
         #print '\n\n ############ ADDED Node ############# \n\n'
         #ic3 = ICoord.add_node(ic1,ic2)
@@ -1361,20 +1353,14 @@ if __name__ == '__main__':
         #qchem example
         from qchem import *
         #filepath="tests/stretched_fluoroethene.xyz"
-        filepath="tests/benzene.xyz"
+        filepath="tests/bent_benzene.xyz"
         geom=manage_xyz.read_xyz(filepath,scale=1)   
-        lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP')
+        lot1=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP',nproc=2)
 	
         print "ic1"
         mol1=pb.readfile("xyz",filepath).next()
         ic1=ICoord.from_options(mol=mol1,lot=lot1)
-        ic1.optimize(10)
-        ic1.ic_create()
-        ic1.bmatp_create()
-        ic1.bmatp_to_U()
-        ic1.bmat_create()
-        ic1.make_Hint()
-        ic1.optimize(40)
+        ic1.optimize(2)
 
     if 0:
         from pytc import *
@@ -1413,7 +1399,7 @@ if __name__ == '__main__':
         ic1=ICoord.from_options(mol=mol,lot=lot1,OPTTHRESH=0.0005)
         ic1.optimize(100)
 
-    if 1:
+    if 0:
         from pytc import *
         #optimize example 
         # from reference

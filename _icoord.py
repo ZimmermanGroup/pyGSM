@@ -213,6 +213,7 @@ class Mixin:
         nicd_c = self.nicd-nconstraints
         temph = self.Hint[:nicd_c,:nicd_c]
         e,v_temp = np.linalg.eigh(temph)
+
         v = np.transpose(v_temp)
         leig = e[0]
 
@@ -231,6 +232,8 @@ class Mixin:
 
         dq0 = np.dot(v_temp,dqe0)
         dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
+        #print "dq0"
+        #print ["{0:0.5f}".format(i) for i in dq0]
         dq_c = np.zeros((self.nicd,1))
         for i in range(nicd_c):
             dq_c[i,0] = dq0[i]
@@ -241,23 +244,14 @@ class Mixin:
         assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
         assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
         assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
-        dEtemp = np.matmul(self.Hint,dq0)
-        #dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
-        #print "gradq"
-        #print self.gradq.T
-        dEpre = np.dot(dq0.T,self.gradq)
-        #print "\n dEpre1 ", dEpre*KCAL_MOL_PER_AU
-        dEpre += 0.5*np.dot(dEtemp.T,dq0)
-        #print " dEpre2 ", dEpre*KCAL_MOL_PER_AU
+        dEtemp = np.dot(self.Hint,dq0)
+        dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
         dEpre *=KCAL_MOL_PER_AU
         if abs(dEpre)<0.005: dEpre = np.sign(dEpre)*0.005
         print( "predE: %1.4f " % dEpre) 
         return dEpre
 
     def grad_to_q(self,grad):
-        #gradq = np.matmul(self.bmatti,grad)
-        #print grad
-        #print "gradms in C %1.4f" %np.linalg.norm(grad)
         gradq = np.dot(self.bmatti,grad)
         return gradq
 
