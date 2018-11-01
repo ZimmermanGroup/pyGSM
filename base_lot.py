@@ -103,12 +103,10 @@ class Base(object):
 
         return 
 
-
-
-    def get_energy(self,geom,mulitplicity,charge,state):
+    def get_energy(self,geom,mulitplicity,state):
         raise NotImplementedError()
 
-    def get_gradient(self,geom,multiplicity,charge,state):
+    def get_gradient(self,geom,multiplicity,state):
         raise NotImplementedError()
 
     def finite_difference(self):

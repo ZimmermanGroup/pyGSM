@@ -154,8 +154,17 @@ def combine_atom_xyz(
 
     """
     geom2 = []
-    for N,atom in enumerate(atoms):
-        tmp = list(atom) + [x for x in xyz[N]] 
-        geom2.append(tmp)
+#    for N,atom in enumerate(atoms):
+#        coords = [x for x in xyz[N]]
+#        tmp = coords.insert(0,atom)
+#        geom2.append(tmp)
+#
+    for A, atom in enumerate(atoms):
+        geom2.append((
+            atom,
+            xyz[A,0],
+            xyz[A,1],
+            xyz[A,2],
+            ))
     return geom2
 

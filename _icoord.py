@@ -59,8 +59,14 @@ class Mixin:
         for i in range(self.natoms):
             getCoords(i)
 
+    def getAtomicNums(self):
+        print range(self.natoms)
+        atomic_nums = [ self.getAtomicNum(i+1) for i in range(self.natoms) ]
+        return atomic_nums
+
     def getAtomicNum(self,i):
-        return self.mol.OBMol.GetAtom(i).GetAtomicNum()
+        a = self.mol.OBMol.GetAtom(i)
+        return a.GetAtomicNum()
 
     def isTM(self,i):
         anum= self.getIndex(i)

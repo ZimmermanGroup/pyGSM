@@ -56,9 +56,9 @@ class ICoord(Mixin):
                 doc='Pybel molecule object (not OB.Mol)')
 
         opt.add_option(
-                key="lot",
+                key="PES",
                 required=True,
-                doc='level of theory object')
+                doc='Potential energy surface object')
 
         opt.add_option(
                 key="bonds",
@@ -116,13 +116,13 @@ class ICoord(Mixin):
 
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = deepcopy(icoordA.lot)
+        pes1 = deepcopy(icoordA.PES)
         ic3 = ICoord(icoordA.options.copy().set_values({
             'bonds' : bonds,
             'angles': angles,
             'torsions': torsions,
             'mol' : mol1,
-            'lot' : lot1,
+            'pes' : pes1,
             }))
 
         return ic3
@@ -139,7 +139,7 @@ class ICoord(Mixin):
         self.mol = self.options['mol']
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
-        self.lot = self.options['lot']
+        self.PES = self.options['PES']
         self.OPTTHRESH = self.options['OPTTHRESH']
         self.bonds = self.options['bonds']
         self.resetopt = self.options['resetopt']
@@ -147,6 +147,7 @@ class ICoord(Mixin):
         self.torsions = self.options['torsions']
 
         #self.print_xyz()
+        self.Elements = elements.ElementData()
 
         if self.isOpt>0:
             self.ic_create()
@@ -171,8 +172,10 @@ class ICoord(Mixin):
                 self.coords[i,1] = a.GetY()
                 self.coords[i,2] = a.GetZ()
 
-        atoms1=myIB.mol1.atoms
-        self.geom=manage_xyz(atoms,self.coords)
+        atomic_nums = self.getAtomicNums()
+        myelements = [ self.Elements.from_atomic_number(i) for i in atomic_nums]
+        atomic_symbols = [ele.symbol for ele in myelements]
+        self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
 
         self.nretry = 0 
         
@@ -776,25 +779,18 @@ class ICoord(Mixin):
         #print("Printing q")
         #print np.transpose(self.q)
 
-
     def bmat_create(self):
-
 
         #print(" In bmat create")
         self.q_create()
-
         bmat = np.matmul(self.Ut,self.bmatp)
         #print("printing bmat")
         #print bmat
-        #print(" Shape of bmat %s" %(np.shape(bmat),))
-
         bbt = np.matmul(bmat,np.transpose(bmat))
-        #print(" Shape of bbt %s" %(np.shape(bbt),))
         bbti = np.linalg.inv(bbt)
         #print("bmatti formation")
         self.bmatti = np.matmul(bbti,bmat)
         #print self.bmatti
-        #print(" Shape of bmatti %s" %(np.shape(self.bmatti),))
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -1022,11 +1018,7 @@ class ICoord(Mixin):
         self.Hintp=np.diag(Hdiagp)
         Hdiagp=np.asarray(Hdiagp)
         Hdiagp=np.reshape(Hdiagp,(self.num_ics,1))
-        #print(" Hdiagp elements")
-        #for i in Hdiagp:
-        #    print i
-       
-        #TODO is this right?
+
         tmp = np.zeros((self.nicd,self.num_ics),dtype=float)
         for i in range(self.nicd): 
             for k in range(self.num_ics):
@@ -1053,8 +1045,8 @@ class ICoord(Mixin):
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        #opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-        self.V0 = self.lot.getEnergy(self.geom)
+        opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
+        self.V0 = self.PES.get_energy(self.geom)
         self.energy=0
         grmss = []
         steps = []
@@ -1072,7 +1064,6 @@ class ICoord(Mixin):
             grmss.append(self.gradrms)
             steps.append(smag)
             energies.append(self.energy)
-            Es.append((self.lot.E))
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             #write convergence
@@ -1088,24 +1079,12 @@ class ICoord(Mixin):
                 f.write("energy\n")
                 for energy in energies:
                     f.write('{}\n'.format(energy))
-                if len(self.lot.E)<2:
                     f.write("max-force\n")
-                    for grms in grmss:
-                        f.write('{}\n'.format(grms))
-                    f.write("max-step\n")
-                    for step in steps:
-                        f.write('{}\n'.format(step))
-                elif len(self.lot.E) == 2:
-                    f.write("max-force\n")
-                    for grms in grmss:
-                        f.write('{}\n'.format(grms))
-                    f.write("max-step\n")
-                    for E in Es:
-                        f.write('{}\n'.format(E[0]))
-                    f.write("rms-step\n")
-                    for E in Es:
-                        f.write('{}\n'.format(E[1]))
-
+                for grms in grmss:
+                    f.write('{}\n'.format(grms))
+                f.write("max-step\n")
+                for step in steps:
+                    f.write('{}\n'.format(step))
 
             if self.gradrms<self.OPTTHRESH:
                 break
@@ -1118,7 +1097,7 @@ class ICoord(Mixin):
         #print "in opt step: coordinates at current step are"
         #print self.coords
         energyp = self.energy
-        grad = self.lot.getGrad()
+        grad = self.PES.get_gradient(self.geom)
         self.bmatp_create()
         self.bmat_create()
         coorp = np.copy(self.coords)
@@ -1129,6 +1108,8 @@ class ICoord(Mixin):
         pgradrms = self.gradrms
         self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd)
         print("gradrms = %1.5f" % self.gradrms),
+        if self.gradrms<self.OPTTHRESH:
+            return
 
         # For Hessian update
         self.pgradqprim=self.gradqprim
@@ -1169,7 +1150,7 @@ class ICoord(Mixin):
         self.Hintp_to_Hint()
      
         # => calc energyat new position <= #
-        self.energy = self.PES.getEnergy(self.geom) - self.V0
+        self.energy = self.PES.get_energy(self.geom) - self.V0
         print "E is %4.5f" % self.energy,
 
         # check goodness of step
@@ -1189,7 +1170,7 @@ class ICoord(Mixin):
             if dEstep > 2.0 and self.resetopt==True:
                 print "resetting coords to coorp"
                 self.coords = coorp
-                self.energy = self.lot.getEnergy(self.geom) - self.V0
+                self.energy = self.PES.get_energy(self.geom) - self.V0
                 self.update_ics()
                 self.bmatp_create()
                 self.bmatp_to_U()
@@ -1238,7 +1219,6 @@ class ICoord(Mixin):
         Cn = np.matmul(np.transpose(self.Ut),dots)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
-#       print "Cn:\n",Cn
         basis=np.zeros((self.nicd,self.num_ics),dtype=float)
         basis[-1,:] = list(Cn)
         for i,v in enumerate(self.Ut):
@@ -1246,13 +1226,9 @@ class ICoord(Mixin):
             tmp = w/np.linalg.norm(w)
             if (w > 1e-10).any():  
                 basis[i,:] =tmp
-        #print basis
-#        print "before np.array(basis)\n",self.Ut
         self.Ut = np.array(basis)
-#        print "end opt_constriant, UT:\n",self.Ut
         #print "Check if Ut is orthonormal"
         #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-
 
 
     @staticmethod
@@ -1261,11 +1237,11 @@ class ICoord(Mixin):
 
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = deepcopy(ICoordA.lot)
+        PES1 = deepcopy(ICoordA.PES)
         ICoordC = ICoord(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.bonds,
-            "lot" : lot1
+            "PES" : PES1
             }))
 
         ictan = ICoord.tangent_1(ICoordA,ICoordB)
@@ -1287,7 +1263,7 @@ class ICoord(Mixin):
 
 #        ICoordC.mol.write('xyz','tmp1.xyz',overwrite=True)
 #        geom = manage_xyz.read_xyz('tmp1.xyz',scale=1)
-#        ICoordC.lot.geom = geom
+#        ICoordC.PES.geom = geom
 
         return ICoordC
 
@@ -1295,31 +1271,39 @@ class ICoord(Mixin):
 if __name__ == '__main__':
     
 
+    if 0:
+        from pytc import *
+        filepath1="tests/SiH4.xyz"
+        filepath2="tests/SiH2H2.xyz"
+        # LOT object
+        nocc=8
+        nactive=2
+        lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot2 = PyTC(lot1.options.copy())
+        lot2.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
+        lot1.cas_from_file(filepath1)
+
     if 1:
-        #from pytc import *
         from qchem import *
+        from pes import *
         # fragment example 
         filepath1="tests/SiH4.xyz"
         filepath2="tests/SiH2H2.xyz"
 
         # LOT object
-        nocc=8
-        nactive=2
-        #lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        #lot2 = PyTC(lot1.options.copy())
         geom1=manage_xyz.read_xyz(filepath1,scale=1)   
         geom2=manage_xyz.read_xyz(filepath2,scale=1)   
-        lot1=QChem.from_options(E_states=[(1,0)],geom=geom1,basis='6-31g(d)',functional='B3LYP')
-        lot2 = QChem(lot1.options.copy().set_values({"geom":geom2}))
+        lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+        lot2 = QChem(lot1.options.copy())
 
-        #lot2.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
-        #lot1.cas_from_file(filepath1)
+        # PES object
+        pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
 
         # ICoord object
         mol1=pb.readfile("xyz",filepath1).next()
         mol2=pb.readfile("xyz",filepath2).next()
         print "########## ic1 ######\n\n"
-        ic1=ICoord.from_options(mol=mol1,lot=lot1)
+        ic1=ICoord.from_options(mol=mol1,PES=pes)
         #print "########## ic2 #######\n\n" 
         #ic2=ICoord.from_options(mol=mol2,lot=lot2)
         ## union
