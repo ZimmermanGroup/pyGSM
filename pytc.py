@@ -17,7 +17,6 @@ class PyTC(Base):
         coords = mx.xyz_to_np(geom)
         T = ls.Tensor.array(coords*ANGSTROM_TO_AU)
         self.lot = self.lot.update_xyz(T)
-
         # from template
         #geom = self.lot.casci.geometry.update_xyz(T)
         #self.casci_from_template(geom,self.nocc)
