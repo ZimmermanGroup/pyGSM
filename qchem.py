@@ -5,7 +5,8 @@ from units import *
 
 class QChem(Base):
     
-    def compute_energy(self,multiplicity,charge,state):
+    def run(self,geom,multiplicity):
+
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
         tempfile.write(' $rem\n')
@@ -23,48 +24,87 @@ class QChem(Base):
         tempfile.write(' $end\n')
         tempfile.write('\n')
         tempfile.write('$molecule\n')
-        tempfile.write('{} {}\n'.format(charge,multiplicity))
-        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords) #updates geom
-        for coord in self.geom:
+        tempfile.write('{} {}\n'.format(self.charge,multiplicity))
+        for coord in geom:
             for i in coord:
                 tempfile.write(str(i)+' ')
             tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
-        cmd = "qchem -nt {} -save {} {}.qchem.out{} {}.{}".format(self.nproc,tempfilename,tempfilename,state,multiplicity,state)
+
+        cmd = "qchem -nt {} -save {} {}.qchem.out {}".format(self.nproc,tempfilename,tempfilename,multiplicity)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
-        efilepath += '/{}.{}/GRAD'.format(multiplicity,state)
+        efilepath += '/{}/GRAD'.format(multiplicity)
         with open(efilepath) as efile:
             elines = efile.readlines()
         
         temp = 0
         for lines in elines:
             if temp == 1:
-                energy = float(lines.split()[0])
+                self.E.append((multiplicity,float(lines.split()[0])))
                 break
             if "$" in lines:
                 temp += 1
-        return energy*KCAL_MOL_PER_AU
 
-    def compute_gradient(self,multiplicity,charge,state):
-        """ Assuming grad already computed in compute_energy"""
         gradfilepath = os.environ['QCSCRATCH']
-        gradfilepath += '/{}.{}/GRAD'.format(multiplicity,state)
+        gradfilepath += '/{}/GRAD'.format(multiplicity)
+
         with open(gradfilepath) as gradfile:
             gradlines = gradfile.readlines()
-        gradient = []
         temp = 0
+        tmp=[]
         for lines in gradlines:
             if '$' in lines:
                 temp+=1
             elif temp == 2:
                 tmpline = lines.split()
-                gradient.append([float(i) for i in tmpline])
+                tmp.append([float(i) for i in tmpline])
             elif temp == 3:
                 break
-        return np.asarray(gradient)*ANGSTROM_TO_AU
+        self.grada.append((multiplicity,tmp))
+
+        return 
+
+    def runall(self,geom):
+        self.E=[]
+        self.grada = []
+        singlets=self.search_tuple(self.states,1)
+        len_singlets=len(singlets) 
+        if len_singlets is not 0:
+            self.run(geom,1)
+        triplets=self.search_tuple(self.states,1)
+        len_triplets=len(triplets) 
+        if len_triplets is not 0:
+            self.run(geom,3)
+        self.hasRanForCurrentCoords=True
+
+    def get_energy(self,geom,multiplicity,state):
+        if self.has_nelectrons==False:
+            for i in self.states:
+                self.get_nelec(geom,i[0])
+            self.has_nelectrons==True
+        if self.hasRanForCurrentCoords==False:
+            self.runall(geom)
+        return self.getE(state,multiplicity)
+
+    def getE(self,state,multiplicity):
+        tmp = self.search_tuple(self.E,multiplicity)
+        return tmp[state][1]*KCAL_MOL_PER_AU
+
+    def get_gradient(self,geom,multiplicity,state):
+        if self.has_nelectrons==False:
+            for i in self.states:
+                self.get_nelec(geom,i[0])
+            self.has_nelectrons==True
+        if self.hasRanForCurrentCoords==False:
+            self.runall(geom)
+        return self.getgrad(state,multiplicity)
+
+    def getgrad(self,state,multiplicity):
+        tmp = self.search_tuple(self.grada,multiplicity)
+        return tmp[state][1]
 
     @staticmethod
     def from_options(**kwargs):
@@ -81,8 +121,12 @@ if __name__ == '__main__':
     filepath="tests/fluoroethene.xyz"
     geom=manage_xyz.read_xyz(filepath,scale=1)   
 
-    lot=QChem.from_options(states=[0],multiplicity=[1],charge=0,geom=geom,basis='6-31g(d)',functional='B3LYP')
-    e=lot.getEnergy()
+    lot=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    e=lot.get_energy(geom,1,0)
     print e
-    g=lot.getGrad()
+    e=lot.get_energy(geom,3,0)
+    print e
+    g=lot.get_gradient(geom,1,0)
+    print g
+    g=lot.get_gradient(geom,3,0)
     print g

@@ -4,15 +4,11 @@ import manage_xyz as mx
 from units import *
 import os
 import re
-import elements 
-ELEMENT_TABLE = elements.ElementData()
 
 class Molpro(Base):
 
     def run(self,geom):
 
-        if self.got_electrons==False:
-            self.get_nelec(geom)
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
@@ -126,10 +122,14 @@ class Molpro(Base):
 
     def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
-        print tmp
         return tmp[state][1]*KCAL_MOL_PER_AU
 
     def get_energy(self,geom,multiplicity,state):
+        if self.has_nelectrons==False:
+            for i in self.states:
+                self.get_nelec(geom,i[0])
+            self.has_nelectrons==True
+
         if self.hasRanForCurrentCoords==False:
             self.run(geom)
         return self.getE(state,multiplicity)

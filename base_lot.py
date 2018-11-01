@@ -3,6 +3,7 @@ import manage_xyz
 import numpy as np
 from units import *
 import elements 
+ELEMENT_TABLE = elements.ElementData()
 
 
 class Base(object):
@@ -81,25 +82,24 @@ class Base(object):
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
         self.hasRanForCurrentCoords =False
-        self.got_electrons =False
+        self.has_nelectrons =False
 
         print self.states
 
-    def check_multiplicity(self):
+    def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
             raise ValueError("Spin multiplicity too high.")
         if (self.n_electrons + multiplicity + 1) % 2:
             raise ValueError("Inconsistent charge/multiplicity.")
             
-    def get_nelec(self,geom):
+    def get_nelec(self,geom,multiplicity):
         atoms = manage_xyz.get_atoms(geom)
         elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
         atomic_num = [ele.atomic_num for ele in elements]
-        self.got_electrons =True
         self.n_electrons = sum(atomic_num) - self.charge
         if self.n_electrons < 0:
             raise ValueError("Molecule has fewer than 0 electrons!!!")
-        self.check_multiplicity()
+        self.check_multiplicity(multiplicity)
 
         return 
 
