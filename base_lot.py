@@ -85,6 +85,25 @@ class Base(object):
 
         print self.states
 
+    def check_multiplicity(self):
+        if multiplicity > self.n_electrons + 1:
+            raise ValueError("Spin multiplicity too high.")
+        if (self.n_electrons + multiplicity + 1) % 2:
+            raise ValueError("Inconsistent charge/multiplicity.")
+            
+    def get_nelec(self,geom):
+        atoms = manage_xyz.get_atoms(geom)
+        elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
+        atomic_num = [ele.atomic_num for ele in elements]
+        self.got_electrons =True
+        self.n_electrons = sum(atomic_num) - self.charge
+        if self.n_electrons < 0:
+            raise ValueError("Molecule has fewer than 0 electrons!!!")
+        self.check_multiplicity()
+
+        return 
+
+
 
     def get_energy(self,geom,mulitplicity,charge,state):
         raise NotImplementedError()
@@ -95,3 +114,7 @@ class Base(object):
     def finite_difference(self):
         print("Not yet implemented")
         return 0
+
+    def search_tuple(self,tups, elem):
+        return filter(lambda tup: elem==tup[0], tups)
+

@@ -9,13 +9,10 @@ ELEMENT_TABLE = elements.ElementData()
 
 class Molpro(Base):
 
-    def search_tuple(self,tups, elem):
-        return filter(lambda tup: elem==tup[0], tups)
-
     def run(self,geom):
 
         if self.got_electrons==False:
-            self.n_electrons = self.get_nelec(geom)
+            self.get_nelec(geom)
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
@@ -126,13 +123,6 @@ class Molpro(Base):
         self.hasRanForCurrentCoords=True
 
         return
-
-    def get_nelec(self,geom):
-        atoms = manage_xyz.get_atoms(geom)
-        elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
-        atomic_num = [ele.atomic_num for ele in elements]
-        self.got_electrons =True
-        return sum(atomic_num) - self.charge
 
     def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)

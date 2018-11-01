@@ -12,23 +12,22 @@ class PyTC(Base):
     Inherits from Base
     """
 
-    def compute_energy(self,S,index):
-
+    def get_energy(self,geom,multiplicity,state):
         #normal update
-        #print "Coords at E source are"
-        #print self.coords
-        T = ls.Tensor.array(self.coords*ANGSTROM_TO_AU)
+        coords = mx.xyz_to_np(geom)
+        T = ls.Tensor.array(coords*ANGSTROM_TO_AU)
         self.lot = self.lot.update_xyz(T)
 
         # from template
         #geom = self.lot.casci.geometry.update_xyz(T)
         #self.casci_from_template(geom,self.nocc)
-        tmp = self.lot.compute_energy(S=S,index=index)
+        S=multiplicity-1
+        tmp = self.lot.compute_energy(S=S,index=state)
         return tmp*KCAL_MOL_PER_AU
 
-    def compute_gradient(self,S,index):
-        #print "computing gradient for state %i" % index
-        tmp=self.lot.compute_gradient(S=S,index=index)
+    def get_gradient(self,geom,multiplicity,state):
+        S=multiplicity-1
+        tmp=self.lot.compute_gradient(S=S,index=state)
         return tmp[...]*ANGSTROM_TO_AU
 
     @staticmethod
@@ -117,8 +116,16 @@ class PyTC(Base):
         fomo_method = 'gaussian'
         fomo_temp = 0.3
         
-        S_inds = [0]
-        S_nstates = [3]
+        singlets=self.search_tuple(self.states,1)
+        len_singlets = len(singlets)
+        triplets=self.search_tuple(self.states,3)
+        len_triplets = len(triplets)
+        singlet_inds = [i for i in range(len(singlets))]
+        triplet_inds = [i for i in range(len(triplets))]
+        singlet_states = [len_singlets]
+        triplet_states = [len_triplets]
+        S_inds = singlet_inds+triplet_inds
+        S_nstates = singlet_states+triplet_states
 
         geom1 = psiw.Geometry.build(
             resources=resources,
@@ -175,9 +182,21 @@ class PyTC(Base):
         fomo_method = 'gaussian'
         fomo_temp = 0.3
         
-        S_inds = [0]
-        S_nstates = [3]
-
+        singlets=self.search_tuple(self.states,1)
+        len_singlets = len(singlets)
+        triplets=self.search_tuple(self.states,3)
+        len_triplets = len(triplets)
+        singlet_inds =  [len_singlets]
+        triplet_inds =  [len_triplets]
+        S_nstates = singlet_inds+triplet_inds
+        S_inds=[]
+        if len_singlets>0:
+            S_inds.append(0)
+        if len_triplets>0:
+            S_inds.append(2)
+       
+        print S_nstates
+        print S_inds
         geom1 = psiw.Geometry.build(
             resources=resources,
             molecule=molecule,
@@ -222,30 +241,31 @@ if __name__ == '__main__':
     from pytc import *
     import manage_xyz
 
-    if 0:
+    if 1:
         nocc=11
         nactive=2
 
-        lot=PyTC.from_options(E_states=[(0,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot=PyTC.from_options(states=[(1,0),(3,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         x="tests/fluoroethene.xyz"
         lot.cas_from_file(x)
 
-        e=lot.getEnergy()
+        geom=manage_xyz.read_xyz(x,scale=1)   
+        e=lot.get_energy(geom,1,0)
         print e
-        g=lot.getGrad()
+        g=lot.get_gradient(geom,3,0)
         print g
 
     # from reference
-    filepath1="tests/pent-4-enylbenzene.xyz"
-    nocc1=37
-    nactive=6
-    filepath2="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
-    nocc2=61
-    nactive=6
-    lot1=PyTC.from_options(E_states=[(0,0)],nocc=nocc2,nactive=nactive,basis='6-31gs')
-    lot1.casci_from_file_from_template(filepath1,filepath2,nocc1,nocc2)
+    #filepath1="tests/pent-4-enylbenzene.xyz"
+    #nocc1=37
+    #nactive=6
+    #filepath2="tests/pent-4-enylbenzene_pos1_11DICHLOROETHANE.xyz"
+    #nocc2=61
+    #nactive=6
+    #lot1=PyTC.from_options(states=[(0,0)],nocc=nocc2,nactive=nactive,basis='6-31gs')
+    #lot1.casci_from_file_from_template(filepath1,filepath2,nocc1,nocc2)
 
-    e=lot1.getEnergy()
-    print e
-    g=lot1.getGrad()
-    print g
+    #e=lot1.getEnergy()
+    #print e
+    #g=lot1.getGrad()
+    #print g
