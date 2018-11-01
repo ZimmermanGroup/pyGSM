@@ -18,41 +18,21 @@ class Penalty_PES(PES):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return Penalty_PES(Penalty_PES.default_options().set_values(kwargs))
 
-    #def getGrad(self):
-    #    avg_grad = self.PES.getGrad() 
-    #    dgrad = self.PES.grada[1] - self.PES.grada[0]
-    #    dgrad = dgrad.reshape((3*len(self.coords),1))
-
-    #    prefactor = (self.dE**2. + 2.*self.alpha*self.dE)/((self.dE + self.alpha)**2.)
-    #    #print prefactor
-    #    #print self.PES.grada[0].flatten()
-    #    #print self.PES.grada[1].flatten()
-    #    #print avg_grad.T
-    #    tmp = dgrad*prefactor*self.sigma
-    #    #print prefactor
-    #    print tmp.T
-    #    print avg_grad.T
-    #    grad = avg_grad + tmp
-    #    print grad.T
-
-    #    return grad
-
     def get_energy(self,geom):
         avgE = 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
         self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
+        print "delta E = %1.4f" %self.dE,
         #TODO what to do if PES2 is or goes lower than PES1?
         G = (self.dE**2.)/(self.dE + self.alpha)
+        #print "G = %1.4f" % G,
         return avgE+self.sigma*G
 
     def get_gradient(self,geom):
-        #print self.PES1.get_gradient(geom)
-        #print np.shape( self.PES1.get_gradient(geom))
         avg_grad = 0.5*(self.PES1.get_gradient(geom) + self.PES2.get_gradient(geom))
-        #print avg_grad
         dgrad = self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom)
-        #print dgrad
-        factor = (self.dE**2. + 2.*self.alpha*self.dE)/((self.dE + self.alpha)**2.)
-        return avg_grad + self.sigma*factor*dgrad
+        factor = self.sigma*(self.dE**2. + 2.*self.alpha*self.dE)/((self.dE + self.alpha)**2.)
+        #print "factor is %1.4f" % factor
+        return avg_grad + factor*dgrad
 
 
 if __name__ == '__main__':
@@ -97,7 +77,7 @@ if __name__ == '__main__':
         geom=manage_xyz.read_xyz(filepath,scale=1)   
         nocc=7
         nactive=2
-        lot=Molpro.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot=Molpro.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31g*',nproc=4)
         pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
         pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
         #p = Penalty_PES(pes1,pes2)
@@ -107,13 +87,12 @@ if __name__ == '__main__':
             }))
 
         #e =p.get_energy(geom)
-        #print e
-        #g = p.get_gradient(geom)
+        #g =p.get_gradient(geom)
+        #print e 
         #print g
-
         mol=pb.readfile("xyz",filepath).next()
         mol.OBMol.AddBond(6,1,1)
         print "####### ic1 ##########"
         ic1=ic.ICoord.from_options(mol=mol,PES=p,resetopt=False)
-        ic1.optimize(50)
+        ic1.optimize(100)
 

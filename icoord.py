@@ -8,6 +8,7 @@ from units import *
 import itertools
 from copy import deepcopy
 import manage_xyz
+import StringIO 
 
 from _icoord import Mixin
 np.set_printoptions(precision=4)
@@ -27,6 +28,13 @@ class ICoord(Mixin):
             required=False,
             allowed_types=[int],
             doc='Something to do with how coordinates are setup? Ask Paul')
+
+        opt.add_option(
+            key='print_level',
+            value=1,
+            required=False,
+            allowed_types=[int],
+            doc='0-- no printing, 1-- printing')
 
         opt.add_option(
             key='MAX_FRAG_DIST',
@@ -145,6 +153,7 @@ class ICoord(Mixin):
         self.resetopt = self.options['resetopt']
         self.angles = self.options['angles']
         self.torsions = self.options['torsions']
+        self.print_level = self.options['print_level']
 
         #self.print_xyz()
         self.Elements = elements.ElementData()
@@ -165,7 +174,7 @@ class ICoord(Mixin):
             self.ixflag = 0
             self.energy = 0.
             self.DMAX = 0.1
-            self.DMIN0 =self.DMAX/100.
+            self.DMIN0 =self.DMAX/10.
             self.coords = np.zeros((len(self.mol.atoms),3))
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
                 self.coords[i,0] = a.GetX()
@@ -1053,11 +1062,16 @@ class ICoord(Mixin):
         energies=[]
         Es =[]
         self.do_bfgs=False # gets reset after each step
+        self.buf = StringIO.StringIO()
 
         print "Initial energy is %1.4f\n" % self.V0
+        self.buf.write("\n Writing convergence:")
+
 
         for step in range(nsteps):
-            print("\niteration step %i" %step)
+            if self.print_level==1:
+                print("\nOpt step: %i" %(step+1)),
+            self.buf.write("\nOpt step: %d" %(step+1))
 
             # => Opt step <= #
             smag =self.opt_step(nconstraints)
@@ -1088,6 +1102,7 @@ class ICoord(Mixin):
 
             if self.gradrms<self.OPTTHRESH:
                 break
+        print(self.buf.getvalue())
         print "Final energy is %2.5f" % (self.V0 + self.energy)
         return smag
 
@@ -1107,7 +1122,9 @@ class ICoord(Mixin):
         self.gradq = self.grad_to_q(grad)
         pgradrms = self.gradrms
         self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd)
-        print("gradrms = %1.5f" % self.gradrms),
+        if self.print_level==1:
+            print("gradrms = %1.5f" % self.gradrms),
+        self.buf.write(" gRMS=%1.5f" %(self.gradrms))
         if self.gradrms<self.OPTTHRESH:
             return
 
@@ -1125,7 +1142,9 @@ class ICoord(Mixin):
 
         # regulate max overall step
         smag = np.linalg.norm(dq)
-        print(" ss: %1.5f (DMAX: %1.3f)" %(smag,self.DMAX)),
+        self.buf.write(" ss: %1.5f (DMAX: %1.3f" %(smag,self.DMAX))
+        if self.print_level==1:
+            print(" ss: %1.5f (DMAX: %1.3f)" %(smag,self.DMAX)),
 
         if smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
@@ -1151,18 +1170,24 @@ class ICoord(Mixin):
      
         # => calc energyat new position <= #
         self.energy = self.PES.get_energy(self.geom) - self.V0
-        print "E is %4.5f" % self.energy,
+        self.buf.write(" E(M): %4.5f" %(self.energy))
+        if self.print_level==1:
+            print "E(M): %4.5f" % self.energy,
 
         # check goodness of step
         dEstep = self.energy - energyp
         dEpre = self.compute_predE(dq)
 
         ratio = dEstep/dEpre
-        print "ratio is %1.4f" % ratio,
+        self.buf.write(" ratio: %1.4f" %(ratio))
+        if self.print_level==1:
+            print "ratio is %1.4f" % ratio,
 
         # => step controller  <= #
         if dEstep>0.01:
-            print("decreasing DMAX"),
+            if self.print_level==1:
+                print("decreasing DMAX"),
+            self.buf.write(" decreasing DMAX")
             if smag <self.DMAX:
                 self.DMAX = smag/1.5
             else: 
@@ -1178,19 +1203,24 @@ class ICoord(Mixin):
                 self.Hintp_to_Hint()
                 self.do_bfgs=False
         elif ratio<0.25:
-            print("decreasing DMAX"),
+            if self.print_level==1:
+                print("decreasing DMAX"),
+            self.buf.write(" decreasing DMAX")
             if smag<self.DMAX:
                 self.DMAX = smag/1.1
             else:
                 self.DMAX = self.DMAX/1.2
             self.make_Hint()
         elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
-            print("increasing DMAX"),
+            if self.print_level==1:
+                print("increasing DMAX"),
+            self.buf.write(" increasing DMAX")
             self.DMAX=self.DMAX*1.1 + 0.01
             if self.DMAX>0.25:
                 self.DMAX=0.25
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
+
         return  smag
 
 

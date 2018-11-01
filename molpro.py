@@ -102,11 +102,11 @@ class Molpro(Base):
                     for i in range(len(geom)):
                         findline = next(f,'').strip()
                         mobj = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
-                        tmpgrad.append((
+                        tmpgrad.append([
                             float(mobj.group(2)),
                             float(mobj.group(3)),
                             float(mobj.group(4)),
-                            ))
+                            ])
                     tmpgrada.append(tmpgrad)
                     tmpgrad = []
 
@@ -135,15 +135,12 @@ class Molpro(Base):
 
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
-        return tmp[state][1]
+        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     def get_gradient(self,geom,multiplicity,state):
         if self.hasRanForCurrentCoords==False:
             self.run(geom)
         return self.getgrad(state,multiplicity)
-
-
-    #    return np.asarray(grad)*ANGSTROM_TO_AU
 
 
     @staticmethod
@@ -166,6 +163,6 @@ if __name__ == '__main__':
     e=lot.get_energy(geom,3,0)
     print e
     g=lot.get_gradient(geom,1,0)
-    #print g
-    #g=lot.get_gradient(geom,3,0)
+    print g
+    g=lot.get_gradient(geom,3,0)
     #print g

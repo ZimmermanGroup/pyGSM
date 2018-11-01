@@ -264,7 +264,7 @@ class Mixin:
         dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
         dEpre *=KCAL_MOL_PER_AU
         if abs(dEpre)<0.005: dEpre = np.sign(dEpre)*0.005
-        print( "predE: %1.4f " % dEpre) 
+        print( "predE: %1.4f " % dEpre),
         return dEpre
 
     def grad_to_q(self,grad):
