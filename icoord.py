@@ -100,30 +100,16 @@ class ICoord(Mixin):
         #print b
 
         unionAngles   = list(set(icoordA.angles) | set(icoordB.angles))
-        print "Union Angles",unionAngles
         unionTorsions = list(set(icoordA.torsions) | set(icoordB.torsions))
 
-        #print icoordA.bonds
-        #print icoordB.bonds
-        #print unionBonds
-        #print unionAngles
-        #print unionTorsions
         #print "Saving bond union"
         bonds = []
         angles = []
         torsions = []
         #for bond in b:
         for bond in unionBonds:
-            #if bond not in icoordA.bonds:
-                #print "need to add bond to %s" % (bond,)
-                #isOkay = icoordA.mol.OBMol.AddBond(bond[0]+1,bond[1]+1,1)
-                #print "Bond: %s added okay? %r" % (bond,isOkay)
             bonds.append(bond)
         for angle in unionAngles:
-        #    #print angle
-        #    if bond not in icoordA.angles or bond not in icoordB.angles:
-        #        pass
-        #        #print "need to add angle to %i" % angle[0]
             angles.append(angle)
         for torsion in unionTorsions:
             torsions.append(torsion)
@@ -161,7 +147,6 @@ class ICoord(Mixin):
         self.torsions = self.options['torsions']
 
         #self.print_xyz()
-        self.Elements = elements.ElementData()
 
         if self.isOpt>0:
             self.ic_create()
@@ -180,11 +165,14 @@ class ICoord(Mixin):
             self.energy = 0.
             self.DMAX = 0.1
             self.DMIN0 =self.DMAX/100.
-            self.lot.coords = np.zeros((len(self.mol.atoms),3))
+            self.coords = np.zeros((len(self.mol.atoms),3))
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-                self.lot.coords[i,0] = a.GetX()
-                self.lot.coords[i,1] = a.GetY()
-                self.lot.coords[i,2] = a.GetZ()
+                self.coords[i,0] = a.GetX()
+                self.coords[i,1] = a.GetY()
+                self.coords[i,2] = a.GetZ()
+
+        atoms1=myIB.mol1.atoms
+        self.geom=manage_xyz(atoms,self.coords)
 
         self.nretry = 0 
         
@@ -420,19 +408,15 @@ class ICoord(Mixin):
 
     def update_ics(self):
         self.update_xyz()
+        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords)
+        self.PES.lot.hasRanForCurrentCoords= False
         self.update_bonds()
         self.update_angles()
         self.update_torsions()
 
-    def set_xyz(self,coords):
-        self.lot.coords = np.copy(coords)
-        for i,xyz in enumerate(coords):
-            self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
-
-
     def update_xyz(self):
         """ Updates the mol.OBMol object coords: Important for ICs"""
-        for i,xyz in enumerate(self.lot.coords):
+        for i,xyz in enumerate(self.coords):
             self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
 
     def update_bonds(self):
@@ -853,9 +837,9 @@ class ICoord(Mixin):
             magp=mag
 
             # update coords
-            xyz1 = self.lot.coords + xyzd/SCALEBT 
+            xyz1 = self.coords + xyzd/SCALEBT 
             xyzall.append(xyz1)
-            self.lot.coords = np.copy(xyz1)
+            self.coords = np.copy(xyz1)
             self.update_ics()
             self.bmatp_create()
             self.bmat_create()
@@ -899,7 +883,7 @@ class ICoord(Mixin):
         self.update_ics()
 
         #Current coords
-        xyzall.append(self.lot.coords)
+        xyzall.append(self.coords)
 
         magp=100
         dqmagp=100.
@@ -929,7 +913,7 @@ class ICoord(Mixin):
             #TODO frozen
 
             # => Add Change in Coords <= #
-            xyz1 = self.lot.coords + xyzd/SCALEBT 
+            xyz1 = self.coords + xyzd/SCALEBT 
 
             # => Calc Mag <= #
             mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
@@ -937,8 +921,8 @@ class ICoord(Mixin):
             xyzall.append(xyz1)
 
             # update coords
-            xyzp = np.copy(self.lot.coords) # note that when we modify coords, xyzp will not change
-            self.lot.coords = xyz1
+            xyzp = np.copy(self.coords) # note that when we modify coords, xyzp will not change
+            self.coords = xyz1
 
             self.update_ics()
             self.bmatp_create()
@@ -956,7 +940,7 @@ class ICoord(Mixin):
             if dqmag>dqmagp*10.:
                 print(" Q%i" % n)
                 SCALEBT *= 2.0
-                self.lot.coords = np.copy(xyzp)
+                self.coords = np.copy(xyzp)
                 self.update_ics()
                 self.bmatp_create()
                 self.bmat_create()
@@ -1070,7 +1054,7 @@ class ICoord(Mixin):
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
         #opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
-        self.V0 = self.lot.getEnergy()
+        self.V0 = self.lot.getEnergy(self.geom)
         self.energy=0
         grmss = []
         steps = []
@@ -1132,12 +1116,12 @@ class ICoord(Mixin):
         energy=0.
 
         #print "in opt step: coordinates at current step are"
-        #print self.lot.coords
+        #print self.coords
         energyp = self.energy
         grad = self.lot.getGrad()
         self.bmatp_create()
         self.bmat_create()
-        coorp = np.copy(self.lot.coords)
+        coorp = np.copy(self.coords)
 
         # grad in ics
         self.pgradq = self.gradq
@@ -1185,7 +1169,7 @@ class ICoord(Mixin):
         self.Hintp_to_Hint()
      
         # => calc energyat new position <= #
-        self.energy = self.lot.getEnergy() - self.V0
+        self.energy = self.PES.getEnergy(self.geom) - self.V0
         print "E is %4.5f" % self.energy,
 
         # check goodness of step
@@ -1204,8 +1188,8 @@ class ICoord(Mixin):
                 self.DMAX = self.DMAX/1.5
             if dEstep > 2.0 and self.resetopt==True:
                 print "resetting coords to coorp"
-                self.lot.coords = coorp
-                self.energy = self.lot.getEnergy() - self.V0
+                self.coords = coorp
+                self.energy = self.lot.getEnergy(self.geom) - self.V0
                 self.update_ics()
                 self.bmatp_create()
                 self.bmatp_to_U()

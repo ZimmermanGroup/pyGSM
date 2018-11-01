@@ -5,6 +5,12 @@ from units import *
 
 class Mixin:
 
+    # not used
+    def set_xyz(self,coords):
+        self.coords = np.copy(coords)
+        for i,xyz in enumerate(coords):
+            self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
+
     def bond_exists(self,bond):
         if bond in self.bonds:
             return True
@@ -48,6 +54,10 @@ class Mixin:
     def getCoords(self,i):
         a= self.mol.OBMol.GetAtom(i+1)
         return [a.GetX(),a.GetY(),a.GetZ()]
+
+    def getAllCoords(self,i):
+        for i in range(self.natoms):
+            getCoords(i)
 
     def getAtomicNum(self,i):
         return self.mol.OBMol.GetAtom(i).GetAtomicNum()
