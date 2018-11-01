@@ -122,7 +122,7 @@ class ICoord(Mixin):
             'angles': angles,
             'torsions': torsions,
             'mol' : mol1,
-            'pes' : pes1,
+            'PES' : pes1,
             }))
 
         return ic3
@@ -1260,6 +1260,7 @@ class ICoord(Mixin):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
+        ICoordC.dqmag = dqmag
 
 #        ICoordC.mol.write('xyz','tmp1.xyz',overwrite=True)
 #        geom = manage_xyz.read_xyz('tmp1.xyz',scale=1)
