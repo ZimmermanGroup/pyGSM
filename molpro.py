@@ -27,7 +27,6 @@ class Molpro(Base):
         tempfile.write('}\n\n')
 
         tempfile.write(' basis={}\n\n'.format(self.basis))
-
         singlets=self.search_tuple(self.states,1)
         len_singlets=len(singlets) 
         if len_singlets is not 0:
@@ -44,14 +43,14 @@ class Molpro(Base):
                 s=state[1]
                 grad_name="510"+str(s)+".1"
                 tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
-                tempfile.write(' }\n')
+            tempfile.write(' }\n')
 
             for state in singlets:
                 s=state[1]
                 grad_name="510"+str(s)+".1"
                 tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
 
-        triplets=self.search_tuple(self.states,1)
+        triplets=self.search_tuple(self.states,3)
         len_triplets=len(triplets) 
         if len_triplets is not 0:
             tempfile.write(' {multi\n')
@@ -67,7 +66,7 @@ class Molpro(Base):
                 s=state[1]
                 grad_name="511"+str(s)+".1"
                 tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
-                tempfile.write(' }\n')
+            tempfile.write(' }\n')
 
             for s in triplets:
                 s=state[1]
@@ -92,7 +91,6 @@ class Molpro(Base):
         for i in range(len_triplets):
             self.E.append((3,tmp[len_singlets+i]))
 
-        print("finding grad")
         tmpgrada=[]
         tmpgrad=[]
         self.grada=[]
@@ -110,6 +108,7 @@ class Molpro(Base):
                             float(mobj.group(4)),
                             ))
                     tmpgrada.append(tmpgrad)
+                    tmpgrad = []
 
         for i in range(len_singlets):
             self.grada.append((1,tmpgrada[i]))
@@ -167,6 +166,6 @@ if __name__ == '__main__':
     e=lot.get_energy(geom,3,0)
     print e
     g=lot.get_gradient(geom,1,0)
-    print g
-    g=lot.get_gradient(geom,3,0)
-    print g
+    #print g
+    #g=lot.get_gradient(geom,3,0)
+    #print g

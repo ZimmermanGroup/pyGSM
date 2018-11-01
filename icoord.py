@@ -1079,7 +1079,7 @@ class ICoord(Mixin):
                 f.write("energy\n")
                 for energy in energies:
                     f.write('{}\n'.format(energy))
-                    f.write("max-force\n")
+                f.write("max-force\n")
                 for grms in grmss:
                     f.write('{}\n'.format(grms))
                 f.write("max-step\n")

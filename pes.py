@@ -32,6 +32,15 @@ class PES(object):
                 required=True,
                 doc='multiplicity')
 
+        opt.add_option(
+                key='PES1',
+                required=False,
+                doc='')
+        opt.add_option(
+                key='PES2',
+                required=False,
+                doc='')
+
         PES._default_options = opt
         return PES._default_options.copy()
 
@@ -49,6 +58,10 @@ class PES(object):
         self.lot = self.options['lot']
         self.ad_idx = self.options['ad_idx']
         self.multiplicity = self.options['multiplicity']
+        self.PES1 = self.options['PES1']
+        self.PES2 = self.options['PES2']
+        self.alpha = 0.02*KCAL_MOL_PER_AU
+        self.sigma = 3.5
 
     def get_energy(self,geom):
         #if self.checked_input == False:
