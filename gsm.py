@@ -153,7 +153,7 @@ class GSM(BaseGSM):
             nodesXYZ.write(pb.readstring("xyz",mol))
 
     def get_tangents_1g(self):
-        size_ic = self.icoords[0].nbonds+self.icoords[0].nangles+self.icoords[0].ntor
+        size_ic = self.icoords[0].BObj.nbonds+self.icoords[0].AObj.nangles+self.icoords[0].TObj.ntor
         ictan0 = [0]*self.nnodes
         ictan = [[],]*self.nnodes
         nlist = [0]*(2*self.nnodes)

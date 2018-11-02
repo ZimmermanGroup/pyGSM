@@ -36,7 +36,7 @@ class Penalty_PES(PES):
 
 
 if __name__ == '__main__':
-    if 0:
+    if 1:
         from pytc import *
         import icoord as ic
         import pybel as pb
@@ -45,20 +45,22 @@ if __name__ == '__main__':
         filepath2="tests/twisted_ethene.xyz"
         nocc=7
         nactive=2
-        lot=PyTC.from_options(E_states=[(0,0),(0,1)],filepath=filepath2,nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot=PyTC.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot.cas_from_file(filepath2)
-
         #lot.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
-        p = Penalty_PES(lot.options.copy().set_values({
-            "PES":lot,
+        pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+        pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
+
+        p = Penalty_PES(pes1.options.copy().set_values({
+            'PES1':pes1,
+            'PES2':pes2,
             }))
         #p.get_energy()
         #p.getGrad()
-        print "alpha is %1.4f kcal/mol" % p.alpha
         mol=pb.readfile("xyz",filepath2).next()
         mol.OBMol.AddBond(6,1,1)
         print "ic1"
-        ic1=ic.ICoord.from_options(mol=mol,lot=p,resetopt=False)
+        ic1=ic.ICoord.from_options(mol=mol,PES=p,resetopt=False)
 
         for i in range(1):
             ic1.optimize(100)
@@ -68,7 +70,7 @@ if __name__ == '__main__':
                 ic1.lot.sigma *=2.
                 print "increasing sigma %1.2f" % ic1.lot.sigma
         print "Finished"
-    if 1:
+    if 0:
         from molpro import *
         import icoord as ic
         import pybel as pb
