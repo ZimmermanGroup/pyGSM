@@ -208,25 +208,3 @@ class Bmat:
         bbti = np.linalg.inv(bbt)
         return np.matmul(bbti,bmat)
 
-    def Hintp_to_Hint(self):
-        tmp = np.matmul(self.Ut,np.transpose(self.Hintp))
-        #self.Hint = np.matmul(self.Ut,np.transpose(tmp))
-        return np.matmul(tmp,np.transpose(self.Ut))
-
-    def update_bfgsp(self):
-        #print("In update bfgsp")
-        dx = self.dqprim
-        dg = self.gradqprim - self.pgradqprim
-        Hdx = np.dot(self.Hintp,dx)
-        dxHdx = np.dot(np.transpose(dx),Hdx)
-        dgdg = np.outer(dg,dg)
-        dgtdx = np.dot(np.transpose(dg),dx)
-        change = np.zeros_like(self.Hintp)
-        if dgtdx>0.:
-            if dgtdx<0.001: dgtdx=0.001
-            change += dgdg/dgtdx
-        if dxHdx>0.:
-            if dxHdx<0.001: dxHdx=0.001
-            change -= np.outer(Hdx,Hdx)/dxHdx
-        return change
-

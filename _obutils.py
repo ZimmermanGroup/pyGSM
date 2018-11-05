@@ -2,14 +2,18 @@ import numpy as np
 import openbabel as ob
 import pybel as pb
 from units import *
+import elements 
+import networkx
+import matplotlib.pyplot as plt
+import Tkinter
 
 """ 
 This file contains ICoord utilities that center around the usage of openbabel
 """
 
+Elements = elements.ElementData()
 class Utils:
 
-    # not used
     def set_xyz(self,coords):
         self.coords = np.copy(coords)
         for i,xyz in enumerate(coords):
@@ -52,6 +56,26 @@ class Utils:
         a = self.mol.OBMol.GetAtom(i)
         return a.GetAtomicNum()
 
+    def get_angle(self,i,j,k):
+        a=self.mol.OBMol.GetAtom(i)
+        b=self.mol.OBMol.GetAtom(j)
+        c=self.mol.OBMol.GetAtom(k)
+        return self.mol.OBMol.GetAngle(a,b,c) #b is the vertex #in degrees
+
+    def get_torsion(self,i,j,k,l):
+        a=self.mol.OBMol.GetAtom(i)
+        b=self.mol.OBMol.GetAtom(j)
+        c=self.mol.OBMol.GetAtom(k)
+        d=self.mol.OBMol.GetAtom(l)
+        tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
+        #if tval >3.14159:
+        if tval>=np.pi:
+            tval-=2.*np.pi
+        #if tval <-3.14159:
+        if tval<=-np.pi:
+            tval+=2.*np.pi
+        return tval*180./np.pi
+
     def isTM(self,i):
         anum= self.getIndex(i)
         if anum>20:
@@ -68,7 +92,7 @@ class Utils:
         #dr = (vdw_radii.radii[self.getAtomicNum(bond[0])] + vdw_radii.radii[self.getAtomicNum(bond[1])] )/2
         a=self.getAtomicNum(bond[0])
         b=self.getAtomicNum(bond[1])
-        dr = (self.Elements.from_atomic_number(a).vdw_radius + self.Elements.from_atomic_number(b).vdw_radius )/2.
+        dr = (Elements.from_atomic_number(a).vdw_radius + Elements.from_atomic_number(b).vdw_radius )/2.
         val = np.exp(-A*(d-dr))
         if val>1: val=1
         return val
@@ -88,7 +112,6 @@ class Utils:
 
         print("making frags")
         nfrags=0
-        merged=0
         frags=[]
         frag1=[]
         frag2=[]
@@ -115,3 +138,8 @@ class Utils:
             print(" atom[%i]: %i " % (i[1],i[0]))
         print(" nfrags: %i" % (nfrags))
         return nfrags,frags
+
+    def draw(self):
+        #self.mol.draw(filename="path.png")
+        self.mol.write("svg", "can.svg", overwrite=True)
+

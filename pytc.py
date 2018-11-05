@@ -223,6 +223,7 @@ class PyTC(Base):
             S_inds=S_inds,
             S_nstates=S_nstates,
             print_level=0,
+            #g_convergence=1.0E-6, #work?
             grad_thre_dp = 1.0E-8,
             )
 

@@ -38,7 +38,7 @@ class Penalty_PES(PES):
 if __name__ == '__main__':
     if 1:
         from pytc import *
-        import icoord as ic
+        import dlc as ic
         import pybel as pb
         from units import  *
         #filepath1="tests/ethylene.xyz"

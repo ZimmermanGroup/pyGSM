@@ -99,79 +99,6 @@ class ICoords:
             print "%s: %1.2f" %(torsion, torv[n])
         return Tor_obj(ntor,torsions,torv)
 
-
-
-    def get_angle(self,i,j,k):
-        a=self.mol.OBMol.GetAtom(i)
-        b=self.mol.OBMol.GetAtom(j)
-        c=self.mol.OBMol.GetAtom(k)
-        return self.mol.OBMol.GetAngle(a,b,c) #b is the vertex #in degrees
-
-    def get_torsion(self,i,j,k,l):
-        a=self.mol.OBMol.GetAtom(i)
-        b=self.mol.OBMol.GetAtom(j)
-        c=self.mol.OBMol.GetAtom(k)
-        d=self.mol.OBMol.GetAtom(l)
-        tval=self.mol.OBMol.GetTorsion(a,b,c,d)*np.pi/180.
-        #if tval >3.14159:
-        if tval>=np.pi:
-            tval-=2.*np.pi
-        #if tval <-3.14159:
-        if tval<=-np.pi:
-            tval+=2.*np.pi
-        return tval*180./np.pi
-
-    def update_ic_eigen(self,gradq,nconstraints=0):
-        SCALE =self.SCALEQN
-        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
-        if self.SCALEQN>10.0: SCALE=10.0
-        lambda1 = 0.0
-
-        nicd_c = self.nicd-nconstraints
-        temph = self.Hint[:nicd_c,:nicd_c]
-        e,v_temp = np.linalg.eigh(temph)
-
-        v = np.transpose(v_temp)
-        leig = e[0]
-
-        if leig < 0:
-            lambda1 = -leig+0.015
-        else:
-            lambda1 = 0.005
-        if abs(lambda1)<0.005: lambda1 = 0.005
-
-        # => grad in eigenvector basis <= #
-        gradq = gradq[:nicd_c,0]
-        gqe = np.dot(v,gradq)
-
-        dqe0 = np.divide(-gqe,e+lambda1)/SCALE
-        dqe0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dqe0 ]
-
-        dq0 = np.dot(v_temp,dqe0)
-        dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
-        #print "dq0"
-        #print ["{0:0.5f}".format(i) for i in dq0]
-        dq_c = np.zeros((self.nicd,1))
-        for i in range(nicd_c):
-            dq_c[i,0] = dq0[i]
-        return dq_c
-
-    def compute_predE(self,dq0):
-        # compute predicted change in energy 
-        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
-        assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
-        assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
-        dEtemp = np.dot(self.Hint,dq0)
-        dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
-        dEpre *=KCAL_MOL_PER_AU
-        if abs(dEpre)<0.005: dEpre = np.sign(dEpre)*0.005
-        print( "predE: %1.4f " % dEpre),
-        return dEpre
-
-    def grad_to_q(self,grad):
-        gradq = np.dot(self.bmatti,grad)
-        return gradq
-
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
         ictan = []
@@ -198,10 +125,6 @@ class ICoords:
             print "%1.2f " %ictan[i],
         print "\n"
         return np.asarray(ictan).reshape((ICoord1.num_ics,1))
-
-
-
-
 
 
 ######################  IC objects #####################################

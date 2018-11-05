@@ -1,11 +1,11 @@
 import numpy as np
 import options
 import os
-from base_gsm import *
-from icoord import *
+from base_opt import *
+from dlc import *
 import pybel as pb
 
-class GSM(BaseGSM):
+class GSM(Base_Method):
 
     def starting_string(self):
         #dq
@@ -26,8 +26,8 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            tempR = ICoord.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            tempP = ICoord.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
+            tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
             #self.icoords[self.nR-1] = tempR
             #self.icoords[-self.nP] = tempP
             #self.icoords[self.nR] = ICoord.add_node(self.icoords[self.nR-1],self.icoords[-self.nP])
@@ -215,6 +215,8 @@ class GSM(BaseGSM):
 if __name__ == '__main__':
 #    from icoord import *
     from qchem import *
+    from dlc import *
+    from pes import *
     import manage_xyz
 
     if True:
@@ -229,13 +231,13 @@ if __name__ == '__main__':
     mol2=pb.readfile("xyz",filepath2).next()
     geom = manage_xyz.read_xyz(filepath,scale=1)
     geom2 = manage_xyz.read_xyz(filepath2,scale=1)
-    lot=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP',nproc=2)
-    lot2=QChem.from_options(E_states=[(1,0)],geom=geom,basis='6-31g(d)',functional='B3LYP',nproc=2)
+    lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
 
     print "\n IC1 \n\n"
-    ic1=ICoord.from_options(mol=mol,lot=lot)
+    ic1=DLC.from_options(mol=mol,PES=pes)
     print "\n IC2 \n\n"
-    ic2=ICoord.from_options(mol=mol2,lot=lot2)
+    ic2=DLC.from_options(mol=mol2,PES=pes)
 
     if True:
         print "\n Starting GSM \n\n"
