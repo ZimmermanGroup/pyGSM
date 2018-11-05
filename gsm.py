@@ -3,6 +3,7 @@ import options
 import os
 from base_opt import *
 from dlc import *
+from pes import *
 import pybel as pb
 import sys
 
@@ -29,7 +30,7 @@ class GSM(Base_Method):
         for i in range(newnodes):
             tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
             tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
-            self.icoords[self.nR] = DLC.add_node(tempR,tempP)
+            self.icoords[self.nR] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
             self.active[self.nR] = True
 #            ictan = DLC.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
@@ -43,7 +44,7 @@ class GSM(Base_Method):
         for i in range(newnodes):
             tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
             tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            self.icoords[-self.nP-1] = DLC.add_node(tempP,tempR)
+            self.icoords[-self.nP-1] = DLC.add_node(tempP,tempR,self.nnodes,self.nn)
 #            ictan = DLC.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
@@ -55,6 +56,7 @@ class GSM(Base_Method):
             print("Adding too many nodes, cannot interpolate")
         sign = -1
         for i in range(newnodes):
+            print "Adding node",i
             sign *= -1
             if sign == 1:
                 self.interpolateR()
@@ -66,10 +68,10 @@ class GSM(Base_Method):
         for i in range(newnodes):
             sign *= -1
             if sign == 1:
-                self.add_node(self.nR-1,self.nR,-self.nP)
+                self.add_node(self.nR-1,self.nR,-self.nP,self.nnodes,self.nn)
                 self.nR += 1
             elif sign == -1:
-                self.add_node(-self.nP,-self.nP-1,self.nR-1)
+                self.add_node(-self.nP,-self.nP-1,self.nR-1,self.nnodes,self.nn)
                 self.nP += 1            
 
     def write_xyz_files(self,iters=0):
@@ -107,19 +109,29 @@ class GSM(Base_Method):
             for ico,act in zip(self.icoords,self.active):
                 if act:
                     f.write('{}\n'.format(ico.gradrms))
+                elif ico != 0:
+                    if ico.gradrms >= 999.:
+                        grad = ico.PES.get_gradient(ico.geom)
+                        ico.bmatp = ico.bmatp_create()
+                        ico.bmatti = ico.bmat_create()
+                        ico.pgradq = ico.gradq
+                        ico.gradq = ico.grad_to_q(grad)
+                        ico.pgradrms = ico.gradrms
+                        ico.gradrms = np.linalg.norm(ico.gradq)*1./np.sqrt(ico.nicd)
+                    f.write('{}\n'.format(ico.gradrms))
                 #elif ico != 0:
                 #    f.write('{}\n'.format(ico.gradrms))
-            f.write('max-step \n')
-            for ico,act in zip(self.icoords,self.active):
-                if act:
-                    f.write('{}\n'.format(ico.smag))
-                elif ico != 0:
-                    f.write('{}\n'.format(0.))
-            for ico,act in zip(self.icoords,self.active):
-                if act:
-                    f.write('{}\n'.format(ico.dqmag))
-                elif ico != 0:
-                    f.write('{}\n'.format(0.))
+#            f.write('max-step \n')
+#            for ico,act in zip(self.icoords,self.active):
+#                if act:
+#                    f.write('{}\n'.format(ico.smag))
+#                elif ico != 0:
+#                    f.write('{}\n'.format(0.))
+#            for ico,act in zip(self.icoords,self.active):
+#                if act:
+#                    f.write('{}\n'.format(ico.dqmag))
+#                elif ico != 0:
+#                    f.write('{}\n'.format(0.))
         f.close()
 
     def growth_iters(self,maxrounds=1,maxopt=3,nconstraints=0,iters=0):
@@ -131,7 +143,7 @@ class GSM(Base_Method):
         for i in range(maxopt):
             for n in range(self.nnodes):
                 if self.icoords[n] != 0:
-                    if self.icoords[n].gradrms < 5e-3:
+                    if self.icoords[n].gradrms < 0.001:
                         self.active[n] = False
                         try:
                             if self.icoords[n+1] == 0:
@@ -140,6 +152,7 @@ class GSM(Base_Method):
                             elif self.icoords[n-1] == 0:
                                 self.interpolateP()
                                 self.active[n-1] = True
+                                self.icoords[n-1].smag = self.optimize(self.icoords[n-1],1,nconstraints)
                         except IndexError:
                             pass
                 if self.active[n] == True:
@@ -163,18 +176,15 @@ class GSM(Base_Method):
         ictan = [[]]*self.nnodes
         dqmaga = [0.] * self.nnodes
         dqa = [[]]*self.nnodes
-        for n in range(len(self.icoords)-1):
+        for n in range(self.nR):
             if self.icoords[n] != 0:
                 if self.icoords[n+1] != 0:
-                    self.icoords[n] = DLC.union_ic(self.icoords[n],self.icoords[n+1])
-                    self.icoords[n+1] = DLC.union_ic(self.icoords[n+1],self.icoords[n])
                     
                     #TODO tangent_1b() for SSSM
+                    print "Getting tangents between",n,n+1
                     ictan[n] = DLC.tangent_1(self.icoords[n+1],self.icoords[n])            
                 elif self.icoords[n+1] == 0:
-                    self.icoords[n] = DLC.union_ic(self.icoords[n],self.icoords[-self.nP])
-                    self.icoords[-self.nP] = DLC.union_ic(self.icoords[-self.nP],self.icoords[n])
-                    ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[-self.nP])
+                    ictan[n] = DLC.tangent_1(self.icoords[-self.nP],self.icoords[n])
                 
                 ictan0 = np.copy(ictan[n])
     
@@ -182,12 +192,39 @@ class GSM(Base_Method):
                 self.icoords[n].bmatp_to_U()
                 self.icoords[n].opt_constraint(ictan[n])
                 self.icoords[n].bmat_create()
+
                 if self.icoords[n+1] != 0:
                     dqmaga[n] = np.dot(ictan0.T,self.icoords[n+1].Ut[-1,:])
                 elif self.icoords[n+1] == 0:
                     dqmaga[n] = np.dot(ictan0.T,self.icoords[-self.nP].Ut[-1,:])
-                dqmaga[n] = float(np.sqrt(dqmaga[n]))
+                dqmaga[n] = float(np.sqrt(abs(dqmaga[n])))
                 self.icoords[n].dqmag = dqmaga[n]
+            else:
+                pass        
+
+        for n in range(1,self.nP):
+            if self.icoords[-n] != 0:
+                if self.icoords[-n-1] != 0:
+                    
+                    #TODO tangent_1b() for SSSM
+                    print "Getting tangents between",self.nnodes-n,self.nnodes-n-1
+                    ictan[-n] = DLC.tangent_1(self.icoords[-n-1],self.icoords[-n])            
+#                elif self.icoords[-n-1] == 0:
+#                    ictan[-n] = DLC.tangent_1(self.icoords[self.nR-1],self.icoords[-n])
+                
+                ictan0 = np.copy(ictan[-n])
+    
+                self.icoords[-n].bmatp_create()
+                self.icoords[-n].bmatp_to_U()
+                self.icoords[-n].opt_constraint(ictan[n])
+                self.icoords[-n].bmat_create()
+
+                if self.icoords[-n-1] != 0:
+                    dqmaga[-n] = np.dot(ictan0.T,self.icoords[-n-1].Ut[-1,:])
+                elif self.icoords[-n-1] == 0:
+                    dqmaga[-n] = np.dot(ictan0.T,self.icoords[self.nR-1].Ut[-1,:])
+                dqmaga[-n] = float(np.sqrt(abs(dqmaga[-n])))
+                self.icoords[-n].dqmag = dqmaga[-n]
             else:
                 pass        
 
@@ -228,8 +265,6 @@ class GSM(Base_Method):
         ncurrent += 1
 
         for n in range(ncurrent):
-            self.icoords[nlist[2*n+1]] = DLC.union_ic(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
-            self.icoords[nlist[2*n+0]] = DLC.union_ic(self.icoords[nlist[2*n+0]],self.icoords[nlist[2*n+1]])
 
             if self.isSSM:
                 pass #do tangent_1b()
@@ -245,10 +280,16 @@ class GSM(Base_Method):
             self.icoords[nlist[2*n+1]].bmat_create()
         
             dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
-            dqmaga[nlist[2*n]] = float(np.sqrt(dqmaga[nlist[2*n]]))
+            dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
         self.ictan = ictan
+        
+#        print "printing ictan 2"        
+#        print nlist
+#        for n in range(ncurrent):
+#            print nlist[2*n]
+#            print np.transpose(ictan[nlist[2*n]])
 
     def ic_reparam_g(self,ic_reparam_steps=4):
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
@@ -346,9 +387,12 @@ class GSM(Base_Method):
 
 if __name__ == '__main__':
 #    from icoord import *
-    from qchem import *
-    from dlc import *
-    from pes import *
+    ORCA=True
+    QCHEM=False
+    if QCHEM:
+        from qchem import *
+    if ORCA:
+        from orca import *
     import manage_xyz
     #from pytc import *
 
@@ -364,14 +408,13 @@ if __name__ == '__main__':
     mol2=pb.readfile("xyz",filepath2).next()
 #    geom = manage_xyz.read_xyz(filepath,scale=1)
 #    geom2 = manage_xyz.read_xyz(filepath2,scale=1)
-    lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-    lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-    #nocc=8
-    #nactive=2
-    #lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    #lot2=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    #lot.cas_from_file(filepath)
-    #lot2.cas_from_file(filepath2)
+    if QCHEM:
+        lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+        lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+    
+    if ORCA:
+        lot=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+        lot2=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
 
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
@@ -387,21 +430,30 @@ if __name__ == '__main__':
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
 
         gsm.interpolate(2) 
-        gsm.ic_reparam_g()
+        #gsm.ic_reparam_g()
         #gsm.interpolate2(7)
         gsm.write_node_xyz("nodes_xyz_file0.xyz")
 
     if False:
-        gsm.ic_reparam_g()
+        print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
     
-    if False:
-        gsm.get_tangents_1g()
-        print "DQMAGA:",gsm.dqmaga
-        print "Printing Tangents:"
-        for tan in gsm.ictan:
-            print np.transpose(tan)
-
     if True:
+        gsm.get_tangents_1g()
+        tanbkup = np.copy(gsm.ictan)
+#        gsm.get_tangents_1g_2()
+
+        #print gsm.icoords[0].BObj.bonds
+#        print "printing tangents 1"
+#        for tan in tanbkup:
+#            print np.transpose(tan)
+#        print "\n\nprinting tangents 2"
+#        for tan in gsm.ictan:
+#            print np.transpose(tan)
+
+    if False:
+        gsm.ic_reparam_g()
+
+    if False:
         iters = 0
         while True:
             print "beginning iteration:",iters
@@ -422,5 +474,8 @@ if __name__ == '__main__':
             iters += 1
         #gsm.growth_iters(nconstraints=1)
         gsm.write_node_xyz()
+
+        if ORCA:
+            os.system('rm temporcarun/*')
 
 

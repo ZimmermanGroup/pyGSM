@@ -3,7 +3,7 @@ import numpy as np
 import os
 import openbabel as ob
 import pybel as pb
-import dlc as ico
+from dlc import *
 from copy import deepcopy
 import StringIO
 
@@ -25,13 +25,13 @@ class Base_Method(object):
         opt.add_option(
             key='ICoord1',
             required=True,
-            allowed_types=[ico.DLC],
+            allowed_types=[DLC],
             doc='')
 
         opt.add_option(
             key='ICoord2',
             required=False,
-            allowed_types=[ico.DLC],
+            allowed_types=[DLC],
             doc='')
 
         opt.add_option(
@@ -102,7 +102,8 @@ class Base_Method(object):
         self.icoords[0] = self.options['ICoord1']
         if self.nnodes>1:
             self.icoords[-1] = self.options['ICoord2']
-        tmp=self.options['ICoord1']
+            self.icoords[0] = DLC.union_ic(self.icoords[0],self.icoords[-1])
+            self.icoords[-1] = DLC.union_ic(self.icoords[-1],self.icoords[0])
         self.nn = 2
         self.nR = 1
         self.nP = 1        
@@ -110,7 +111,7 @@ class Base_Method(object):
         self.isMAP_SE = self.options['isMAP_SE']
         self.active = [False] * self.nnodes
         self.active[0] = True
-        self.active[-1] = False
+        self.active[-1] = True
         self.isomers = self.options['isomers']
         #self.isomer_init()
         self.nconstraints = self.options['nconstraints']

@@ -74,7 +74,7 @@ class QChem(Base):
         len_singlets=len(singlets) 
         if len_singlets is not 0:
             self.run(geom,1)
-        triplets=self.search_tuple(self.states,1)
+        triplets=self.search_tuple(self.states,3)
         len_triplets=len(triplets) 
         if len_triplets is not 0:
             self.run(geom,3)

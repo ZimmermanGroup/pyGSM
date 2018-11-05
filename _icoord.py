@@ -24,6 +24,7 @@ class ICoords:
                 bonds.append((b,a))
 
         bonds = sorted(bonds)
+        print bonds
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
         return Bond_obj(bonds,nbonds,bondd)

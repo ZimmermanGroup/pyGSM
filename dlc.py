@@ -60,11 +60,46 @@ class DLC(Base_DLC,Bmat,Utils):
             icoordA,
             icoordB,
             ):
-        """ return union DLC of two DLC Objects """
-        unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
-        unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
-        unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
+#        bondA = set(icoordA.BObj.bonds)
+#        bondB = set(icoordB.BObj.bonds)
+#        angleA = set(icoordA.AObj.angles)
+#        angleB = set(icoordB.AObj.angles)
+#        torsionA = set(icoordA.TObj.torsions)
+#        torsionB = set(icoordB.TObj.torsions)
+#
+#        bondB.update(bondA.difference(bondB))
+#        angleB.update(angleA.difference(angleB))
+#        torsionB.update(torsionA.difference(torsionB))
+#                    
+#        print bondB
+#        print angleB
+#        print torsionB
+#        diffbonds = map(tuple,set(map(frozenset,bondB)))
+#        diffangles = map(tuple,set(map(frozenset,angleB)))
+#        difftorsions = map(tuple,set(map(frozenset,torsionB)))
+#
+#        print diffbonds
+#        print diffangles
+#        print difftorsions
 
+        """ return union DLC of two DLC Objects """
+        print "icoordA,icoordB bonds"
+        print icoordA.BObj.bonds
+        print icoordB.BObj.bonds
+        unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
+        unionBonds.sort()
+        print "printing unionBonds"
+        print unionBonds
+        unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
+#        print "printing unionANgles"
+#        print unionAngles
+        unionAngles = map(tuple,set(map(frozenset,unionAngles)))
+#        print unionAngles
+        unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
+#        print "printing unionTorsions"
+#        print unionTorsions
+        unionTorsions = map(tuple,set(map(frozenset,unionTorsions)))
+#        print unionTorsions
         bonds = []
         angles = []
         torsions = []
@@ -87,7 +122,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 )
 
     @staticmethod
-    def add_node(ICoordA,ICoordB):
+    def add_node(ICoordA,ICoordB,nmax,ncurr):
         dq0 = np.zeros((ICoordA.nicd,1))
 
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
@@ -100,16 +135,16 @@ class DLC(Base_DLC,Bmat,Utils):
             }))
 
         ictan = DLC.tangent_1(ICoordA,ICoordB)
+        print "------------------printing ictan:--------------------"
+        print np.transpose(ictan)
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
         ICoordC.bmatp_create()
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
-        #if self.nnodes-self.nn != 1:
-        if 1:
-            dq0[ICoordC.nicd-1] = -dqmag/7.
-            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
+        if nmax-ncurr != 1:
+            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
         else:
             dq0[ICoordC.nicd-1] = -dqmag/2.0;
         
