@@ -105,7 +105,7 @@ class QChem(Base):
 
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
-        return tmp[state][1]*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     @staticmethod
     def from_options(**kwargs):

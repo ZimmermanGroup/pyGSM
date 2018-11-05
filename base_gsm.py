@@ -97,7 +97,7 @@ class BaseGSM(object):
         self.isSSM = self.options['isSSM']
         self.isMAP_SE = self.options['isMAP_SE']
         self.active = [False] * self.nnodes
-        self.active[0] = True
+        self.active[0] = False
         self.active[-1] = False
         self.isomers = self.options['isomers']
         self.isomer_init()
