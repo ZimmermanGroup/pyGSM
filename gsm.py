@@ -4,6 +4,7 @@ import os
 from base_opt import *
 from dlc import *
 import pybel as pb
+import sys
 
 class GSM(Base_Method):
 
@@ -349,7 +350,7 @@ if __name__ == '__main__':
     from dlc import *
     from pes import *
     import manage_xyz
-    from pytc import *
+    #from pytc import *
 
     if True:
         filepath="tests/fluoroethene.xyz"
@@ -363,14 +364,14 @@ if __name__ == '__main__':
     mol2=pb.readfile("xyz",filepath2).next()
 #    geom = manage_xyz.read_xyz(filepath,scale=1)
 #    geom2 = manage_xyz.read_xyz(filepath2,scale=1)
-    #lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-    #lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-    nocc=8
-    nactive=2
-    lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot2=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot.cas_from_file(filepath)
-    lot2.cas_from_file(filepath2)
+    lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+    lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+    #nocc=8
+    #nactive=2
+    #lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    #lot2=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    #lot.cas_from_file(filepath)
+    #lot2.cas_from_file(filepath2)
 
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
@@ -421,6 +422,5 @@ if __name__ == '__main__':
             iters += 1
         #gsm.growth_iters(nconstraints=1)
         gsm.write_node_xyz()
-
 
 

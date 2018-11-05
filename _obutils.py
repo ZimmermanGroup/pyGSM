@@ -3,9 +3,6 @@ import openbabel as ob
 import pybel as pb
 from units import *
 import elements 
-import networkx
-import matplotlib.pyplot as plt
-import Tkinter
 
 """ 
 This file contains ICoord utilities that center around the usage of openbabel

@@ -13,12 +13,113 @@ from base_dlc import *
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
 
-class DLC(Base_DLC,ICoords,Bmat,Utils):
+class DLC(Base_DLC,Bmat,Utils):
 
     @staticmethod
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
+        print "in from options"
         return DLC(DLC.default_options().set_values(kwargs))
+
+    def setup(self):
+        #if self.isOpt>0:
+        if True:
+            self.ic_create()
+            self.bmatp=self.bmatp_create()
+            self.bmatp_to_U()
+            self.bmatti=self.bmat_create()
+            self.make_Hint()  
+            self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
+            self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
+            self.gradq = np.zeros((self.nicd,1),dtype=float)
+            self.pgradq = np.zeros((self.nicd,1),dtype=float)
+            self.gradrms = 1000.
+            self.SCALEQN = 1.0
+            self.MAXAD = 0.075
+            self.ixflag = 0
+            self.energy = 0.
+            self.DMAX = 0.1
+            self.nretry = 0 
+            self.DMIN0 =self.DMAX/10.
+            self.coords = np.zeros((len(self.mol.atoms),3))
+            for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
+                self.coords[i,0] = a.GetX()
+                self.coords[i,1] = a.GetY()
+                self.coords[i,2] = a.GetZ()
+
+        # TODO might be a Pybel way to do 
+        atomic_nums = self.getAtomicNums()
+        Elements = elements.ElementData()
+        myelements = [ Elements.from_atomic_number(i) for i in atomic_nums]
+        atomic_symbols = [ele.symbol for ele in myelements]
+        self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
+
+    
+    @staticmethod
+    def union_ic(
+            icoordA,
+            icoordB,
+            ):
+        """ return union DLC of two DLC Objects """
+        unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
+        unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
+        unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
+
+        bonds = []
+        angles = []
+        torsions = []
+        for bond in unionBonds:
+            bonds.append(bond)
+        for angle in unionAngles:
+            angles.append(angle)
+        for torsion in unionTorsions:
+            torsions.append(torsion)
+        icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1=pb.readfile('xyz','tmp1.xyz').next()
+        pes1 = deepcopy(icoordA.PES)
+        return DLC.from_options(
+                bonds= bonds,
+                angles= angles,
+                torsions= torsions,
+                mol = mol1,
+                PES = pes1,
+                nicd= icoordA.nicd
+                )
+
+    @staticmethod
+    def add_node(ICoordA,ICoordB):
+        dq0 = np.zeros((ICoordA.nicd,1))
+
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        PES1 = deepcopy(ICoordA.PES)
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "PES" : PES1
+            }))
+
+        ictan = DLC.tangent_1(ICoordA,ICoordB)
+        ICoordC.opt_constraint(ictan)
+        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
+        print " dqmag: %1.3f"%dqmag
+        ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        #if self.nnodes-self.nn != 1:
+        if 1:
+            dq0[ICoordC.nicd-1] = -dqmag/7.
+            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
+        else:
+            dq0[ICoordC.nicd-1] = -dqmag/2.0;
+        
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.dqmag = dqmag
+
+        return ICoordC
+
 
     def ic_create(self):
         self.natoms= len(self.mol.atoms)
@@ -521,7 +622,7 @@ class DLC(Base_DLC,ICoords,Bmat,Utils):
         self.Hintp += change
         self.Hint=self.Hintp_to_Hint()
 
-    def opt_constraint(self,C):
+    def opt_constraint(self,ictan):
         norm = np.linalg.norm(ictan)
         C = ictan/norm
         dots = np.matmul(self.Ut,ictan)

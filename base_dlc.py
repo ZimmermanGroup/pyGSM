@@ -8,9 +8,10 @@ import itertools
 from copy import deepcopy
 import manage_xyz
 from _obutils import Utils
+from _icoord import *
 import elements 
 
-class Base_DLC(Utils):
+class Base_DLC(Utils,ICoords):
 
     @staticmethod
     def default_options():
@@ -75,6 +76,12 @@ class Base_DLC(Utils):
                 required=False,
                 )
 
+        opt.add_option(
+                key="nicd",
+                value=None,
+                required=False,
+                )
+
         Base_DLC._default_options = opt
         return Base_DLC._default_options.copy()
 
@@ -90,120 +97,25 @@ class Base_DLC(Utils):
         self.isOpt = self.options['isOpt']
         self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
         self.PES = self.options['PES']
-        bonds = self.options['bonds']
-        angles = self.options['angles']
-        torsions = self.options['torsions']
+        self.bonds = self.options['bonds']
+        self.angles = self.options['angles']
+        self.torsions = self.options['torsions']
         self.print_level=self.options['print_level']
         self.resetopt=self.options['resetopt']
-        self.setup(bonds,angles,torsions)
-
-    def setup(self,bonds,angles,torsions):
-        if bonds is not None:
-            self.BObj = Bond_obj(bonds,None,None)
-            self.BOjb.update(self.mol)
+        self.nicd=self.options['nicd']
+        self.madeBonds = False
+        if self.bonds is not None:
+            self.BObj = Bond_obj(self.bonds,None,None)
+            self.BObj.update(self.mol)
             self.madeBonds = True
-            self.AObj = Ang_obj(angles,None,None)
+            self.AObj = Ang_obj(self.angles,None,None)
             self.AObj.update(self.mol)
-            self.TObj = Tor_obj(torsions,None,None)
+            self.TObj = Tor_obj(self.torsions,None,None)
             self.TObj.update(self.mol)
-        else:
-            self.madeBonds =False
-        if self.isOpt>0:
-            self.ic_create()
-            self.bmatp=self.bmatp_create()
-            self.bmatp_to_U()
-            self.bmatti=self.bmat_create()
-            self.make_Hint()  
-            self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
-            self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
-            self.gradq = np.zeros((self.nicd,1),dtype=float)
-            self.pgradq = np.zeros((self.nicd,1),dtype=float)
-            self.gradrms = 1000.
-            self.SCALEQN = 1.0
-            self.MAXAD = 0.075
-            self.ixflag = 0
-            self.energy = 0.
-            self.DMAX = 0.1
-            self.nretry = 0 
-            self.DMIN0 =self.DMAX/10.
-            self.coords = np.zeros((len(self.mol.atoms),3))
-            for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-                self.coords[i,0] = a.GetX()
-                self.coords[i,1] = a.GetY()
-                self.coords[i,2] = a.GetZ()
+        self.setup()
 
-        # TODO might be a Pybel way to do 
-        atomic_nums = self.getAtomicNums()
-        Elements = elements.ElementData()
-        myelements = [ Elements.from_atomic_number(i) for i in atomic_nums]
-        atomic_symbols = [ele.symbol for ele in myelements]
-        self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
-
-
-    @staticmethod
-    def union_ic(
-            icoordA,
-            icoordB,
-            ):
-        """ return union DLC of two DLC Objects """
-        unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
-        unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
-        unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
-
-        bonds = []
-        angles = []
-        torsions = []
-        for bond in unionBonds:
-            bonds.append(bond)
-        for angle in unionAngles:
-            angles.append(angle)
-        for torsion in unionTorsions:
-            torsions.append(torsion)
-
-        icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1=pb.readfile('xyz','tmp1.xyz').next()
-        pes1 = deepcopy(icoordA.PES)
-
-        return Base_DLC(icoordA.options.copy().set_values({
-                'bonds' : bonds,
-                'angles': angles,
-                'torsions': torsions,
-                'mol' : mol1,
-                'PES' : pes1,
-                }))
-
-    @staticmethod
-    def add_node(ICoordA,ICoordB):
-        dq0 = np.zeros((ICoordA.nicd,1))
-
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        PES1 = deepcopy(ICoordA.PES)
-        ICoordC = Base_DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "PES" : PES1
-            }))
-
-        ictan = DLC.tangent_1(ICoordA,ICoordB)
-        ICoordC.opt_constraint(ictan)
-        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
-        print " dqmag: %1.3f"%dqmag
-        ICoordC.bmatp_create()
-        ICoordC.bmat_create()
-        #if self.nnodes-self.nn != 1:
-        if 1:
-            dq0[ICoordC.nicd-1] = -dqmag/7.
-            #dq0[newic.nicd-1] = -dqmag/float(self.nnodes-self.nn)
-        else:
-            dq0[ICoordC.nicd-1] = -dqmag/2.0;
-        
-        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
-        ICoordC.ic_to_xyz(dq0)
-        ICoordC.update_ics()
-        ICoordC.dqmag = dqmag
-
-        return ICoordC
+    def setup(self):
+        raise NotImplementedError()
 
     # can be inherited and modified for hybrid
 

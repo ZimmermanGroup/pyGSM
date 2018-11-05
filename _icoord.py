@@ -26,7 +26,7 @@ class ICoords:
         bonds = sorted(bonds)
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
-        return Bond_obj(nbonds,bonds,bondd)
+        return Bond_obj(bonds,nbonds,bondd)
 
     def make_angles(self):
         nangles=0
@@ -59,7 +59,7 @@ class ICoords:
         print "printing angles"
         for angle,angv in zip(angles,anglev):
             print "%s %1.2f" %(angle,angv)
-        return Ang_obj(nangles,angles,anglev)
+        return Ang_obj(angles,nangles,anglev)
 
     def make_torsions(self):
         ntor=0
@@ -97,7 +97,7 @@ class ICoords:
         print "printing torsions"
         for n,torsion in enumerate(torsions):
             print "%s: %1.2f" %(torsion, torv[n])
-        return Tor_obj(ntor,torsions,torv)
+        return Tor_obj(torsions,ntor,torv)
 
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
@@ -130,9 +130,9 @@ class ICoords:
 ######################  IC objects #####################################
 class Bond_obj(object):
     __slots__ = ["nbonds","bonds","bondd"]
-    def __init__(self,nbonds,bonds,bondd):
-        self.nbonds=nbonds
+    def __init__(self,bonds,nbonds,bondd):
         self.bonds=bonds
+        self.nbonds=nbonds
         self.bondd=bondd
 
     def update(self,mol):
@@ -149,9 +149,9 @@ class Bond_obj(object):
 
 class Ang_obj(object):
     __slots__ = ["nangles","angles","anglev"]
-    def __init__(self,nangles,angles,anglev):
-        self.nangles=nangles
+    def __init__(self,angles,nangles,anglev):
         self.angles=angles
+        self.nangles=nangles
         self.anglev=anglev
 
     def update(self,mol):
@@ -169,9 +169,9 @@ class Ang_obj(object):
 
 class Tor_obj(object):
     __slots__ = ["ntor","torsions","torv"]
-    def __init__(self,ntor,torsions,torv):
-        self.ntor=ntor
+    def __init__(self,torsions,ntor,torv):
         self.torsions=torsions
+        self.ntor=ntor
         self.torv=torv
 
     def update(self,mol):

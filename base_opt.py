@@ -1,6 +1,7 @@
 import options
 import numpy as np
 import os
+import openbabel as ob
 import pybel as pb
 import dlc as ico
 from copy import deepcopy
