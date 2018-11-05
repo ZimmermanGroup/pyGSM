@@ -176,11 +176,11 @@ class ICoords:
     def tangent_1(ICoord1,ICoord2):
         ictan = []
         print "starting tangent 1"
-        for bond1,bond2 in zip(ICoord1.bondd,ICoord2.bondd):
+        for bond1,bond2 in zip(ICoord1.BObj.bondd,ICoord2.BObj.bondd):
             ictan.append(bond1 - bond2)
-        for angle1,angle2 in zip(ICoord1.anglev,ICoord2.anglev):
+        for angle1,angle2 in zip(ICoord1.AObj.anglev,ICoord2.AObj.anglev):
             ictan.append((angle1-angle2)*np.pi/180.)
-        for torsion1,torsion2 in zip(ICoord1.torv,ICoord2.torv):
+        for torsion1,torsion2 in zip(ICoord1.TObj.torv,ICoord2.TObj.torv):
             temptorsion = (torsion1-torsion2)*np.pi/180.0
             if temptorsion > np.pi:
                 ictan.append(-1*((2*np.pi) - temptorsion))
@@ -190,11 +190,11 @@ class ICoords:
                 ictan.append(temptorsion)
         print 'ending tangent 1'
         print "printing ictan"
-        for i in range(ICoord1.nbonds):
+        for i in range(ICoord1.BObj.nbonds):
             print "%1.2f " %ictan[i],
-        for i in range(ICoord1.nbonds,ICoord1.nangles+ICoord1.nbonds):
+        for i in range(ICoord1.BObj.nbonds,ICoord1.AObj.nangles+ICoord1.BObj.nbonds):
             print "%1.2f " %ictan[i],
-        for i in range(ICoord1.nbonds+ICoord1.nangles,ICoord1.nangles+ICoord1.nbonds+ICoord1.ntor):
+        for i in range(ICoord1.BObj.nbonds+ICoord1.AObj.nangles,ICoord1.AObj.nangles+ICoord1.BObj.nbonds+ICoord1.TObj.ntor):
             print "%1.2f " %ictan[i],
         print "\n"
         return np.asarray(ictan).reshape((ICoord1.num_ics,1))

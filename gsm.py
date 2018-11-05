@@ -2,10 +2,11 @@ import numpy as np
 import options
 import os
 from base_gsm import *
-from icoord import *
+from deloc_ics import *
 import pybel as pb
 import sys
 from pes import *
+import optimize
 
 class GSM(BaseGSM):
 
@@ -28,11 +29,11 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            tempR = ICoord.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            tempP = ICoord.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
-            self.icoords[self.nR] = ICoord.add_node(tempR,tempP)
+            tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
+            tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            self.icoords[self.nR] = DLC.add_node(tempR,tempP)
             self.active[self.nR] = True
-#            ictan = ICoord.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
+#            ictan = DLC.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
             self.nn+=1
             self.nR+=1
@@ -42,10 +43,10 @@ class GSM(BaseGSM):
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            tempP = ICoord.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
-            tempR = ICoord.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            self.icoords[-self.nP-1] = ICoord.add_node(tempP,tempR)
-#            ictan = ICoord.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
+            tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
+            self.icoords[-self.nP-1] = DLC.add_node(tempP,tempR)
+#            ictan = DLC.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
             self.nn+=1
@@ -144,7 +145,7 @@ class GSM(BaseGSM):
                         except IndexError:
                             pass
                 if self.active[n] == True:
-                    self.icoords[n].smag = self.icoords[n].optimize(1,nconstraints)
+                    self.icoords[n].smag = optimize.optimize(self.icoords[n],1,nconstraints)
 
     def write_node_xyz(self,xyzfile = "nodes_xyz_file.xyz"):
         xyzfile = os.getcwd()+"/"+xyzfile
@@ -166,15 +167,15 @@ class GSM(BaseGSM):
         for n in range(len(self.icoords)-1):
             if self.icoords[n] != 0:
                 if self.icoords[n+1] != 0:
-                    self.icoords[n] = ICoord.union_ic(self.icoords[n],self.icoords[n+1])
-                    self.icoords[n+1] = ICoord.union_ic(self.icoords[n+1],self.icoords[n])
+                    self.icoords[n] = DLC.union_ic(self.icoords[n],self.icoords[n+1])
+                    self.icoords[n+1] = DLC.union_ic(self.icoords[n+1],self.icoords[n])
                     
                     #TODO tangent_1b() for SSSM
-                    ictan[n] = ICoord.tangent_1(self.icoords[n+1],self.icoords[n])            
+                    ictan[n] = DLC.tangent_1(self.icoords[n+1],self.icoords[n])            
                 elif self.icoords[n+1] == 0:
-                    self.icoords[n] = ICoord.union_ic(self.icoords[n],self.icoords[-self.nP])
-                    self.icoords[-self.nP] = ICoord.union_ic(self.icoords[-self.nP],self.icoords[n])
-                    ictan[n] = ICoord.tangent_1(self.icoords[n],self.icoords[-self.nP])
+                    self.icoords[n] = DLC.union_ic(self.icoords[n],self.icoords[-self.nP])
+                    self.icoords[-self.nP] = DLC.union_ic(self.icoords[-self.nP],self.icoords[n])
+                    ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[-self.nP])
                 
                 ictan0 = np.copy(ictan[n])
     
@@ -228,13 +229,13 @@ class GSM(BaseGSM):
         ncurrent += 1
 
         for n in range(ncurrent):
-            self.icoords[nlist[2*n+1]] = ICoord.union_ic(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
-            self.icoords[nlist[2*n+0]] = ICoord.union_ic(self.icoords[nlist[2*n+0]],self.icoords[nlist[2*n+1]])
+            self.icoords[nlist[2*n+1]] = DLC.union_ic(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
+            self.icoords[nlist[2*n+0]] = DLC.union_ic(self.icoords[nlist[2*n+0]],self.icoords[nlist[2*n+1]])
 
             if self.isSSM:
                 pass #do tangent_1b()
             else:
-                ictan[nlist[2*n]] = ICoord.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
+                ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
 
             ictan0 = np.copy(ictan[nlist[2*n]])
 
@@ -310,7 +311,7 @@ class GSM(BaseGSM):
                 break
 
             for n in range(1,self.nnodes-1):
-                if isinstance(self.icoords[n],ICoord):
+                if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
                         if len(self.ictan[n]) != 0:
                             #print "May need to make copy_CI"
@@ -368,9 +369,9 @@ if __name__ == '__main__':
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
 
     print "\n IC1 \n\n"
-    ic1=ICoord.from_options(mol=mol,PES=pes)
+    ic1=DLC.from_options(mol=mol,PES=pes)
     print "\n IC2 \n\n"
-    ic2=ICoord.from_options(mol=mol2,PES=pes2)
+    ic2=DLC.from_options(mol=mol2,PES=pes2)
 
     if True:
         print "\n Starting GSM \n\n"
@@ -396,7 +397,7 @@ if __name__ == '__main__':
         while True:
             print "beginning iteration:",iters
             sys.stdout.flush()
-            if iters >= 20:
+            if iters >= 1:
                 break
             gsm.ic_reparam_g()
             do_growth = False

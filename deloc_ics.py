@@ -10,6 +10,9 @@ from copy import deepcopy
 import manage_xyz
 
 from _icoord import ICoords
+from _icoord import Bond_obj
+from _icoord import Ang_obj
+from _icoord import Tor_obj
 from _bmat import Bmat
 from _obutils import Utils
 np.set_printoptions(precision=4)
@@ -112,12 +115,12 @@ class DLC(ICoords,Bmat,Utils):
         angles = self.options['angles']
         torsions = self.options['torsions']
         if bonds is not None:
-            self.BObj = Bond_obj(bonds,None,None)
-            self.BOjb.update(self.mol)
+            self.BObj = Bond_obj(None,bonds,None)
+            self.BObj.update(self.mol)
             self.madeBonds = True
-            self.AObj = Ang_obj(angles,None,None)
+            self.AObj = Ang_obj(None,angles,None)
             self.AObj.update(self.mol)
-            self.TObj = Tor_obj(torsions,None,None)
+            self.TObj = Tor_obj(None,torsions,None)
             self.TObj.update(self.mol)
         else:
             self.madeBonds =False
@@ -240,7 +243,7 @@ class DLC(ICoords,Bmat,Utils):
         else:
             self.BObj.update(self.mol)
             self.AObj.update(self.mol)
-            self.TObj.update(mol)
+            self.TObj.update(self.mol)
 
         #self.make_imptor()
         if self.isOpt==1:

@@ -2,7 +2,7 @@ import options
 import numpy as np
 import os
 import pybel as pb
-import icoord as ico
+from deloc_ics import *
 from copy import deepcopy
 
 global DQMAG_SSM_SCALE
@@ -23,13 +23,13 @@ class BaseGSM(object):
         opt.add_option(
             key='ICoord1',
             required=True,
-            allowed_types=[ico.ICoord],
+            allowed_types=[DLC],
             doc='')
 
         opt.add_option(
             key='ICoord2',
             required=False,
-            allowed_types=[ico.ICoord],
+            allowed_types=[DLC],
             doc='')
 
         opt.add_option(
@@ -346,8 +346,8 @@ class BaseGSM(object):
         iN = n2
 
 
-        self.icoords[iR] = ico.ICoord.union_ic(self.icoords[iR],self.icoords[iP])
-        self.icoords[iP] = ico.ICoord.union_ic(self.icoords[iP],self.icoords[iR])
+        self.icoords[iR] = DLC.union_ic(self.icoords[iR],self.icoords[iP])
+        self.icoords[iP] = DLC.union_ic(self.icoords[iP],self.icoords[iR])
         self.icoords[iR].update_ics()
         self.icoords[iP].update_ics()
 
@@ -356,18 +356,18 @@ class BaseGSM(object):
         mol2 = pb.Molecule(pb.ob.OBMol(self.icoords[iP].mol.OBMol))
         lot = deepcopy(self.icoords[iR].lot)
         lot2 = deepcopy(self.icoords[iP].lot)
-        newic = ico.ICoord.from_options(mol=mol,lot=lot)
-        intic = ico.ICoord.from_options(mol=mol2,lot=lot2)
+        newic = DLC.from_options(mol=mol,lot=lot)
+        intic = DLC.from_options(mol=mol2,lot=lot2)
 
-        newic = ico.ICoord.union_ic(newic,intic)
-        intic = ico.ICoord.union_ic(intic,newic)
+        newic = DLC.union_ic(newic,intic)
+        intic = DLC.union_ic(intic,newic)
 
         newic.update_ics()
         intic.update_ics()
 
         dq0 = [0.] * newic.nicd
         dq0 = np.asarray(dq0).reshape(newic.nicd,1)
-        ictan = ico.ICoord.tangent_1(newic,intic)
+        ictan = DLC.tangent_1(newic,intic)
 
         dqmag = 0.0
         
@@ -437,7 +437,7 @@ class BaseGSM(object):
 
         print "\n n2 \n"
         mol = pb.Molecule(pb.ob.OBMol(self.icoords[n1].mol.OBMol)) 
-        self.icoords[n2] = ico.ICoord.from_options(mol=mol,lot=self.icoords[n1].lot) 
+        self.icoords[n2] = DLC.from_options(mol=mol,lot=self.icoords[n1].lot) 
         self.icoords[n2].update_ics()
 
         dq0 = [0.] * self.icoords[n2].nicd
