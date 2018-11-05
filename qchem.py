@@ -114,7 +114,7 @@ class QChem(Base):
     
 if __name__ == '__main__':
 
-    import icoord as ic
+    import dlc as ic
     import pybel as pb    
     import manage_xyz
 
