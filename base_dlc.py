@@ -82,6 +82,13 @@ class Base_DLC(Utils,ICoords):
                 required=False,
                 )
 
+        opt.add_option(
+            key='OPTTHRESH',
+            value=0.001,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
         Base_DLC._default_options = opt
         return Base_DLC._default_options.copy()
 
@@ -103,6 +110,7 @@ class Base_DLC(Utils,ICoords):
         self.print_level=self.options['print_level']
         self.resetopt=self.options['resetopt']
         self.nicd=self.options['nicd']
+        self.OPTTHRESH=self.options['OPTTHRESH']
         self.madeBonds = False
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)

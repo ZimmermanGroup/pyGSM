@@ -575,6 +575,8 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.print_level==1:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
+        if self.gradrms < self.OPTTHRESH:
+            return 0.
 
         # For Hessian update
         self.pgradqprim=self.gradqprim

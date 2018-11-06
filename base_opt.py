@@ -70,8 +70,15 @@ class Base_Method(object):
             allowed_types=[int])
 
         opt.add_option(
-            key='OPTTHRESH',
+            key='CONV_TOL',
             value=0.001,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
+        opt.add_option(
+            key='ADD_NODE_TOL',
+            value=0.1,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold')
@@ -109,7 +116,7 @@ class Base_Method(object):
                 mol= tmp.mol,
                 ))
                 )
-        self.nn = 2
+        self.nn = 4
         self.nR = 1
         self.nP = 1        
         self.isSSM = self.options['isSSM']
@@ -120,7 +127,11 @@ class Base_Method(object):
         self.isomers = self.options['isomers']
         #self.isomer_init()
         self.nconstraints = self.options['nconstraints']
-        self.OPTTHRESH = self.options['OPTTHRESH']
+        self.CONV_TOL = self.options['CONV_TOL']
+        self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
+
+        self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
+        self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
         xyzfile=os.getcwd()+"/node_{}.xyz".format(n)
@@ -173,7 +184,7 @@ class Base_Method(object):
                 for step in steps:
                     f.write('{}\n'.format(step))
     
-            if self.icoords[n].gradrms<self.OPTTHRESH:
+            if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())
         print "Final energy is %2.5f" % (self.icoords[n].V0 + self.icoords[n].energy)
@@ -189,14 +200,18 @@ if __name__ == '__main__':
         #lot1.cas_from_file(filepath)
     if True:
         from qchem import *
-        lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+        lot1=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
 
     from pes import *
+    from penalty_pes import *
     from dlc import *
 
     pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+    pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)
+    penalty_pes = Penalty_PES(pes,pes2)
+
     mol1=pb.readfile("xyz",filepath).next()
-    ic1=DLC.from_options(mol=mol1,PES=pes)
+    ic1=DLC.from_options(mol=mol1,PES=penalty_pes)
     opt = Base_Method.from_options(ICoord1=ic1)
     opt.optimize(0,50,0)
     #ic1.draw()

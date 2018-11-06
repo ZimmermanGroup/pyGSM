@@ -4,11 +4,14 @@ from pes import *
 class Penalty_PES(PES):
     """ penalty potential energy surface calculators """
 
-    #def __init__(self,
-    #        PES1,
-    #        PES2):
-    #    self.PES1 = PES1
-    #    self.PES2 = PES2
+    def __init__(self,
+            PES1,
+            PES2):
+        self.PES1 = PES1
+        self.PES2 = PES2
+        self.lot = PES1.lot
+        self.alpha = 0.02*KCAL_MOL_PER_AU
+        self.sigma = 3.5
     #    self.alpha = 0.02*KCAL_MOL_PER_AU
     #    self.sigma = 3.5
 

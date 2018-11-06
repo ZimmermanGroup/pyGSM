@@ -33,11 +33,13 @@ class GSM(Base_Method):
             tempP = DLC(self.icoords[-self.nP].options.copy())
             print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
             self.icoords[self.nR] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
-            self.active[self.nR] = True
 #            ictan = DLC.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
-            self.nn+=1
-            self.nR+=1
+            if self.nR!=1:
+                self.nn+=1
+                self.nR+=1
+            print "nn=%i,nR=%i" %(self.nn,self.nR)
+            self.active[self.nR] = True
 
     def interpolateP(self,newnodes=1):
         print "interpolateP"
@@ -53,9 +55,11 @@ class GSM(Base_Method):
             self.icoords[-self.nP-1] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
 #            ictan = DLC.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
+            if self.nP!=1:
+                self.nn+=1
+                self.nP+=1
+            print "nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[-self.nP-1] = True
-            self.nn+=1
-            self.nP+=1
 
     def interpolate(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
@@ -140,30 +144,51 @@ class GSM(Base_Method):
 #                    f.write('{}\n'.format(0.))
         f.close()
 
-    def growth_iters(self,maxrounds=1,maxopt=1,nconstraints=0,iters=0):
-        for n in range(maxrounds):
+    def set_fsm_active(self,nR,nP):
+        if nR!=nP:
+            print(" setting active nodes to %i and %i"%(nR,nP))
+        else:
+            print(" setting active node to %i "%nR)
+
+        for i in range(self.nnodes):
+            if self.icoords[i] !=0:
+                self.active[i] = False;
+                self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
+        self.active[nR] = True
+        self.active[nP] = True
+
+        #if (isSSM:
+        #  icoords[nnR].OPTTHRESH = CONV_TOL*10.;
+        #  icoords[nnP].OPTTHRESH = CONV_TOL*10.;
+        #}
+
+    def growth_iters(self,iters=50,maxopt=1,nconstraints=1):
+        for n in range(iters):
+            self.set_fsm_active(self.nR,self.nnodes -self.nP-1)
+            #TODO for SSM
+            if self.icoords[self.nR-1].gradrms < self.gaddmax:
+                try:
+                    if self.icoords[n+1] == 0:
+                        self.interpolateR()
+                        self.active[n+1] = True
+                except:
+                    raise ValueError
+            if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
+                try:
+                    if self.icoords[n-1] == 0:
+                        self.interpolateP()
+                        self.active[n-1] = True
+                except:
+                    raise ValueError
             self.opt_steps(maxopt,nconstraints)
         self.write_xyz_files(iters)
 
     def opt_steps(self,maxopt,nconstraints):
         for i in range(maxopt):
             for n in range(self.nnodes):
-                if self.icoords[n] != 0:
-                    if self.icoords[n].gradrms < 0.001:
-                        self.active[n] = False
-                        try:
-                            if self.icoords[n+1] == 0:
-                                self.interpolateR()
-                                self.active[n+1] = True
-                            elif self.icoords[n-1] == 0:
-                                self.interpolateP()
-                                self.active[n-1] = True
-                                self.icoords[n-1].smag = self.optimize(self.icoords[n-1],3,nconstraints)
-                        except IndexError:
-                            pass
-                if self.active[n] == True:
-                    #TODO
-                    self.icoords[n].smag = self.optimize(n,1,nconstraints)
+                if self.icoords[n] != 0 and self.active[n]==True:
+                    print "optimizing node %i" % n
+                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
 
     def write_node_xyz(self,xyzfile = "nodes_xyz_file.xyz"):
         xyzfile = os.getcwd()+"/"+xyzfile
@@ -306,6 +331,14 @@ class GSM(Base_Method):
                 print "\n"
 #           #     print np.transpose(ictan[nlist[2*n]])
 
+    def start_string(self):
+        print "\n"
+        gsm.interpolate(2) 
+        self.nn=2
+        self.nR=1
+        self.nP=1
+
+
     def ic_reparam_g(self,ic_reparam_steps=4):
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
         num_ics = self.icoords[0].num_ics
@@ -329,7 +362,8 @@ class GSM(Base_Method):
             print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
             print " printing spacings dqmaga: "
             for n in range(self.nnodes):
-                print " {:1.2}".format(self.dqmaga[n])
+                print " {:1.2}".format(self.dqmaga[n]),
+            print
             
             if i == 0:
                 rpart += 1.0/(self.nn-2)
@@ -337,7 +371,8 @@ class GSM(Base_Method):
                 rpart[-1] = 0.0
                 print " rpart: "
                 for n in range(1,self.nnodes):
-                    print " {:1.2}".format(rpart[n])
+                    print " {:1.2}".format(rpart[n]),
+                print
             nR0 = self.nR
             nP0 = self.nP
             if self.nnodes-self.nn > 2:
@@ -440,10 +475,10 @@ if __name__ == '__main__':
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
     
-        print "\n"
-        gsm.interpolate(2) 
         #gsm.ic_reparam_g()
         #gsm.interpolate2(7)
+        #gsm.start_string()
+        gsm.interpolate(2)
         #gsm.write_node_xyz("nodes_xyz_file0.xyz")
 
     if False:
@@ -462,17 +497,19 @@ if __name__ == '__main__':
 #        for tan in gsm.ictan:
 #            print np.transpose(tan)
 
-    if True:
+    if False:
         gsm.ic_reparam_g()
 
-    if True:
+
+    gsm.growth_iters()
+
+    if False:
         iters = 0
         while True:
             print "beginning iteration:",iters
             sys.stdout.flush()
             if iters >= 1:
                 break
-            gsm.ic_reparam_g()
             do_growth = False
             for act in gsm.active:
                 if act:
@@ -483,6 +520,7 @@ if __name__ == '__main__':
                 sys.stdout.flush()
             else:
                 break
+            gsm.ic_reparam_g()
             iters += 1
         #gsm.growth_iters(nconstraints=1)
         gsm.write_node_xyz()
