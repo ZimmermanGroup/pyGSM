@@ -153,8 +153,8 @@ class DLC(Base_DLC,Bmat,Utils):
             "PES" : PES1
             }))
 
-        ictan = DLC.tangent_1(ICoordB,ICoordA)
         ICoordC.setup()
+        ictan = DLC.tangent_1(ICoordB,ICoordA)
         #print ictan.T
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
@@ -169,6 +169,10 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
+        ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        ictan = DLC.tangent_1(ICoordC,ICoordA)
         
         #ICoordC.dqmag = dqmag
 
@@ -607,10 +611,10 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ## => update ICs <= #
         self.update_ics()
-        self.bmatp=self.bmatp_create()
-        self.bmatp_to_U()
-        self.bmatti=self.bmat_create()
-        self.Hint=self.Hintp_to_Hint()
+        #self.bmatp=self.bmatp_create()
+        #self.bmatp_to_U()
+        #self.bmatti=self.bmat_create()
+        #self.Hint=self.Hintp_to_Hint()
      
         # => calc energyat new position <= #
         self.energy = self.PES.get_energy(self.geom) - self.V0

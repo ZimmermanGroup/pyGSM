@@ -123,7 +123,7 @@ class Base_Method(object):
         self.OPTTHRESH = self.options['OPTTHRESH']
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
-        xyzfile=os.getcwd()+"/xyzfile.xyz"
+        xyzfile=os.getcwd()+"/node_{}.xyz".format(n)
         output_format = 'xyz'
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)

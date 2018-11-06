@@ -140,12 +140,12 @@ class GSM(Base_Method):
 #                    f.write('{}\n'.format(0.))
         f.close()
 
-    def growth_iters(self,maxrounds=1,maxopt=3,nconstraints=0,iters=0):
+    def growth_iters(self,maxrounds=1,maxopt=1,nconstraints=0,iters=0):
         for n in range(maxrounds):
-            self.opt_step(maxopt,nconstraints)
+            self.opt_steps(maxopt,nconstraints)
         self.write_xyz_files(iters)
 
-    def opt_step(self,maxopt,nconstraints):
+    def opt_steps(self,maxopt,nconstraints):
         for i in range(maxopt):
             for n in range(self.nnodes):
                 if self.icoords[n] != 0:
@@ -158,7 +158,7 @@ class GSM(Base_Method):
                             elif self.icoords[n-1] == 0:
                                 self.interpolateP()
                                 self.active[n-1] = True
-                                self.icoords[n-1].smag = self.optimize(self.icoords[n-1],1,nconstraints)
+                                self.icoords[n-1].smag = self.optimize(self.icoords[n-1],3,nconstraints)
                         except IndexError:
                             pass
                 if self.active[n] == True:
@@ -196,7 +196,7 @@ class GSM(Base_Method):
                 self.icoords[n].bmatp_create()
                 self.icoords[n].bmatp_to_U()
                 self.icoords[n].opt_constraint(ictan[n])
-                self.icoords[n].bmat_create()
+                #self.icoords[n].bmat_create()
 
                 if self.icoords[n+1] != 0:
                     dqmaga[n] = np.dot(ictan0.T,self.icoords[n+1].Ut[-1,:])
@@ -273,8 +273,6 @@ class GSM(Base_Method):
         ncurrent += 1
 
         for n in range(ncurrent):
-            print "nlist[%i] = %i" %(2*n,nlist[2*n])
-            print "nlist[%i] = %i" %(2*n+1,nlist[2*n+1])
             if self.isSSM:
                 pass #do tangent_1b()
             else:
@@ -293,18 +291,20 @@ class GSM(Base_Method):
 
         self.dqmaga = dqmaga
         self.ictan = ictan
-        
-        print "printing ictan"       
-        for n in range(ncurrent):
-            for i in range(self.icoords[nlist[2*n]].BObj.nbonds):
-                print "%1.2f " % ictan[nlist[2*n]][i],
-            print 
-            for i in range(self.icoords[nlist[2*n]].BObj.nbonds,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds):
-                print "%1.2f " % ictan[nlist[2*n]][i],
-            for i in range(self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].AObj.nangles,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].TObj.ntor):
-                print "%1.2f " % ictan[nlist[2*n]][i],
-            print "\n"
-#       #     print np.transpose(ictan[nlist[2*n]])
+       
+        if False:
+            for n in range(ncurrent):
+                print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
+                print "printing ictan[%i]" %nlist[2*n]       
+                for i in range(self.icoords[nlist[2*n]].BObj.nbonds):
+                    print "%1.2f " % ictan[nlist[2*n]][i],
+                print 
+                for i in range(self.icoords[nlist[2*n]].BObj.nbonds,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds):
+                    print "%1.2f " % ictan[nlist[2*n]][i],
+                for i in range(self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].AObj.nangles,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].TObj.ntor):
+                    print "%1.2f " % ictan[nlist[2*n]][i],
+                print "\n"
+#           #     print np.transpose(ictan[nlist[2*n]])
 
     def ic_reparam_g(self,ic_reparam_steps=4):
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
@@ -356,7 +356,7 @@ class GSM(Base_Method):
 
             for n in range(1,self.nnodes-1):
                 if abs(rpmove[n]) > MAXRE:
-                    repmove[n] = float(np.sign(rpmove[n])*MAXRE)
+                    rpmove[n] = float(np.sign(rpmove[n])*MAXRE)
 
             disprms = float(np.linalg.norm(rpmove))
             lastdispr = disprms
@@ -374,7 +374,6 @@ class GSM(Base_Method):
                             self.icoords[n].update_ics()
                             self.icoords[n].bmatp_create()
                             self.icoords[n].bmatp_to_U()
-                            
                             self.icoords[n].opt_constraint(self.ictan[n])
                             self.icoords[n].bmat_create()
                             dq0 = np.zeros((self.icoords[n].nicd,1))
@@ -402,8 +401,8 @@ class GSM(Base_Method):
 
 if __name__ == '__main__':
 #    from icoord import *
-    ORCA=True
-    QCHEM=False
+    ORCA=False
+    QCHEM=True
     if QCHEM:
         from qchem import *
     if ORCA:
@@ -421,8 +420,6 @@ if __name__ == '__main__':
 
     mol=pb.readfile("xyz",filepath).next()
     mol2=pb.readfile("xyz",filepath2).next()
-#    geom = manage_xyz.read_xyz(filepath,scale=1)
-#    geom2 = manage_xyz.read_xyz(filepath2,scale=1)
     if QCHEM:
         lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
         lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
@@ -445,17 +442,16 @@ if __name__ == '__main__':
     
         print "\n"
         gsm.interpolate(2) 
-        gsm.get_tangents_1g()
         #gsm.ic_reparam_g()
         #gsm.interpolate2(7)
-        gsm.write_node_xyz("nodes_xyz_file0.xyz")
+        #gsm.write_node_xyz("nodes_xyz_file0.xyz")
 
     if False:
         print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
     
     if True:
         gsm.get_tangents_1g()
-        tanbkup = np.copy(gsm.ictan)
+        #tanbkup = np.copy(gsm.ictan)
 #        gsm.get_tangents_1g_2()
 
         #print gsm.icoords[0].BObj.bonds
@@ -466,10 +462,10 @@ if __name__ == '__main__':
 #        for tan in gsm.ictan:
 #            print np.transpose(tan)
 
-    if False:
+    if True:
         gsm.ic_reparam_g()
 
-    if False:
+    if True:
         iters = 0
         while True:
             print "beginning iteration:",iters
