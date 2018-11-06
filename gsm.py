@@ -177,7 +177,7 @@ class GSM(Base_Method):
         for mol in opt_mols:
             nodesXYZ.write(pb.readstring("xyz",mol))
 
-    def get_tangents_1g(self):
+    def get_tangents_1g2(self):
         ictan0 = [0]*self.nnodes
         ictan = [[]]*self.nnodes
         dqmaga = [0.] * self.nnodes
@@ -185,7 +185,6 @@ class GSM(Base_Method):
         for n in range(self.nR):
             if self.icoords[n] != 0:
                 if self.icoords[n+1] != 0:
-                    
                     #TODO tangent_1b() for SSSM
                     print "Getting tangents between",n,n+1
                     ictan[n] = DLC.tangent_1(self.icoords[n+1],self.icoords[n])            
@@ -238,7 +237,7 @@ class GSM(Base_Method):
         self.ictan = ictan
             
 
-    def get_tangents_1g_2(self):
+    def get_tangents_1g(self):
         size_ic = self.icoords[0].num_ics
         ictan0 = [0]*self.nnodes
         ictan = [[]]*self.nnodes
@@ -247,7 +246,7 @@ class GSM(Base_Method):
         dqmaga = [0.]*self.nnodes
         dqa = [[],]*self.nnodes
 
-        for n in range(self.nR):
+        for n in range(self.nR-1):
             nlist[2*ncurrent] = n
             nlist[2*ncurrent+1] = n+1
             ncurrent += 1
@@ -259,19 +258,23 @@ class GSM(Base_Method):
 
         nlist[2*ncurrent] = self.nR -1
         nlist[2*ncurrent+1] = self.nnodes - self.nP
-
         if False:
             nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
 
         #TODO is this actually used?
-        if self.nR == 0: 
-            nlist[2*ncurrent+1] += 1
-        if self.nP == 0:
-            nlist[2*ncurrent] -= 1
+        if self.nR == 0: nlist[2*ncurrent+1] += 1
+        if self.nP == 0: nlist[2*ncurrent] -= 1
+        ncurrent += 1
+        nlist[2*ncurrent] = self.nnodes -self.nP
+        nlist[2*ncurrent+1] = self.nR-1
+        #TODO is this actually used?
+        if self.nR == 0: nlist[2*ncurrent+1] += 1
+        if self.nP == 0: nlist[2*ncurrent] -= 1
         ncurrent += 1
 
         for n in range(ncurrent):
-
+            print "nlist[%i] = %i" %(2*n,nlist[2*n])
+            print "nlist[%i] = %i" %(2*n+1,nlist[2*n+1])
             if self.isSSM:
                 pass #do tangent_1b()
             else:
@@ -291,11 +294,17 @@ class GSM(Base_Method):
         self.dqmaga = dqmaga
         self.ictan = ictan
         
-#        print "printing ictan 2"        
-#        print nlist
-#        for n in range(ncurrent):
-#            print nlist[2*n]
-#            print np.transpose(ictan[nlist[2*n]])
+        print "printing ictan"       
+        for n in range(ncurrent):
+            for i in range(self.icoords[nlist[2*n]].BObj.nbonds):
+                print "%1.2f " % ictan[nlist[2*n]][i],
+            print 
+            for i in range(self.icoords[nlist[2*n]].BObj.nbonds,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds):
+                print "%1.2f " % ictan[nlist[2*n]][i],
+            for i in range(self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].AObj.nangles,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].TObj.ntor):
+                print "%1.2f " % ictan[nlist[2*n]][i],
+            print "\n"
+#       #     print np.transpose(ictan[nlist[2*n]])
 
     def ic_reparam_g(self,ic_reparam_steps=4):
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
@@ -435,7 +444,8 @@ if __name__ == '__main__':
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
     
         print "\n"
-        gsm.interpolate(7) 
+        gsm.interpolate(2) 
+        gsm.get_tangents_1g()
         #gsm.ic_reparam_g()
         #gsm.interpolate2(7)
         gsm.write_node_xyz("nodes_xyz_file0.xyz")

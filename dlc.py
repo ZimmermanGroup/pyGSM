@@ -160,7 +160,6 @@ class DLC(Base_DLC,Bmat,Utils):
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
         ICoordC.bmatp_create()
-        ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         if nmax-ncurr != 1:
             dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
@@ -170,8 +169,6 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
-        print "new ictan"
-        ictan = DLC.tangent_1(ICoordC,ICoordA)
         
         #ICoordC.dqmag = dqmag
 
@@ -697,6 +694,11 @@ class DLC(Base_DLC,Bmat,Utils):
         self.Ut = np.array(basis)
         #print "Check if Ut is orthonormal"
         #dots = np.matmul(self.Ut,np.transpose(self.Ut))
+        #print "orthogonal basis"
+        #for i in range(self.nicd):
+        #    for j in range(self.num_ics):
+        #        print "%1.3f"% self.Ut[i,j],
+        #    print ""
 
     def orthogonalize(self,vecs):
         newvecs=np.zeros_like(vecs)

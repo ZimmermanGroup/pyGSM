@@ -106,14 +106,6 @@ class ICoords:
 
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
-        print "1"
-        print ICoord1.BObj.bondd
-        print "2"
-        print ICoord2.BObj.bondd
-        print ICoord1.AObj.anglev
-        print ICoord2.AObj.anglev
-        print ICoord1.TObj.torv
-        print ICoord2.TObj.torv
         ictan = []
         for bond1,bond2 in zip(ICoord1.BObj.bondd,ICoord2.BObj.bondd):
             ictan.append(bond1 - bond2)
