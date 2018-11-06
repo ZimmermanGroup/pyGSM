@@ -45,7 +45,6 @@ class Utils:
             getCoords(i)
 
     def getAtomicNums(self):
-        print range(self.natoms)
         atomic_nums = [ self.getAtomicNum(i+1) for i in range(self.natoms) ]
         return atomic_nums
 
@@ -107,7 +106,7 @@ class Utils:
     def make_frags(self):
         """ Currently only works for two fragments """
 
-        print("making frags")
+        print(" making frags")
         nfrags=0
         frags=[]
         frag1=[]

@@ -24,12 +24,14 @@ class GSM(Base_Method):
         return
 
     def interpolateR(self,newnodes=1):
+        print "interpolateR"
         if self.nn+newnodes > self.nnodes:
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
+            tempR = DLC(self.icoords[self.nR-1].options.copy())
+            tempP = DLC(self.icoords[-self.nP].options.copy())
+            print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
             self.icoords[self.nR] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
             self.active[self.nR] = True
 #            ictan = DLC.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
@@ -38,13 +40,17 @@ class GSM(Base_Method):
             self.nR+=1
 
     def interpolateP(self,newnodes=1):
+        print "interpolateP"
         if self.nn+newnodes > self.nnodes:
             print("Adding too many nodes, cannot interpolate")
             return
         for i in range(newnodes):
-            tempP = DLC.union_ic(self.icoords[-self.nP],self.icoords[self.nR-1])
-            tempR = DLC.union_ic(self.icoords[self.nR-1],self.icoords[-self.nP])
-            self.icoords[-self.nP-1] = DLC.add_node(tempP,tempR,self.nnodes,self.nn)
+            tempR = DLC(self.icoords[-self.nP].options.copy())
+            tempP = DLC(self.icoords[self.nR-1].options.copy())
+            #print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
+            print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
+
+            self.icoords[-self.nP-1] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
 #            ictan = DLC.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
             self.active[-self.nP-1] = True
@@ -419,17 +425,17 @@ if __name__ == '__main__':
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
 
-    print "\n IC1 \n\n"
+    print "\n IC1 \n"
     ic1=DLC.from_options(mol=mol,PES=pes)
-    print "\n IC2 \n\n"
+    print "\n IC2 \n"
     ic2=DLC.from_options(mol=mol2,PES=pes2)
-    ic2=DLC.from_options(mol=mol2,PES=pes)
 
     if True:
-        print "\n Starting GSM \n\n"
+        print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
-
-        gsm.interpolate(2) 
+    
+        print "\n"
+        gsm.interpolate(7) 
         #gsm.ic_reparam_g()
         #gsm.interpolate2(7)
         gsm.write_node_xyz("nodes_xyz_file0.xyz")

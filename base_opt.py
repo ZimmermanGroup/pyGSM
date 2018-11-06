@@ -101,9 +101,14 @@ class Base_Method(object):
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
         if self.nnodes>1:
-            self.icoords[-1] = self.options['ICoord2']
-            self.icoords[0] = DLC.union_ic(self.icoords[0],self.icoords[-1])
-            self.icoords[-1] = DLC.union_ic(self.icoords[-1],self.icoords[0])
+            #self.icoords[-1] = self.options['ICoord2']
+            tmp = self.options['ICoord2']
+            self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
+            #self.icoords[-1] = DLC.union_ic(self.icoords[-1],self.icoords[0])
+            self.icoords[-1] = DLC(self.icoords[0].options.copy().set_values(dict(
+                mol= tmp.mol,
+                ))
+                )
         self.nn = 2
         self.nR = 1
         self.nP = 1        
@@ -175,18 +180,23 @@ class Base_Method(object):
         return smag
 
 if __name__ == '__main__':
-    if 1:
+    filepath="tests/stretched_fluoroethene.xyz"
+    if False:
         from pytc import *
-        from pes import *
-        from dlc import *
-
-        filepath="tests/stretched_fluoroethene.xyz"
         nocc=11
         nactive=2
         lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         #lot1.cas_from_file(filepath)
-        pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
-        mol1=pb.readfile("xyz",filepath).next()
-        ic1=DLC.from_options(mol=mol1,PES=pes)
-        opt = Base_Method.from_options(ICoord1=ic1)
-        ic1.draw()
+    if True:
+        from qchem import *
+        lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+
+    from pes import *
+    from dlc import *
+
+    pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+    mol1=pb.readfile("xyz",filepath).next()
+    ic1=DLC.from_options(mol=mol1,PES=pes)
+    opt = Base_Method.from_options(ICoord1=ic1)
+    opt.optimize(0,50,0)
+    #ic1.draw()

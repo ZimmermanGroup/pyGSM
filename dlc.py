@@ -18,7 +18,6 @@ class DLC(Base_DLC,Bmat,Utils):
     @staticmethod
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
-        print "in from options"
         return DLC(DLC.default_options().set_values(kwargs))
 
     def setup(self):
@@ -54,68 +53,86 @@ class DLC(Base_DLC,Bmat,Utils):
         atomic_symbols = [ele.symbol for ele in myelements]
         self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
 
-    
+
     @staticmethod
     def union_ic(
             icoordA,
             icoordB,
             ):
-#        bondA = set(icoordA.BObj.bonds)
-#        bondB = set(icoordB.BObj.bonds)
-#        angleA = set(icoordA.AObj.angles)
-#        angleB = set(icoordB.AObj.angles)
-#        torsionA = set(icoordA.TObj.torsions)
-#        torsionB = set(icoordB.TObj.torsions)
-#
-#        bondB.update(bondA.difference(bondB))
-#        angleB.update(angleA.difference(angleB))
-#        torsionB.update(torsionA.difference(torsionB))
-#                    
-#        print bondB
-#        print angleB
-#        print torsionB
-#        diffbonds = map(tuple,set(map(frozenset,bondB)))
-#        diffangles = map(tuple,set(map(frozenset,angleB)))
-#        difftorsions = map(tuple,set(map(frozenset,torsionB)))
-#
-#        print diffbonds
-#        print diffangles
-#        print difftorsions
 
-        """ return union DLC of two DLC Objects """
-        print "icoordA,icoordB bonds"
-        print icoordA.BObj.bonds
-        print icoordB.BObj.bonds
-        unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
-        unionBonds.sort()
-        print "printing unionBonds"
-        print unionBonds
-        unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
-#        print "printing unionANgles"
-#        print unionAngles
-        unionAngles = map(tuple,set(map(frozenset,unionAngles)))
-#        print unionAngles
-        unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
-#        print "printing unionTorsions"
-#        print unionTorsions
-        unionTorsions = map(tuple,set(map(frozenset,unionTorsions)))
-#        print unionTorsions
-        bonds = []
-        angles = []
-        torsions = []
-        for bond in unionBonds:
-            bonds.append(bond)
-        for angle in unionAngles:
-            angles.append(angle)
-        for torsion in unionTorsions:
-            torsions.append(torsion)
+        bondA = icoordA.BObj.bonds
+        bondB = icoordB.BObj.bonds
+        angleA = icoordA.AObj.angles
+        angleB = icoordB.AObj.angles
+        torsionA = icoordA.TObj.torsions
+        torsionB = icoordB.TObj.torsions
+    
+        for bond in bondB:
+            if bond in bondA:
+                pass
+            elif (bond[1],bond[1]) in bondA:
+                pass
+            else:
+                bondA.append(bond)
+        permAngle = list(itertools.permutations([0,1,2]))
+        permTor = list(itertools.permutations([0,1,2,3]))
+        for angle in angleB:
+            foundA=False
+            for perm in permAngle:
+                if (angle[perm[0]],angle[perm[1]],angle[perm[2]]) in angleA:
+                    foundA=True
+                    break
+            if foundA==False:
+                angleA.append(angle)
+
+        angleA.append((1,4,3))
+        for torsion in torsionB:
+            foundA=False
+            for perm in permTor:
+                if (torsion[perm[0]],torsion[perm[1]],torsion[perm[2]],torsion[perm[3]]) in torsionA:
+                    foundA=True
+                    break
+            if foundA==False:
+                torsionA.append(torsion)
+
+
+        #print "icoordA,icoordB bonds"
+        #print icoordA.BObj.bonds
+        #print icoordB.BObj.bonds
+        #unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
+        #unionBonds.sort()
+        #print "printing unionBonds"
+        #print unionBonds
+        #unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
+#       # print "printing unionANgles"
+#       # print unionAngles
+        #unionAngles = map(tuple,set(map(frozenset,unionAngles)))
+#       # print unionAngles
+        #unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
+#       # print "printing unionTorsions"
+#       # print unionTorsions
+        #unionTorsions = map(tuple,set(map(frozenset,unionTorsions)))
+#       # print unionTorsions
+        #bonds = []
+        #angles = []
+        #torsions = []
+        #for bond in unionBonds:
+        #    bonds.append(bond)
+        #for angle in unionAngles:
+        #    angles.append(angle)
+        #for torsion in unionTorsions:
+        #    torsions.append(torsion)
+        print "printing Union ICs"
+        print bondA
+        print angleA
+        print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
         pes1 = deepcopy(icoordA.PES)
         return DLC.from_options(
-                bonds= bonds,
-                angles= angles,
-                torsions= torsions,
+                bonds= bondA,
+                angles= angleA,
+                torsions= torsionA,
                 mol = mol1,
                 PES = pes1,
                 nicd= icoordA.nicd
@@ -131,12 +148,14 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1
             }))
 
-        ictan = DLC.tangent_1(ICoordA,ICoordB)
-        print "------------------printing ictan:--------------------"
-        print np.transpose(ictan)
+        ictan = DLC.tangent_1(ICoordB,ICoordA)
+        ICoordC.setup()
+        #print ictan.T
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
@@ -144,32 +163,39 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         if nmax-ncurr != 1:
-            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
+            dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
         else:
-            dq0[ICoordC.nicd-1] = -dqmag/2.0;
-        
+            dq0[ICoordC.nicd-1] = dqmag/2.0;
+
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
-        ICoordC.dqmag = dqmag
+        print "new ictan"
+        ictan = DLC.tangent_1(ICoordC,ICoordA)
+        
+        #ICoordC.dqmag = dqmag
 
         return ICoordC
 
 
     def ic_create(self):
+
         self.natoms= len(self.mol.atoms)
         self.coordn = self.coord_num()
 
         if self.madeBonds==False:
-            print "making bonds"
+            print " making bonds"
             self.BObj = self.make_bonds()
             #TODO 
             if self.isOpt>0:
                 print(" isOpt: %i" %self.isOpt)
                 self.nfrags,self.frags = self.make_frags()
+                self.BObj.update(self.mol)
                 self.bond_frags()
-            self.AObj = self.make_angles()
-            self.TObj = self.make_torsions()
+                self.AObj = self.make_angles()
+                self.TObj = self.make_torsions()
+                self.AObj.update(self.mol)
+                self.TObj.update(self.mol)
         else:
             self.BObj.update(self.mol)
             self.AObj.update(self.mol)
@@ -276,29 +302,29 @@ class DLC(Base_DLC,Bmat,Utils):
 
                 bond1=(a1,a2)
                 if found>0 and self.bond_exists(bond1)==False:
-                    print("bond pair1 added : %s" % (bond1,))
+                    print(" bond pair1 added : %s" % (bond1,))
                     self.BObj.bonds.append(bond1)
                     self.BObj.nbonds+=1
                     self.BObj.bondd.append(mclose)
-                    print "bond dist: %1.4f" % mclose
+                    print " bond dist: %1.4f" % mclose
                     isOkay = self.mol.OBMol.AddBond(bond1[0]+1,bond1[1]+1,1)
-                    print "Bond added okay? %r" % isOkay
+                    print " Bond added okay? %r" % isOkay
                 bond2=(b1,b2)
                 if found2>0 and self.bond_exists(bond2)==False:
                     self.BObj.bonds.append(bond2)
-                    print("bond pair2 added : %s" % (bond2,))
+                    print(" bond pair2 added : %s" % (bond2,))
                 bond3=(c1,c2)
                 if found3>0 and self.bond_exists(bond3)==False:
                     self.BObj.bonds.append(bond3)
-                    print("bond pair2 added : %s" % (bond3,))
+                    print(" bond pair2 added : %s" % (bond3,))
                 bond4=(d1,d2)
                 if found4>0 and self.bond_exists(bond4)==False:
                     self.BObj.bonds.append(bond4)
-                    print("bond pair2 added : %s" % (bond24,))
+                    print(" bond pair2 added : %s" % (bond24,))
 
 
                 if self.isOpt==2:
-                    print("Checking for linear angles in newly added bond")
+                    print(" Checking for linear angles in newly added bond")
                     #TODO
         return isOkay
 
@@ -309,10 +335,7 @@ class DLC(Base_DLC,Bmat,Utils):
         self.bmatti=self.bmat_create()
         SCALEBT = 1.5
         N3=self.natoms*3
-        print np.transpose(dq)
         qn = self.q + dq  #target IC values
-        print "target IC values"
-        print np.transpose(qn)
         xyzall=[]
         magall=[]
         magp=100

@@ -24,9 +24,13 @@ class ICoords:
                 bonds.append((b,a))
 
         bonds = sorted(bonds)
-        print bonds
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
+        print " number of bonds is %i" %nbonds
+        print " printing bonds"
+        for bond,bod in zip(bonds,bondd):
+            print "%s: %1.2f" %(bond, bod)
+
         return Bond_obj(bonds,nbonds,bondd)
 
     def make_angles(self):
@@ -56,8 +60,8 @@ class ICoords:
                         angles.append(angle)
                         nangles +=1
 
-        print "number of angles is %i" %nangles
-        print "printing angles"
+        print " number of angles is %i" %nangles
+        print " printing angles"
         for angle,angv in zip(angles,anglev):
             print "%s %1.2f" %(angle,angv)
         return Ang_obj(angles,nangles,anglev)
@@ -94,16 +98,23 @@ class ICoords:
                     t = self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3])
                     torv.append(t)
 
-        print "number of torsions is %i" %ntor
-        print "printing torsions"
+        print " number of torsions is %i" %ntor
+        print " printing torsions"
         for n,torsion in enumerate(torsions):
             print "%s: %1.2f" %(torsion, torv[n])
         return Tor_obj(torsions,ntor,torv)
 
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
+        print "1"
+        print ICoord1.BObj.bondd
+        print "2"
+        print ICoord2.BObj.bondd
+        print ICoord1.AObj.anglev
+        print ICoord2.AObj.anglev
+        print ICoord1.TObj.torv
+        print ICoord2.TObj.torv
         ictan = []
-        print "starting tangent 1"
         for bond1,bond2 in zip(ICoord1.BObj.bondd,ICoord2.BObj.bondd):
             ictan.append(bond1 - bond2)
         for angle1,angle2 in zip(ICoord1.AObj.anglev,ICoord2.AObj.anglev):
@@ -116,12 +127,13 @@ class ICoords:
                 ictan.append((2*np.pi)+temptorsion)
             else:
                 ictan.append(temptorsion)
-        print 'ending tangent 1'
-        print "printing ictan"
+        print " printing ictan"
         for i in range(ICoord1.BObj.nbonds):
             print "%1.2f " %ictan[i],
+        print 
         for i in range(ICoord1.BObj.nbonds,ICoord1.AObj.nangles+ICoord1.BObj.nbonds):
             print "%1.2f " %ictan[i],
+        print 
         for i in range(ICoord1.BObj.nbonds+ICoord1.AObj.nangles,ICoord1.AObj.nangles+ICoord1.BObj.nbonds+ICoord1.TObj.ntor):
             print "%1.2f " %ictan[i],
         print "\n"

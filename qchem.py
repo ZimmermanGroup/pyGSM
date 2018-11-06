@@ -91,7 +91,7 @@ class QChem(Base):
 
     def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
 
 
     def get_gradient(self,geom,multiplicity,state):
