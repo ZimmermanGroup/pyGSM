@@ -24,7 +24,8 @@ class Orca(Base):
         tempfile.write(inpstring)
         tempfile.close()
         
-        path2orca = os.popen('which orca').read().rstrip()
+#        path2orca = os.popen('which orca').read().rstrip()
+        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
         orcascr = 'temporcarun'
         os.system('mkdir -p {}'.format(orcascr))
         os.system('mv {} {}/'.format(tempfilename,orcascr))
@@ -83,7 +84,7 @@ class Orca(Base):
 
     def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
 
 
     def get_gradient(self,geom,multiplicity,state):

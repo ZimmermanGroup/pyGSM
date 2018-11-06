@@ -132,6 +132,7 @@ class Base_Method(object):
 
         self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
+        print " gaddmax:",self.gaddmax
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
         xyzfile=os.getcwd()+"/node_{}.xyz".format(n)

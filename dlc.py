@@ -571,7 +571,7 @@ class DLC(Base_DLC,Bmat,Utils):
         self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
         pgradrms = self.gradrms
-        self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd)
+        self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd-nconstraints)
         if self.print_level==1:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
@@ -589,7 +589,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
-
+        print " printing dq:",np.transpose(dq)
         # regulate max overall step
         smag = np.linalg.norm(dq)
         self.buf.write(" ss: %1.5f (DMAX: %1.3f" %(smag,self.DMAX))
