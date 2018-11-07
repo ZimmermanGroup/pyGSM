@@ -10,6 +10,7 @@ import manage_xyz
 from _icoord import ICoords
 from _bmat import Bmat
 from base_dlc import *
+from sklearn import preprocessing
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
 
@@ -687,6 +688,7 @@ class DLC(Base_DLC,Bmat,Utils):
         norm = np.linalg.norm(ictan)
         C = ictan/norm
         dots = np.matmul(self.Ut,ictan)
+        # Cn is C in basis
         Cn = np.matmul(np.transpose(self.Ut),dots)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
@@ -707,35 +709,67 @@ class DLC(Base_DLC,Bmat,Utils):
         #    print ""
 
     def orthogonalize(self,vecs):
-        newvecs=np.zeros_like(vecs)
-        newvecs[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
+        basis=np.zeros_like(vecs)
+        basis[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
         for i,v in enumerate(vecs):
-            w = v - np.sum( np.dot(v,b)*b  for b in basis )
+            w = v - np.sum( np.dot(v,b)*b  for b in basis)
             tmp = w/np.linalg.norm(w)
             if (w > 1e-10).any():  
-                newvec[i,:] =tmp
+                basis[i,:]=tmp
+        #dots = np.matmul(basis,np.transpose(basis))
+        #print "orthogonal basis"
+        #for i in range(len(basis)):
+        #    for j in range(self.num_ics):
+        #        print "%1.3f"% basis[i,j],
+        #    print ""
+        return basis
+
+    def fromDLC_to_ICbasis(self,vecq):
+        """
+        This function takes a matrix of vectors wrtiten in the basis of U.
+        The components in this basis are called q.
+        """
+        vec_U = np.zeros((self.num_ics,1),dtype=float)
+        assert np.shape(vecq) == (self.nicd,1), "vecq is not nicd long"
+        vec_U = np.dot(self.Ut.T,vecq)
+        return vec_U/np.linalg.norm(vec_U)
 
     def opt_constraint2(self,C):
-
-        #norm = np.linalg.norm(C)
-        #C = ictan/norm
+        """
+        This function takes a matrix of vectors wrtiten in the basis of ICs
+        same as U vectors, and returns a new normalized Ut with those vectors as 
+        basis vectors.
+        """
+        
         # normalize all constraints
-        Cn = preprocessing.normalize(C, norm='l2')
+        Cn = preprocessing.normalize(C.T,norm='l2')
+        dots = np.matmul(Cn,Cn.T)
+
+        # orthogonalize
         Cn = self.orthogonalize(Cn) 
+        #print "shape of Cn is %s" %(np.shape(Cn),)
 
-        dots = np.matmul(self.Ut,C)
-        C_U = np.matmul(np.transpose(self.Ut),dots)
+        # write Cn in terms of C_U?
+        dots = np.matmul(self.Ut,Cn.T)
+        C_U = np.matmul(self.Ut.T,dots)
 
-        #norm = np.linalg.norm(Cn)
-        C_U = C_U/norm
+        # normalize C_U
+        C_U = preprocessing.normalize(C_U.T,norm='l2')
+        #print "shape of overlaps is %s, shape of Ut is %s, shape of C_U is %s" %(np.shape(dots),np.shape(self.Ut),np.shape(C_U))
+
         basis=np.zeros((self.nicd,self.num_ics),dtype=float)
-        basis[-1,:] = list(Cn)
-        for i,v in enumerate(self.Ut):
+        for n,row in enumerate(C_U):
+            basis[self.nicd-len(C_U)+n,:] =row 
+        count=0
+        for v in self.Ut:
             w = v - np.sum( np.dot(v,b)*b  for b in basis )
             tmp = w/np.linalg.norm(w)
-            if (w > 1e-10).any():  
-                basis[i,:] =tmp
+            if (w > 1e-4).any():  
+                basis[count,:] =tmp
+                count +=1
         self.Ut = np.array(basis)
+        #print "printing Ut"
+        #print self.Ut
         #print "Check if Ut is orthonormal"
         #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-
+        #print dots

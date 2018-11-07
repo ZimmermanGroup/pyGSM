@@ -53,3 +53,15 @@ if __name__ == '__main__':
     #print dvec
     dgrad = ic1.PES.get_dgrad(geom)
     #print dgrad
+
+    dvecq = ic1.grad_to_q(dvec)
+    dgradq = ic1.grad_to_q(dgrad)
+    dvecq_U = ic1.fromDLC_to_ICbasis(dvecq)
+    dgradq_U = ic1.fromDLC_to_ICbasis(dgradq)
+
+    constraints = np.zeros((len(dvecq_U),2),dtype=float)
+    constraints[:,0] = dvecq_U[:,0]
+    constraints[:,1] = dgradq_U[:,0]
+    ic1.opt_constraint2(constraints)
+
+
