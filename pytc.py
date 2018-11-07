@@ -29,6 +29,11 @@ class PyTC(Base):
         tmp=self.lot.compute_gradient(S=S,index=state)
         return tmp[...]*ANGSTROM_TO_AU
 
+    def get_coupling(self,geom,mulitplicity,state1,state2):
+        S=multiplicity-1
+        tmp = self.lot.coupute_coupling(S=S,indexA=state1,indexB=state2)
+        return tmp[...]*ANGSTROM_TO_AU
+
     @staticmethod
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""

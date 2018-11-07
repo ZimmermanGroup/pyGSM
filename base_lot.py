@@ -49,7 +49,6 @@ class Base(object):
                 allowed_types=[str],
                 doc='Basis set')
 
-
         opt.add_option(
                 key='charge',
                 value=0,
@@ -61,6 +60,13 @@ class Base(object):
                 key='nproc',
                 required=False,
                 value=1,
+                )
+
+        opt.add_option(
+                key='do_coupling',
+                required=False,
+                value=False,
+                doc=''
                 )
 
 
@@ -81,10 +87,9 @@ class Base(object):
         self.functional=self.options['functional']
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
+        self.do_coupling=self.options['do_coupling']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
-
-        print self.states
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
@@ -107,6 +112,9 @@ class Base(object):
         raise NotImplementedError()
 
     def get_gradient(self,geom,multiplicity,state):
+        raise NotImplementedError()
+
+    def get_coupling(self,geom,multiplicity,state1,state2):
         raise NotImplementedError()
 
     def finite_difference(self):

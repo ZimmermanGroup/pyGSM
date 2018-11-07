@@ -8,6 +8,10 @@ import re
 class Molpro(Base):
 
     def run(self,geom):
+        if self.has_nelectrons==False:
+            for i in self.states:
+                self.get_nelec(geom,i[0])
+            self.has_nelectrons==True
 
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
@@ -43,12 +47,19 @@ class Molpro(Base):
                 s=state[1]
                 grad_name="510"+str(s)+".1"
                 tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
+
+            #TODO this can only do coupling if states is 2, want to generalize to 3 states
+            print singlets
+            if self.do_coupling==True and len(singlets)==2:
+                tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(singlets[0][1]+1,singlets[1][1]+1))
             tempfile.write(' }\n')
 
             for state in singlets:
                 s=state[1]
                 grad_name="510"+str(s)+".1"
                 tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
+            if self.do_coupling==True and len(singlets)==2:
+                tempfile.write('Force;SAMC,5200.1;varsav\n')
 
         triplets=self.search_tuple(self.states,3)
         len_triplets=len(triplets) 
@@ -94,6 +105,7 @@ class Molpro(Base):
         tmpgrada=[]
         tmpgrad=[]
         self.grada=[]
+        self.coup=[]
         with open(tempfileout,"r") as f:
             for line in f:
                 if line.startswith(" SA-MC GRADIENT FOR STATE"):
@@ -109,6 +121,17 @@ class Molpro(Base):
                             ])
                     tmpgrada.append(tmpgrad)
                     tmpgrad = []
+                if line.startswith(" SA-MC NACME FOR STATES"):
+                    for i in range(3):
+                        next(f)
+                    for i in range(len(geom)):
+                        findline = next(f,'').strip()
+                        mobj = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
+                        self.coup.append([
+                            float(mobj.group(2)),
+                            float(mobj.group(3)),
+                            float(mobj.group(4)),
+                            ])
 
         for i in range(len_singlets):
             self.grada.append((1,tmpgrada[i]))
@@ -124,11 +147,6 @@ class Molpro(Base):
         return tmp[state][1]*KCAL_MOL_PER_AU
 
     def get_energy(self,geom,multiplicity,state):
-        if self.has_nelectrons==False:
-            for i in self.states:
-                self.get_nelec(geom,i[0])
-            self.has_nelectrons==True
-
         if self.hasRanForCurrentCoords==False:
             self.run(geom)
         return self.getE(state,multiplicity)
@@ -142,6 +160,14 @@ class Molpro(Base):
             self.run(geom)
         return self.getgrad(state,multiplicity)
 
+    def getcoup(self,state1,state2,multiplicity):
+        #TODO this could be better
+        return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
+
+    def get_coupling(self,geom,multiplicity,state1,state2):
+        if self.hasRanForCurrentCoords==False:
+            self.run(geom)
+        return self.getcoup(state1,state2,multiplicity)
 
     @staticmethod
     def from_options(**kwargs):
@@ -150,19 +176,21 @@ class Molpro(Base):
 
 if __name__ == '__main__':
 
-    import icoord as ic
     import pybel as pb    
     import manage_xyz
+    from dlc import *
     filepath="tests/fluoroethene.xyz"
     nocc=11
     nactive=2
     geom=manage_xyz.read_xyz(filepath,scale=1)   
-    lot=Molpro.from_options(states=[(1,0),(3,0)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*')
+    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*',do_coupling=True,nproc=4)
     e=lot.get_energy(geom,1,0)
     print e
-    e=lot.get_energy(geom,3,0)
+    e=lot.get_energy(geom,1,1)
     print e
     g=lot.get_gradient(geom,1,0)
     print g
-    g=lot.get_gradient(geom,3,0)
-    #print g
+    g=lot.get_gradient(geom,1,1)
+    print g
+    d=lot.get_coupling(geom,state1=0,state2=1,multiplicity=1)
+    print d
