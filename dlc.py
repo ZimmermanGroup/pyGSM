@@ -161,7 +161,7 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dqmag: %1.3f"%dqmag
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        if nmax-ncurr != 1:
+        if nmax-ncurr > 1:
             dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
         else:
             dq0[ICoordC.nicd-1] = dqmag/2.0;

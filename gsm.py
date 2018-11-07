@@ -35,8 +35,7 @@ class GSM(Base_Method):
             self.icoords[self.nR] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
 #            ictan = DLC.tangent_1(self.icoords[self.nR],self.icoords[-self.nP])
 #            self.icoords[self.nR].opt_constraint(ictan)
-            if self.nR != 1:
-                self.nn+=1
+            self.nn+=1
             self.nR+=1
             print "nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[self.nR-1] = True
@@ -55,8 +54,7 @@ class GSM(Base_Method):
             self.icoords[-self.nP-1] = DLC.add_node(tempR,tempP,self.nnodes,self.nn)
 #            ictan = DLC.tangent_1(self.icoords[-self.nP-1],self.icoords[self.nR-1])
 #            self.icoords[-self.nP-1].opt_constraint(ictan)
-            if self.nP != 1:
-                self.nn+=1
+            self.nn+=1
             self.nP+=1
             print "nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[-self.nP] = True
@@ -167,7 +165,7 @@ class GSM(Base_Method):
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
         #self.ic_reparam_g()
-        self.get_tangents_1g()
+        #self.get_tangents_1g()
         for n in range(iters):
             self.set_fsm_active(self.nR-1, self.nnodes-self.nP)
             #TODO for SSM
@@ -187,11 +185,10 @@ class GSM(Base_Method):
                         #automatically done in interpolateP()
                 except:
                     raise ValueError
-            #self.ic_reparam_g()
+            self.ic_reparam_g(n0=self.nR-1,nconstraints=nconstraints)
             #self.get_tangents_1g()
             self.opt_steps(maxopt,nconstraints)
             self.write_xyz_files(current)
-            #self.ic_reparam_g()
 
     def opt_steps(self,maxopt,nconstraints):
         for i in range(maxopt):
@@ -318,10 +315,10 @@ class GSM(Base_Method):
             ictan0 = np.copy(ictan[nlist[2*n]])
 
             if True:
-                self.icoords[nlist[2*n+1]].bmatp_create()
+                self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
                 self.icoords[nlist[2*n+1]].bmatp_to_U()
                 self.icoords[nlist[2*n+1]].opt_constraint(ictan[nlist[2*n]])
-            self.icoords[nlist[2*n+1]].bmat_create()
+                self.icoords[nlist[2*n+1]].bmatti = self.icoords[nlist[2*n+1]].bmat_create()
         
             dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
@@ -329,7 +326,7 @@ class GSM(Base_Method):
         self.dqmaga = dqmaga
         self.ictan = ictan
        
-        if False:
+        if True:
             for n in range(ncurrent):
                 print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
                 print "printing ictan[%i]" %nlist[2*n]       
@@ -351,7 +348,7 @@ class GSM(Base_Method):
         self.nP=1
 
 
-    def ic_reparam_g(self,ic_reparam_steps=4):
+    def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
         num_ics = self.icoords[0].num_ics
         
@@ -370,29 +367,34 @@ class GSM(Base_Method):
 
         for i in range(ic_reparam_steps):
             self.get_tangents_1g()
-            totaldqmag = np.sum(self.dqmaga)
+            totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
             print " printing spacings dqmaga: "
             for n in range(self.nnodes):
-                print " {:1.2}".format(self.dqmaga[n]),
-            print
+                print " {:1.2}".format(self.dqmaga[n])
+            print ''
             
             if i == 0:
-                rpart += 1.0/(self.nn-2)
-                rpart[0] = 0.0
-                rpart[-1] = 0.0
+                for n in range(n0+1,self.nR):
+                    rpart[n] += 1.0/(self.nn-2)
+                for n in range(self.nnodes-self.nP,self.nnodes-1):
+                    rpart[n] += 1.0/(self.nn-2)
+#                rpart[0] = 0.0
+#                rpart[-1] = 0.0
                 print " rpart: "
                 for n in range(1,self.nnodes):
                     print " {:1.2}".format(rpart[n]),
                 print
             nR0 = self.nR
             nP0 = self.nP
-            if self.nnodes-self.nn > 2:
-                nR0 -= 1
-                nP0 -= 0
+
+            if False:
+                if self.nnodes-self.nn > 2:
+                    nR0 -= 1
+                    nP0 -= 0
             
             deltadq = 0.0
-            for n in range(1,nR0):
+            for n in range(n0+1,nR0):
                 deltadq = self.dqmaga[n-1] - totaldqmag*rpart[n]
                 rpmove[n] = -deltadq
             for n in range(self.nnodes-nP0,self.nnodes-1):
@@ -401,21 +403,26 @@ class GSM(Base_Method):
 
             MAXRE = 1.1
 
-            for n in range(1,self.nnodes-1):
+            for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n]) > MAXRE:
                     rpmove[n] = float(np.sign(rpmove[n])*MAXRE)
 
-            disprms = float(np.linalg.norm(rpmove))
+            for n in range(n0+1,self.nnodes-1):
+                print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
+            print
+
+            disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
             print " disprms: {:1.3}\n".format(disprms)
 
             if disprms < 1e-2:
                 break
 
-            for n in range(1,self.nnodes-1):
+                            #TODO check how range is defined in gstring, uses n0...
+            for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
-                        if len(self.ictan[n]) != 0:
+                        if len(self.ictan[n]) != 0:# and self.active[n]: #may need to change active requirement TODO
                             #print "May need to make copy_CI"
                             #This does something to ictan0
                             self.icoords[n].update_ics()
@@ -424,18 +431,18 @@ class GSM(Base_Method):
                             self.icoords[n].opt_constraint(self.ictan[n])
                             self.icoords[n].bmatti = self.icoords[n].bmat_create()
                             dq0 = np.zeros((self.icoords[n].nicd,1))
-                            dq0[-1] = rpmove[n]
-                            print " dq0[constraint]: {:1.3}".format(dq0[-1])
+                            dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
+                            print " dq0[constraint]: {:1.3}".format(dq0[self.icoords[n].nicd-nconstraints])
                             self.icoords[n].ic_to_xyz(dq0)
                             self.icoords[n].update_ics()
                         else:
                             pass
                 else:
                     pass
-        print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps)
+        print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
         for n in range(self.nnodes):
-            print " {:1.2}".format(self.dqmaga[n])
-            print "  disprms: {:1.3}".format(disprms)
+            print " {:1.2}".format(self.dqmaga[n]),
+        print "  disprms: {:1.3}".format(disprms)
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
@@ -450,6 +457,8 @@ if __name__ == '__main__':
 #    from icoord import *
     ORCA=True
     QCHEM=False
+    nproc=8
+
     if QCHEM:
         from qchem import *
     if ORCA:
@@ -468,12 +477,12 @@ if __name__ == '__main__':
     mol=pb.readfile("xyz",filepath).next()
     mol2=pb.readfile("xyz",filepath2).next()
     if QCHEM:
-        lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-        lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+        lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
+        lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
     
     if ORCA:
-        lot=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
-        lot2=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+        lot=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
+        lot2=Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
 
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
@@ -514,13 +523,11 @@ if __name__ == '__main__':
 
 
     if True:
-        maxiters = 2
-        iters = 0
+        maxiters = 10
+        iters = 1
         while True:
             print "beginning iteration:",iters
             sys.stdout.flush()
-            if iters >= maxiters:
-                break
             do_growth = False
             for act in gsm.active:
                 if act:
@@ -533,10 +540,11 @@ if __name__ == '__main__':
                 break
 #            gsm.ic_reparam_g()
             iters += 1
+            if iters >= maxiters:
+                break
         #gsm.growth_iters(nconstraints=1)
         gsm.write_node_xyz()
 
         if ORCA:
             os.system('rm temporcarun/*')
-
 

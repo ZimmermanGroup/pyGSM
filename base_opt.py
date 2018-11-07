@@ -92,6 +92,22 @@ class Base_Method(object):
     def from_options(**kwargs):
         return Base_Method(Base_Method.default_options().set_values(kwargs))
 
+#    def restart_string(self,xyzbase='restart'):#,nR,nP):
+#        with open(xyzfile) as xyzcoords:
+#            xyzlines = xyzcoords.readlines()
+#        
+#    def write_restart(self,xyzbase='restart'):
+#        rxyzfile = os.getcwd()+"/"+xyzbase+'_r.xyz'
+#        pxyzfile = os.getcwd()+'/'+xyzbase+'_p.xyz'
+#        rxyz = pb.Outputfile('xyz',rxyzfile,overwrite=True)
+#        pxyz = pb.Outputfile('xyz',pxyzfile,overwrite=True)
+#        obconversion = ob.OBConversion()
+#        obconversion.SetOutFormat('xyz')
+#        r_mols = []
+#        for i in range(self.nR):
+#            r_mols.append(obconversion.WriteString(self.icoords[i]
+        
+
     def __init__(
             self,
             options,
@@ -116,7 +132,7 @@ class Base_Method(object):
                 mol= tmp.mol,
                 ))
                 )
-        self.nn = 4
+        self.nn = 2
         self.nR = 1
         self.nP = 1        
         self.isSSM = self.options['isSSM']

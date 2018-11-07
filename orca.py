@@ -24,8 +24,8 @@ class Orca(Base):
         tempfile.write(inpstring)
         tempfile.close()
         
-#        path2orca = os.popen('which orca').read().rstrip()
-        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
+        path2orca = os.popen('which orca').read().rstrip()
+#        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
         orcascr = 'temporcarun'
         os.system('mkdir -p {}'.format(orcascr))
         os.system('mv {} {}/'.format(tempfilename,orcascr))
