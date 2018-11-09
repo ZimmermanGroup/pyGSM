@@ -156,7 +156,7 @@ class Base_Method(object):
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
+        #opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
         self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         self.icoords[n].energy=0
         grmss = []
@@ -173,12 +173,38 @@ class Base_Method(object):
             if self.icoords[n].print_level==1:
                 print("\nOpt step: %i" %(step+1)),
             self.icoords[n].buf.write("\nOpt step: %d" %(step+1))
-    
+   
+            # => update DLCs <= #
+            self.icoords[n].bmatp_create()
+            self.icoords[n].bmatp_to_U()
+            self.icoords[n].bmat_create()
+            if self.icoords[n].PES.lot.do_coupling is False:
+                if nconstraints>0:
+                    constraints=self.ictan[n]
+            else:
+                if nconstraints==2:
+                    dvec = self.icoords[n].PES.get_coupling(geom)
+                    dgrad = self.icoords[n].PES.get_dgrad(geom)
+                    dvecq = self.icoords[n].grad_to_q(dvec)
+                    dgradq = self.icoords[n].grad_to_q(dgrad)
+                    constraints = np.zeros((len(dvecq_U),2),dtype=float)
+                    constraints[:,0] = dvecq_U[:,0]
+                    constraints[:,1] = dgradq_U[:,0]
+                elif nconstraints==3:
+                    raise NotImplemented
+
+            if nconstraints>0:
+                self.opt_constraint(constraints)
+                self.bmat_create()
+
+            self.icoords[n].Hintp_to_Hint()
             # => Opt step <= #
             smag =self.icoords[n].opt_step(nconstraints)
+
+            # convergence quantities
             grmss.append(self.icoords[n].gradrms)
             steps.append(smag)
-            energies.append(self.icoords[n].energy)
+            energies.append(self.icoords[n].energy-self.icoords[n].V0)
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
     
             #write convergence

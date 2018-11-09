@@ -560,7 +560,7 @@ class DLC(Base_DLC,Bmat,Utils):
         grad = self.PES.get_gradient(self.geom)
         self.bmatp=self.bmatp_create()
         self.bmatti=self.bmat_create()
-        coorp = np.copy(self.coords)
+        self.coorp = np.copy(self.coords)
         # grad in ics
         self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
@@ -584,7 +584,7 @@ class DLC(Base_DLC,Bmat,Utils):
     def eigenvector_step(self,nconstraints):
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
-        print " printing dq:",np.transpose(dq)
+        #print " printing dq:",np.transpose(dq)
 
         # regulate max overall step
         self.smag = np.linalg.norm(dq)
@@ -608,7 +608,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.DMAX = self.DMAX/1.5
             if self.dEstep > 2.0 and self.resetopt==True:
                 print "resetting coords to coorp"
-                self.coords = coorp
+                self.coords = self.coorp
                 self.energy = self.PES.get_energy(self.geom)
                 self.update_ics()
                 self.do_bfgs=False
@@ -633,8 +633,59 @@ class DLC(Base_DLC,Bmat,Utils):
     
     def opt_step(self,nconstraints):
 
+        # => update PES info <= #
+        self.update_for_step(nconstraints)
+
+        # => take eigenvector step in non-constrained space <= #
+        dq = self.eigenvector_step(nconstraints)
+
+        # => update geometry <=#
+        rflag = self.ic_to_xyz_opt(dq)
+
+        #TODO if rflag and ixflag
+        if rflag==True:
+            print "rflag" 
+            self.DMAX=self.DMAX/1.6
+            dq=self.update_ic_eigen(self.gradq,nconstraints)
+            self.ic_to_xyz_opt(dq)
+            self.do_bfgs=False
+
+        ## => update ICs,xyz <= #
+        self.update_ics()
+     
+        # => calc energy at new position <= #
+        self.energy = self.PES.get_energy(self.geom)
+        self.buf.write(" E(M): %4.5f" %(self.energy - self.V0))
+        if self.print_level==1:
+            print "E(M): %4.5f" % self.energy,
+
+        # check goodness of step
+        self.dEstep = self.energy - self.energyp
+        self.dEpre = self.compute_predE(dq)
+
+        self.ratio = self.dEstep/self.dEpre
+        self.buf.write(" self.ratio: %1.4f" %(self.ratio))
+        if self.print_level==1:
+            print "ratio is %1.4f" % self.ratio,
+
+        # => step controller  <= #
+        self.step_controller()
+
+        return  self.smag
+
+    def combined_step(self,nconstraints):
+
         self.update_for_step(nconstraints)
         dq = self.eigenvector_step(nconstraints)
+        dgrad = self.PES.get_dgrad(self.geom)
+        dgradq = self.grad_to_q(dgrad)
+        norm_dg = np.linalg.norm(dgradq)
+        print "norm_dg is %1.4f" % norm_dg
+        dq[-1] = self.PES.dE/KCAL_MOL_PER_AU/norm_dg
+        if dq[-1]<-0.075:
+            dq[-1]=-0.075
+        print dq[-1]
+
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
 
@@ -658,6 +709,7 @@ class DLC(Base_DLC,Bmat,Utils):
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(dq)
+        self.dEpre += self.gradq[-1]*dq[-1]*KCAL_MOL_PER_AU
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" self.ratio: %1.4f" %(self.ratio))
@@ -667,9 +719,6 @@ class DLC(Base_DLC,Bmat,Utils):
         # => step controller  <= #
         self.step_controller()
 
-        return  self.smag
-
-    def combined_step(self):
         return
 
     def update_Hessian(self):
@@ -678,46 +727,6 @@ class DLC(Base_DLC,Bmat,Utils):
         change = self.update_bfgsp()
         self.Hintp += change
         self.Hint=self.Hintp_to_Hint()
-
-    def opt_constraint(self,ictan):
-        norm = np.linalg.norm(ictan)
-        C = ictan/norm
-        dots = np.matmul(self.Ut,ictan)
-        # Cn is C in basis
-        Cn = np.matmul(np.transpose(self.Ut),dots)
-        norm = np.linalg.norm(Cn)
-        Cn = Cn/norm
-        basis=np.zeros((self.nicd,self.num_ics),dtype=float)
-        basis[-1,:] = list(Cn)
-        for i,v in enumerate(self.Ut):
-            w = v - np.sum( np.dot(v,b)*b  for b in basis )
-            tmp = w/np.linalg.norm(w)
-            if (w > 1e-10).any():  
-                basis[i,:] =tmp
-        self.Ut = np.array(basis)
-        #print "Check if Ut is orthonormal"
-        #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-        #print "orthogonal basis"
-        #for i in range(self.nicd):
-        #    for j in range(self.num_ics):
-        #        print "%1.3f"% self.Ut[i,j],
-        #    print ""
-
-    def orthogonalize(self,vecs):
-        basis=np.zeros_like(vecs)
-        basis[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
-        for i,v in enumerate(vecs):
-            w = v - np.sum( np.dot(v,b)*b  for b in basis)
-            tmp = w/np.linalg.norm(w)
-            if (w > 1e-10).any():  
-                basis[i,:]=tmp
-        #dots = np.matmul(basis,np.transpose(basis))
-        #print "orthogonal basis"
-        #for i in range(len(basis)):
-        #    for j in range(self.num_ics):
-        #        print "%1.3f"% basis[i,j],
-        #    print ""
-        return basis
 
     def fromDLC_to_ICbasis(self,vecq):
         """
@@ -729,13 +738,12 @@ class DLC(Base_DLC,Bmat,Utils):
         vec_U = np.dot(self.Ut.T,vecq)
         return vec_U/np.linalg.norm(vec_U)
 
-    def opt_constraint2(self,C):
+    def opt_constraint(self,C):
         """
         This function takes a matrix of vectors wrtiten in the basis of ICs
         same as U vectors, and returns a new normalized Ut with those vectors as 
         basis vectors.
         """
-        
         # normalize all constraints
         Cn = preprocessing.normalize(C.T,norm='l2')
         dots = np.matmul(Cn,Cn.T)
@@ -768,3 +776,20 @@ class DLC(Base_DLC,Bmat,Utils):
         #print "Check if Ut is orthonormal"
         #dots = np.matmul(self.Ut,np.transpose(self.Ut))
         #print dots
+
+    def orthogonalize(self,vecs):
+        basis=np.zeros_like(vecs)
+        basis[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
+        for i,v in enumerate(vecs):
+            w = v - np.sum( np.dot(v,b)*b  for b in basis)
+            if (w > 1e-10).any():  
+                tmp = w/np.linalg.norm(w)
+                basis[i,:]=tmp
+        #dots = np.matmul(basis,np.transpose(basis))
+        #print "orthogonal basis"
+        #for i in range(len(basis)):
+        #    for j in range(self.num_ics):
+        #        print "%1.3f"% basis[i,j],
+        #    print ""
+        return basis
+

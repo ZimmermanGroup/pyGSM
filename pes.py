@@ -49,8 +49,8 @@ class PES(object):
         self.lot = self.options['lot']
         self.ad_idx = self.options['ad_idx']
         self.multiplicity = self.options['multiplicity']
-        self.do_coupling = False
-        self.dE = None
+        #self.do_coupling = False
+        #self.dE = None
 
     def get_energy(self,geom):
         #if self.checked_input == False:
