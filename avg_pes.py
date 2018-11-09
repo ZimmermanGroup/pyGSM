@@ -17,6 +17,7 @@ class Avg_PES(PES):
         return Avg_PES(Avg_PES.default_options().set_values(kwargs))
 
     def get_energy(self,geom):
+        self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
         return 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
 
     def get_gradient(self,geom):
@@ -24,10 +25,11 @@ class Avg_PES(PES):
 
     def get_coupling(self,geom):
         assert self.PES1.multiplicity==self.PES2.multiplicity,"coupling is 0"
+        assert self.PES1.ad_idx!=self.PES2.ad_idx,"coupling is 0"
         return self.lot.get_coupling(geom,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx)
 
     def get_dgrad(self,geom):
-        return (self.PES2.get_gradient(geom) + self.PES1.get_gradient(geom))
+        return (self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom))
 
 if __name__ == '__main__':
 

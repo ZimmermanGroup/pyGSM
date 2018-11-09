@@ -552,26 +552,19 @@ class DLC(Base_DLC,Bmat,Utils):
         #if self.optCG==False or self.isTSNode==False:
         #    print "Not implemented"
 
-    def combined_step(self,nconstraints):
-        printf(" taking step along x and orthogonal vector (besides y) ")
-        return
-
-
-    def opt_step(self,nconstraints):
-        energy=0.
-
+    def update_for_step(self,nconstraints):
         #print "in opt step: coordinates at current step are"
         #print self.coords
-        energyp = self.energy
+        self.energy = self.PES.get_energy(self.geom)
+        self.energyp = self.energy
         grad = self.PES.get_gradient(self.geom)
         self.bmatp=self.bmatp_create()
         self.bmatti=self.bmat_create()
         coorp = np.copy(self.coords)
-
         # grad in ics
         self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
-        pgradrms = self.gradrms
+        self.pgradrms = self.gradrms
         self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd-nconstraints)
         if self.print_level==1:
             print("gradrms = %1.5f" % self.gradrms),
@@ -582,25 +575,66 @@ class DLC(Base_DLC,Bmat,Utils):
         # For Hessian update
         self.pgradqprim=self.gradqprim
         self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
-
         # => Update Hessian <= #
         if self.do_bfgs == True:
             self.update_Hessian()
         self.do_bfgs = True
 
+
+    def eigenvector_step(self,nconstraints):
         # => Take Eigenvector Step <=#
         dq = self.update_ic_eigen(self.gradq,nconstraints)
         print " printing dq:",np.transpose(dq)
-        # regulate max overall step
-        smag = np.linalg.norm(dq)
-        self.buf.write(" ss: %1.5f (DMAX: %1.3f" %(smag,self.DMAX))
-        if self.print_level==1:
-            print(" ss: %1.5f (DMAX: %1.3f)" %(smag,self.DMAX)),
 
-        if smag>self.DMAX:
-            dq = np.fromiter(( xi*self.DMAX/smag for xi in dq), dq.dtype)
+        # regulate max overall step
+        self.smag = np.linalg.norm(dq)
+        self.buf.write(" ss: %1.5f (DMAX: %1.3f" %(self.smag,self.DMAX))
+        if self.print_level==1:
+            print(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX)),
+        if self.smag>self.DMAX:
+            dq = np.fromiter(( xi*self.DMAX/self.smag for xi in dq), dq.dtype)
         dq= np.asarray(dq).reshape(self.nicd,1)
 
+        return dq
+
+    def step_controller(self):
+        if self.dEstep>0.01:
+            if self.print_level==1:
+                print("decreasing DMAX"),
+            self.buf.write(" decreasing DMAX")
+            if self.smag <self.DMAX:
+                self.DMAX = self.smag/1.5
+            else: 
+                self.DMAX = self.DMAX/1.5
+            if self.dEstep > 2.0 and self.resetopt==True:
+                print "resetting coords to coorp"
+                self.coords = coorp
+                self.energy = self.PES.get_energy(self.geom)
+                self.update_ics()
+                self.do_bfgs=False
+        elif self.ratio<0.25:
+            if self.print_level==1:
+                print("decreasing DMAX"),
+            self.buf.write(" decreasing DMAX")
+            if self.smag<self.DMAX:
+                self.DMAX = self.smag/1.1
+            else:
+                self.DMAX = self.DMAX/1.2
+        elif (self.ratio>0.75 and self.ratio<1.25) and self.smag > self.DMAX and self.gradrms<self.pgradrms*1.35:
+            if self.print_level==1:
+                print("increasing DMAX"),
+            self.buf.write(" increasing DMAX")
+            self.DMAX=self.DMAX*1.1 + 0.01
+            if self.DMAX>0.25:
+                self.DMAX=0.25
+        if self.DMAX<self.DMIN0:
+            self.DMAX=self.DMIN0
+
+    
+    def opt_step(self,nconstraints):
+
+        self.update_for_step(nconstraints)
+        dq = self.eigenvector_step(nconstraints)
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
 
@@ -614,65 +648,26 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ## => update ICs <= #
         self.update_ics()
-        #self.bmatp=self.bmatp_create()
-        #self.bmatp_to_U()
-        #self.bmatti=self.bmat_create()
-        #self.Hint=self.Hintp_to_Hint()
      
         # => calc energyat new position <= #
-        self.energy = self.PES.get_energy(self.geom) - self.V0
+        self.energy = self.PES.get_energy(self.geom)
         self.buf.write(" E(M): %4.5f" %(self.energy))
         if self.print_level==1:
             print "E(M): %4.5f" % self.energy,
 
         # check goodness of step
-        dEstep = self.energy - energyp
-        dEpre = self.compute_predE(dq)
+        self.dEstep = self.energy - self.energyp
+        self.dEpre = self.compute_predE(dq)
 
-        ratio = dEstep/dEpre
-        self.buf.write(" ratio: %1.4f" %(ratio))
+        self.ratio = self.dEstep/self.dEpre
+        self.buf.write(" self.ratio: %1.4f" %(self.ratio))
         if self.print_level==1:
-            print "ratio is %1.4f" % ratio,
+            print "ratio is %1.4f" % self.ratio,
 
         # => step controller  <= #
-        if dEstep>0.01:
-            if self.print_level==1:
-                print("decreasing DMAX"),
-            self.buf.write(" decreasing DMAX")
-            if smag <self.DMAX:
-                self.DMAX = smag/1.5
-            else: 
-                self.DMAX = self.DMAX/1.5
-            if dEstep > 2.0 and self.resetopt==True:
-                print "resetting coords to coorp"
-                self.coords = coorp
-                self.energy = self.PES.get_energy(self.geom) - self.V0
-                self.update_ics()
-                self.bmatp=self.bmatp_create()
-                self.bmatp_to_U()
-                self.bmatti=self.bmat_create()
-                self.Hint=self.Hintp_to_Hint()
-                self.do_bfgs=False
-        elif ratio<0.25:
-            if self.print_level==1:
-                print("decreasing DMAX"),
-            self.buf.write(" decreasing DMAX")
-            if smag<self.DMAX:
-                self.DMAX = smag/1.1
-            else:
-                self.DMAX = self.DMAX/1.2
-            self.make_Hint()
-        elif (ratio>0.75 and ratio<1.25) and smag > self.DMAX and self.gradrms<pgradrms*1.35:
-            if self.print_level==1:
-                print("increasing DMAX"),
-            self.buf.write(" increasing DMAX")
-            self.DMAX=self.DMAX*1.1 + 0.01
-            if self.DMAX>0.25:
-                self.DMAX=0.25
-        if self.DMAX<self.DMIN0:
-            self.DMAX=self.DMIN0
+        self.step_controller()
 
-        return  smag
+        return  self.smag
 
     def combined_step(self):
         return

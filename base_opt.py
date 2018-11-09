@@ -215,20 +215,27 @@ if __name__ == '__main__':
         nactive=2
         lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         #lot1.cas_from_file(filepath)
-    if True:
+    if False:
         from qchem import *
         lot1=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    if True:
+        from qchem import *
+        lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
 
     from pes import *
     from penalty_pes import *
     from dlc import *
 
-    pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
-    pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)
-    penalty_pes = Penalty_PES(pes,pes2)
-
-    mol1=pb.readfile("xyz",filepath).next()
-    ic1=DLC.from_options(mol=mol1,PES=penalty_pes)
-    opt = Base_Method.from_options(ICoord1=ic1)
-    opt.optimize(0,50,0)
+    if True:
+        pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+        mol1=pb.readfile("xyz",filepath).next()
+        ic1=DLC.from_options(mol=mol1,PES=pes)
+        opt = Base_Method.from_options(ICoord1=ic1)
+        opt.optimize(0,50,0)
+    #pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)
+    #penalty_pes = Penalty_PES(pes,pes2)
+    #mol1=pb.readfile("xyz",filepath).next()
+    #ic1=DLC.from_options(mol=mol1,PES=penalty_pes)
+    #opt = Base_Method.from_options(ICoord1=ic1)
+    #opt.optimize(0,50,0)
     #ic1.draw()
