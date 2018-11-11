@@ -192,19 +192,12 @@ class Bmat:
             bmatp[i,3*a4+1] = dqtdx[10]
             bmatp[i,3*a4+2] = dqtdx[11]
             i+=1
-
-        #print "printing bmatp"
-        #print bmatp
-        #print "\n"
+        if self.print_level==2:
+            print "printing bmatp"
+            print bmatp
+            print "\n"
         #print "shape of bmatp is %s" %(np.shape(bmatp),)
         #print bmatp
         return bmatp
 
-    def bmat_create(self):
-        #print(" In bmat create")
-        self.q_create()
-        bmat = np.matmul(self.Ut,self.bmatp)
-        bbt = np.matmul(bmat,np.transpose(bmat))
-        bbti = np.linalg.inv(bbt)
-        return np.matmul(bbti,bmat)
 

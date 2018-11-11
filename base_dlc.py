@@ -273,6 +273,20 @@ class Base_DLC(Utils,ICoords):
         #print("Printing q")
         #print np.transpose(self.q)
 
+    def bmat_create(self):
+        #print(" In bmat create")
+        self.q_create()
+        if self.print_level==2:
+            print "printing q"
+            print self.q.T
+        bmat = np.matmul(self.Ut,self.bmatp)
+        bbt = np.matmul(bmat,np.transpose(bmat))
+        bbti = np.linalg.inv(bbt)
+        self.bmatti= np.matmul(bbti,bmat)
+        if self.print_level==2:
+            print "bmatti"
+            print self.bmatti
+
     def Hintp_to_Hint(self):
         tmp = np.matmul(self.Ut,np.transpose(self.Hintp))
         return np.matmul(tmp,np.transpose(self.Ut))
@@ -283,16 +297,27 @@ class Base_DLC(Utils,ICoords):
         dx = self.dqprim
         dg = self.gradqprim - self.pgradqprim
         Hdx = np.dot(self.Hintp,dx)
+        if self.print_level==2:
+            print "dg:", dg.T
+            print "dx:", dx.T
+            print "Hdx"
+            print Hdx.T
         dxHdx = np.dot(np.transpose(dx),Hdx)
         dgdg = np.outer(dg,dg)
         dgtdx = np.dot(np.transpose(dg),dx)
         change = np.zeros_like(self.Hintp)
+
+        if self.print_level==2:
+            print "dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx)
+            print dgdg
+
         if dgtdx>0.:
             if dgtdx<0.001: dgtdx=0.001
             change += dgdg/dgtdx
         if dxHdx>0.:
             if dxHdx<0.001: dxHdx=0.001
             change -= np.outer(Hdx,Hdx)/dxHdx
+
         return change
 
     def compute_predE(self,dq0):
@@ -303,8 +328,9 @@ class Base_DLC(Utils,ICoords):
         dEtemp = np.dot(self.Hint,dq0)
         dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
         dEpre *=KCAL_MOL_PER_AU
-        if abs(dEpre)<0.005: dEpre = np.sign(dEpre)*0.005
-        print( "predE: %1.4f " % dEpre),
+        if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
+        if self.print_level>0:
+            print( "predE: %1.4f " % dEpre),
         return dEpre
 
     def update_ic_eigen(self,gradq,nconstraints=0):
@@ -335,8 +361,17 @@ class Base_DLC(Utils,ICoords):
 
         dq0 = np.dot(v_temp,dqe0)
         dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
-        #print "dq0"
-        #print ["{0:0.5f}".format(i) for i in dq0]
+        if self.print_level==2:
+            print "tmph"
+            print temph
+            print "eigen opt Hint ev:"
+            print e
+            print "gqe"
+            print gqe.T
+            print "dqe0"
+            print dqe0
+            print "dq0"
+            print ["{0:0.5f}".format(i) for i in dq0]
         dq_c = np.zeros((self.nicd,1))
         for i in range(nicd_c):
             dq_c[i,0] = dq0[i]

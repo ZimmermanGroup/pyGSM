@@ -165,17 +165,20 @@ class Base_Method(object):
         Es =[]
         self.icoords[n].do_bfgs=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
+        self.icoords[n].bmatp = self.icoords[n].bmatp_create()
+        self.icoords[n].bmatp_to_U()
+        self.icoords[n].bmat_create()
     
         print "Initial energy is %1.4f\n" % self.icoords[n].V0
         self.icoords[n].buf.write("\n Writing convergence:")
     
         for step in range(nsteps):
-            if self.icoords[n].print_level==1:
+            if self.icoords[n].print_level>0:
                 print("\nOpt step: %i" %(step+1)),
             self.icoords[n].buf.write("\nOpt step: %d" %(step+1))
    
             # => update DLCs <= #
-            self.icoords[n].bmatp_create()
+            self.icoords[n].bmatp = self.icoords[n].bmatp_create()
             self.icoords[n].bmatp_to_U()
             self.icoords[n].bmat_create()
             if self.icoords[n].PES.lot.do_coupling is False:
@@ -183,10 +186,12 @@ class Base_Method(object):
                     constraints=self.ictan[n]
             else:
                 if nconstraints==2:
-                    dvec = self.icoords[n].PES.get_coupling(geom)
-                    dgrad = self.icoords[n].PES.get_dgrad(geom)
+                    dvec = self.icoords[n].PES.get_coupling(self.icoords[n].geom)
+                    dgrad = self.icoords[n].PES.get_dgrad(self.icoords[n].geom)
                     dvecq = self.icoords[n].grad_to_q(dvec)
                     dgradq = self.icoords[n].grad_to_q(dgrad)
+                    dvecq_U = self.icoords[n].fromDLC_to_ICbasis(dvecq)
+                    dgradq_U = self.icoords[n].fromDLC_to_ICbasis(dgradq)
                     constraints = np.zeros((len(dvecq_U),2),dtype=float)
                     constraints[:,0] = dvecq_U[:,0]
                     constraints[:,1] = dgradq_U[:,0]
@@ -194,15 +199,19 @@ class Base_Method(object):
                     raise NotImplemented
 
             if nconstraints>0:
-                self.opt_constraint(constraints)
-                self.bmat_create()
+                self.icoords[n].opt_constraint(constraints)
+                self.icoords[n].bmat_create()
+            #print self.icoords[n].bmatti
+            self.icoords[n].Hint = self.icoords[n].Hintp_to_Hint()
 
-            self.icoords[n].Hintp_to_Hint()
             # => Opt step <= #
-            smag =self.icoords[n].opt_step(nconstraints)
+            if self.icoords[n].PES.lot.do_coupling is False:
+                smag =self.icoords[n].opt_step(nconstraints)
+            else:
+                smag =self.icoords[n].combined_step(nconstraints)
 
             # convergence quantities
-            grmss.append(self.icoords[n].gradrms)
+            grmss.append(float(self.icoords[n].gradrms))
             steps.append(smag)
             energies.append(self.icoords[n].energy-self.icoords[n].V0)
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
@@ -230,11 +239,12 @@ class Base_Method(object):
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())
-        print "Final energy is %2.5f" % (self.icoords[n].V0 + self.icoords[n].energy)
+        print "Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
 if __name__ == '__main__':
     filepath="tests/stretched_fluoroethene.xyz"
+    #filepath="tests/twisted_ethene.xyz"
     if False:
         from pytc import *
         nocc=11
@@ -244,20 +254,39 @@ if __name__ == '__main__':
     if False:
         from qchem import *
         lot1=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
-    if True:
+    if False:
         from qchem import *
         lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    if True:
+        from molpro import *
+        filepath="tests/twisted_ethene.xyz"
+        nocc=6
+        nactive=4
+        lot1=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*',do_coupling=True,nproc=4)
+
 
     from pes import *
     from penalty_pes import *
+    from avg_pes import *
     from dlc import *
 
-    if True:
+    if False:
         pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
         mol1=pb.readfile("xyz",filepath).next()
+        #isOkay = mol1.OBMol.AddBond(6,4,1)
         ic1=DLC.from_options(mol=mol1,PES=pes)
-        opt = Base_Method.from_options(ICoord1=ic1)
+        opt = Base_Method.from_options(ICoord1=ic1,CONV_TOL=0.0005)
         opt.optimize(0,50,0)
+    if True:
+        pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+        pes2 = PES.from_options(lot=lot1,ad_idx=1,multiplicity=1)
+        p = Avg_PES(pes1,pes2)
+        mol1=pb.readfile("xyz",filepath).next()
+        isOkay = mol1.OBMol.AddBond(6,4,1)
+        ic1=DLC.from_options(mol=mol1,PES=p,print_level=1)
+        opt = Base_Method.from_options(ICoord1=ic1)
+        opt.optimize(0,50,2)
+
     #pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)
     #penalty_pes = Penalty_PES(pes,pes2)
     #mol1=pb.readfile("xyz",filepath).next()

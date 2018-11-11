@@ -27,12 +27,11 @@ class DLC(Base_DLC,Bmat,Utils):
             self.ic_create()
             self.bmatp=self.bmatp_create()
             self.bmatp_to_U()
-            self.bmatti=self.bmat_create()
+            self.bmat_create()
             self.make_Hint()  
             self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
             self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
             self.gradq = np.zeros((self.nicd,1),dtype=float)
-            self.pgradq = np.zeros((self.nicd,1),dtype=float)
             self.gradrms = 1000.
             self.SCALEQN = 1.0
             self.MAXAD = 0.075
@@ -334,7 +333,7 @@ class DLC(Base_DLC,Bmat,Utils):
         """ Transforms ic to xyz, used by addNode"""
         self.update_ics()
         self.bmatp=self.bmatp_create()
-        self.bmatti=self.bmat_create()
+        self.bmat_create()
         SCALEBT = 1.5
         N3=self.natoms*3
         qn = self.q + dq  #target IC values
@@ -371,7 +370,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.coords = np.copy(xyz1)
             self.update_ics()
             self.bmatp=self.bmatp_create()
-            self.bmatti=self.bmat_create()
+            self.bmat_create()
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             dq = qn - self.q
@@ -425,12 +424,14 @@ class DLC(Base_DLC,Bmat,Utils):
         for n in range(MAX_STEPS):
             #print "ic iteration %i" % n
             btit = np.transpose(self.bmatti)
-            xyzd=np.matmul(btit,dq)
+            xyzd=np.dot(btit,dq)
+            if self.print_level==2:
+                print "xyzd"
+                print xyzd.T
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
             #TODO frozen
-
             # => Add Change in Coords <= #
             xyz1 = self.coords + xyzd/SCALEBT 
 
@@ -445,12 +446,16 @@ class DLC(Base_DLC,Bmat,Utils):
 
             self.update_ics()
             self.bmatp=self.bmatp_create()
-            self.bmatti=self.bmat_create()
+            self.bmat_create()
+            if self.print_level==2:
+                print self.bmatti
 
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             #calc new dq
             dq = qn - self.q
+            if self.print_level==2:
+                print "dq is ", dq.T
 
             dqmag = np.linalg.norm(dq)
             dqmagall.append(dqmag)
@@ -462,7 +467,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.coords = np.copy(xyzp)
                 self.update_ics()
                 self.bmatp=self.bmatp_create()
-                self.bmatti=self.bmat_create()
+                self.bmat_create()
                 dq = qn - self.q
             magp = mag
             dqmagp = dqmag
@@ -505,18 +510,23 @@ class DLC(Base_DLC,Bmat,Utils):
                     torfix=360.
                 else:
                     torfix=0.
-                torsion_diff.append((i+torfix))
+                torsion_diff.append(tordiff+torfix)
 
             bond_diff = self.BObj.bondd - qprim[:self.BObj.nbonds]
             angle_diff = self.AObj.anglev - qprim[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
+            angle_diff=[a*np.pi/180. for a in angle_diff]
+            torsion_diff=[t*np.pi/180. for t in torsion_diff]
             self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
-            self.dqprim[self.BObj.nbonds:] *= np.pi/180.
             self.dqprim = np.reshape(self.dqprim,(self.num_ics,1))
 
         #write convergence geoms to file 
         #largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
         #for mol in opt_molecules:
         #    largeXyzFile.write(pb.readstring("xyz",mol))
+        if self.print_level==2:
+            print "dqmagall,magall"
+            print dqmagall
+            print magall
        
         if retry==True:
             self.ic_to_xyz_opt(dq0)
@@ -525,6 +535,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
     def grad_to_q(self,grad):
         gradq = np.dot(self.bmatti,grad)
+        #if nconstraints>0:
         return gradq
 
     def make_Hint(self):
@@ -558,17 +569,17 @@ class DLC(Base_DLC,Bmat,Utils):
         self.energy = self.PES.get_energy(self.geom)
         self.energyp = self.energy
         grad = self.PES.get_gradient(self.geom)
-        self.bmatp=self.bmatp_create()
-        self.bmatti=self.bmat_create()
+        #if self.print_level==2:
+        #    print "bmatti"
+        #    print self.bmatti
         self.coorp = np.copy(self.coords)
         # grad in ics
-        self.pgradq = self.gradq
         self.gradq = self.grad_to_q(grad)
+        if self.print_level==2:
+            print "gradq"
+            print self.gradq.T
+        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
         self.pgradrms = self.gradrms
-        self.gradrms = np.linalg.norm(self.gradq)*1./np.sqrt(self.nicd-nconstraints)
-        if self.print_level==1:
-            print("gradrms = %1.5f" % self.gradrms),
-        self.buf.write(" gRMS=%1.5f" %(self.gradrms))
         if self.gradrms < self.OPTTHRESH:
             return 0.
 
@@ -588,8 +599,8 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # regulate max overall step
         self.smag = np.linalg.norm(dq)
-        self.buf.write(" ss: %1.5f (DMAX: %1.3f" %(self.smag,self.DMAX))
-        if self.print_level==1:
+        self.buf.write(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX))
+        if self.print_level>0:
             print(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX)),
         if self.smag>self.DMAX:
             dq = np.fromiter(( xi*self.DMAX/self.smag for xi in dq), dq.dtype)
@@ -598,8 +609,10 @@ class DLC(Base_DLC,Bmat,Utils):
         return dq
 
     def step_controller(self):
-        if self.dEstep>0.01:
-            if self.print_level==1:
+        if (self.dEstep>0.01 and self.PES.lot.do_coupling==False) or (self.dEstep>0.01 and self.PES.dE<1.0 and self.PES.lot.do_coupling==True):
+            if self.PES.dE>1.0:
+                raise ValueError
+            if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag <self.DMAX:
@@ -612,16 +625,16 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.energy = self.PES.get_energy(self.geom)
                 self.update_ics()
                 self.do_bfgs=False
-        elif self.ratio<0.25:
-            if self.print_level==1:
+        elif (self.ratio<0.25):
+            if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag<self.DMAX:
                 self.DMAX = self.smag/1.1
             else:
                 self.DMAX = self.DMAX/1.2
-        elif (self.ratio>0.75 and self.ratio<1.25) and self.smag > self.DMAX and self.gradrms<self.pgradrms*1.35:
-            if self.print_level==1:
+        elif self.ratio>0.75 and self.ratio<1.25 and self.smag > self.DMAX and self.gradrms<(self.pgradrms*1.35):
+            if self.print_level>0:
                 print("increasing DMAX"),
             self.buf.write(" increasing DMAX")
             self.DMAX=self.DMAX*1.1 + 0.01
@@ -638,6 +651,9 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # => take eigenvector step in non-constrained space <= #
         dq = self.eigenvector_step(nconstraints)
+        if self.print_level==2:
+            print "dq for step is "
+            print dq.T
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -655,36 +671,43 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %4.5f" %(self.energy - self.V0))
-        if self.print_level==1:
-            print "E(M): %4.5f" % self.energy,
+        self.buf.write(" E(M): %3.2f" %(self.energy - self.V0))
+        if self.print_level>0:
+            print "E(M): %3.5f" % (self.energy-self.V0),
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(dq)
 
         self.ratio = self.dEstep/self.dEpre
-        self.buf.write(" self.ratio: %1.4f" %(self.ratio))
-        if self.print_level==1:
+        self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
+        if self.print_level>0:
             print "ratio is %1.4f" % self.ratio,
 
+        grad = self.PES.get_gradient(self.geom)
+        self.gradq = self.grad_to_q(grad)
+        self.pgradrms = self.gradrms
+        self.gradrms = np.sqrt(np.dot(self.gradq.T,self.gradq)/(self.nicd-nconstraints))
+        if self.print_level>0:
+            print("gradrms = %1.5f" % self.gradrms),
+        self.buf.write(" gRMS=%1.5f" %(self.gradrms))
         # => step controller  <= #
         self.step_controller()
 
         return  self.smag
 
     def combined_step(self,nconstraints):
-
+        assert nconstraints>1,"nconstraints must be >1"
         self.update_for_step(nconstraints)
         dq = self.eigenvector_step(nconstraints)
         dgrad = self.PES.get_dgrad(self.geom)
         dgradq = self.grad_to_q(dgrad)
         norm_dg = np.linalg.norm(dgradq)
-        print "norm_dg is %1.4f" % norm_dg
-        dq[-1] = self.PES.dE/KCAL_MOL_PER_AU/norm_dg
+        print " norm_dg is %1.4f" % norm_dg,
+        print " dE is %1.4f" % self.PES.dE,
+        dq[-1] = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg
         if dq[-1]<-0.075:
             dq[-1]=-0.075
-        print dq[-1]
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -694,6 +717,9 @@ class DLC(Base_DLC,Bmat,Utils):
             print "rflag" 
             self.DMAX=self.DMAX/1.6
             dq=self.update_ic_eigen(self.gradq,nconstraints)
+            dq[-1] = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg
+            if dq[-1]<-0.075:
+                dq[-1]=-0.075
             self.ic_to_xyz_opt(dq)
             self.do_bfgs=False
 
@@ -702,9 +728,12 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energyat new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %4.5f" %(self.energy))
-        if self.print_level==1:
-            print "E(M): %4.5f" % self.energy,
+        self.buf.write(" E(M): %4.5f" %(self.energy-self.V0))
+        self.buf.write(" dE: %1.4f" %(self.PES.dE))
+        if self.print_level>0:
+            print "E(M): %4.5f" % (self.energy-self.V0),
+
+        self.form_meci_space()
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
@@ -712,20 +741,30 @@ class DLC(Base_DLC,Bmat,Utils):
         self.dEpre += self.gradq[-1]*dq[-1]*KCAL_MOL_PER_AU
 
         self.ratio = self.dEstep/self.dEpre
-        self.buf.write(" self.ratio: %1.4f" %(self.ratio))
-        if self.print_level==1:
+        self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
+        if self.print_level>0:
             print "ratio is %1.4f" % self.ratio,
+
+        grad = self.PES.get_gradient(self.geom)
+        self.gradq = self.grad_to_q(grad)
+        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+        if self.print_level>0:
+            print("gradrms = %1.5f" % self.gradrms),
+        self.buf.write(" gRMS=%1.5f" %(self.gradrms))
 
         # => step controller  <= #
         self.step_controller()
 
-        return
+        return self.smag
 
     def update_Hessian(self):
         #print("In update bfgsp")
         self.newHess-=1
         change = self.update_bfgsp()
         self.Hintp += change
+        if self.print_level==2:
+            print "Hintp"
+            print self.Hintp
         self.Hint=self.Hintp_to_Hint()
 
     def fromDLC_to_ICbasis(self,vecq):
@@ -771,11 +810,12 @@ class DLC(Base_DLC,Bmat,Utils):
                 basis[count,:] =tmp
                 count +=1
         self.Ut = np.array(basis)
-        #print "printing Ut"
-        #print self.Ut
-        #print "Check if Ut is orthonormal"
-        #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-        #print dots
+        if self.print_level>1:
+            print "printing Ut"
+            print self.Ut
+            #print "Check if Ut is orthonormal"
+            #dots = np.matmul(self.Ut,np.transpose(self.Ut))
+            #print dots
 
     def orthogonalize(self,vecs):
         basis=np.zeros_like(vecs)
@@ -785,11 +825,17 @@ class DLC(Base_DLC,Bmat,Utils):
             if (w > 1e-10).any():  
                 tmp = w/np.linalg.norm(w)
                 basis[i,:]=tmp
-        #dots = np.matmul(basis,np.transpose(basis))
-        #print "orthogonal basis"
-        #for i in range(len(basis)):
-        #    for j in range(self.num_ics):
-        #        print "%1.3f"% basis[i,j],
-        #    print ""
         return basis
 
+    def form_meci_space(self):
+        dvec = self.PES.get_coupling(self.geom)
+        dgrad = self.PES.get_dgrad(self.geom)
+        dvecq = self.grad_to_q(dvec)
+        dgradq = self.grad_to_q(dgrad)
+        dvecq_U = self.fromDLC_to_ICbasis(dvecq)
+        dgradq_U = self.fromDLC_to_ICbasis(dgradq)
+        constraints = np.zeros((len(dvecq_U),2),dtype=float)
+        constraints[:,0] = dvecq_U[:,0]
+        constraints[:,1] = dgradq_U[:,0]
+        self.opt_constraint(constraints)
+        self.bmat_create()

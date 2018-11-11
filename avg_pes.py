@@ -17,6 +17,8 @@ class Avg_PES(PES):
         return Avg_PES(Avg_PES.default_options().set_values(kwargs))
 
     def get_energy(self,geom):
+        if self.PES1.multiplicity==self.PES2.multiplicity:
+            assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
         self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
         return 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
 
@@ -29,6 +31,8 @@ class Avg_PES(PES):
         return self.lot.get_coupling(geom,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx)
 
     def get_dgrad(self,geom):
+        if self.PES1.multiplicity==self.PES2.multiplicity:
+            assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
         return (self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom))
 
 if __name__ == '__main__':

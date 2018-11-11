@@ -37,6 +37,7 @@ class Molpro(Base):
             tempfile.write(' {multi\n')
             nclosed = self.nocc
             nocc = nclosed+self.nactive
+            tempfile.write(' direct\n')
             tempfile.write(' closed,{}\n'.format(nclosed))
             tempfile.write(' occ,{}\n'.format(nocc))
             tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
@@ -49,7 +50,6 @@ class Molpro(Base):
                 tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
 
             #TODO this can only do coupling if states is 2, want to generalize to 3 states
-            print singlets
             if self.do_coupling==True and len(singlets)==2:
                 tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(singlets[0][1]+1,singlets[1][1]+1))
             tempfile.write(' }\n')
