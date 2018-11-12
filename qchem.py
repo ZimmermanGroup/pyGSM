@@ -3,7 +3,7 @@ import numpy as np
 import os
 from units import *
 
-class QChem(Base):
+class QChem(Lot):
     
     def run(self,geom,multiplicity):
 
@@ -93,7 +93,6 @@ class QChem(Base):
         tmp = self.search_tuple(self.E,multiplicity)
         return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
 
-
     def get_gradient(self,geom,multiplicity,state):
         if self.has_nelectrons==False:
             for i in self.states:
@@ -106,6 +105,13 @@ class QChem(Base):
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+
+    @staticmethod
+    def copy(QChemA,node_id):
+        """ create a copy of this lot object"""
+        return QChem(QChemA.options.copy().set_values({
+            "node_id" :node_id,
+            }))
 
     @staticmethod
     def from_options(**kwargs):

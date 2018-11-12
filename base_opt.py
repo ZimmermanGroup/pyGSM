@@ -181,6 +181,8 @@ class Base_Method(object):
         self.icoords[n].bmatp = self.icoords[n].bmatp_create()
         self.icoords[n].bmatp_to_U()
         self.icoords[n].bmat_create()
+        # set node id
+        self.icoords[n].node_id = n
     
         print "Initial energy is %1.4f\n" % self.icoords[n].V0
         self.icoords[n].buf.write("\n Writing convergence:")
@@ -257,20 +259,26 @@ class Base_Method(object):
 
 if __name__ == '__main__':
     filepath="tests/stretched_fluoroethene.xyz"
-    #filepath="tests/twisted_ethene.xyz"
     if False:
         from pytc import *
         nocc=11
         nactive=2
         lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         #lot1.cas_from_file(filepath)
+    if True:
+        from pytc import *
+        nocc=7
+        nactive=2
+        filepath="tests/twisted_ethene.xyz"
+        lot1=PyTC.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs',do_coupling=True)
+        lot1.cas_from_file(filepath)
     if False:
         from qchem import *
         lot1=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
     if False:
         from qchem import *
         lot1=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
-    if True:
+    if False:
         from molpro import *
         filepath="tests/twisted_ethene.xyz"
         nocc=6
@@ -297,7 +305,7 @@ if __name__ == '__main__':
         mol1=pb.readfile("xyz",filepath).next()
         isOkay = mol1.OBMol.AddBond(6,4,1)
         ic1=DLC.from_options(mol=mol1,PES=p,print_level=1)
-        opt = Base_Method.from_options(ICoord1=ic1)
+        opt = Base_Method.from_options(ICoord1=ic1,CONV_TOL=0.0005)
         opt.optimize(0,50,2)
 
     #pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)

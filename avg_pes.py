@@ -51,7 +51,12 @@ if __name__ == '__main__':
         nocc=6
         nactive=4
     geom=manage_xyz.read_xyz(filepath,scale=1)   
-    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*',do_coupling=True,nproc=4)
+    if False:
+        lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*',do_coupling=True,nproc=4)
+    if True:
+        from pytc import *
+        lot=PyTC.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs',do_coupling=True)
+        lot.cas_from_file(filepath)
     # PES object
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     mol1=pb.readfile("xyz",filepath).next()
@@ -80,7 +85,7 @@ if __name__ == '__main__':
     constraints = np.zeros((len(dvecq_U),2),dtype=float)
     constraints[:,0] = dvecq_U[:,0]
     constraints[:,1] = dgradq_U[:,0]
-    ic1.opt_constraint2(constraints)
+    ic1.opt_constraint(constraints)
     print ic1.Ut
     ic1.bmat_create()
     print ic1.q

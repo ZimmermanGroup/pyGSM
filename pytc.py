@@ -6,10 +6,10 @@ import manage_xyz as mx
 from units import *
 
 
-class PyTC(Base):
+class PyTC(Lot):
     """
     Level of theory is a wrapper object to do DFT and CASCI calculations 
-    Inherits from Base
+    Inherits from Lot
     """
 
     def get_energy(self,geom,multiplicity,state):
@@ -27,12 +27,22 @@ class PyTC(Base):
     def get_gradient(self,geom,multiplicity,state):
         S=multiplicity-1
         tmp=self.lot.compute_gradient(S=S,index=state)
+        #return np.reshape(tmp[...],(3*len(tmp[...]),1))*ANGSTROM_TO_AU
         return tmp[...]*ANGSTROM_TO_AU
 
-    def get_coupling(self,geom,mulitplicity,state1,state2):
+    def get_coupling(self,geom,multiplicity,state1,state2):
         S=multiplicity-1
-        tmp = self.lot.coupute_coupling(S=S,indexA=state1,indexB=state2)
-        return tmp[...]*ANGSTROM_TO_AU
+        tmp = self.lot.compute_coupling(S=S,indexA=state1,indexB=state2)
+        return np.reshape(tmp[...],(3*len(tmp[...]),1))*ANGSTROM_TO_AU
+
+    @staticmethod
+    def copy(PyTCA,node_id):
+        """ create a copy of this lot object"""
+        obj = PyTC(PyTCA.options.copy().set_values({
+            "node_id" :node_id,
+            }))
+        obj.lot = PyTCA.lot
+        return obj
 
     @staticmethod
     def from_options(**kwargs):

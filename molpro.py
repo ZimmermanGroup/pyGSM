@@ -5,7 +5,7 @@ from units import *
 import os
 import re
 
-class Molpro(Base):
+class Molpro(Lot):
 
     def run(self,geom):
         if self.has_nelectrons==False:
@@ -168,6 +168,13 @@ class Molpro(Base):
         if self.hasRanForCurrentCoords==False:
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
+
+    @staticmethod
+    def copy(MolproA,node_id):
+        """ create a copy of this lot object"""
+        return Molpro(MolproA.options.copy().set_values({
+            "node_id" :node_id,
+            }))
 
     @staticmethod
     def from_options(**kwargs):
