@@ -111,6 +111,48 @@ class DLC(Base_DLC,Bmat,Utils):
                 PES = pes1,
                 nicd= icoordA.nicd
                 )
+    @staticmethod
+    def add_node_SingleEnded(ICoordA,driving_coordinate):
+        dq0 = np.zeros((ICoordA.nicd,1))
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        #PES1 = deepcopy(ICoordA.PES)
+        lot1 = LOT.copy(ICoordA.PES.lot)
+        PES1 = PES(ICoordA.options.copy.set_values({
+            "lot": lot1,
+            }))
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : PES1
+            }))
+
+        ICoordC.setup()
+        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        #print ictan.T
+        ICoordC.opt_constraint(ictan)
+        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
+        print " dqmag: %1.3f"%dqmag
+        ICoordC.bmatp_create()
+        ICoordC.bmat_create()
+        if nmax-ncurr > 1:
+            dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
+        else:
+            dq0[ICoordC.nicd-1] = dqmag/2.0;
+
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        
+        #ICoordC.dqmag = dqmag
+
+        return ICoordC
+
 
     @staticmethod
     def add_node(ICoordA,ICoordB,nmax,ncurr):
@@ -150,9 +192,6 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_create()
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
-        ictan = DLC.tangent_1(ICoordC,ICoordA)
-        
-        #ICoordC.dqmag = dqmag
 
         return ICoordC
 
@@ -665,7 +704,7 @@ class DLC(Base_DLC,Bmat,Utils):
         grad = self.PES.get_gradient(self.geom)
         self.gradq = self.grad_to_q(grad)
         self.pgradrms = self.gradrms
-        self.gradrms = np.sqrt(np.dot(self.gradq.T,self.gradq)/(self.nicd-nconstraints))
+        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
         if self.print_level>0:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
@@ -817,3 +856,19 @@ class DLC(Base_DLC,Bmat,Utils):
         constraints[:,1] = dgradq_U[:,0]
         self.opt_constraint(constraints)
         self.bmat_create()
+
+if __name__ =='__main__':
+    filepath="tests/stretched_fluoroethene.xyz"
+    from pytc import *
+    nocc=11
+    nactive=2
+    lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    from pes import *
+
+    pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+    mol1=pb.readfile("xyz",filepath).next()
+    ic1=DLC.from_options(mol=mol1,PES=pes)
+    driving_coordinate = [("TORSION",5,2,1,3,40.)]
+    ictan,bdist = DLC.tangent_SE(ic1,driving_coordinate)
+    print ictan
+    print bdist

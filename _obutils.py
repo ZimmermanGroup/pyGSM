@@ -82,6 +82,9 @@ class Utils:
             elif anum >71 and anum <81:
                 return True
 
+    def get_element_VDW(self,a):
+        return Elements.from_atomic_number(a).vdw_radius
+
     def close_bond(self,bond):
         A = 0.2
         d = self.distance(bond[0],bond[1])

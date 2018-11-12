@@ -2,6 +2,7 @@ import numpy as np
 import openbabel as ob
 import pybel as pb
 from units import *
+from collections import Counter
 
 '''
 This file contains a ICoord class which is a Mixin for deloc_ic class
@@ -132,6 +133,68 @@ class ICoords:
         #print "\n"
         return np.asarray(ictan).reshape((ICoord1.num_ics,1))
 
+    def tangent_SE(ICoord1,driving_coordinates):
+        ictan = []
+        bdist = 0.
+        #count_dcs = Counter([x for (x,y,) in driving_coordinates])
+        #nadds = count_dcs['ADD']
+        #nbreaks = count_dcs['BREAK']
+        #nangles = count_dcs['ANGLE']
+        #ntorsions = count_dcs['TORSION']
+        nadds = driving_coordinates.count("ADD")
+        nbreaks = driving_coordinates.count("BREAK")
+        nangles = driving_coordinates.count("ANGLE")
+        ntorsions = driving_coordinates.count("TORSION")
+        ictan = np.zeros((ICoord1.num_ics,1),dtype=float)
+        breakdq = 0.3
+
+        for i in driving_coordinates:
+            if "ADD" in i:
+                print i
+                bond = (i[1],i[2])
+                wbond = ICoord1.BObj.bond_num(bond)
+                print wbond
+                d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))/2.8
+                if ICoord1.distance(i[1][0],i[1][1])>d0:
+                    ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1]))
+                if nbreaks>0:
+                    ictan[wbond] *= 2
+                if ICoord1.print_level>0:
+                    print "bond %s d0: %4.3f diff: %4.3f " % (i[1],d0,ictan[wbond])
+            if "BREAK" in i:
+                bond = (i[1],i[2])
+                wbond = ICoord1.BObj.bond_num(bond)
+                d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))*2.
+                if ICoord1.distance(bond[0],bond[1])<d0:
+                    ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1])) # NOTE THAT THIS IS NOT HOW THE ORIGINAL GSM WORKED 
+                if ICoord1.print_level>0:
+                    print "bond %s d0: %4.3f diff: %4.3f " % (i[1],d0,ictan[wbond])
+            if "ANGLE" in i:
+                angle=(i[1],i[2],i[3])
+                ang_idx = ICoord1.AObj.angle_num(angle)
+                anglet = i[4]
+                ang_diff = (anglet -ICoord1.AObj.anglev[ang_idx]) *np.pi/180.
+                print(" angle: %s is index %i " %(angle,ang_idx))
+                print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.AObj.anglev[ang_idx],anglet,ang_diff))
+                ictan[ICoord1.BObj.nbonds+ang_idx] = -ang_diff
+            if "TORSION" in i:
+                torsion=(i[1],i[2],i[3],i[4])
+                tor_idx = ICoord1.TObj.torsion_num(torsion)
+                tort = i[5]
+                tor_diff = (tort -ICoord1.TObj.torv[tor_idx]) 
+                if tor_diff>180.:
+                    tor_diff-=360.
+                elif tor_diff<-180.:
+                    tor_diff+=360.
+                if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
+                    ictan[ICoord1.BObj.nbonds+ICoord1.AObj.nangles+tor_idx] = -tor_diff*np.pi/180.
+                print(" torsion: %s is index %i ",i[1],tor_idx)
+                print(" torv: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
+
+        bdist = np.linalg.norm(ictan)
+
+        return ictan,bdist
+
 
 ######################  IC objects #####################################
 class Bond_obj(object):
@@ -146,6 +209,15 @@ class Bond_obj(object):
         self.nbonds = len(self.bonds)
         for bond in self.bonds:
             self.bondd.append(self.distance(mol,bond[0],bond[1]))
+
+    def bond_num(self,bond):
+        for b in [bond,tuple(reversed(bond))]:
+            print b
+            try:
+                return self.bonds.index(b)
+            except ValueError:
+                pass
+        raise ValueError('The bond %s does not exist' % b)
 
     def distance(self,mol,i,j):
         """ for some reason openbabel has this one based """
@@ -172,6 +244,14 @@ class Ang_obj(object):
         c=mol.OBMol.GetAtom(k)
         return mol.OBMol.GetAngle(a,b,c) #b is the vertex #in degrees
 
+    def angle_num(self,angle):
+        for a in angle,tuple(reversed(angle)):
+            try:
+                return self.angles.index(a)
+            except ValueError:
+                pass
+        raise ValueError('The angle does not exist')
+
 
 class Tor_obj(object):
     __slots__ = ["ntor","torsions","torv"]
@@ -197,6 +277,14 @@ class Tor_obj(object):
         if tval<=-np.pi:
             tval+=2.*np.pi
         return tval*180./np.pi
+
+    def torsion_num(self,torsion):
+        for t in torsion,tuple(reversed(torsion)):
+            try:
+                return self.torsions.index(t)
+            except ValueError:
+                pass
+        raise ValueError('The torsion does not exist')
 
 
 
