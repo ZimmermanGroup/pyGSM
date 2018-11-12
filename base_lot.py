@@ -6,14 +6,14 @@ import elements
 ELEMENT_TABLE = elements.ElementData()
 
 
-class Base(object):
-    """ Base object for level of theory calculators """
+class Lot(object):
+    """ Lot object for level of theory calculators """
 
     @staticmethod
     def default_options():
-        """ Base default options. """
+        """ Lot default options. """
 
-        if hasattr(Base, '_default_options'): return Base._default_options.copy()
+        if hasattr(Lot, '_default_options'): return Lot._default_options.copy()
         opt = options.Options() 
 
 
@@ -60,18 +60,25 @@ class Base(object):
                 key='nproc',
                 required=False,
                 value=1,
+                doc="number of processors",
                 )
 
         opt.add_option(
                 key='do_coupling',
                 required=False,
                 value=False,
-                doc=''
+                doc='derivative coupling'
                 )
 
+        opt.add_option(
+                key="node_id",
+                required=False,
+                value=0,
+                doc='unique id used for storing orbs,etc'
+                )
 
-        Base._default_options = opt
-        return Base._default_options.copy()
+        Lot._default_options = opt
+        return Lot._default_options.copy()
 
     def __init__(self,
             options,
@@ -88,6 +95,7 @@ class Base(object):
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
         self.do_coupling=self.options['do_coupling']
+        self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
 
@@ -105,7 +113,6 @@ class Base(object):
         if self.n_electrons < 0:
             raise ValueError("Molecule has fewer than 0 electrons!!!")
         self.check_multiplicity(multiplicity)
-
         return 
 
     def get_energy(self,geom,mulitplicity,state):

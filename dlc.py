@@ -84,7 +84,8 @@ class DLC(Base_DLC,Bmat,Utils):
                     break
             if foundA==False:
                 angleA.append(angle)
-
+        print(" FIXME warning only adding this bond for testing")
+        #TODO
         angleA.append((1,4,3))
         for torsion in torsionB:
             foundA=False
@@ -95,33 +96,6 @@ class DLC(Base_DLC,Bmat,Utils):
             if foundA==False:
                 torsionA.append(torsion)
 
-
-        #print "icoordA,icoordB bonds"
-        #print icoordA.BObj.bonds
-        #print icoordB.BObj.bonds
-        #unionBonds    = list(set(icoordA.BObj.bonds) | set(icoordB.BObj.bonds))
-        #unionBonds.sort()
-        #print "printing unionBonds"
-        #print unionBonds
-        #unionAngles   = list(set(icoordA.AObj.angles) | set(icoordB.AObj.angles))
-#       # print "printing unionANgles"
-#       # print unionAngles
-        #unionAngles = map(tuple,set(map(frozenset,unionAngles)))
-#       # print unionAngles
-        #unionTorsions = list(set(icoordA.TObj.torsions) | set(icoordB.TObj.torsions))
-#       # print "printing unionTorsions"
-#       # print unionTorsions
-        #unionTorsions = map(tuple,set(map(frozenset,unionTorsions)))
-#       # print unionTorsions
-        #bonds = []
-        #angles = []
-        #torsions = []
-        #for bond in unionBonds:
-        #    bonds.append(bond)
-        #for angle in unionAngles:
-        #    angles.append(angle)
-        #for torsion in unionTorsions:
-        #    torsions.append(torsion)
         print "printing Union ICs"
         print bondA
         print angleA
@@ -144,7 +118,11 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        PES1 = deepcopy(ICoordA.PES)
+        #PES1 = deepcopy(ICoordA.PES)
+        lot1 = LOT.copy(ICoordA.PES.lot)
+        PES1 = PES(ICoordA.options.copy.set_values({
+            "lot": lot1,
+            }))
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.BObj.bonds,

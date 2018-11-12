@@ -3,7 +3,7 @@ import numpy as np
 import os
 from units import *
 
-class Orca(Base):
+class Orca(Lot):
     
     def run(self,geom,multiplicity):
         
@@ -99,6 +99,13 @@ class Orca(Base):
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+
+    @staticmethod
+    def copy(OrcaA,node_id):
+        """ create a copy of this lot object"""
+        return Orca(OrcaA.options.copy().set_values({
+            "node_id" :node_id,
+            }))
         
     @staticmethod
     def from_options(**kwargs):
