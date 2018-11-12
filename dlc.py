@@ -103,9 +103,8 @@ class DLC(Base_DLC,Bmat,Utils):
         print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
-        #pes1 = deepcopy(icoordA.PES)
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id)
-        PES1 = PES(ICoordA.options.copy.set_values({
+        lot1 = icoordA.PES.lot.copy(icoordA.PES.lot,icoordA.PES.lot.node_id)
+        PES1 = PES(icoordA.PES.options.copy().set_values({
             "lot": lot1,
             }))
         return DLC.from_options(
@@ -117,11 +116,10 @@ class DLC(Base_DLC,Bmat,Utils):
                 nicd= icoordA.nicd
                 )
     @staticmethod
-    def add_node_SingleEnded(ICoordA,driving_coordinate):
+    def add_node_SE(ICoordA,driving_coordinate):
         dq0 = np.zeros((ICoordA.nicd,1))
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        #PES1 = deepcopy(ICoordA.PES)
         lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
         PES1 = PES(ICoordA.PES.options.copy().set_values({
             "lot": lot1,
@@ -135,17 +133,15 @@ class DLC(Base_DLC,Bmat,Utils):
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
-        #print ictan.T
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
+        print ictan.T
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        if nmax-ncurr > 1:
-            dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
-        else:
-            dq0[ICoordC.nicd-1] = dqmag/2.0;
+
+        dq0[ICoordC.nicd-1] = -dqmag
 
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
@@ -165,7 +161,6 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        #PES1 = deepcopy(ICoordA.PES)
         if ICoordA.PES.lot.node_id > ICoordB.PES.lot.node_id:
             node_id = ICoordA.PES.lot.node_id - 1
         else:
@@ -872,12 +867,12 @@ if __name__ =='__main__':
     nocc=11
     nactive=2
     lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+    lot1.cas_from_file(filepath)
     from pes import *
 
     pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
     mol1=pb.readfile("xyz",filepath).next()
     ic1=DLC.from_options(mol=mol1,PES=pes)
-    driving_coordinate = [("TORSION",5,2,1,3,40.)]
-    ictan,bdist = DLC.tangent_SE(ic1,driving_coordinate)
-    print ictan
-    print bdist
+    driving_coordinate = [("ADD",1,2)]
+    ic2= DLC.add_node_SE(ic1,driving_coordinate)
+    ic2.print_xyz()

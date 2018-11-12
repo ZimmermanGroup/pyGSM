@@ -136,11 +136,6 @@ class ICoords:
     def tangent_SE(ICoord1,driving_coordinates):
         ictan = []
         bdist = 0.
-        #count_dcs = Counter([x for (x,y,) in driving_coordinates])
-        #nadds = count_dcs['ADD']
-        #nbreaks = count_dcs['BREAK']
-        #nangles = count_dcs['ANGLE']
-        #ntorsions = count_dcs['TORSION']
         nadds = driving_coordinates.count("ADD")
         nbreaks = driving_coordinates.count("BREAK")
         nangles = driving_coordinates.count("ANGLE")
@@ -155,7 +150,7 @@ class ICoords:
                 wbond = ICoord1.BObj.bond_num(bond)
                 print wbond
                 d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))/2.8
-                if ICoord1.distance(i[1][0],i[1][1])>d0:
+                if ICoord1.distance(bond[0],bond[1])>d0:
                     ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1]))
                 if nbreaks>0:
                     ictan[wbond] *= 2

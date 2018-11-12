@@ -6,6 +6,7 @@ import pybel as pb
 from dlc import *
 from copy import deepcopy
 import StringIO
+from _print_opt import *
 
 global DQMAG_SSM_SCALE
 DQMAG_SSM_SCALE=1.5
@@ -14,7 +15,7 @@ DQMAG_SSM_MAX=0.8
 global DQMAG_SSM_MIN
 DQMAG_SSM_MIN=0.2
 
-class Base_Method(object):
+class Base_Method(object,Print):
     
     @staticmethod
     def default_options():
@@ -124,16 +125,20 @@ class Base_Method(object):
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
         if self.nnodes>1:
-            #self.icoords[-1] = self.options['ICoord2']
             tmp = self.options['ICoord2']
             self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
-            #self.icoords[-1] = DLC.union_ic(self.icoords[-1],self.icoords[0])
+            print "after union"
+            lot1 = tmp.PES.lot.copy(
+                    tmp.PES.lot, 
+                    self.nnodes-1)
+            PES1 = PES(tmp.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
             self.icoords[-1] = DLC(self.icoords[0].options.copy().set_values(dict(
                 mol= tmp.mol,
-                PES=self.options['ICoord2'].PES
+                PES=PES1,
                 ))
                 )
-            self.icoords[-1].PES.lot.node_id = self.nnodes
         
         self.nn = 2
         self.nR = 1
@@ -165,7 +170,6 @@ class Base_Method(object):
                 self.energies[i] = ico.energy
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
-        xyzfile=os.getcwd()+"/node_{}.xyz".format(n)
         output_format = 'xyz'
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
@@ -233,24 +237,7 @@ class Base_Method(object):
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
     
             #write convergence
-            largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
-            for mol in opt_molecules:
-                largeXyzFile.write(pb.readstring("xyz",mol))
-            with open(xyzfile,'r+') as f:
-                content  =f.read()
-                f.seek(0,0)
-                f.write("[Molden Format]\n[Geometries] (XYZ)\n"+content)
-            with open(xyzfile, "a") as f:
-                f.write("[GEOCONV]\n")
-                f.write("energy\n")
-                for energy in energies:
-                    f.write('{}\n'.format(energy))
-                f.write("max-force\n")
-                for grms in grmss:
-                    f.write('{}\n'.format(grms))
-                f.write("max-step\n")
-                for step in steps:
-                    f.write('{}\n'.format(step))
+            self.write_node(n,opt_molecules,energies,grmss,steps)
     
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
