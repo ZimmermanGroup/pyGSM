@@ -646,7 +646,6 @@ if __name__ == '__main__':
         print 'gsm.icoords[0] E:',gsm.icoords[0].energy
         print 'gsm.icoords[-1]E:',gsm.icoords[-1].energy
         gsm.interpolate(2)
-        print "after"
 
     if False:
         print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
@@ -658,7 +657,7 @@ if __name__ == '__main__':
         gsm.ic_reparam_g()
 
 
-    if True:
+    if False:
         gsm.grow_string(50)
         gsm.opt_iters()
         if ORCA:
