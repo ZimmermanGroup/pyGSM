@@ -130,25 +130,38 @@ class Base_Method(object):
             #self.icoords[-1] = DLC.union_ic(self.icoords[-1],self.icoords[0])
             self.icoords[-1] = DLC(self.icoords[0].options.copy().set_values(dict(
                 mol= tmp.mol,
+                PES=self.options['ICoord2'].PES
                 ))
                 )
+        
         self.nn = 2
         self.nR = 1
         self.nP = 1        
         self.isSSM = self.options['isSSM']
         self.isMAP_SE = self.options['isMAP_SE']
         self.active = [False] * self.nnodes
-        self.active[0] = True
-        self.active[-1] = True
+        self.active[0] = False
+        self.active[-1] = False
         self.isomers = self.options['isomers']
         #self.isomer_init()
         self.nconstraints = self.options['nconstraints']
         self.CONV_TOL = self.options['CONV_TOL']
         self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
 
+        self.energies = np.asarray([-1e8]*self.nnodes)
+        self.emax = float(max(self.energies))
+        self.nmax = 0
+        self.climb = False
+        self.find = False
+
         self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
         print " gaddmax:",self.gaddmax
+
+    def store_energies(self):
+        for i,ico in enumerate(self.icoords):
+            if ico != 0:
+                self.energies[i] = ico.energy
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
         xyzfile=os.getcwd()+"/node_{}.xyz".format(n)
