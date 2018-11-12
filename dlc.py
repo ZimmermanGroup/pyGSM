@@ -75,23 +75,23 @@ class DLC(Base_DLC,Bmat,Utils):
                 pass
             else:
                 bondA.append(bond)
-        permAngle = list(itertools.permutations([0,1,2]))
-        permTor = list(itertools.permutations([0,1,2,3]))
+        permAngle = list(itertools.permutations([0,2]))
+        permTor = list(itertools.permutations([0,3]))
         for angle in angleB:
             foundA=False
             for perm in permAngle:
-                if (angle[perm[0]],angle[perm[1]],angle[perm[2]]) in angleA:
+                if (angle[perm[0]],angle[1],angle[perm[1]]) in angleA:
                     foundA=True
                     break
             if foundA==False:
                 angleA.append(angle)
-        print(" FIXME warning only adding this bond for testing")
-        #TODO
-        angleA.append((1,4,3))
         for torsion in torsionB:
             foundA=False
             for perm in permTor:
-                if (torsion[perm[0]],torsion[perm[1]],torsion[perm[2]],torsion[perm[3]]) in torsionA:
+                if (torsion[perm[0]],torsion[1],torsion[2],torsion[perm[1]]) in torsionA:
+                    foundA=True
+                    break
+                elif (torsion[perm[0]],torsion[2],torsion[1],torsion[perm[1]]) in torsionA:
                     foundA=True
                     break
             if foundA==False:
