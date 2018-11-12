@@ -9,6 +9,7 @@ from copy import deepcopy
 import manage_xyz
 from _icoord import ICoords
 from _bmat import Bmat
+from pes import *
 from base_dlc import *
 from sklearn import preprocessing
 np.set_printoptions(precision=4)
@@ -102,13 +103,17 @@ class DLC(Base_DLC,Bmat,Utils):
         print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
-        pes1 = deepcopy(icoordA.PES)
+        #pes1 = deepcopy(icoordA.PES)
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id)
+        PES1 = PES(ICoordA.options.copy.set_values({
+            "lot": lot1,
+            }))
         return DLC.from_options(
                 bonds= bondA,
                 angles= angleA,
                 torsions= torsionA,
                 mol = mol1,
-                PES = pes1,
+                PES = PES1,
                 nicd= icoordA.nicd
                 )
     @staticmethod
@@ -117,8 +122,8 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
         #PES1 = deepcopy(ICoordA.PES)
-        lot1 = LOT.copy(ICoordA.PES.lot)
-        PES1 = PES(ICoordA.options.copy.set_values({
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
+        PES1 = PES(ICoordA.PES.options.copy().set_values({
             "lot": lot1,
             }))
         ICoordC = DLC(ICoordA.options.copy().set_values({
@@ -161,8 +166,12 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
         #PES1 = deepcopy(ICoordA.PES)
-        lot1 = LOT.copy(ICoordA.PES.lot)
-        PES1 = PES(ICoordA.options.copy.set_values({
+        if ICoordA.PES.lot.node_id > ICoordB.PES.lot.node_id:
+            node_id = ICoordA.PES.lot.node_id - 1
+        else:
+            node_id = ICoordB.PES.lot.node_id + 1
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,node_id)
+        PES1 = PES(ICoordA.PES.options.copy().set_values({
             "lot": lot1,
             }))
         ICoordC = DLC(ICoordA.options.copy().set_values({

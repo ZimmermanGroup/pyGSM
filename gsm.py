@@ -163,18 +163,21 @@ class GSM(Base_Method):
 
     def grow_string(self,maxiters=20):
         print 'Starting Growth Phase'
-        gsm.write_node_xyz("nodes_xyz_file0.xyz")
+        self.write_node_xyz("nodes_xyz_file0.xyz")
         iters = 1
         while True:
             print "beginning iteration:",iters
             sys.stdout.flush()
             do_growth = False
-            for act in gsm.active:
+            for act in self.active:
                 if act:
                     do_growth = True
                     break
             if do_growth:
-                gsm.growth_iters(nconstraints=1,current=iters)
+                if self.isSSM:
+                    self.growth_iters_SSM(nconstraints=1,current=iters)
+                else:
+                    self.growth_iters(nconstraints=1,current=iters)
                 sys.stdout.flush()
             else:
                 break
@@ -182,8 +185,47 @@ class GSM(Base_Method):
             if iters > maxiters:
                 print 'All nodes added. String done growing'
                 break
-        gsm.write_node_xyz()
+        self.write_node_xyz()
 
+    def growth_iters_SSM(self,iters=1,maxopt=1,nconstraints=1,current=0):
+        print "*********************************************************************"
+        print "************************ in growth_iters ****************************"
+        print "*********************************************************************"
+        for n in range(iters):
+            self.set_fsm_active(self.nR-1, self.nR-1)
+            #TODO for SSM
+            if self.icoords[self.nR-1].gradrms < self.gaddmax:
+                try:
+                    self.active[self.nR-1] = False
+                    if self.icoords[self.nR] == 0:
+                        self.interpolateR()
+                        #self.active[self.nR-1] = True
+                        #automatically done in interpolateR()
+                except:
+                    raise ValueError
+            if self.nn==self.nnodes:
+                self.get_tangents_1g()
+                self.opt_steps(maxopt,nconstraints)
+            #self.ic_reparam_g(nconstraints=nconstraints)
+            self.get_tangents_1g()
+            self.opt_steps(maxopt,nconstraints)
+            self.store_energies()
+
+            totalgrad = 0.0
+            gradrms = 0.0
+            self.emaxp = self.emax            
+            for ico in self.icoords:
+                if ico != 0:
+                    totalgrad += ico.gradrms*self.rn3m6
+                    gradrms += ico.gradrms*ico.gradrms
+            gradrms = np.sqrt(gradrms/(self.nnodes-2))
+
+            self.emax = float(max(self.energies[1:-1]))
+            self.nmax = np.where(self.energies==self.emax)[0][0]
+            
+            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(current,float(totalgrad),float(gradrms),float(self.emax))
+ 
+            self.write_xyz_files(iters=current,base='growth_iters',nconstraints=nconstraints)
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
         print "*********************************************************************"
@@ -507,7 +549,7 @@ class GSM(Base_Method):
 
     def start_string(self):
         print "\n"
-        gsm.interpolate(2) 
+        self.interpolate(2) 
         self.nn=2
         self.nR=1
         self.nP=1

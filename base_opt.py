@@ -133,6 +133,7 @@ class Base_Method(object):
                 PES=self.options['ICoord2'].PES
                 ))
                 )
+            self.icoords[-1].PES.lot.node_id = self.nnodes
         
         self.nn = 2
         self.nR = 1
@@ -265,7 +266,7 @@ if __name__ == '__main__':
         nactive=2
         lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         #lot1.cas_from_file(filepath)
-    if True:
+    if False:
         from pytc import *
         nocc=7
         nactive=2
@@ -298,7 +299,7 @@ if __name__ == '__main__':
         ic1=DLC.from_options(mol=mol1,PES=pes)
         opt = Base_Method.from_options(ICoord1=ic1,CONV_TOL=0.0005)
         opt.optimize(0,50,0)
-    if True:
+    if False:
         pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
         pes2 = PES.from_options(lot=lot1,ad_idx=1,multiplicity=1)
         p = Avg_PES(pes1,pes2)
@@ -307,7 +308,14 @@ if __name__ == '__main__':
         ic1=DLC.from_options(mol=mol1,PES=p,print_level=1)
         opt = Base_Method.from_options(ICoord1=ic1,CONV_TOL=0.0005)
         opt.optimize(0,50,2)
-
+    if True:
+        from qchem import *
+        lot = QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=8)
+        mol=pb.readfile('xyz','tests/SiH2H2.xyz').next()
+        pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+        ic1=DLC.from_options(mol=mol,PES=pes,print_level=1)
+        opt = Base_Method.from_options(ICoord1=ic1,CONV_TOL=0.001)
+        opt.optimize(0,50,0)
     #pes2 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=3)
     #penalty_pes = Penalty_PES(pes,pes2)
     #mol1=pb.readfile("xyz",filepath).next()
