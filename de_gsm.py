@@ -62,39 +62,8 @@ class GSM(Base_Method):
         print(" Here is new active:",self.active)
 
     def tangent(self,n1,n2):
-        return DLC.tangent_1(self.icoords[n1],self.icoords[n2])
-
-    def grow_string(self,maxiters=20):
-        print 'Starting Growth Phase'
-        self.write_node_xyz("nodes_xyz_file0.xyz")
-        iters = 1
-        while True:
-            print "beginning iteration:",iters
-            sys.stdout.flush()
-            do_growth = False
-            for act in self.active:
-                if act:
-                    do_growth = True
-                    break
-            if do_growth:
-                self.growth_iters(nconstraints=1,current=iters)
-                sys.stdout.flush()
-            else:
-                print 'All nodes added. String done growing'
-                break
-            iters += 1
-            if iters > maxiters:
-                raise ValueError("reached max number of growth iterations")
-        self.write_node_xyz()
-
-    def opt_steps(self,maxopt,nconstraints):
-        for i in range(maxopt):
-            for n in range(self.nnodes):
-                if self.icoords[n] != 0 and self.active[n]==True:
-                    print "optimizing node %i" % n
-                    self.icoords[n].opt_constraint(self.ictan[n])
-                    print self.icoords[n].coords
-                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
+        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
 
     def check_add_node(self):
         if self.icoords[self.nR-1].gradrms < self.gaddmax:
@@ -105,6 +74,38 @@ class GSM(Base_Method):
             self.active[self.nnodes-self.nP] = False
             if self.icoords[-self.nP-1] == 0:
                 self.interpolateP()
+
+    def make_nlist(self):
+        ncurrent = 0
+        nlist = [0]*(2*self.nnodes)
+        for n in range(self.nR-1):
+            nlist[2*ncurrent] = n
+            nlist[2*ncurrent+1] = n+1
+            ncurrent += 1
+
+        for n in range(self.nnodes-self.nP+1,self.nnodes):
+            nlist[2*ncurrent] = n
+            nlist[2*ncurrent+1] = n-1
+            ncurrent += 1
+
+        nlist[2*ncurrent] = self.nR -1
+        nlist[2*ncurrent+1] = self.nnodes - self.nP
+
+        if False:
+            nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
+
+        #TODO is this actually used?
+        if self.nR == 0: nlist[2*ncurrent] += 1
+        if self.nP == 0: nlist[2*ncurrent+1] -= 1
+        ncurrent += 1
+        nlist[2*ncurrent] = self.nnodes -self.nP
+        nlist[2*ncurrent+1] = self.nR-1
+        #TODO is this actually used?
+        if self.nR == 0: nlist[2*ncurrent+1] += 1
+        if self.nP == 0: nlist[2*ncurrent] -= 1
+        ncurrent += 1
+
+        return ncurrent,nlist
 
     def get_tangents_1e(self,n0=0):
         size_ic = self.icoords[0].num_ics

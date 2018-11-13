@@ -7,6 +7,7 @@ from dlc import *
 from copy import deepcopy
 import StringIO
 from _print_opt import *
+import sys
 
 class Base_Method(object,Print):
     
@@ -404,46 +405,21 @@ class Base_Method(object,Print):
         ictan = [[]]*self.nnodes
         dqmaga = [0.]*self.nnodes
         dqa = [[],]*self.nnodes
-        ncurrent = 0
-        nlist = [0]*(2*self.nnodes)
-        for n in range(self.nR-1):
-            nlist[2*ncurrent] = n
-            nlist[2*ncurrent+1] = n+1
-            ncurrent += 1
 
-        for n in range(self.nnodes-self.nP+1,self.nnodes):
-            nlist[2*ncurrent] = n
-            nlist[2*ncurrent+1] = n-1
-            ncurrent += 1
-
-        nlist[2*ncurrent] = self.nR -1
-        nlist[2*ncurrent+1] = self.nnodes - self.nP
-
-        if False:
-            nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
-
-        #TODO is this actually used?
-        if self.nR == 0: nlist[2*ncurrent] += 1
-        if self.nP == 0: nlist[2*ncurrent+1] -= 1
-        ncurrent += 1
-        nlist[2*ncurrent] = self.nnodes -self.nP
-        nlist[2*ncurrent+1] = self.nR-1
-        #TODO is this actually used?
-        if self.nR == 0: nlist[2*ncurrent+1] += 1
-        if self.nP == 0: nlist[2*ncurrent] -= 1
-        ncurrent += 1
+        ncurrent,nlist = self.make_nlist()
 
         for n in range(ncurrent):
             #ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
             ictan[nlist[2*n]] = self.tangent(nlist[2*n+1],nlist[2*n])
             ictan0 = np.copy(ictan[nlist[2*n]])
+            print ictan0
 
-            if True:
-                self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
-                self.icoords[nlist[2*n+1]].bmatp_to_U()
-                self.icoords[nlist[2*n+1]].opt_constraint(ictan[nlist[2*n]])
-                self.icoords[nlist[2*n+1]].bmat_create()
-        
+            print "forming space for", nlist[2*n+1]
+            self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
+            self.icoords[nlist[2*n+1]].bmatp_to_U()
+            self.icoords[nlist[2*n+1]].opt_constraint(ictan[nlist[2*n]])
+            self.icoords[nlist[2*n+1]].bmat_create()
+            
             dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
@@ -472,8 +448,11 @@ class Base_Method(object,Print):
         for n in range(iters):
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.check_add_node()
+            if self.nn==self.nnodes:
+                print(" gopt_iter: string done growing")
+                break
             self.get_tangents_1g()
-            #self.ic_reparam_g()
+            self.ic_reparam_g()
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
 
@@ -492,6 +471,38 @@ class Base_Method(object,Print):
             print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(current,float(totalgrad),float(gradrms),float(self.emax))
  
             self.write_xyz_files(iters=current,base='growth_iters',nconstraints=nconstraints)
+
+    def opt_steps(self,maxopt,nconstraints):
+        for i in range(maxopt):
+            for n in range(self.nnodes):
+                if self.icoords[n] != 0 and self.active[n]==True:
+                    print "optimizing node %i" % n
+                    self.icoords[n].opt_constraint(self.ictan[n])
+                    print self.icoords[n].coords
+                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
+
+    def grow_string(self,maxiters=20):
+        print 'Starting Growth Phase'
+        self.write_node_xyz("nodes_xyz_file0.xyz")
+        iters = 1
+        while True:
+            print "beginning iteration:",iters
+            sys.stdout.flush()
+            do_growth = False
+            for act in self.active:
+                if act:
+                    do_growth = True
+                    break
+            if do_growth:
+                self.growth_iters(nconstraints=1,current=iters)
+                sys.stdout.flush()
+            else:
+                print 'All nodes added. String done growing'
+                break
+            iters += 1
+            if iters > maxiters:
+                raise ValueError("reached max number of growth iterations")
+        self.write_node_xyz()
 
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
@@ -866,9 +877,9 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
-#        gsm.icoords[0].gradrms = 0.
+        gsm.icoords[0].gradrms = 0.
 #        gsm.icoords[-1].gradrms = 0.
-#        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
+        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
 #        gsm.icoords[-1].energy = gsm.icoords[-1].PES.get_energy(gsm.icoords[-1].geom)
         print 'gsm.icoords[0] E:',gsm.icoords[0].energy
         print 'gsm.icoords[-1]E:',gsm.icoords[-1].energy
