@@ -4,6 +4,7 @@ from pes import *
 class Avg_PES(PES):
     """ Avg potential energy surface calculators """
 
+    #TODO can fix this up so it automatically initializes PES1 and PES2?
     def __init__(self,
             PES1,
             PES2):

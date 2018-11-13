@@ -5,7 +5,7 @@ import os
 
 class Print:
     def write_node(self,n,opt_molecules,energies,grmss,steps):
-        xyzfile=os.getcwd()+"/node_{}.xyz".format(n)
+        xyzfile=os.getcwd()+"/scratch/node_{}.xyz".format(n)
         largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
         for mol in opt_molecules:
             largeXyzFile.write(pb.readstring("xyz",mol))
@@ -26,7 +26,7 @@ class Print:
                 f.write('{}\n'.format(step))
 
     def write_xyz_files(self,iters=0,base='xyzgeom',nconstraints=1):
-        xyzfile = os.getcwd()+'/'+base+'_{:03}.xyz'.format(iters)
+        xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}.xyz'.format(iters)
         stringxyz = pb.Outputfile('xyz',xyzfile,overwrite=True)
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat('xyz')
@@ -64,7 +64,7 @@ class Print:
         f.close()
 
     def write_node_xyz(self,xyzfile = "nodes_xyz_file.xyz"):
-        xyzfile = os.getcwd()+"/"+xyzfile
+        xyzfile = os.getcwd()+"/scratch/"+xyzfile
         nodesXYZ = pb.Outputfile("xyz",xyzfile,overwrite=True)
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat('xyz')
