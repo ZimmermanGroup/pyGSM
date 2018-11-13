@@ -335,7 +335,7 @@ class Base_Method(object,Print):
             self.icoords[n].opt_constraint(ictan0)
             dqmaga[n] += np.dot(ictan0[:nbonds].T,self.icoords[n].Ut[-1,:nbonds])*2.5
             dqmaga[n] += np.dot(ictan0[nbonds:].T,self.icoords[n].Ut[-1,nbonds:])
-            dqmaga[n] = np.sqrt(dqmaga[n])
+            dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
         self.dqmaga = dqmaga
         self.ictan = ictan
@@ -349,10 +349,12 @@ class Base_Method(object,Print):
         ictan0 = np.copy(ictan[0])
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes,self.nnodes))
+
+        self.store_energies()
         
         print " V_profile: ",
         for n in range(self.nnodes):
-            print " {:1.1}".format(self.energies[n]),
+            print " {:7.3f}".format(float(self.energies[n])),
         print
         
         TSnode = self.nmax
@@ -360,39 +362,82 @@ class Base_Method(object,Print):
             do3 = False
             if not self.find:
                 if self.energies[n+1] > self.energies[n] and self.energies[n] > self.energies[n-1]:
-                    n_sm = n
-                    n_lg = n+1
+                    intic_n = n
+                    newic_n = n+1
                 elif self.energies[n-1] > self.energies[n] and self.energies[n] > self.energies[n+1]:
-                    n_sm = n-1
-                    n_lg = n
+                    intic_n = n-1
+                    newic_n = n
                 else:
                     do3 = True
-                    newic = n
-                    intic = n+1
-                    int2ic = n-1
+                    newic_n = n
+                    intic_n = n+1
+                    int2ic_n = n-1
             else:
                 if n < TSnode:
-                    n_sm = n
-                    n_lg = n+1
+                    intic_n = n
+                    newic_n = n+1
                 elif n> TSnode:
-                    n_sm = n-1
-                    n_lg = n
+                    intic_n = n-1
+                    newic_n = n
                 else:
                     do3 = True
-                    newic = n
-                    intic = n+1
-                    int2ic = n-1
+                    newic_n = n
+                    intic_n = n+1
+                    int2ic_n = n-1
             if not do3:
-                ictan[n] = np.transpose(tangent_1(self.icoords[n_lg],self.icoords[n_sm]))
+                ictan[n,:]=np.transpose(self.tangent(newic_n,intic_n))
             else:
                 f1 = 0.
                 dE1 = abs(self.energies[n+1]-self.energies[n])
                 dE2 = abs(self.energies[n] - self.energies[n-1])
                 dEmax = max(dE1,dE2)
                 dEmin = min(dE1,dE2)
-                if self.energies[n+1]>self.energies[n-1]: #Continue from line 5897 in gstring.cpp
-                    pass
+                if self.energies[n+1]>self.energies[n-1]:
+                    f1 = dEmax/(dEmax+dEmin+0.00000001)
+                else:
+                    f1 = 1 - dEmax/(dEmax+dEmin+0.00000001)
+
+                print ' 3 way tangent ({}): f1:{:3.2}'.format(n,f1)
+
+                t1 = np.zeros(size_ic)
+                t2 = np.zeros(size_ic)
+
+                for i in range(nbonds):
+                    t1[i] = self.icoords[intic_n].BObj.bondd[i] - self.icoords[newic_n].BObj.bondd[i]
+                    t2[i] = self.icoords[newic_n].BObj.bondd[i] - self.icoords[int2ic_n].BObj.bondd[i]
+                for i in range(nangles):
+                    t1[nbonds+i] = (self.icoords[intic_n].AObj.anglev[i] - self.icoords[newic_n].AObj.anglev[i])*np.pi/180.
+                    t2[nbonds+i] = (self.icoords[newic_n].AObj.anglev[i] - self.icoords[int2ic_n].AObj.anglev[i])*np.pi/180.
+                for i in range(ntor):
+                    tmp1 = (self.icoords[intic_n].TObj.torv[i] - self.icoords[newic_n].TObj.torv[i])*np.pi/180.
+                    tmp2 = (self.icoords[newic_n].TObj.torv[i] - self.icoords[int2ic_n].TObj.torv[i])*np.pi/180.
+                    if tmp1 > np.pi:
+                        tmp1 = -1*(2*np.pi-tmp1)
+                    if tmp1 < -np.pi:
+                        tmp1 = 2*np.pi + tmp1
+                    if tmp2 > np.pi:
+                        tmp2 = -1*(2*np.pi - tmp2)
+                    if tmp2 < -np.pi:
+                        tmp2 = 2*np.pi + tmp2
+                    t1[nbonds+nangles+i] = tmp1
+                    t2[nbonds+nangles+i] = tmp2
+                ictan[n,:] = f1*t1 + (1-f1)*t2
+            
+            dqmaga[n]=0.0
+            ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
+            self.icoords[newic_n].bmatp = self.icoords[newic_n].bmatp_create()
+            self.icoords[newic_n].bmatp_to_U()
+            self.icoords[newic_n].opt_constraint(ictan0)
+            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.icoords[newic_n].Ut[-1,:nbonds])*2.5
+            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.icoords[newic_n].Ut[-1,nbonds:])
+            dqmaga[n] = float(dqmaga[n])
         
+
+        print '------------printing ictan[:]-------------'
+        for row in ictan:
+            print row
+        print '------------printing dqmaga---------------'
+        print dqmaga
         self.dqmaga = dqmaga
         self.ictan = ictan
 
@@ -503,51 +548,6 @@ class Base_Method(object,Print):
             if iters > maxiters:
                 raise ValueError("reached max number of growth iterations")
         self.write_node_xyz()
-
-
-    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
-        print "*********************************************************************"
-        print "************************** in opt_iters *****************************"
-        print "*********************************************************************"
-        for i in range(1,self.nnodes-1):
-            self.active[i] = True
-        for oi in range(max_iter):
-            self.get_tangents_1g() #Try get_tangents_1e here
-            self.opt_steps(optsteps,nconstraints)
-            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-                if ico.gradrms < self.CONV_TOL:
-                    self.active[i] = False
-            totalgrad = 0.0
-            gradrms = 0.0
-            print " rn3m6: {:1.4}".format(self.rn3m6)
-            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-                print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
-                if i%5 == 0:
-                    print
-                totalgrad += ico.gradrms*self.rn3m6
-                gradrms += ico.gradrms*ico.gradrms
-            print
-            gradrms = np.sqrt(gradrms/(self.nnodes-2))
-            self.emaxp = self.emax
-            self.emax = float(max(self.energies[1:-1]))
-            self.nmax = np.where(self.energies==self.emax)[0][0]
-
-            #TODO stuff with path_overlap/path_overlapn
-            #TODO Stuff with find and climb
-            #TODO Stuff with find_peaks            
-            print "convergence criteria: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
-            #also prints tgrads and jobGradCount
-            if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
-                print " String is converged"
-                print " String convergence criteria is {:1.5}".format(self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5)
-                print " Printing string to opt_converged_000.xyz"
-                self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
-                return
-            self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
-            if oi!=max_iter-1:
-                self.ic_reparam(nconstraints=nconstraints)
-
 
     def interpolateR(self,newnodes=1):
         print "interpolateR"
