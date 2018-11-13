@@ -135,7 +135,6 @@ class ICoords:
 
     def tangent_SE(ICoord1,driving_coordinates):
         ictan = []
-        bdist = 0.
         nadds = driving_coordinates.count("ADD")
         nbreaks = driving_coordinates.count("BREAK")
         nangles = driving_coordinates.count("ANGLE")
@@ -184,9 +183,8 @@ class ICoords:
                 print(" torsion: %s is index %i "%(i[1],tor_idx))
                 print(" torv: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
 
-        bdist = np.linalg.norm(ictan)
 
-        return ictan,bdist
+        return ictan
 
 
 ######################  IC objects #####################################

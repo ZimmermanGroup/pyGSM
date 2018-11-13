@@ -5,7 +5,6 @@ from base_gsm import *
 from dlc import *
 from pes import *
 import pybel as pb
-import sys
 
 
 class SE_GSM(Base_Method):
@@ -52,12 +51,31 @@ class SE_GSM(Base_Method):
         self.active[nR] = True
         print(" Here is new active:",self.active)
 
-    def tangent(self,n1,n2):
-        if n2 ==self.nR-1:
-            return DLC.tangent_SE(self.icoords[n1],self.icoords[n2])
-        else:
-            return DLC.tangent_1(self.icoords[n1],self.icoords[n2])
+    def make_nlist(self):
+        ncurrent =0
+        nlist = [0]*(2*self.nnodes)
+        for n in range(self.nR-1):
+            nlist[2*ncurrent] = n
+            nlist[2*ncurrent+1] = n+1
+            ncurrent += 1
+        nlist[2*ncurrent+1] = self.nR -1
+        nlist[2*ncurrent] = self.nR -1
+        ncurrent += 1
+        print nlist
 
+        return ncurrent,nlist
+
+
+    def tangent(self,n1,n2):
+        print n1,n2
+        if n2 ==self.nR-1:
+            print" getting tangent from node ",n2
+            return DLC.tangent_SE(self.icoords[n2],self.driving_coords)
+        elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
+            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
+        else:
+            raise ValueError("can't make tan")
 
 if __name__ == '__main__':
 #    from icoord import *
@@ -78,6 +96,10 @@ if __name__ == '__main__':
         filepath="tests/fluoroethene.xyz"
         filepath2="tests/stretched_fluoroethene.xyz"
         nocc=11
+        nactive=2
+    if True:
+        filepath="tests/ethylene.xyz"
+        nocc=7
         nactive=2
 
     if False:
@@ -106,23 +128,14 @@ if __name__ == '__main__':
 
     if True:
         print "\n Starting GSM \n"
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("BREAK",1,2),("TORSION",5,2,1,3,90.)])
-        print "about to interpolate"
-        gsm.interpolate(4)
-        gsm.write_node_xyz()
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
+        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
+        gsm.icoords[0].gradrms = 0.
+        gsm.interpolate(1)
 
-    if False:
-        print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
-    
-    if False:
-        gsm.get_tangents_1(n0=0)
-
-    if False:
-        gsm.ic_reparam_g()
-
-
-    if False:
-        gsm.grow_string(50)
+    if True:
+        #gsm.grow_string(50)
+        gsm.growth_iters(iters=5,maxopt=3,nconstraints=1)
         #gsm.growth_iters(iters=50,maxopt=3,nconstraints=1)
         #gsm.opt_iters()
         if ORCA:
