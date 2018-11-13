@@ -187,16 +187,17 @@ class DLC(Base_DLC,Bmat,Utils):
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_1(ICoordB,ICoordA)
+        ictan = DLC.tangent_1(ICoordA,ICoordB)
+        #print ictan.T
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
         if nmax-ncurr > 1:
-            dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
+            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
         else:
-            dq0[ICoordC.nicd-1] = dqmag/2.0;
+            dq0[ICoordC.nicd-1] = -dqmag/2.0;
 
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
