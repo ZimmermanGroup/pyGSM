@@ -139,7 +139,10 @@ class Base_Method(object,Print):
                 PES=PES1,
                 ))
                 )
-        
+            self.icoords[-1].gradrms = 0.
+            self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+        self.icoords[0].gradrms = 0.
+        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.nn = 2
         self.nR = 1
         self.nP = 1        

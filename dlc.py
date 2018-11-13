@@ -178,7 +178,7 @@ class DLC(Base_DLC,Bmat,Utils):
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_1(ICoordB,ICoordA)
+        ictan = DLC.tangent_1(ICoordA,ICoordB)
         #print ictan.T
         ICoordC.opt_constraint(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
@@ -186,9 +186,9 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
         if nmax-ncurr > 1:
-            dq0[ICoordC.nicd-1] = dqmag/float(nmax-ncurr)
+            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
         else:
-            dq0[ICoordC.nicd-1] = dqmag/2.0;
+            dq0[ICoordC.nicd-1] = -dqmag/2.0;
 
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
@@ -631,8 +631,6 @@ class DLC(Base_DLC,Bmat,Utils):
 
     def step_controller(self):
         if (self.dEstep>0.01 and self.PES.lot.do_coupling==False) or (self.dEstep>0.01 and self.PES.dE<1.0 and self.PES.lot.do_coupling==True):
-            if self.PES.dE>1.0:
-                raise ValueError
             if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
@@ -827,7 +825,7 @@ class DLC(Base_DLC,Bmat,Utils):
         for v in self.Ut:
             w = v - np.sum( np.dot(v,b)*b  for b in basis )
             tmp = w/np.linalg.norm(w)
-            if (w > 1e-4).any():  
+            if (abs(w) > 1e-4).any():  
                 basis[count,:] =tmp
                 count +=1
         self.Ut = np.array(basis)

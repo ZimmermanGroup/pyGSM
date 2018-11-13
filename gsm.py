@@ -108,10 +108,10 @@ class GSM(Base_Method):
                     self.growth_iters(nconstraints=1,current=iters)
                 sys.stdout.flush()
             else:
+                print 'All nodes added. String done growing'
                 break
             iters += 1
             if iters > maxiters:
-                print 'All nodes added. String done growing'
                 break
         self.write_node_xyz()
 
@@ -124,16 +124,17 @@ class GSM(Base_Method):
             self.set_active(self.nR-1, self.nnodes-self.nP)
             #TODO for SSM
             if self.icoords[self.nR-1].gradrms < self.gaddmax:
+                self.active[self.nR-1] = False
                 if self.icoords[self.nR] == 0:
-                    self.active[self.nR-1] = False
                     self.interpolateR()
             if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
+                self.active[self.nnodes-self.nP] = False
                 if self.icoords[-self.nP-1] == 0:
-                    self.active[self.nnodes-self.nP] = False
                     self.interpolateP()
             if self.nn==self.nnodes:
                 self.get_tangents_1g()
                 self.opt_steps(maxopt,nconstraints)
+            self.ic_reparam_g(nconstraints=nconstraints)
             self.get_tangents_1g()
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
@@ -170,6 +171,7 @@ class GSM(Base_Method):
         for i in range(1,self.nnodes-1):
             self.active[i] = True
         for oi in range(max_iter):
+            sys.stdout.flush()
             self.get_tangents_1g() #Try get_tangents_1e here
             self.opt_steps(optsteps,nconstraints)
             for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
@@ -201,6 +203,7 @@ class GSM(Base_Method):
                 print " String convergence criteria is {:1.5}".format(self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5)
                 print " Printing string to opt_converged_000.xyz"
                 self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
+                sys.stdout.flush()
                 return
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
             if oi!=max_iter-1:
@@ -280,7 +283,7 @@ class GSM(Base_Method):
                 dE2 = abs(self.energies[n] - self.energies[n-1])
                 dEmax = max(dE1,dE2)
                 dEmin = min(dE1,dE2)
-                if self.energies[n+1]>self.energies[n-1]:
+                if self.energies[n+1]>self.energies[n-1]: #Continue from line 5897 in gstring.cpp
                     pass
         
         self.dqmaga = dqmaga
@@ -306,12 +309,13 @@ class GSM(Base_Method):
 
         nlist[2*ncurrent] = self.nR -1
         nlist[2*ncurrent+1] = self.nnodes - self.nP
+
         if False:
             nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
 
         #TODO is this actually used?
-        if self.nR == 0: nlist[2*ncurrent+1] += 1
-        if self.nP == 0: nlist[2*ncurrent] -= 1
+        if self.nR == 0: nlist[2*ncurrent] += 1
+        if self.nP == 0: nlist[2*ncurrent+1] -= 1
         ncurrent += 1
         nlist[2*ncurrent] = self.nnodes -self.nP
         nlist[2*ncurrent+1] = self.nR-1
@@ -480,12 +484,25 @@ class GSM(Base_Method):
                 else:
                     self.ictan[n] = np.copy(ictan0[n+1])
                 ictan0 = np.reshape(np.copy(ictan[n]),(num_ics,1))
-                self.icoords[n].opt_constraint(ictan0) #TODO at line 3815
-                        
+                self.icoords[n].opt_constraint(ictan0) #3815
+            
+            print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
+            for n in range(self.nnodes):
+                print " {:1.2}".format(self.dqmaga[n]),
+            print
+
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
+
+        #close_dist_fix(0) #done here in GString line 3427.
+
+        print '**************************************************'
+        print '***************in ic_reparam_g********************'
+        print '**************************************************'
+
         num_ics = self.icoords[0].num_ics
+        len_d = self.icoords[0].nicd
         
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
@@ -501,24 +518,35 @@ class GSM(Base_Method):
         emax = -1000 # And this?
 
         for i in range(ic_reparam_steps):
+            print 'on ic_reparam step',i
             self.get_tangents_1g()
-            totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP:self.nnodes])
+            totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
+#            totaldqmag = 0.
+#            for n in range(n0,self.nR-1):
+#                totaldqmag += self.dqmaga[n]
+#            for n in range(self.nnodes-self.nP+1,self.nnodes):
+#                totaldqmag += self.dqmaga[n]
             print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
             print " printing spacings dqmaga: "
             for n in range(self.nnodes):
-                print " {:1.2}".format(self.dqmaga[n])
-            print ''
+                print " {:1.2}".format(self.dqmaga[n]),
+                if (n+1)%5==0:
+                    print
+            print 
             
             if i == 0:
+                rpart = np.zeros(self.nnodes)
                 for n in range(n0+1,self.nR):
-                    rpart[n] += 1.0/(self.nn-2)
+                    rpart[n] = 1.0/(self.nn-2)
                 for n in range(self.nnodes-self.nP,self.nnodes-1):
-                    rpart[n] += 1.0/(self.nn-2)
+                    rpart[n] = 1.0/(self.nn-2)
 #                rpart[0] = 0.0
 #                rpart[-1] = 0.0
                 print " rpart: "
                 for n in range(1,self.nnodes):
                     print " {:1.2}".format(rpart[n]),
+                    if (n)%5==0:
+                        print
                 print
             nR0 = self.nR
             nP0 = self.nP
@@ -526,7 +554,7 @@ class GSM(Base_Method):
             if False:
                 if self.nnodes-self.nn > 2:
                     nR0 -= 1
-                    nP0 -= 0
+                    nP0 -= 1
             
             deltadq = 0.0
             for n in range(n0+1,nR0):
@@ -560,14 +588,18 @@ class GSM(Base_Method):
                         if len(self.ictan[n]) != 0:# and self.active[n]: #may need to change active requirement TODO
                             #print "May need to make copy_CI"
                             #This does something to ictan0
-                            self.icoords[n].update_ics()
+                            #self.icoords[n].update_ics()
                             self.icoords[n].bmatp = self.icoords[n].bmatp_create()
                             self.icoords[n].bmatp_to_U()
                             self.icoords[n].opt_constraint(self.ictan[n])
                             self.icoords[n].bmat_create()
                             dq0 = np.zeros((self.icoords[n].nicd,1))
                             dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
-                            print " dq0[constraint]: {:1.3}".format(dq0[self.icoords[n].nicd-nconstraints])
+                            print ' dq0:',
+                            for iii in dq0:
+                                print iii,
+                            print
+                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
                             self.icoords[n].ic_to_xyz(dq0)
                             self.icoords[n].update_ics()
                         else:
@@ -591,8 +623,8 @@ class GSM(Base_Method):
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=False
-    PYTC=True
+    QCHEM=True
+    PYTC=False
     nproc=8
 
     if QCHEM:
@@ -639,10 +671,10 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,nconstraints=1)
-        gsm.icoords[0].gradrms = 0.
-        gsm.icoords[-1].gradrms = 0.
-        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
-        gsm.icoords[-1].energy = gsm.icoords[-1].PES.get_energy(gsm.icoords[-1].geom)
+#        gsm.icoords[0].gradrms = 0.
+#        gsm.icoords[-1].gradrms = 0.
+#        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
+#        gsm.icoords[-1].energy = gsm.icoords[-1].PES.get_energy(gsm.icoords[-1].geom)
         print 'gsm.icoords[0] E:',gsm.icoords[0].energy
         print 'gsm.icoords[-1]E:',gsm.icoords[-1].energy
         gsm.interpolate(2)
@@ -653,13 +685,14 @@ if __name__ == '__main__':
     if False:
         gsm.get_tangents_1(n0=0)
 
-    if False:
+    if True:
         gsm.ic_reparam_g()
 
 
-    if False:
+    if True:
         gsm.grow_string(50)
         gsm.opt_iters()
         if ORCA:
             os.system('rm temporcarun/*')
 
+    gsm.write_node_xyz("nodes_xyz_file1.xyz")
