@@ -117,6 +117,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 )
     @staticmethod
     def add_node_SE(ICoordA,driving_coordinate):
+
         dq0 = np.zeros((ICoordA.nicd,1))
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
@@ -134,12 +135,19 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ICoordC.setup()
         ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
-        print ictan.T
         ICoordC.opt_constraint(ictan)
-        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
-        print " dqmag: %1.3f"%dqmag
+        bdist = np.dot(ICoordC.Ut[-1,:],ictan)
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
+        DQMAG_SSM_MAX=0.8
+        DQMAG_SSM_MIN=0.2
+        DQMAG_SSM_SCALE=1.5
+        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
+        a = bdist/DQMAG_SSM_SCALE
+        if a>1:
+            a=1
+        dqmag = DQMAG_SSM_MIN+minmax*a
+        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
 
         dq0[ICoordC.nicd-1] = -dqmag
 
@@ -149,6 +157,7 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_create()
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
+        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
         
         #ICoordC.dqmag = dqmag
 
@@ -814,8 +823,11 @@ class DLC(Base_DLC,Bmat,Utils):
         dots = np.matmul(self.Ut,Cn.T)
         C_U = np.matmul(self.Ut.T,dots)
 
+        #print "Cn written in terms of U"
+        #print C_U
         # normalize C_U
         C_U = preprocessing.normalize(C_U.T,norm='l2')
+        #print C_U
         #print "shape of overlaps is %s, shape of Ut is %s, shape of C_U is %s" %(np.shape(dots),np.shape(self.Ut),np.shape(C_U))
 
         basis=np.zeros((self.nicd,self.num_ics),dtype=float)
@@ -841,7 +853,7 @@ class DLC(Base_DLC,Bmat,Utils):
         basis[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
         for i,v in enumerate(vecs):
             w = v - np.sum( np.dot(v,b)*b  for b in basis)
-            if (w > 1e-10).any():  
+            if (abs(w) > 1e-10).any():  
                 tmp = w/np.linalg.norm(w)
                 basis[i,:]=tmp
         return basis

@@ -1,119 +1,227 @@
-import numpy as np
 import options
+import numpy as np
 import os
-from base_opt import *
-from dlc import *
-from pes import *
+import openbabel as ob
 import pybel as pb
-import sys
+from dlc import *
+from copy import deepcopy
+import StringIO
+from _print_opt import *
 
-class GSM(Base_Method):
+class Base_Method(object,Print):
+    
+    @staticmethod
+    def default_options():
+        if hasattr(Base_Method, '_default_options'): return Base_Method._default_options.copy()
 
-    def de_gsm(self):
-        #grow string
-        #for i in range(max_iters)
-        #grow_node if okay
-        #optimize string
-        #find TS
-        return
+        opt = options.Options() 
+        
+        opt.add_option(
+            key='ICoord1',
+            required=True,
+            allowed_types=[DLC],
+            doc='')
 
-    def interpolateR(self,newnodes=1):
-        print "interpolateR"
-        if self.nn+newnodes > self.nnodes:
-            raise ValueError("Adding too many nodes, cannot interpolate")
-        for i in range(newnodes):
-            print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
-            if not self.isSSM:
-                self.icoords[self.nR] = DLC.add_node(self.icoords[self.nR-1],self.icoords[-self.nP],self.nnodes,self.nn)
+        opt.add_option(
+            key='ICoord2',
+            required=False,
+            allowed_types=[DLC],
+            doc='')
+
+        opt.add_option(
+            key='nnodes',
+            required=False,
+            value=1,
+            allowed_types=[int],
+            doc='number of string nodes')
+        
+        opt.add_option(
+            key='isSSM',
+            required=False,
+            value=False,
+            allowed_types=[bool],
+            doc='specify SSM or DSM')
+
+        opt.add_option(
+            key='driving_coords',
+            required=False,
+            value=[],
+            allowed_types=[list],
+            doc='Provide a list of tuples to select coordinates to modify atoms\
+                 indexed at 1')
+
+        opt.add_option(
+            key='isMAP_SE',
+            required=False,
+            value=False,
+            allowed_types=[bool],
+            doc='specify isMAP_SE')
+
+        opt.add_option(
+            key='nconstraints',
+            required=False,
+            value=0,
+            allowed_types=[int])
+
+        opt.add_option(
+            key='CONV_TOL',
+            value=0.001,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
+        opt.add_option(
+            key='ADD_NODE_TOL',
+            value=0.1,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
+
+        Base_Method._default_options = opt
+        return Base_Method._default_options.copy()
+
+
+    @staticmethod
+    def from_options(**kwargs):
+        return Base_Method(Base_Method.default_options().set_values(kwargs))
+
+#    def restart_string(self,xyzbase='restart'):#,nR,nP):
+#        with open(xyzfile) as xyzcoords:
+#            xyzlines = xyzcoords.readlines()
+#        
+#    def write_restart(self,xyzbase='restart'):
+#        rxyzfile = os.getcwd()+"/"+xyzbase+'_r.xyz'
+#        pxyzfile = os.getcwd()+'/'+xyzbase+'_p.xyz'
+#        rxyz = pb.Outputfile('xyz',rxyzfile,overwrite=True)
+#        pxyz = pb.Outputfile('xyz',pxyzfile,overwrite=True)
+#        obconversion = ob.OBConversion()
+#        obconversion.SetOutFormat('xyz')
+#        r_mols = []
+#        for i in range(self.nR):
+#            r_mols.append(obconversion.WriteString(self.icoords[i]
+        
+
+    def __init__(
+            self,
+            options,
+            ):
+        """ Constructor """
+        self.options = options
+
+        # Cache some useful attributes
+
+        #TODO What is optCG Ask Paul
+        self.optCG = False
+        self.isTSnode =False
+        self.nnodes = self.options['nnodes']
+        self.icoords = [0]*self.nnodes
+        self.icoords[0] = self.options['ICoord1']
+        
+        self.nn = 2
+        self.nR = 1
+        self.nP = 1        
+        self.isSSM = self.options['isSSM']
+        self.isMAP_SE = self.options['isMAP_SE']
+        self.active = [False] * self.nnodes
+        self.active[0] = False
+        self.active[-1] = False
+        self.driving_coords = self.options['driving_coords']
+        #self.isomer_init()
+        self.nconstraints = self.options['nconstraints']
+        self.CONV_TOL = self.options['CONV_TOL']
+        self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
+
+        self.energies = np.asarray([-1e8]*self.nnodes)
+        self.emax = float(max(self.energies))
+        self.nmax = 0
+        self.climb = False
+        self.find = False
+
+        self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
+        self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
+        print " gaddmax:",self.gaddmax
+
+    def store_energies(self):
+        for i,ico in enumerate(self.icoords):
+            if ico != 0:
+                self.energies[i] = ico.energy
+
+    def optimize(self,n=0,nsteps=100,nconstraints=0):
+        output_format = 'xyz'
+        obconversion = ob.OBConversion()
+        obconversion.SetOutFormat(output_format)
+        opt_molecules=[]
+        #opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
+        self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
+        self.icoords[n].energy=0
+        grmss = []
+        steps = []
+        energies=[]
+        Es =[]
+        self.icoords[n].do_bfgs=False # gets reset after each step
+        self.icoords[n].buf = StringIO.StringIO()
+        self.icoords[n].bmatp = self.icoords[n].bmatp_create()
+        self.icoords[n].bmatp_to_U()
+        self.icoords[n].bmat_create()
+        # set node id
+        self.icoords[n].node_id = n
+    
+        print "Initial energy is %1.4f\n" % self.icoords[n].V0
+        self.icoords[n].buf.write("\n Writing convergence:")
+    
+        for step in range(nsteps):
+            if self.icoords[n].print_level>0:
+                print("\nOpt step: %i" %(step+1)),
+            self.icoords[n].buf.write("\nOpt step: %d" %(step+1))
+   
+            # => update DLCs <= #
+            self.icoords[n].bmatp = self.icoords[n].bmatp_create()
+            self.icoords[n].bmatp_to_U()
+            self.icoords[n].bmat_create()
+            if self.icoords[n].PES.lot.do_coupling is False:
+                if nconstraints>0:
+                    constraints=self.ictan[n]
             else:
-                self.icoords[self.nR] = DLC.add_node_SE(self.icoords[self.nR-1],self.driving_coords)
-            self.nn+=1
-            self.nR+=1
-            print "nn=%i,nR=%i" %(self.nn,self.nR)
-            self.active[self.nR-1] = True
+                if nconstraints==2:
+                    dvec = self.icoords[n].PES.get_coupling(self.icoords[n].geom)
+                    dgrad = self.icoords[n].PES.get_dgrad(self.icoords[n].geom)
+                    dvecq = self.icoords[n].grad_to_q(dvec)
+                    dgradq = self.icoords[n].grad_to_q(dgrad)
+                    dvecq_U = self.icoords[n].fromDLC_to_ICbasis(dvecq)
+                    dgradq_U = self.icoords[n].fromDLC_to_ICbasis(dgradq)
+                    constraints = np.zeros((len(dvecq_U),2),dtype=float)
+                    constraints[:,0] = dvecq_U[:,0]
+                    constraints[:,1] = dgradq_U[:,0]
+                elif nconstraints==3:
+                    raise NotImplemented
 
-    def interpolateP(self,newnodes=1):
-        print "interpolateP"
-        if self.nn+newnodes > self.nnodes:
-            print("Adding too many nodes, cannot interpolate")
-            return
-        for i in range(newnodes):
-            print "adding node between %i %i" % (self.nnodes-self.nP,self.nR-1)
-            self.icoords[-self.nP-1] = DLC.add_node(self.icoords[-self.nP],self.icoords[self.nR-1],self.nnodes,self.nn)
-            self.nn+=1
-            self.nP+=1
-            print "nn=%i,nR=%i" %(self.nn,self.nR)
-            self.active[-self.nP] = True
+            if nconstraints>0:
+                self.icoords[n].opt_constraint(constraints)
+                self.icoords[n].bmat_create()
+            #print self.icoords[n].bmatti
+            self.icoords[n].Hint = self.icoords[n].Hintp_to_Hint()
 
-    def interpolate(self,newnodes=1):
-        if self.nn+newnodes > self.nnodes:
-            print("Adding too many nodes, cannot interpolate")
-        sign = -1
-        for i in range(newnodes):
-            print "Adding node",i
-            sign *= -1
-            if sign == 1:
-                self.interpolateR()
+            # => Opt step <= #
+            if self.icoords[n].PES.lot.do_coupling is False:
+                smag =self.icoords[n].opt_step(nconstraints)
             else:
-                self.interpolateP()
+                smag =self.icoords[n].combined_step(nconstraints)
 
-    def interpolate2(self,newnodes=1):
-        sign = -1
-        for i in range(newnodes):
-            sign *= -1
-            if sign == 1:
-                self.add_node(self.nR-1,self.nR,-self.nP,self.nnodes,self.nn)
-                self.nR += 1
-            elif sign == -1:
-                self.add_node(-self.nP,-self.nP-1,self.nR-1,self.nnodes,self.nn)
-                self.nP += 1            
-
-
-    def set_active(self,nR,nP):
-        print(" Here is active:",self.active)
-        if nR!=nP:
-            print(" setting active nodes to %i and %i"%(nR,nP))
-        else:
-            print(" setting active node to %i "%nR)
-
-        for i in range(self.nnodes):
-            if self.icoords[i] !=0:
-                self.active[i] = False;
-                self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
-        self.active[nR] = True
-        self.active[nP] = True
-        print(" Here is new active:",self.active)
-
-        #if (isSSM:
-        #  icoords[nnR].OPTTHRESH = CONV_TOL*10.;
-        #  icoords[nnP].OPTTHRESH = CONV_TOL*10.;
-        #}
-
-    def grow_string(self,maxiters=20):
-        print 'Starting Growth Phase'
-        self.write_node_xyz("nodes_xyz_file0.xyz")
-        iters = 1
-        while True:
-            print "beginning iteration:",iters
-            sys.stdout.flush()
-            do_growth = False
-            for act in self.active:
-                if act:
-                    do_growth = True
-                    break
-            if do_growth:
-                if self.isSSM:
-                    self.growth_iters_SSM(nconstraints=1,current=iters)
-                else:
-                    self.growth_iters(nconstraints=1,current=iters)
-                sys.stdout.flush()
-            else:
-                print 'All nodes added. String done growing'
+            # convergence quantities
+            grmss.append(float(self.icoords[n].gradrms))
+            steps.append(smag)
+            energies.append(self.icoords[n].energy-self.icoords[n].V0)
+            opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
+    
+            #write convergence
+            self.write_node(n,opt_molecules,energies,grmss,steps)
+    
+            if self.icoords[n].gradrms<self.CONV_TOL:
                 break
-            iters += 1
-            if iters > maxiters:
-                break
-        self.write_node_xyz()
+        print(self.icoords[n].buf.getvalue())
+        print "Final energy is %2.5f" % (self.icoords[n].energy)
+        return smag
 
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
@@ -209,7 +317,6 @@ class GSM(Base_Method):
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
 
-            
     def get_tangents_1(self,n0=0):
         size_ic = self.icoords[0].num_ics
         nbonds = self.icoords[0].BObj.nbonds
@@ -218,7 +325,6 @@ class GSM(Base_Method):
         ictan = np.zeros((self.nnodes+1,size_ic))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
-        
         for n in range(n0+1,self.nnodes):
             ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
             dqmaga[n] = 0.
@@ -290,13 +396,16 @@ class GSM(Base_Method):
         self.ictan = ictan
 
     def get_tangents_1g(self):
-        size_ic = self.icoords[0].num_ics
+        """
+        Finds the tangents during the growth phase. 
+        Tangents referenced to left or right during growing phase
+        """
+
         ictan = [[]]*self.nnodes
-        nlist = [0]*(2*self.nnodes)
-        ncurrent = 0
         dqmaga = [0.]*self.nnodes
         dqa = [[],]*self.nnodes
-
+        ncurrent = 0
+        nlist = [0]*(2*self.nnodes)
         for n in range(self.nR-1):
             nlist[2*ncurrent] = n
             nlist[2*ncurrent+1] = n+1
@@ -325,11 +434,8 @@ class GSM(Base_Method):
         ncurrent += 1
 
         for n in range(ncurrent):
-            if self.isSSM:
-                pass #do tangent_1b()
-            else:
-                ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
-
+            #ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
+            ictan[nlist[2*n]] = self.tangent(nlist[2*n+1],nlist[2*n])
             ictan0 = np.copy(ictan[nlist[2*n]])
 
             if True:
@@ -358,12 +464,101 @@ class GSM(Base_Method):
                 print "\n"
 #           #     print np.transpose(ictan[nlist[2*n]])
 
-    def start_string(self):
-        print "\n"
-        self.interpolate(2) 
-        self.nn=2
-        self.nR=1
-        self.nP=1
+
+    def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
+        print "*********************************************************************"
+        print "************************ in growth_iters ****************************"
+        print "*********************************************************************"
+        for n in range(iters):
+            self.set_active(self.nR-1, self.nnodes-self.nP)
+            self.check_add_node()
+            self.get_tangents_1g()
+            #self.ic_reparam_g()
+            self.opt_steps(maxopt,nconstraints)
+            self.store_energies()
+
+            totalgrad = 0.0
+            gradrms = 0.0
+            self.emaxp = self.emax            
+            for ico in self.icoords:
+                if ico != 0:
+                    totalgrad += ico.gradrms*self.rn3m6
+                    gradrms += ico.gradrms*ico.gradrms
+            gradrms = np.sqrt(gradrms/(self.nnodes-2))
+
+            self.emax = float(max(self.energies[1:-1]))
+            self.nmax = np.where(self.energies==self.emax)[0][0]
+            
+            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(current,float(totalgrad),float(gradrms),float(self.emax))
+ 
+            self.write_xyz_files(iters=current,base='growth_iters',nconstraints=nconstraints)
+
+
+    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
+        print "*********************************************************************"
+        print "************************** in opt_iters *****************************"
+        print "*********************************************************************"
+        for i in range(1,self.nnodes-1):
+            self.active[i] = True
+        for oi in range(max_iter):
+            self.get_tangents_1g() #Try get_tangents_1e here
+            self.opt_steps(optsteps,nconstraints)
+            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
+                if ico.gradrms < self.CONV_TOL:
+                    self.active[i] = False
+            totalgrad = 0.0
+            gradrms = 0.0
+            print " rn3m6: {:1.4}".format(self.rn3m6)
+            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
+                print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
+                if i%5 == 0:
+                    print
+                totalgrad += ico.gradrms*self.rn3m6
+                gradrms += ico.gradrms*ico.gradrms
+            print
+            gradrms = np.sqrt(gradrms/(self.nnodes-2))
+            self.emaxp = self.emax
+            self.emax = float(max(self.energies[1:-1]))
+            self.nmax = np.where(self.energies==self.emax)[0][0]
+
+            #TODO stuff with path_overlap/path_overlapn
+            #TODO Stuff with find and climb
+            #TODO Stuff with find_peaks            
+            print "convergence criteria: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
+            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
+            #also prints tgrads and jobGradCount
+            if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
+                print " String is converged"
+                print " String convergence criteria is {:1.5}".format(self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5)
+                print " Printing string to opt_converged_000.xyz"
+                self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
+                return
+            self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
+            if oi!=max_iter-1:
+                self.ic_reparam(nconstraints=nconstraints)
+
+
+    def interpolateR(self,newnodes=1):
+        print "interpolateR"
+        if self.nn+newnodes > self.nnodes:
+            raise ValueError("Adding too many nodes, cannot interpolate")
+        for i in range(newnodes):
+            self.icoords[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+            self.nn+=1
+            self.nR+=1
+            print "nn=%i,nR=%i" %(self.nn,self.nR)
+            self.active[self.nR-1] = True
+
+    def interpolateP(self,newnodes=1):
+        print "interpolateP"
+        if self.nn+newnodes > self.nnodes:
+            raise ValueError("Adding too many nodes, cannot interpolate")
+        for i in range(newnodes):
+            self.icoords[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nR-1)
+            self.nn+=1
+            self.nP+=1
+            print "nn=%i,nR=%i" %(self.nn,self.nR)
+            self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=4,n0=0,nconstraints=1,rtype=0):
         num_ics = self.icoords[0].num_ics

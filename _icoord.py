@@ -145,10 +145,8 @@ class ICoords:
 
         for i in driving_coordinates:
             if "ADD" in i:
-                print i
                 bond = (i[1],i[2])
                 wbond = ICoord1.BObj.bond_num(bond)
-                print wbond
                 d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))/2.8
                 if ICoord1.distance(bond[0],bond[1])>d0:
                     ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1]))
@@ -183,7 +181,7 @@ class ICoords:
                     tor_diff+=360.
                 if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
                     ictan[ICoord1.BObj.nbonds+ICoord1.AObj.nangles+tor_idx] = -tor_diff*np.pi/180.
-                print(" torsion: %s is index %i ",i[1],tor_idx)
+                print(" torsion: %s is index %i "%(i[1],tor_idx))
                 print(" torv: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
 
         bdist = np.linalg.norm(ictan)
@@ -207,7 +205,6 @@ class Bond_obj(object):
 
     def bond_num(self,bond):
         for b in [bond,tuple(reversed(bond))]:
-            print b
             try:
                 return self.bonds.index(b)
             except ValueError:
