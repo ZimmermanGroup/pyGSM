@@ -32,6 +32,8 @@ class GSM(Base_Method):
             mol= tmp.mol,
             PES=PES1,
             )))
+        print "print levels at beginning are ",self.icoords[0].print_level
+        print "print levels at beginning are ",self.icoords[-1].print_level
 
     def go_gsm(self):
         self.icoords[0].gradrms = 0.
@@ -90,10 +92,12 @@ class GSM(Base_Method):
             self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
                 self.interpolateR()
+                print "print_level is",self.icoords[self.nR-1].print_level
         if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
             self.active[self.nnodes-self.nP] = False
             if self.icoords[-self.nP-1] == 0:
                 self.interpolateP()
+                print "print_level is",self.icoords[self.nR-1].print_level
 
     def make_nlist(self):
         ncurrent = 0

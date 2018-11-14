@@ -107,14 +107,21 @@ class DLC(Base_DLC,Bmat,Utils):
         PES1 = PES(icoordA.PES.options.copy().set_values({
             "lot": lot1,
             }))
-        return DLC.from_options(
-                bonds= bondA,
-                angles= angleA,
-                torsions= torsionA,
-                mol = mol1,
-                PES = PES1,
-                nicd= icoordA.nicd
-                )
+        return DLC(icoordA.options.copy().set_values({
+            "bonds":bondA,
+            "angles":angleA,
+            "torsions":torsionA,
+            'mol':mol1,
+            'PES':PES1,
+            }))
+        #return DLC.from_options(
+        #        bonds= bondA,
+        #        angles= angleA,
+        #        torsions= torsionA,
+        #        mol = mol1,
+        #        PES = PES1,
+        #        nicd= icoordA.nicd
+        #        )
     @staticmethod
     def add_node_SE(ICoordA,driving_coordinate):
 

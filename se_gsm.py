@@ -20,6 +20,12 @@ class SE_GSM(Base_Method):
         super(SE_GSM,self).__init__(options)
         self.nn=1
 
+    def go_gsm(self):
+        self.icoords[0].gradrms = 0.
+        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        self.interpolate(1) 
+        self.growth_iters(iters=3,maxopt=3)
+
     def add_node(self,n1,n2,n3=None):
         print "adding node: %i from node %i" %(n2,n1)
         return DLC.add_node_SE(self.icoords[n1],self.driving_coords)
@@ -40,7 +46,7 @@ class SE_GSM(Base_Method):
         pass
 
     def set_active(self,nR,nP=None):
-        print(" Here is active:",self.active)
+        #print(" Here is active:",self.active)
         print(" setting active node to %i "%nR)
 
         for i in range(self.nnodes):
@@ -49,7 +55,7 @@ class SE_GSM(Base_Method):
                 self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
         self.icoords[nR].OPTTHRESH = self.ADD_NODE_TOL
         self.active[nR] = True
-        print(" Here is new active:",self.active)
+        #print(" Here is new active:",self.active)
 
     def make_nlist(self):
         ncurrent =0
@@ -140,7 +146,7 @@ class SE_GSM(Base_Method):
         print "max nodes" 
         print maxnodes
         npeaks1 = len(maxnodes)
-        print "number of peaks is ",npeaks
+        print "number of peaks is ",npeaks1
         ediff=0.5
         PEAK4_EDIFF = 2.0
         if rtype==1:
@@ -152,7 +158,7 @@ class SE_GSM(Base_Method):
 
         #check if any node after peak is less than 2 kcal below
         for n in maxnodes:
-            diffs=(if self.energies[n]-e>ediff for e in self.energies[n:])
+            diffs=( self.energies[n]-e>ediff for e in self.energies[n:])
             if any(diffs):
                 found=n
                 npeaks2+=1
@@ -160,7 +166,7 @@ class SE_GSM(Base_Method):
         print "found %i significant peak(s) TOL %3.2f" %(npeaks,ediff)
 
         #handle dissociative case
-        if rtype=3 and npeaks==1:
+        if rtype==3 and npeaks==1:
             nextmin=0
             for n in range(found,numnodes-1):
                 if n in minnodes:
@@ -171,7 +177,7 @@ class SE_GSM(Base_Method):
 
         if rtype==3:
             return num_nodes
-        if allup=False and npeaks==0:
+        if allup==False and npeaks==0:
             return -2
 
         return npeaks
@@ -192,7 +198,7 @@ class SE_GSM(Base_Method):
         if ns<nodemax: ns=nodemax
 
         for n in range(ns,self.nR):
-            printf(" %4.3f" % self.energies[n])
+            print(" %4.3f" % self.energies[n])
             if self.energies[n]>emax:
                 nodemax=n
                 emax=self.energies[n]
@@ -210,7 +216,7 @@ class SE_GSM(Base_Method):
         print "ispast2",ispast2
         print "ispast3",ispast3
 
-        cgrad = self.icoords[nR-1].gradq[icoords[self.nR-1].nicd-1]
+        cgrad = self.icoords[self.nR-1].gradq[self.icoords[self.nR-1].nicd-1]
         print(" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR))
 
         if cgrad>CTHRESH:
@@ -225,8 +231,8 @@ class SE_GSM(Base_Method):
         else:
             ispast=0
 
-        if !ispast:
-            bch=check_for_reacation_g(1)
+        if ispast==0:
+            bch=self.check_for_reaction_g(1)
             if ispast3>1 and bch:
                 print "over the hill(3) %i connection changed" %bch
                 ispast=3
@@ -234,8 +240,8 @@ class SE_GSM(Base_Method):
         return ispast
 
     def check_for_reaction_g(self,rtype):
-        nadds = self.driving_coordinates.count("ADD")
-        nbreaks = self.driving_coordinates.count("BREAK")
+        nadds = self.driving_coords.count("ADD")
+        nbreaks = self.driving_coords.count("BREAK")
         if (nadds+nbreaks) <1:
             return 0
         nadded=0
@@ -311,7 +317,7 @@ if __name__ == '__main__':
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
 
     print "\n IC1 \n"
-    ic1=DLC.from_options(mol=mol,PES=pes)
+    ic1=DLC.from_options(mol=mol,PES=pes,print_level=0)
 
     if True:
         print "\n Starting GSM \n"

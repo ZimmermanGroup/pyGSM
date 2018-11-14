@@ -228,7 +228,8 @@ class Base_Method(object,Print):
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())
-        print "Final energy is %2.5f" % (self.icoords[n].energy)
+        if self.icoords[n].print_level>0:
+            print "Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
     def opt_steps(self,maxopt,nconstraints):
@@ -422,11 +423,11 @@ class Base_Method(object,Print):
 
         for n in range(ncurrent):
             #ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
-            ictan[nlist[2*n]] = self.tangent(nlist[2*n+1],nlist[2*n])
+            ictan[nlist[2*n]] = self.tangent(nlist[2*n],nlist[2*n+1])
             ictan0 = np.copy(ictan[nlist[2*n]])
-            print ictan0
 
-            print "forming space for", nlist[2*n+1]
+            if self.icoords[nlist[2*n+1]].print_level>1:
+                print "forming space for", nlist[2*n+1]
             self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
             self.icoords[nlist[2*n+1]].bmatp_to_U()
             self.icoords[nlist[2*n+1]].opt_constraint(ictan[nlist[2*n]])
@@ -438,7 +439,7 @@ class Base_Method(object,Print):
         self.dqmaga = dqmaga
         self.ictan = ictan
        
-        if True:
+        if False:
             for n in range(ncurrent):
                 print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
                 print "printing ictan[%i]" %nlist[2*n]       
@@ -463,6 +464,7 @@ class Base_Method(object,Print):
             self.check_add_node()
             self.get_tangents_1g()
             self.ic_reparam_g()
+            self.get_tangents_1g()
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
 
@@ -490,7 +492,6 @@ class Base_Method(object,Print):
                 if self.icoords[n] != 0 and self.active[n]==True:
                     print "optimizing node %i" % n
                     self.icoords[n].opt_constraint(self.ictan[n])
-                    print self.icoords[n].coords
                     self.icoords[n].smag = self.optimize(n,maxopt,nconstraints)
 
     #def grow_string(self,maxiters=20):
