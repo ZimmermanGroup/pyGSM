@@ -10,6 +10,10 @@ from _print_opt import *
 import sys
 
 class Base_Method(object,Print):
+
+    @staticmethod
+    def from_options(**kwargs):
+        return GSM(GSM.default_options().set_values(kwargs))
     
     @staticmethod
     def default_options():
@@ -138,6 +142,9 @@ class Base_Method(object,Print):
         self.nmax = 0
         self.climb = False
         self.find = False
+        self.n0 = 1 # something to do with added nodes? "first node along current block"
+        self.end_early=False
+        self.tscontinue=0 #TODO 2 is TS opt, 1 is climb?
 
         self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
@@ -223,46 +230,6 @@ class Base_Method(object,Print):
         print(self.icoords[n].buf.getvalue())
         print "Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
-
-
-    def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
-        print "*********************************************************************"
-        print "************************ in growth_iters ****************************"
-        print "*********************************************************************"
-        for n in range(iters):
-            self.set_active(self.nR-1, self.nnodes-self.nP)
-            #TODO for SSM
-            if self.icoords[self.nR-1].gradrms < self.gaddmax:
-                self.active[self.nR-1] = False
-                if self.icoords[self.nR] == 0:
-                    self.interpolateR()
-            if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
-                self.active[self.nnodes-self.nP] = False
-                if self.icoords[-self.nP-1] == 0:
-                    self.interpolateP()
-            if self.nn==self.nnodes:
-                self.get_tangents_1g()
-                self.opt_steps(maxopt,nconstraints)
-            self.ic_reparam_g(nconstraints=nconstraints)
-            self.get_tangents_1g()
-            self.opt_steps(maxopt,nconstraints)
-            self.store_energies()
-
-            totalgrad = 0.0
-            gradrms = 0.0
-            self.emaxp = self.emax            
-            for ico in self.icoords:
-                if ico != 0:
-                    totalgrad += ico.gradrms*self.rn3m6
-                    gradrms += ico.gradrms*ico.gradrms
-            gradrms = np.sqrt(gradrms/(self.nnodes-2))
-
-            self.emax = float(max(self.energies[1:-1]))
-            self.nmax = np.where(self.energies==self.emax)[0][0]
-            
-            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(current,float(totalgrad),float(gradrms),float(self.emax))
- 
-            self.write_xyz_files(iters=current,base='growth_iters',nconstraints=nconstraints)
 
     def opt_steps(self,maxopt,nconstraints):
         for i in range(maxopt):
@@ -491,15 +458,17 @@ class Base_Method(object,Print):
         print "************************ in growth_iters ****************************"
         print "*********************************************************************"
         for n in range(iters):
+            sys.stdout.flush()
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.check_add_node()
-            if self.nn==self.nnodes:
-                print(" gopt_iter: string done growing")
-                break
             self.get_tangents_1g()
             self.ic_reparam_g()
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
+
+            isDone = self.check_if_grown()
+            if isDone:
+                break
 
             totalgrad = 0.0
             gradrms = 0.0
@@ -509,45 +478,42 @@ class Base_Method(object,Print):
                     totalgrad += ico.gradrms*self.rn3m6
                     gradrms += ico.gradrms*ico.gradrms
             gradrms = np.sqrt(gradrms/(self.nnodes-2))
-
             self.emax = float(max(self.energies[1:-1]))
             self.nmax = np.where(self.energies==self.emax)[0][0]
             
-            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(current,float(totalgrad),float(gradrms),float(self.emax))
- 
-            self.write_xyz_files(iters=current,base='growth_iters',nconstraints=nconstraints)
+            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(n,float(totalgrad),float(gradrms),float(self.emax))
+            self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
 
     def opt_steps(self,maxopt,nconstraints):
-        for i in range(maxopt):
+        for i in range(1):
             for n in range(self.nnodes):
                 if self.icoords[n] != 0 and self.active[n]==True:
                     print "optimizing node %i" % n
                     self.icoords[n].opt_constraint(self.ictan[n])
                     print self.icoords[n].coords
-                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
+                    self.icoords[n].smag = self.optimize(n,maxopt,nconstraints)
 
-    def grow_string(self,maxiters=20):
-        print 'Starting Growth Phase'
-        self.write_node_xyz("nodes_xyz_file0.xyz")
-        iters = 1
-        while True:
-            print "beginning iteration:",iters
-            sys.stdout.flush()
-            do_growth = False
-            for act in self.active:
-                if act:
-                    do_growth = True
-                    break
-            if do_growth:
-                self.growth_iters(nconstraints=1,current=iters)
-                sys.stdout.flush()
-            else:
-                print 'All nodes added. String done growing'
-                break
-            iters += 1
-            if iters > maxiters:
-                raise ValueError("reached max number of growth iterations")
-        self.write_node_xyz()
+    #def grow_string(self,maxiters=20):
+    #    self.write_node_xyz("nodes_xyz_file0.xyz")
+    #    iters = 1
+    #    while True:
+    #        print "beginning iteration:",iters
+    #        sys.stdout.flush()
+    #        do_growth = False
+    #        for act in self.active:
+    #            if act:
+    #                do_growth = True
+    #                break
+    #        if do_growth:
+    #            self.growth_iters(nconstraints=1,current=iters)
+    #            sys.stdout.flush()
+    #        else:
+    #            print 'All nodes added. String done growing'
+    #            break
+    #        iters += 1
+    #        if iters > maxiters:
+    #            raise ValueError("reached max number of growth iterations")
+    #    self.write_node_xyz()
 
     def interpolateR(self,newnodes=1):
         print "interpolateR"
@@ -819,11 +785,6 @@ class Base_Method(object,Print):
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
-
-
-    @staticmethod
-    def from_options(**kwargs):
-        return GSM(GSM.default_options().set_values(kwargs))
 
 
 if __name__ == '__main__':

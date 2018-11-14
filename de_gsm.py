@@ -8,18 +8,9 @@ import pybel as pb
 import sys
 
 class GSM(Base_Method):
-
-    def interpolate(self,newnodes=1):
-        if self.nn+newnodes > self.nnodes:
-            print("Adding too many nodes, cannot interpolate")
-        sign = -1
-        for i in range(newnodes):
-            print "Adding node",i
-            sign *= -1
-            if sign == 1:
-                self.interpolateR()
-            else:
-                self.interpolateP()
+    @staticmethod
+    def from_options(**kwargs):
+        return GSM(GSM.default_options().set_values(kwargs))
 
     def __init__(
             self,
@@ -41,6 +32,27 @@ class GSM(Base_Method):
             mol= tmp.mol,
             PES=PES1,
             )))
+
+    def go_gsm(self):
+        self.icoords[0].gradrms = 0.
+        self.icoords[-1].gradrms = 0.
+        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+        self.interpolate(2) 
+        self.growth_iters(iters=3,maxopt=3)
+
+
+    def interpolate(self,newnodes=1):
+        if self.nn+newnodes > self.nnodes:
+            print("Adding too many nodes, cannot interpolate")
+        sign = -1
+        for i in range(newnodes):
+            print "Adding node",i
+            sign *= -1
+            if sign == 1:
+                self.interpolateR()
+            else:
+                self.interpolateP()
 
     def add_node(self,n1,n2,n3):
         print "adding node: %i between %i %i" %(n2,n1,n3)
@@ -65,41 +77,13 @@ class GSM(Base_Method):
         print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
         return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
 
-    def grow_string(self,maxiters=20):
-        print 'Starting Growth Phase'
-        self.write_node_xyz("nodes_xyz_file0.xyz")
-        iters = 1
-        self.icoords[0].gradrms = 0.
-        self.icoords[-1].gradrms = 0.
-        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
-        while True:
-            print "beginning iteration:",iters
-            sys.stdout.flush()
-            do_growth = False
-            for act in self.active:
-                if act:
-                    do_growth = True
-                    break
-            if do_growth:
-                self.growth_iters(nconstraints=1,current=iters)
-                sys.stdout.flush()
-            else:
-                print 'All nodes added. String done growing'
+    def check_if_grown(self):
+        isDone=True
+        for act in self.active:
+            if act:
+                isDone = False
                 break
-            iters += 1
-            if iters > maxiters:
-                raise ValueError("reached max number of growth iterations")
-        self.write_node_xyz()
-
-    def opt_steps(self,maxopt,nconstraints):
-        for i in range(maxopt):
-            for n in range(self.nnodes):
-                if self.icoords[n] != 0 and self.active[n]==True:
-                    print "optimizing node %i" % n
-                    self.icoords[n].opt_constraint(self.ictan[n])
-                    print self.icoords[n].coords
-                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
+        return isDone
 
     def check_add_node(self):
         if self.icoords[self.nR-1].gradrms < self.gaddmax:
@@ -150,16 +134,11 @@ class GSM(Base_Method):
         self.nR=1
         self.nP=1
 
-    @staticmethod
-    def from_options(**kwargs):
-        return GSM(GSM.default_options().set_values(kwargs))
-
-
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=True
-    PYTC=False
+    QCHEM=False
+    PYTC=True
     nproc=8
 
     if QCHEM:
@@ -202,22 +181,20 @@ if __name__ == '__main__':
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
 
     print "\n IC1 \n"
-    ic1=DLC.from_options(mol=mol,PES=pes)
+    ic1=DLC.from_options(mol=mol,PES=pes,print_level=0)
     print "\n IC2 \n"
-    ic2=DLC.from_options(mol=mol2,PES=pes2)
+    ic2=DLC.from_options(mol=mol2,PES=pes2,print_level=0)
         
     nnodes=9
     if True:
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,CONV_TOL=0.001)
-        print 'gsm.icoords[0] E:',gsm.icoords[0].energy
-        print 'gsm.icoords[-1]E:',gsm.icoords[-1].energy
-        gsm.interpolate(nnodes-2)
+        gsm.go_gsm()
 
     if False:
         print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
     
-    if True:
+    if False:
         for i in range(gsm.nnodes):
             gsm.icoords[i].energy = gsm.icoords[i].PES.get_energy(gsm.icoords[i].geom)
         gsm.get_tangents_1e(n0=0)
@@ -233,4 +210,4 @@ if __name__ == '__main__':
         if ORCA:
             os.system('rm temporcarun/*')
 
-    gsm.write_node_xyz('nodes_xyz_file1')
+    #gsm.write_node_xyz('nodes_xyz_file1')
