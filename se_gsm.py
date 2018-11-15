@@ -19,16 +19,75 @@ class SE_GSM(Base_Method):
             ):
         super(SE_GSM,self).__init__(options)
         self.nn=1
+        self.isomer_init()
 
-    def go_gsm(self):
+    def isomer_init(self):
+        for i in self.driving_coords:
+            if "ADD" or "BREAK" in i:
+                bond=(i[1],i[2])
+                if not self.icoords[0].bond_exists(bond):
+                    print "adding bond ",bond
+                    self.icoords[0].mol.OBMol.AddBond(bond[0],bond[1],1)
+                    self.icoords[0].BObj.bonds.append(bond)
+            if "ANGLE" in i:
+                angle=(i[1],i[2],i[3])
+                if not self.icoords[0].angle_exists(angle):
+                    self.icoords[0].AObj.angles.append(bond)
+                    print "adding angle ",angle
+            if "TORSION" in i:
+                torsion=(i[1],i[2],i[3],i[4])
+                if not self.icoords[0].torsion_exists(torsion):
+                    print "adding torsion ",torsion
+                    self.icoords[0].TObj.torsions.append(torsion)
+
+        self.icoords[0].setup()
+
+    def go_gsm(self,iters):
         self.icoords[0].gradrms = 0.
         self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        print "Initial energy is %1.4f" % self.icoords[0].energy
         self.interpolate(1) 
-        self.growth_iters(iters=3,maxopt=3)
+        self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
+        self.growth_iters(iters=iters,maxopt=3)
+        if self.tscontinue==True:
+            if self.pastts==1: #normal over the hill
+                #self.add_node(self.nR-1,self.nR)
+                self.interpolateR(1)
+                self.add_last_node(2)
+            elif self.pastts==2 or self.pastts==3: #when cgrad is positive
+                self.add_last_node(1)
+                if self.icoords[self.nR-1].gradrms>5.*self.CONV_TOL:
+                    self.add_last_node(1)
+            elif self.pastts==3: #product detected by bonding
+                self.add_last_node(1)
+
+        self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+        print "SSM growth phase over"
+        print "Warning last node still not optimized fully"
+
 
     def add_node(self,n1,n2,n3=None):
         print "adding node: %i from node %i" %(n2,n1)
         return DLC.add_node_SE(self.icoords[n1],self.driving_coords)
+
+    def add_last_node(self,rtype):
+        samegeom=False
+        if rtype==1:
+            print "copying last node, opting"
+            self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
+        elif rtype==2:
+            print "already created node, opting"
+        noptsteps=15
+        self.optimize(n=self.nR,nsteps=noptsteps)
+        if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
+            samegeom=True
+
+        if samegeom:
+            print "Opt did not produce new geometry"
+        else:
+            self.nR+=1
+        return
+
 
     def check_add_node(self):
         if self.icoords[self.nR-1].gradrms < self.gaddmax:
@@ -70,118 +129,36 @@ class SE_GSM(Base_Method):
         return ncurrent,nlist
 
     def tangent(self,n1,n2):
-        print n1,n2
         if n2 ==self.nR-1:
-            print" getting tangent from node ",n2
+            #print" getting tangent from node ",n2
             return DLC.tangent_SE(self.icoords[n2],self.driving_coords)
         elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
-            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
             return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
         else:
             raise ValueError("can't make tan")
 
     def check_if_grown(self):
-        pastts = self.past_ts()
+        self.pastts = self.past_ts()
         isDone=False
         #TODO break planes
-        if pastts and self.nn>3: #TODO extra criterion here
+        if self.pastts and self.nn>3: #TODO extra criterion here
+            print "pastts is ",self.pastts
             isDone=True
         fp = self.find_peaks(1)
         if fp==-1 and self.energies[self.nR-1]>200.:
             print "growth_iters over: all uphill and high energy"
             self.end_early=2
-            self.tscontinue=0
+            self.tscontinue=False
             self.nnodes=self.nR
             isDone=True
         if fp==-2:
             print "growth_iters over: all uphill and flattening out"
             self.end_early=2
-            self.tscontinue=0
+            self.tscontinue=False
             self.nnodes=self.nR
             isDone=True
         return isDone
-
-    def find_peaks(self,rtype):
-        #rtype 1: growing
-        #rtype 2: opting
-        #rtype 3: intermediate check
-        if rtype==1:
-            nnodes=self.nR
-        elif rtype==2 or rtype==3:
-            nnodes=self.nnodes
-        else:
-            raise ValueError("find peaks bad input")
-        if rtype==1 or rtype==2:
-            print "Energy"
-            print self.energies
-        alluptol=0.1
-        alluptol2=0.5
-        allup=True
-        for n in range(len(self.energies)):
-            if self.energies[n]+alluptol<self.energies[n-1]:
-                allup=False
-                break
-
-        if self.energies[nnodes-1]>15.0:
-            if nnodes-3>0:
-                if (abs(self.energies[nnodes-1]-self.energies[nnodes-2])<alluptol2 and
-                abs(self.energies[nnodes-2]-self.energies[nnodes-3])<alluptol2 and
-                abs(self.energies[nnodes-3]-self.energies[nnodes-4])<alluptol2):
-                    print "possible dissociative profile"
-                    allup=False
-        npeaks1=0
-        npeaks2=0
-        minnodes=[]
-        maxnodes=[]
-        for n in range(self.n0,nnodes):
-            if self.energies[n+1]>self.energies[n]:
-                if self.energies[n]<self.energies[n-1]:
-                    minnodes.append(n)
-            if self.energies[n+1]<self.energies[n]:
-                if self.energies[n]>self.energies[n-1]:
-                    maxnodes.append(n)
-
-        print "min nodes"
-        print minnodes
-        print "max nodes" 
-        print maxnodes
-        npeaks1 = len(maxnodes)
-        print "number of peaks is ",npeaks1
-        ediff=0.5
-        PEAK4_EDIFF = 2.0
-        if rtype==1:
-            ediff=1.
-        if rtype==3:
-            ediff=PEAK4_EDIFF
-        emax = float(max(self.energies[1:-1]))
-        nmax = np.where(self.energies==self.emax)[0][0]
-
-        #check if any node after peak is less than 2 kcal below
-        for n in maxnodes:
-            diffs=( self.energies[n]-e>ediff for e in self.energies[n:])
-            if any(diffs):
-                found=n
-                npeaks2+=1
-        npeaks = npeaks2
-        print "found %i significant peak(s) TOL %3.2f" %(npeaks,ediff)
-
-        #handle dissociative case
-        if rtype==3 and npeaks==1:
-            nextmin=0
-            for n in range(found,numnodes-1):
-                if n in minnodes:
-                    nextmin=n
-                    break
-            if nextmin:
-                npeaks=2
-
-        if rtype==3:
-            return num_nodes
-        if allup==False and npeaks==0:
-            return -2
-
-        return npeaks
-
 
     def past_ts(self):
         ispast=ispast1=ispast2=ispast3=0
@@ -197,13 +174,15 @@ class SE_GSM(Base_Method):
         ns = self.n0-1
         if ns<nodemax: ns=nodemax
 
+        print "Energies"
         for n in range(ns,self.nR):
             print(" %4.3f" % self.energies[n])
             if self.energies[n]>emax:
                 nodemax=n
                 emax=self.energies[n]
+        print "nodemax ",nodemax
 
-        for n in range(ns,self.nR):
+        for n in range(nodemax,self.nR):
             if self.energies[n]<emax-THRESH1:
                 ispast1+=1
             if self.energies[n]<emax-THRESH2:
@@ -285,33 +264,32 @@ if __name__ == '__main__':
         from pytc import *
     import manage_xyz
 
-    if True:
+    if False:
         filepath="tests/fluoroethene.xyz"
-        filepath2="tests/stretched_fluoroethene.xyz"
         nocc=11
         nactive=2
-    if True:
+    if False:
         filepath="tests/ethylene.xyz"
         nocc=7
         nactive=2
 
     if False:
-        filepath2="tests/SiH2H2.xyz"
         filepath="tests/SiH4.xyz"
         nocc=8
         nactive=2
 
+    if True:
+        filepath="tests/butadiene_ethene.xyz"
+        nocc=21
+        nactive=4
+
     mol=pb.readfile("xyz",filepath).next()
-    mol2=pb.readfile("xyz",filepath2).next()
     if QCHEM:
         lot=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
-        lot2=QChem.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
-    
     if ORCA:
         lot=Orca.from_options(states=[(1,0)],charge=0,basis='6-31+g(d)',functional='wB97X-D3',nproc=nproc)
-        lot2=Orca.from_options(states=[(1,0)],charge=0,basis='6-31+g(d)',functional='wB97X-D3',nproc=nproc)
     if PYTC:
-        lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31g')
         lot.cas_from_file(filepath)
 
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
@@ -321,16 +299,8 @@ if __name__ == '__main__':
 
     if True:
         print "\n Starting GSM \n"
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
-        gsm.icoords[0].energy = gsm.icoords[0].PES.get_energy(gsm.icoords[0].geom)
-        gsm.icoords[0].gradrms = 0.
-        gsm.interpolate(1)
+        #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05)
+        gsm.go_gsm(30)
 
-    if True:
-        #gsm.grow_string(50)
-        gsm.growth_iters(iters=5,maxopt=3,nconstraints=1)
-        #gsm.growth_iters(iters=50,maxopt=3,nconstraints=1)
-        #gsm.opt_iters()
-        if ORCA:
-            os.system('rm temporcarun/*')
 

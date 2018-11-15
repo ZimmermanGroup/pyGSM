@@ -7,9 +7,10 @@ from dlc import *
 from copy import deepcopy
 import StringIO
 from _print_opt import *
+from _analyze_string import *
 import sys
 
-class Base_Method(object,Print):
+class Base_Method(object,Print,Analyze):
 
     @staticmethod
     def from_options(**kwargs):
@@ -83,6 +84,14 @@ class Base_Method(object,Print):
             doc='Convergence threshold')
 
 
+        opt.add_option(
+                key='tstype',
+                value=1,
+                required=False,
+                allowed_types=[int],
+                doc='0==any,1 delta bond, 2==turning of climbing image and TS search'
+                )
+
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
 
@@ -114,46 +123,43 @@ class Base_Method(object,Print):
         """ Constructor """
         self.options = options
 
-        # Cache some useful attributes
-
-        #TODO What is optCG Ask Paul
-        self.optCG = False
+        # Cache attributes
+        self.optCG = False #TODO
         self.isTSnode =False
         self.nnodes = self.options['nnodes']
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
-        
-        self.nn = 2
-        self.nR = 1
-        self.nP = 1        
         self.isSSM = self.options['isSSM']
         self.isMAP_SE = self.options['isMAP_SE']
         self.active = [False] * self.nnodes
         self.active[0] = False
         self.active[-1] = False
         self.driving_coords = self.options['driving_coords']
-        #self.isomer_init()
         self.nconstraints = self.options['nconstraints']
         self.CONV_TOL = self.options['CONV_TOL']
         self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
 
-        self.energies = np.asarray([-1e8]*self.nnodes)
+        # Set initial values
+        self.nn = 2
+        self.nR = 1
+        self.nP = 1        
+        self.energies = np.asarray([0.]*self.nnodes)
         self.emax = float(max(self.energies))
-        self.nmax = 0
-        self.climb = False
-        self.find = False
-        self.n0 = 1 # something to do with added nodes? "first node along current block"
+        self.nmax = 0 
+        self.climb = False #TODO
+        self.find = False  #TODO
+        self.n0 = 0 # something to do with added nodes? "first node along current block"
         self.end_early=False
-        self.tscontinue=0 #TODO 2 is TS opt, 1 is climb?
-
+        self.tscontinue=True # whether to continue with TS opt or not
         self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
         print " gaddmax:",self.gaddmax
 
+
     def store_energies(self):
         for i,ico in enumerate(self.icoords):
             if ico != 0:
-                self.energies[i] = ico.energy
+                self.energies[i] = ico.energy - self.icoords[0].energy
 
     def optimize(self,n=0,nsteps=100,nconstraints=0):
         output_format = 'xyz'
@@ -161,6 +167,7 @@ class Base_Method(object,Print):
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
         #opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
+        assert self.icoords[n]!=0,"icoord not set"
         self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         self.icoords[n].energy=0
         grmss = []
@@ -174,8 +181,9 @@ class Base_Method(object,Print):
         self.icoords[n].bmat_create()
         # set node id
         self.icoords[n].node_id = n
-    
-        print "Initial energy is %1.4f\n" % self.icoords[n].V0
+   
+        if self.icoords[n].print_level>0:
+            print "Initial energy is %1.4f\n" % self.icoords[n].V0
         self.icoords[n].buf.write("\n Writing convergence:")
     
         for step in range(nsteps):
@@ -228,18 +236,10 @@ class Base_Method(object,Print):
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())
-        if self.icoords[n].print_level>0:
+        #if self.icoords[n].print_level>0:
+        if True:
             print "Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
-
-    def opt_steps(self,maxopt,nconstraints):
-        for i in range(maxopt):
-            for n in range(self.nnodes):
-                if self.icoords[n] != 0 and self.active[n]==True:
-                    print "optimizing node %i" % n
-                    self.icoords[n].opt_constraint(self.ictan[n])
-                    print self.icoords[n].coords
-                    self.icoords[n].smag = self.optimize(n,3,nconstraints)
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
         print "*********************************************************************"
@@ -460,8 +460,8 @@ class Base_Method(object,Print):
         print "*********************************************************************"
         for n in range(iters):
             sys.stdout.flush()
-            self.set_active(self.nR-1, self.nnodes-self.nP)
             self.check_add_node()
+            self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
             self.ic_reparam_g()
             self.get_tangents_1g()
@@ -470,6 +470,7 @@ class Base_Method(object,Print):
 
             isDone = self.check_if_grown()
             if isDone:
+                print "is Done growing"
                 break
 
             totalgrad = 0.0
@@ -483,7 +484,7 @@ class Base_Method(object,Print):
             self.emax = float(max(self.energies[1:-1]))
             self.nmax = np.where(self.energies==self.emax)[0][0]
             
-            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(n,float(totalgrad),float(gradrms),float(self.emax))
+            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}\n".format(n,float(totalgrad),float(gradrms),float(self.emax))
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
 
     def opt_steps(self,maxopt,nconstraints):
@@ -517,7 +518,7 @@ class Base_Method(object,Print):
     #    self.write_node_xyz()
 
     def interpolateR(self,newnodes=1):
-        print "interpolateR"
+        print "Adding reactant node"
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):

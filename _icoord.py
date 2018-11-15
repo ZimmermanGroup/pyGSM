@@ -105,6 +105,24 @@ class ICoords:
             print "%s: %1.2f" %(torsion, torv[n])
         return Tor_obj(torsions,ntor,torv)
 
+    def bond_exists(self,bond):
+        if bond in self.BObj.bonds or tuple(reversed(bond)) in self.BObj.bonds:
+            return True
+        else:
+            return False
+
+    def angle_exists(self,angle):
+        if angle in self.AObj.angles or tuple(reversed(angle)) in self.AObj.angles:
+            return True
+        else:
+            return False
+
+    def torsion_exists(self,torsion):
+        if torsion in self.TObj.torsions or tuple(reversed(torsion)) in self.TObj.torsions:
+            return True
+        else:
+            return False
+
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
         ictan = []
@@ -241,7 +259,6 @@ class Ang_obj(object):
             except ValueError:
                 pass
         raise ValueError('The angle does not exist')
-
 
 class Tor_obj(object):
     __slots__ = ["ntor","torsions","torv"]

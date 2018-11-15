@@ -20,12 +20,6 @@ class Utils:
         for a in ob.OBMolAtomIter(self.mol.OBMol):
             print(" %1.4f %1.4f %1.4f" %(a.GetX(), a.GetY(), a.GetZ()) )
 
-    def bond_exists(self,bond):
-        if bond in self.BObj.bonds:
-            return True
-        else:
-            return False
-
     def distance(self,i,j):
         """ for some reason openbabel has this one based """
         a1=self.mol.OBMol.GetAtom(i)

@@ -214,11 +214,33 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
 
+        #TODO can have ICoordC get Hintp matrix from A...
+
         return ICoordC
 
+    @staticmethod
+    def copy_node(ICoordA,new_node_id):
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(
+                ICoordA.PES.lot,
+                new_node_id)
+        PES1 = PES(ICoordA.PES.options.copy().set_values({
+            "lot": lot1,
+            }))
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : PES1
+            }))
+
+        ICoordC.setup()
+
+        return ICoordC
 
     def ic_create(self):
-
         self.natoms= len(self.mol.atoms)
         self.coordn = self.coord_num()
 
@@ -294,7 +316,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
                     #TODO changed from 4.5 to 4
                     #TODO what is getIndex doing here?
-                    if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4. and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
+                    if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4.5 and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
                         mclose2 = close
                         b1=i
                         b2=j
@@ -340,13 +362,17 @@ class DLC(Base_DLC,Bmat,Utils):
                 """
 
                 bond1=(a1,a2)
+                print "found",found
+                print "found2",found2
+                print bond1
                 if found>0 and self.bond_exists(bond1)==False:
                     print(" bond pair1 added : %s" % (bond1,))
                     self.BObj.bonds.append(bond1)
                     self.BObj.nbonds+=1
                     self.BObj.bondd.append(mclose)
                     print " bond dist: %1.4f" % mclose
-                    isOkay = self.mol.OBMol.AddBond(bond1[0]+1,bond1[1]+1,1)
+                    #TODO check this
+                    isOkay = self.mol.OBMol.AddBond(bond1[0],bond1[1],1)
                     print " Bond added okay? %r" % isOkay
                 bond2=(b1,b2)
                 if found2>0 and self.bond_exists(bond2)==False:
@@ -656,7 +682,8 @@ class DLC(Base_DLC,Bmat,Utils):
             else: 
                 self.DMAX = self.DMAX/1.5
             if self.dEstep > 2.0 and self.resetopt==True:
-                print "resetting coords to coorp"
+                if self.print_level>0:
+                    print "resetting coords to coorp"
                 self.coords = self.coorp
                 self.energy = self.PES.get_energy(self.geom)
                 self.update_ics()

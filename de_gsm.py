@@ -38,7 +38,7 @@ class GSM(Base_Method):
     def go_gsm(self):
         self.icoords[0].gradrms = 0.
         self.icoords[-1].gradrms = 0.
-        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        self.icoords[0].energies = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
         self.interpolate(2) 
         self.growth_iters(iters=3,maxopt=3)
