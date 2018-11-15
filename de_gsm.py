@@ -35,13 +35,14 @@ class GSM(Base_Method):
         print "print levels at beginning are ",self.icoords[0].print_level
         print "print levels at beginning are ",self.icoords[-1].print_level
 
-    def go_gsm(self):
+    def go_gsm(self,g_iters=1,maxopt=1,nconstraints=1,o_iters=1,optsteps=1):
         self.icoords[0].gradrms = 0.
         self.icoords[-1].gradrms = 0.
         self.icoords[0].energies = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
         self.interpolate(2) 
-        self.growth_iters(iters=3,maxopt=3)
+        self.growth_iters(iters=g_iters,maxopt=maxopt,nconstraints=nconstraints)
+        self.opt_iters(max_iter=o_iters,optsteps=optsteps)
 
 
     def interpolate(self,newnodes=1):
@@ -141,8 +142,8 @@ class GSM(Base_Method):
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=False
-    PYTC=True
+    QCHEM=True
+    PYTC=False
     nproc=8
 
     if QCHEM:
@@ -193,7 +194,7 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,CONV_TOL=0.001)
-        gsm.go_gsm()
+        gsm.go_gsm(g_iters=30,maxopt=1,nconstraints=1,o_iters=30,optsteps=1)
 
     if False:
         print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])

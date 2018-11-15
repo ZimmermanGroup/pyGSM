@@ -112,6 +112,9 @@ class Base_DLC(Utils,ICoords):
         self.nicd=self.options['nicd']
         self.OPTTHRESH=self.options['OPTTHRESH']
         self.madeBonds = False
+        self.isTSnode = False
+        self.use_constraint = False
+        self.stage1opt = False
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
             self.BObj.update(self.mol)
@@ -376,3 +379,108 @@ class Base_DLC(Utils,ICoords):
         for i in range(nicd_c):
             dq_c[i,0] = dq0[i]
         return dq_c
+
+    def walk_up(self,gradq):
+        nicd = self.icoords[0].nicd
+        print(' gts: {:1.4f}'.format(gradq[nicd-1])
+        self.SCALEW = 1.0
+        self.SCALE = self.SCALEQN*1.0 
+        dq0[nicd-1] = gradq[nicd-1]/self.SCALE
+        if abs(dq0[nicd-1]) > self.MAXAD/self.SCALEW:
+            dq0[nicd-1] = np.sign(dq0[nicd-1])*self.MAXAD/self.SCALE
+
+        dEpre += dq0[nicd-1] * gradq[nicd-1] * 627.5
+        print 'predE: {:5.2}'.format(dEpre)
+
+    def update_ic_eigen_h(self,Cn,Dn,nconstraints=0):
+        prnt = True
+        if prnt:
+            print '................................................'
+            print '.............In update_ic_eigen_h...............'
+            print '................................................'
+        
+        if self.use_constraint:
+            self.update_ic_eigen(self.gradq,nconstraints)
+            if self.isTSnode:
+                self.walk_up(self.gradq)
+            return
+        
+        len1 = self.nicd
+        len0 = self.BObj.nbonds+self.AObj.nangles+self.TObj.ntor
+        
+        #maybe don't need to initialize all right now:
+        gqe = np.zeros(len1)
+        dqe0 = np.zeros(len1)
+        lambda1 = 0.
+        #Check, delete redundant assignments
+
+        SCALE = self.SCALEQN
+        
+        if SCALE > 10:
+            SCALE = 10.
+
+        eigen,tmph = np.linalg.eigh(self.Hint)
+        
+        nneg = 0
+        for i in range(len1):
+            if eigen[i] < -0.01:
+                nneg += 1
+
+        overlap = np.zeros(len1)
+        
+        for n in range(len1):
+            Cd = np.zeros(len0)
+            for i in range(len1):
+                Cd += np.dot(tmph[n].T,self.Ut[i])
+        
+            for i in range(len0):
+                overlap[n] += Cd[i]*Cn[i]
+            if prnt:
+                print " Cd: ",
+                for j in range(len0):
+                    print " {:1.2f}".format(Cd[j])
+                print
+
+        absoverlap = abs(overlap)
+        maxol = max(absoverlap)
+        maxoln = np.where(absoverlap==maxol)[0][0]
+        maxols = overlap[maxoln]
+        
+        self.path_overlap = maxol
+        self.path_overlap_n = maxoln
+
+        if maxol < HESS_TANG_TOL or self.gradrms > self.OPTTHRESH*20.:
+            self.opt_constraint(Cn)
+            self.bmatp = self.bmatp_create()
+            self.bmat_create()
+            self.Hint = self.Hintp_to_Hint()
+            self.gradq = self.grad_to_q(self.gradq)
+            self.use_constraint = 1
+            self.update_ic_eigen(nconstraints)
+            if self.isTSnode:
+                self.walk_up(self.gradq)
+            return
+        leig = eigen[1]
+        if maxoln!=0:
+            leig = eigen[0]
+        if leig < 0.:
+            lambda1 = -leig + 0.015
+        else:
+            lambda1 = 0.005
+        if abs(lambda1)<0.005:
+            lambda1 = 0.005
+
+        gqe = np.matmul(tmph,self.gradq)
+    
+        if not self.isTSnode:
+            dqe0[maxoln] = 0
+        else:
+            dqe0[maxoln] = gqe[maxoln] / abs(eigen[maxoln]i + lambda1)/SCALE
+            path_overlap_e_g = gqe[maxoln]
+            print ' gtse: {:1.4f} '.format(gqe[maxoln])
+
+        for i in range(len1):
+            if i != maxoln:
+                dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
+            
+#ridge
