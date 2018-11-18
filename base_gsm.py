@@ -155,7 +155,6 @@ class Base_Method(object,Print,Analyze):
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
         print " gaddmax:",self.gaddmax
 
-
     def store_energies(self):
         for i,ico in enumerate(self.icoords):
             if ico != 0:
@@ -249,7 +248,7 @@ class Base_Method(object,Print,Analyze):
             self.active[i] = True
         for oi in range(max_iter):
             sys.stdout.flush()
-            self.get_tangents_1g() #Try get_tangents_1e here
+            self.get_tangents_1e() #Try get_tangents_1e here
             self.opt_steps(optsteps,nconstraints)
             for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
                 if ico.gradrms < self.CONV_TOL:
