@@ -42,6 +42,7 @@ class PyTC(Lot):
             "node_id" :node_id,
             }))
         obj.lot = PyTCA.lot
+        obj.casci1 = PyTCA.casci1
         return obj
 
     @staticmethod
@@ -172,6 +173,7 @@ class PyTC(Lot):
             )
 
         self.casci1.compute_energy()
+        print "saving casci1 to memory"
 
         geom2 = psiw.Geometry.build(
             resources=resources,
@@ -229,7 +231,7 @@ class PyTC(Lot):
             )
         ref1.compute_energy()
         
-        casci1 = psiw.CASCI.from_options(
+        self.casci1 = psiw.CASCI.from_options(
             reference=ref1,
             nocc=self.nocc,
             nact=self.nactive,
@@ -242,9 +244,9 @@ class PyTC(Lot):
             grad_thre_dp = 1.0E-8,
             )
 
-        casci1.compute_energy()
+        self.casci1.compute_energy()
         self.lot = psiw.CASCI_LOT.from_options(
-            casci=casci1,
+            casci=self.casci1,
             print_level=0,
             rhf_guess=True,
             rhf_mom=True,
@@ -262,12 +264,13 @@ if __name__ == '__main__':
 
         lot=PyTC.from_options(states=[(1,0),(3,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         x="tests/fluoroethene.xyz"
-        lot.cas_from_file(x)
+        #lot.cas_from_file(x)
+        lot.casci_from_file_from_template(x,x,nocc,nocc) # hack to get it to work,need casci1
 
         geom=manage_xyz.read_xyz(x,scale=1)   
         e=lot.get_energy(geom,1,0)
         print e
-        g=lot.get_gradient(geom,3,0)
+        g=lot.get_gradient(geom,1,0)
         print g
 
     # from reference

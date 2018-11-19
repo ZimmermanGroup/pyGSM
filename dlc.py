@@ -42,6 +42,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.nretry = 0 
             self.DMIN0 =self.DMAX/10.
             self.coords = np.zeros((len(self.mol.atoms),3))
+            self.isTSnode=False
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
                 self.coords[i,0] = a.GetX()
                 self.coords[i,1] = a.GetY()
@@ -624,12 +625,11 @@ class DLC(Base_DLC,Bmat,Utils):
         self.Hint = np.matmul(tmp,np.transpose(self.Ut))
         self.Hinv = np.linalg.inv(self.Hint)
 
-        #if self.optCG==False or self.isTSNode==False:
+        #TODO ?
+        #if self.optCG==False or self.isTSnode==False:
         #    print "Not implemented"
 
     def update_for_step(self,nconstraints):
-        #print "in opt step: coordinates at current step are"
-        #print self.coords
         self.energy = self.PES.get_energy(self.geom)
         self.energyp = self.energy
         grad = self.PES.get_gradient(self.geom)
@@ -647,10 +647,9 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.gradrms < self.OPTTHRESH:
             return 0.
 
-        # For Hessian update
+        # => Update Hessian <= #
         self.pgradqprim=self.gradqprim
         self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
-        # => Update Hessian <= #
         if self.do_bfgs == True:
             self.update_Hessian()
         self.do_bfgs = True
@@ -738,6 +737,9 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.print_level>0:
             print "E(M): %3.5f" % (self.energy-self.V0),
 
+        #form DLC at new position
+        #TODO
+
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(dq)
@@ -796,7 +798,8 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.print_level>0:
             print "E(M): %4.5f" % (self.energy-self.V0),
 
-        self.form_meci_space()
+        # Form DLC at new position
+        self.form_CI_DLC()
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
@@ -893,7 +896,8 @@ class DLC(Base_DLC,Bmat,Utils):
                 basis[i,:]=tmp
         return basis
 
-    def form_meci_space(self):
+    def form_CI_DLC(self,constraints=None):
+        self.form_unconstrained_DLC()
         dvec = self.PES.get_coupling(self.geom)
         dgrad = self.PES.get_dgrad(self.geom)
         dvecq = self.grad_to_q(dvec)
@@ -905,6 +909,21 @@ class DLC(Base_DLC,Bmat,Utils):
         constraints[:,1] = dgradq_U[:,0]
         self.opt_constraint(constraints)
         self.bmat_create()
+        self.Hint = self.Hintp_to_Hint()
+
+    def form_constrained_DLC(self,constraints):
+        self.form_unconstrained_DLC()
+        self.opt_constraint(constraints)
+        self.bmat_create()
+        self.Hint = self.Hintp_to_Hint()
+
+    def form_unconstrained_DLC(self):
+        self.bmatp = self.bmatp_create()
+        self.bmatp_to_U()
+        self.bmat_create()
+        self.Hint = self.Hintp_to_Hint()
+
+
 
 if __name__ =='__main__':
     filepath="tests/stretched_fluoroethene.xyz"

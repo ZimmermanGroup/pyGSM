@@ -115,6 +115,7 @@ class Base_DLC(Utils,ICoords):
         self.isTSnode = False
         self.use_constraint = False
         self.stage1opt = False
+
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
             self.BObj.update(self.mol)
@@ -362,11 +363,10 @@ class Base_DLC(Utils,ICoords):
         dqe0 = np.divide(-gqe,e+lambda1)/SCALE
         dqe0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dqe0 ]
 
+        # => Convert step back to DLC basis <= #
         dq0 = np.dot(v_temp,dqe0)
         dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
         if self.print_level==2:
-            print "tmph"
-            print temph
             print "eigen opt Hint ev:"
             print e
             print "gqe"
@@ -392,74 +392,48 @@ class Base_DLC(Utils,ICoords):
         dEpre += dq0[nicd-1] * gradq[nicd-1] * 627.5
         print 'predE: {:5.2}'.format(dEpre)
 
-    def update_ic_eigen_h(self,Cn,Dn,nconstraints=0):
-        prnt = True
-        if prnt:
-            print '................................................'
-            print '.............In update_ic_eigen_h...............'
-            print '................................................'
-        
-        if self.use_constraint:
-            self.update_ic_eigen(self.gradq,nconstraints)
-            if self.isTSnode:
-                self.walk_up(self.gradq)
-            return
-        
-        len1 = self.nicd
-        len0 = self.BObj.nbonds+self.AObj.nangles+self.TObj.ntor
-        
-        #maybe don't need to initialize all right now:
-        gqe = np.zeros(len1)
-        dqe0 = np.zeros(len1)
-        lambda1 = 0.
-        #Check, delete redundant assignments
 
-        SCALE = self.SCALEQN
+    def update_ic_eigen_ts(self,Cn,Dn,nconstraints=0):
         
+        #assert self.isTSnode==False,"Can work for TSNOde but not currently using?"
+        
+        lambda1 = 0.
+        SCALE = self.SCALEQN
         if SCALE > 10:
             SCALE = 10.
 
+        #TODO should we diagonalize the full matrix? Full matrix done in GSM
         eigen,tmph = np.linalg.eigh(self.Hint)
         
         nneg = 0
-        for i in range(len1):
+        for i in range(self.nicd):
             if eigen[i] < -0.01:
                 nneg += 1
 
-        overlap = np.zeros(len1)
-        
-        for n in range(len1):
-            Cd = np.zeros(len0)
-            for i in range(len1):
-                Cd += np.dot(tmph[n].T,self.Ut[i])
-        
-            for i in range(len0):
-                overlap[n] += Cd[i]*Cn[i]
-            if prnt:
-                print " Cd: ",
-                for j in range(len0):
-                    print " {:1.2f}".format(Cd[j])
-                print
+        #=> Overlap metric <= #
+        overlap = np.dot(Cn,np.dot(tmph,self.Ut))
 
-        absoverlap = abs(overlap)
+        # Max overlap metrics
+        absoverlap = np.absolute(overlap)
         maxol = max(absoverlap)
-        maxoln = np.where(absoverlap==maxol)[0][0]
+        maxoln = np.argmax(absoverlap)
         maxols = overlap[maxoln]
-        
         self.path_overlap = maxol
         self.path_overlap_n = maxoln
 
-        if maxol < HESS_TANG_TOL or self.gradrms > self.OPTTHRESH*20.:
+        if self.print_level>0:
+            print "t/ol %i: %3.2f" % (maxoln,maxol)
+        self.buf.write("t/ol %i: %3.2f" % (maxoln,maxol))
+
+        # => if overlap is small use Cn as Constraint <= #
+        if maxol < HESS_TANG_TOL or self.gradrms > self.OPTTHRESH*20.: 
+            self.form_unconstrained_DLC()
             self.opt_constraint(Cn)
-            self.bmatp = self.bmatp_create()
-            self.bmat_create()
-            self.Hint = self.Hintp_to_Hint()
             self.gradq = self.grad_to_q(self.gradq)
-            self.use_constraint = 1
+            #self.use_constraint = 1
             self.update_ic_eigen(nconstraints)
-            if self.isTSnode:
-                self.walk_up(self.gradq)
             return
+
         leig = eigen[1]
         if maxoln!=0:
             leig = eigen[0]
@@ -470,8 +444,10 @@ class Base_DLC(Utils,ICoords):
         if abs(lambda1)<0.005:
             lambda1 = 0.005
 
-        gqe = np.matmul(tmph,self.gradq)
+        # => grad in eigenvector basis <= #
+        gqe = np.dot(tmph,self.gradq)
     
+        dqe0 = np.zeros(self.nicd)
         if not self.isTSnode:
             dqe0[maxoln] = 0
         else:
@@ -479,8 +455,12 @@ class Base_DLC(Utils,ICoords):
             path_overlap_e_g = gqe[maxoln]
             print ' gtse: {:1.4f} '.format(gqe[maxoln])
 
-        for i in range(len1):
+        for i in range(self.nicd):
             if i != maxoln:
                 dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
-            
-#ridge
+           
+        # => Convert step back to DLC basis <= #
+        dq0 = np.dot(temph,dqe0)
+        dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
+
+        return dq0

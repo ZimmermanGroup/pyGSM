@@ -69,10 +69,21 @@ class PES(object):
 
 if __name__ == '__main__':
 
-    from qchem import *
+    if QCHEM:
+        from qchem import *
+    elif PYTC:
+        from pytc import *
+
     filepath="tests/fluoroethene.xyz"
+    nocc=11
+    nactive=2
     geom=manage_xyz.read_xyz(filepath,scale=1)   
-    lot=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    if QCHEM:
+        lot=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    elif PYTC:
+        lot=PyTC.from_options(states=[(1,0),(3,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
+        lot.casci_from_file_from_template(x,x,nocc,nocc) # hack to get it to work,need casci1
+
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     print pes.get_energy(geom)
     print pes.get_gradient(geom)

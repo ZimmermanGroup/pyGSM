@@ -42,13 +42,13 @@ class SE_GSM(Base_Method):
 
         self.icoords[0].setup()
 
-    def go_gsm(self,iters):
+    def go_gsm(self,max_iters,max_steps):
         self.icoords[0].gradrms = 0.
         self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         print "Initial energy is %1.4f" % self.icoords[0].energy
         self.interpolate(1) 
         self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
-        self.growth_iters(iters=iters,maxopt=3)
+        self.growth_iters(iters=max_iters,opt_steps=max_steps)
         if self.tscontinue==True:
             if self.pastts==1: #normal over the hill
                 #self.add_node(self.nR-1,self.nR)
@@ -64,6 +64,10 @@ class SE_GSM(Base_Method):
         self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
         print "SSM growth phase over"
         print "Warning last node still not optimized fully"
+        if self.tscontinue==True:
+            self.opt_iters(max_iter=max_iters,optsteps=max_steps)
+        else:
+            print "Exiting early"
 
 
     def add_node(self,n1,n2,n3=None):
@@ -212,7 +216,7 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05)
-        gsm.go_gsm(30)
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05)
+        gsm.go_gsm(max_iters=30,max_steps=10)
 
 
