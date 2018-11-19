@@ -455,6 +455,7 @@ class Base_Method(object,Print,Analyze):
 
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
+        print ''
         print "*********************************************************************"
         print "************************ in growth_iters ****************************"
         print "*********************************************************************"

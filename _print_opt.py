@@ -1,5 +1,6 @@
 import openbabel as ob
 import pybel as pb
+from penalty_pes import Penalty_PES
 import os 
 
 
@@ -61,6 +62,14 @@ class Print:
                     f.write('{}\n'.format(float(ico.gradrms)))
                 elif ico != 0:
                     f.write('{}\n'.format(float(ico.gradrms)))
+            if isinstance(self.icoords[0].PES,Penalty_PES):
+                print " WARNING: Printing dE as max-step in molden output "
+                f.write("max-step\n")
+                for ico,act in zip(self.icoords,self.active):
+                    if act:
+                        f.write('{}\n'.format(float(ico.PES.dE)))
+                    elif ico != 0:
+                        f.write('{}\n'.format(float(ico.PES.dE)))
         f.close()
 
     def write_node_xyz(self,xyzfile = "nodes_xyz_file.xyz"):

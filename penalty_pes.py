@@ -33,7 +33,9 @@ class Penalty_PES(PES):
     def get_gradient(self,geom):
         avg_grad = 0.5*(self.PES1.get_gradient(geom) + self.PES2.get_gradient(geom))
         dgrad = self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom)
-        factor = self.sigma*(self.dE**2. + 2.*self.alpha*self.dE)/((self.dE + self.alpha)**2.)
+        if self.dE < 0:
+            dgrad *= -1
+        factor = self.sigma*(self.dE**2. + 2.*self.alpha*abs(self.dE))/((abs(self.dE) + self.alpha)**2.)
         #print "factor is %1.4f" % factor
         return avg_grad + factor*dgrad
 

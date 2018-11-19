@@ -382,7 +382,7 @@ class Base_DLC(Utils,ICoords):
 
     def walk_up(self,gradq):
         nicd = self.icoords[0].nicd
-        print(' gts: {:1.4f}'.format(gradq[nicd-1])
+        print(' gts: {:1.4f}'.format(gradq[nicd-1]))
         self.SCALEW = 1.0
         self.SCALE = self.SCALEQN*1.0 
         dq0[nicd-1] = gradq[nicd-1]/self.SCALE
@@ -475,7 +475,7 @@ class Base_DLC(Utils,ICoords):
         if not self.isTSnode:
             dqe0[maxoln] = 0
         else:
-            dqe0[maxoln] = gqe[maxoln] / abs(eigen[maxoln]i + lambda1)/SCALE
+            dqe0[maxoln] = gqe[maxoln] / abs(eigen[maxoln] + lambda1)/SCALE
             path_overlap_e_g = gqe[maxoln]
             print ' gtse: {:1.4f} '.format(gqe[maxoln])
 
