@@ -705,17 +705,24 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
 
-    
-    def opt_step(self,nconstraints):
+    def update_DLC(self):
+        #TODO
+
+    def opt_step(self,nconstraints,constraint_steps):
+        assert len(constraint_steps)==nconstraints, "need to specify constraint_steps even if zero"
 
         # => update PES info <= #
         self.update_for_step(nconstraints)
 
-        # => take eigenvector step in non-constrained space <= #
+        # => form eigenvector step in non-constrained space <= #
         dq = self.eigenvector_step(nconstraints)
         if self.print_level==2:
             print "dq for step is "
             print dq.T
+
+        # => add constraint_step to step <= #
+        for n in range(nconstraints):
+            dq[-nconstraints+n]=constraint_steps[n]
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(dq)
@@ -743,6 +750,12 @@ class DLC(Base_DLC,Bmat,Utils):
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(dq)
+        self.dEstep = self.energy - self.energyp
+        self.dEpre = self.compute_predE(dq)
+
+        # constraint contribution
+        for n in range(nconstraints):
+            self.dEpre += self.gradq[-n-1]*dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
@@ -761,67 +774,6 @@ class DLC(Base_DLC,Bmat,Utils):
 
         return  self.smag
 
-    def combined_step(self,nconstraints):
-        assert nconstraints>1,"nconstraints must be >1"
-        self.update_for_step(nconstraints)
-        dq = self.eigenvector_step(nconstraints)
-        dgrad = self.PES.get_dgrad(self.geom)
-        dgradq = self.grad_to_q(dgrad)
-        norm_dg = np.linalg.norm(dgradq)
-        print " norm_dg is %1.4f" % norm_dg,
-        print " dE is %1.4f" % self.PES.dE,
-        dq[-1] = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg
-        if dq[-1]<-0.075:
-            dq[-1]=-0.075
-
-        # => update geometry <=#
-        rflag = self.ic_to_xyz_opt(dq)
-
-        #TODO if rflag and ixflag
-        if rflag==True:
-            print "rflag" 
-            self.DMAX=self.DMAX/1.6
-            dq=self.update_ic_eigen(self.gradq,nconstraints)
-            dq[-1] = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg
-            if dq[-1]<-0.075:
-                dq[-1]=-0.075
-            self.ic_to_xyz_opt(dq)
-            self.do_bfgs=False
-
-        ## => update ICs <= #
-        self.update_ics()
-     
-        # => calc energyat new position <= #
-        self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %4.5f" %(self.energy-self.V0))
-        self.buf.write(" dE: %1.4f" %(self.PES.dE))
-        if self.print_level>0:
-            print "E(M): %4.5f" % (self.energy-self.V0),
-
-        # Form DLC at new position
-        self.form_CI_DLC()
-
-        # check goodness of step
-        self.dEstep = self.energy - self.energyp
-        self.dEpre = self.compute_predE(dq)
-        self.dEpre += self.gradq[-1]*dq[-1]*KCAL_MOL_PER_AU
-
-        self.ratio = self.dEstep/self.dEpre
-        self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
-        if self.print_level>0:
-            print "ratio is %1.4f" % self.ratio,
-
-        grad = self.PES.get_gradient(self.geom)
-        self.gradq = self.grad_to_q(grad)
-        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
-        if self.print_level>0:
-            print("gradrms = %1.5f" % self.gradrms),
-        self.buf.write(" gRMS=%1.5f" %(self.gradrms))
-
-        # => step controller  <= #
-        self.step_controller()
-
-        return self.smag
 
     def update_Hessian(self):
         #print("In update bfgsp")

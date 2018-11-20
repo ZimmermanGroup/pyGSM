@@ -380,17 +380,36 @@ class Base_DLC(Utils,ICoords):
             dq_c[i,0] = dq0[i]
         return dq_c
 
-    def walk_up(self,gradq):
-        nicd = self.icoords[0].nicd
-        print(' gts: {:1.4f}'.format(gradq[nicd-1]))
-        self.SCALEW = 1.0
-        self.SCALE = self.SCALEQN*1.0 
-        dq0[nicd-1] = gradq[nicd-1]/self.SCALE
-        if abs(dq0[nicd-1]) > self.MAXAD/self.SCALEW:
-            dq0[nicd-1] = np.sign(dq0[nicd-1])*self.MAXAD/self.SCALE
+    def walk_up(self,n):
+        """ walk up the n'th DLC"""
+        if self.print_level>0:
+            print(' gts: {:1.4f}'.format(self.gradq[n]))
+        self.buf.write(' gts: {:1.4f}'.format(self.gradq[n]))
+        SCALEW = 1.0
+        SCALE = self.SCALEQN*1.0 
+        
+        dq = gradq[n]/SCALE
+        if abs(dq) > self.MAXAD/SCALEW:
+            dq0 = np.sign(dq)*self.MAXAD/SCALE
 
-        dEpre += dq0[nicd-1] * gradq[nicd-1] * 627.5
-        print 'predE: {:5.2}'.format(dEpre)
+        return dq
+
+    def dgrad_step(self):
+        """ takes a linear step along dgrad"""
+        dgrad = self.PES.get_dgrad(self.geom)
+        dgradq = self.grad_to_q(dgrad)
+        norm_dg = np.linalg.norm(dgradq)
+        if self.print_level>0:
+            print " norm_dg is %1.4f" % norm_dg,
+            print " dE is %1.4f" % self.PES.dE,
+
+       dq = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg 
+        if dq<-0.075:
+            dq=-0.075
+
+        return dq
+
+
 
 
     def update_ic_eigen_ts(self,Cn,Dn,nconstraints=0):

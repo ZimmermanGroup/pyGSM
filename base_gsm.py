@@ -178,13 +178,16 @@ class Base_Method(object,Print,Analyze):
              elif nconstraints==3:
                  raise NotImplemented
 
-    def optimize(self,n=0,nsteps=100,nconstraints=0):
+    def optimize(self,n=0,nsteps=100,nconstraints=0,fixed_DLCs=[]):
+        assert len(fixed_DLCs)==nconstraints, "need to specify constraint_steps even if zero"
+        assert self.icoords[n]!=0,"icoord not set"
         output_format = 'xyz'
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        assert self.icoords[n]!=0,"icoord not set"
         self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
+        grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
+        self.icoords[n].gradq = self.icoords[n].grad_to_q(grad)
         self.icoords[n].energy=0
         grmss = []
         steps = []
@@ -193,11 +196,9 @@ class Base_Method(object,Print,Analyze):
         self.icoords[n].do_bfgs=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
         self.icoords[n].node_id = n  # set node id is this necessary?
-   
         if self.icoords[n].print_level>0:
             print "Initial energy is %1.4f\n" % self.icoords[n].V0
-        #self.icoords[n].buf.write(" Writing convergence for node %i: \n" %n)
-    
+
         for step in range(nsteps):
             if self.icoords[n].print_level>0:
                 print(" Opt step: %i" %(step+1)),
@@ -208,12 +209,30 @@ class Base_Method(object,Print,Analyze):
 
             # => Update DLC obj <= #
             self.update_DLC_obj(n,nconstraints)
-   
-            # => Opt step <= #
-            if self.icoords[n].PES.lot.do_coupling is False:
-                smag =self.icoords[n].opt_step(nconstraints)
+
+            ######### => form constraints <= ###########
+            constraints=[0]*nconstraints
+            # => step no climb
+            if all(dlc_fix==True for dlc_fix in fixed_DLCs):
+                pass
+            # => step with climb
+            elif fixed_DLCs=[False]:
+                constraints[0]=self.icoords[n].walk_up()
+            # => MECI step
+            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
+                constraints[1] = self.icoords[n].dgrad_step()
+            # => seam step
+            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,True,False]:
+                constraints[2] = self.icoords[n].dgrad_step()
+            # => seam climb
+            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False,False]:
+                constraints[1] = self.icoords[n].dgrad_step()
+                constraints[2]=self.icoords[n].walk_up()
             else:
-                smag =self.icoords[n].combined_step(nconstraints)
+                raise ValueError(" Optimize doesn't know what to do ")
+
+            ########### => Opt step <= ############
+            smag =self.icoords[n].opt_step(nconstraints,constraints)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
@@ -223,7 +242,8 @@ class Base_Method(object,Print,Analyze):
     
             #write convergence
             self.write_node(n,opt_molecules,energies,grmss,steps)
-    
+   
+            #TODO convergence 
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())
@@ -524,6 +544,11 @@ class Base_Method(object,Print,Analyze):
     def opt_steps(self,opt_steps,nconstraints):
         for i in range(1):
 
+            assert nconstraints>0,"opt steps doesn't work without constraints"
+            if self.icoords[n].PES.lot.do_coupling==True: 
+                assert nconstraint>2,"nconstraints wrong size"
+            fixed_DLC = [True]*nconstraints
+
             fp=0
             if self.stage>0:
                 fp = self.find_peaks(2)
@@ -544,19 +569,29 @@ class Base_Method(object,Print,Analyze):
                     exsteps=1 #multiplier for nodes near the TS node
                     if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                         exsteps=2
-
-                    # => do regular optimization, with climb if TS node and climb
+                    
+                    # => form constraint space?
+                    #self.icoords[n].opt_constraint(self.ictan[n])
+                    # => do constrained optimization
                     if self.stage<2 and not self.icoords[n].isTSnode:
-                        self.icoords[n].opt_constraint(self.ictan[n])
-                        self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints)
-                        if self.stage==1 and self.icoords[n].isTSnode:
-                            self.icoords[n].walk_up()
+                        # => do CI constrained optimization
+                        if self.icoords[n].PES.lot.do_coupling:
+                            fixed_DLC=[True,False,True]
+                        self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
+
+                    # => do constrained optimization with climb
+                    elif self.stage==1 and self.icoords[n].isTSnode:
+                        fixed_DLC=[False]
+                        # => do constrained seam optimization with climb
+                        if self.icoords[n].PES.lot.do_coupling==True:
+                            fixed_DLC=[True,False,False]
+                        self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
 
                     # => follow maximum overlap with Hessian for TS node if find <= #
                     elif self.stage==2 and self.icoords[n].isTSnode:
                         self.optimize_TS_exact(n,opt_steps,nconstraints)
 
-                if optlastnode==True and n==self.nnodes-1:
+                if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                     self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
 
     @property
@@ -586,8 +621,6 @@ class Base_Method(object,Print,Analyze):
             if self.stage==1:
                 nclimb-=1
             return nclimb
-
-
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
