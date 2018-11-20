@@ -35,14 +35,20 @@ class GSM(Base_Method):
         print "print levels at beginning are ",self.icoords[0].print_level
         print "print levels at beginning are ",self.icoords[-1].print_level
 
-    def go_gsm(self,g_iters=1,maxopt=1,nconstraints=1,o_iters=1,optsteps=1):
+    def go_gsm(self,max_iters=50,opt_steps=3,nconstraints=1):
         self.icoords[0].gradrms = 0.
         self.icoords[-1].gradrms = 0.
-        self.icoords[0].energies = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+        print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
+
         self.interpolate(2) 
-        self.growth_iters(iters=g_iters,maxopt=maxopt,nconstraints=nconstraints)
-        self.opt_iters(max_iter=o_iters,optsteps=optsteps)
+
+        self.growth_iters(iters=max_iters,opt_steps=opt_steps,nconstraints=nconstraints)
+        print("Done Growing the String!!!")
+
+        #TODO maxiters should decrement somehow
+        self.opt_iters(max_iter=max_iters,optsteps=opt_steps)
 
 
     def interpolate(self,newnodes=1):
@@ -58,11 +64,11 @@ class GSM(Base_Method):
                 self.interpolateP()
 
     def add_node(self,n1,n2,n3):
-        print "adding node: %i between %i %i" %(n2,n1,n3)
+        print " adding node: %i between %i %i" %(n2,n1,n3)
         return DLC.add_node(self.icoords[n1],self.icoords[n3],self.nnodes,self.nn)
 
     def set_active(self,nR,nP):
-        print(" Here is active:",self.active)
+        #print(" Here is active:",self.active)
         if nR!=nP:
             print(" setting active nodes to %i and %i"%(nR,nP))
         else:
@@ -74,10 +80,10 @@ class GSM(Base_Method):
                 self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
         self.active[nR] = True
         self.active[nP] = True
-        print(" Here is new active:",self.active)
+        #print(" Here is new active:",self.active)
 
     def tangent(self,n1,n2):
-        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
         return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
 
     def check_if_grown(self):
@@ -93,12 +99,10 @@ class GSM(Base_Method):
             self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
                 self.interpolateR()
-                print "print_level is",self.icoords[self.nR-1].print_level
         if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
             self.active[self.nnodes-self.nP] = False
             if self.icoords[-self.nP-1] == 0:
                 self.interpolateP()
-                print "print_level is",self.icoords[self.nR-1].print_level
 
     def make_nlist(self):
         ncurrent = 0
@@ -142,8 +146,8 @@ class GSM(Base_Method):
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=True
-    PYTC=False
+    QCHEM=False
+    PYTC=True
     nproc=8
 
     if QCHEM:
@@ -160,11 +164,16 @@ if __name__ == '__main__':
         nocc=11
         nactive=2
 
-    if True:
+    if False:
         filepath2="tests/SiH2H2.xyz"
         filepath="tests/SiH4.xyz"
         nocc=8
         nactive=2
+    if True:
+        filepath="tests/butadiene_ethene.xyz"
+        filepath2="tests/cyclohexene.xyz"
+        nocc=21
+        nactive=4
 
     mol=pb.readfile("xyz",filepath).next()
     mol2=pb.readfile("xyz",filepath2).next()
@@ -179,8 +188,10 @@ if __name__ == '__main__':
     if PYTC:
         lot=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
         lot.cas_from_file(filepath)
+        #lot.casci_from_file_from_template(filepath,filepath,nocc,nocc) 
         lot2=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        lot2.casci_from_file_from_template(filepath,filepath2,nocc,nocc)
+        #lot2.casci_from_file_from_template(filepath,filepath2,nocc,nocc)
+        lot2.cas_from_file(filepath2)
 
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
@@ -194,25 +205,5 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,CONV_TOL=0.001)
-        gsm.go_gsm(g_iters=30,maxopt=1,nconstraints=1,o_iters=30,optsteps=1)
+        gsm.go_gsm(max_iters=30,opt_steps=3,nconstraints=1)
 
-    if False:
-        print DLC.tangent_1(gsm.icoords[0],gsm.icoords[-1])
-    
-    if False:
-        for i in range(gsm.nnodes):
-            gsm.icoords[i].energy = gsm.icoords[i].PES.get_energy(gsm.icoords[i].geom)
-        gsm.get_tangents_1e(n0=0)
-
-    if False:
-        gsm.ic_reparam_g()
-
-
-    if False:
-        gsm.grow_string(50)
-        #gsm.growth_iters(iters=50,maxopt=3,nconstraints=1)
-        gsm.opt_iters()
-        if ORCA:
-            os.system('rm temporcarun/*')
-
-    #gsm.write_node_xyz('nodes_xyz_file1')

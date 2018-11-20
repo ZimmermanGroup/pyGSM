@@ -51,11 +51,12 @@ class Print:
         with open(xyzfile, 'a') as f:
             f.write("[GEOCONV]\n")
             f.write('energy\n')
+            V0=self.icoords[0].energy
             for ico,act in zip(self.icoords,self.active):
                 if act:
-                    f.write('{}\n'.format(ico.energy))
+                    f.write('{}\n'.format(ico.energy-V0))
                 elif ico!=0:
-                    f.write('{}\n'.format(ico.energy))
+                    f.write('{}\n'.format(ico.energy-V0))
             f.write("max-force\n")
             for ico,act in zip(self.icoords,self.active):
                 if act:

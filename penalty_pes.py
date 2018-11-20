@@ -101,5 +101,4 @@ if __name__ == '__main__':
         mol.OBMol.AddBond(6,1,1)
         print "####### ic1 ##########"
         ic1=ic.ICoord.from_options(mol=mol,PES=p,resetopt=False)
-        ic1.optimize(100)
 
