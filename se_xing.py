@@ -65,12 +65,13 @@ if __name__ == '__main__':
     ORCA=False
     QCHEM=True
     PYTC=False
-    nproc=4
+    nproc=8
     
     ethylene=False
     sih4=False
     fluoroethene=False
     butadiene_ethene=False
+    FeCO5=False
     FeO_H2=False
     NiL2Br2=True
 
@@ -79,34 +80,44 @@ if __name__ == '__main__':
     elif PYTC: from pytc import *
 
     states = [(1,0),(3,0)]
+    basis = '6-31G(d)'
 
     if fluoroethene:
         filepath = 'tests/fluoroethene.xyz'
         nocc=11
         nactive=2
+        driving_coords = [('BREAK',1,2)]
     elif ethylene:
         filepath = 'tests/ethylene.xyz'
         nocc=7
         nactive=2
+        driving_coords = [('BREAK',1,2)]
     elif sih4:
         filepath = 'tests/SiH4.xyz'
         nocc=8
         nactive=2
+        driving_coords = [('ADD',3,4),('BREAK',1,3),("BREAK",1,4)]
     elif butadiene_ethene:
         filepath = 'tests/butadiene_ethene.xyz'
         nocc=21
         nactive=4
+    elif FeCO5:
+        filepath = 'tests/FeCO5.xyz'
+        states = [(1,0),(3,0)]
+        driving_coords = [('Add',1,3),('Add',2,4)]
     elif FeO_H2:
         filepath = 'tests/FeO_H2.xyz'
         states = [(4,0),(6,0)]
+        driving_coords = [('Add',1,3),('Add',2,4)]
     elif NiL2Br2:
         filepath = 'tests/NiL2Br2_sqpl.xyz'
-        #filepath = 'tests/NiL2Br2_tetr.xyz'
-        states = [(1,-2),(3,-2)]
+        states = [(1,0),(3,0)]
+        basis = '6-31G(d)'
+        driving_coords = [('Torsion',1,12,13,15)]
 
     mol = pb.readfile('xyz',filepath).next()
     if QCHEM:
-        lot = QChem.from_options(states=states,charge=0,basis='6-31+g(d)',functional='B3LYP',nproc=nproc)
+        lot = QChem.from_options(states=states,charge=0,basis=basis,functional='B3LYP',nproc=nproc)
     elif ORCA:
         lot = Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
     elif PYTC:
@@ -121,18 +132,7 @@ if __name__ == '__main__':
 
     if True:
         print ' Starting GSM '
-        if sih4:
-            gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[('ADD',3,4),('BREAK',1,3),("BREAK",1,4)],ADD_NODE_TOL=0.05)
-        if ethylene:
-            gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[('BREAK',1,2)],ADD_NODE_TOL=0.05)
-        if fluoroethene:
-            gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[('BREAK',1,2)],ADD_NODE_TOL=0.05)
-        if butadiene_ethene:
-            pass
-        if FeO_H2:
-            gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[('Add',1,3),('Add',2,4)],ADD_NODE_TOL=0.05)
-        if NiL2Br2:
-            gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=[('Torsion',1,2,3,4)],ADD_NODE_TOL=0.05)
-        gsm.go_gsm(10)
+        gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=driving_coords,ADD_NODE_TOL=0.05)
+        gsm.go_gsm(20)
 
 

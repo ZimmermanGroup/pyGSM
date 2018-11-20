@@ -147,10 +147,10 @@ class SE_GSM(Base_Method):
 
     def tangent(self,n1,n2):
         if n2 ==self.nR-1:
-            #print" getting tangent from node ",n2
+            print" getting tangent from node ",n2
             return DLC.tangent_SE(self.icoords[n2],self.driving_coords)
         elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
-            #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
             return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
         else:
             raise ValueError("can't make tan")
