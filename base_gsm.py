@@ -72,10 +72,10 @@ class Base_Method(object,Print,Analyze):
 
         opt.add_option(
                 key='tstype',
-                value=1,
+                value=0,
                 required=False,
                 allowed_types=[int],
-                doc='0==any,1 delta bond, 2==turning of climbing image and TS search'
+                doc='0==Find and Climb TS,1 Climb with no exact find, 2==turning of climbing image and TS search'
                 )
 
         opt.add_option(
@@ -129,6 +129,17 @@ class Base_Method(object,Print,Analyze):
         self.CONV_TOL = self.options['CONV_TOL']
         self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
         self.last_node_fixed = self.options['last_node_fixed']
+        self.tstype=self.options['tstype']
+        self.climber=False  #is this string a climber?
+        self.finder=False   # is this string a finder?
+        if self.tstype==0:
+            print("set climber and finder to True")
+            self.climber=True
+            self.finder=True
+        elif self.tstype==1:
+            print("setting climber to True")
+        else:
+            print(" Turning off climbing image and exact TS search")
 
         # Set initial values
         self.nn = 2
@@ -228,18 +239,29 @@ class Base_Method(object,Print,Analyze):
         print "*********************************************************************"
         print "************************** in opt_iters *****************************"
         print "*********************************************************************"
+
+        print "beginning opt iters" 
+        print "convergence criteria 1: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
+        nclimb=0
+
         for i in range(1,self.nnodes-1):
             self.active[i] = True
         for oi in range(max_iter):
             sys.stdout.flush()
-            self.get_tangents_1e() #Try get_tangents_1e here
+
+            # => Get all tangents 3-way <= #
+            self.get_tangents_1e()
+            # => do opt steps <= #
             self.opt_steps(optsteps,nconstraints)
-            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-                if ico.gradrms < self.CONV_TOL:
-                    self.active[i] = False
+
+            # => Turn off converged nodes for next round? <= #
+            #for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
+            #    if ico.gradrms < self.CONV_TOL:
+            #        self.active[i] = False
+
+            # => calculate totalgrad <= #
             totalgrad = 0.0
             gradrms = 0.0
-            print " rn3m6: {:1.4}".format(self.rn3m6)
             for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
                 print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
                 if i%5 == 0:
@@ -247,27 +269,51 @@ class Base_Method(object,Print,Analyze):
                 totalgrad += ico.gradrms*self.rn3m6
                 gradrms += ico.gradrms*ico.gradrms
             print
+
             gradrms = np.sqrt(gradrms/(self.nnodes-2))
             self.emaxp = self.emax
             self.emax = float(max(self.energies[1:-1]))
             self.nmax = np.where(self.energies==self.emax)[0][0]
 
-            #TODO stuff with path_overlap/path_overlapn
-            #TODO Stuff with find and climb
-            #TODO Stuff with find_peaks            
-            print "convergence criteria: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.1}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
-            #also prints tgrads and jobGradCount
-            if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
-                print " String is converged"
-                print " String convergence criteria is {:1.5}".format(self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5)
-                print " Printing string to opt_converged_000.xyz"
-                self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
-                sys.stdout.flush()
-                return
+            if self.stage==1: print("c")
+            elif self.stage==2: print("x")
+
+            #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
+
+            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
+
+            fp = self.find_peaks(2)
+
+            #TODO special SSM criteria if TSNode is second to last node
+            #TODO special SSM criteria if first opt'd node is too high?
+
+            # => set stage <= #
+            ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
+            ts_gradrms=self.icoords[self.nmax].gradrms
+            dE_iter=abs(self.emax-self.emaxp)
+            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
+
+
+            #TODO resetting
+
+
+            #if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
+            if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
+                break
+            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+                break
+            if not self.climber and not self.finder and totalgrad<0.025:
+                break
+
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
+            #also prints tgrads and jobGradCount
+
+        print " Printing string to opt_converged_000.xyz"
+        self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
+        sys.stdout.flush()
+        return
 
     def get_tangents_1(self,n0=0):
         size_ic = self.icoords[0].num_ics
@@ -296,8 +342,11 @@ class Base_Method(object,Print,Analyze):
         nbonds = self.icoords[0].BObj.nbonds
         nangles = self.icoords[0].AObj.nangles
         ntor = self.icoords[0].TObj.ntor
-        ictan = np.zeros((self.nnodes,size_ic))
-        ictan0 = np.copy(ictan[0])
+        #ictan = np.zeros((self.nnodes,size_ic))
+
+        ictan = [[]]*self.nnodes
+        #ictan0 = np.copy(ictan[0])
+        ictan0 = np.zeros((size_ic,1))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes,self.nnodes))
 
@@ -336,7 +385,8 @@ class Base_Method(object,Print,Analyze):
                     intic_n = n+1
                     int2ic_n = n-1
             if not do3:
-                ictan[n,:]=np.transpose(self.tangent(newic_n,intic_n))
+                #ictan[n,:]=np.transpose(self.tangent(newic_n,intic_n))
+                ictan[n] = self.tangent(newic_n,intic_n)
             else:
                 f1 = 0.
                 dE1 = abs(self.energies[n+1]-self.energies[n])
@@ -372,7 +422,9 @@ class Base_Method(object,Print,Analyze):
                         tmp2 = 2*np.pi + tmp2
                     t1[nbonds+nangles+i] = tmp1
                     t2[nbonds+nangles+i] = tmp2
-                ictan[n,:] = f1*t1 + (1-f1)*t2
+                #ictan[n,:] = f1*t1 + (1-f1)*t2
+                ictan[n] = f1*t1 +(1-f1)*t2
+                ictan[n] = ictan[n].reshape((size_ic,1))
             
             dqmaga[n]=0.0
             ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
@@ -384,9 +436,9 @@ class Base_Method(object,Print,Analyze):
             dqmaga[n] = float(dqmaga[n])
         
 
-        print '------------printing ictan[:]-------------'
-        for row in ictan:
-            print row
+        #print '------------printing ictan[:]-------------'
+        #for row in ictan:
+        #    print row
         print '------------printing dqmaga---------------'
         print dqmaga
         self.dqmaga = dqmaga
@@ -453,7 +505,6 @@ class Base_Method(object,Print,Analyze):
             isDone = self.check_if_grown()
             if isDone:
                 print "is Done growing"
-                self.stage=1
                 break
 
             totalgrad = 0.0
@@ -519,6 +570,24 @@ class Base_Method(object,Print,Analyze):
         print("setting stage value to %i" %value)
         self._stage=value
 
+    def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
+        if totalgrad<0.3 and fp>0:
+            if self.stage!=1 and self.climber:
+                print(" ** starting climb **")
+                self.stage=1
+            if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
+                    ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
+                    (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
+                    (ts_gradrms<self.CONV_TOL*5.))
+                    ):
+                print(" ** starting exact climb **")
+                self.stage=2
+                raise NotImplementedError
+            if self.stage==1:
+                nclimb-=1
+            return nclimb
+
+
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
@@ -543,6 +612,7 @@ class Base_Method(object,Print,Analyze):
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=4,n0=0,nconstraints=1,rtype=0):
+        #TODO stuff about climb and find
         num_ics = self.icoords[0].num_ics
         len_d = self.icoords[0].nicd
         ictalloc = self.nnodes+1

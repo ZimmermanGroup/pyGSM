@@ -45,7 +45,7 @@ class SE_GSM(Base_Method):
     def go_gsm(self,max_iters,max_steps):
         self.icoords[0].gradrms = 0.
         self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        print "Initial energy is %1.4f" % self.icoords[0].energy
+        print " Initial energy is %1.4f" % self.icoords[0].energy
         self.interpolate(1) 
         self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
         self.growth_iters(iters=max_iters,opt_steps=max_steps)
@@ -61,13 +61,26 @@ class SE_GSM(Base_Method):
             elif self.pastts==3: #product detected by bonding
                 self.add_last_node(1)
 
+        self.nnodes=self.nR
+        print " Number of nodes is ",self.nnodes
+        print " Warning last node still not optimized fully"
         self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
-        print "SSM growth phase over"
-        print "Warning last node still not optimized fully"
+        print " SSM growth phase over"
+
+        print " beginning opt phase"
+        print "Setting all interior nodes to active"
+        for n in range(1,self.nnodes):
+            self.active[n]==True
+
+        print " initial ic_reparam"
+        self.ic_reparam()
+
         if self.tscontinue==True:
             self.opt_iters(max_iter=max_iters,optsteps=max_steps)
         else:
             print "Exiting early"
+
+        print "Finished GSM!"  
 
 
     def add_node(self,n1,n2,n3=None):
@@ -216,7 +229,7 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05)
-        gsm.go_gsm(max_iters=30,max_steps=10)
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=2)
+        gsm.go_gsm(max_iters=30,max_steps=3)
 
 
