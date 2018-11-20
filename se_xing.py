@@ -74,6 +74,7 @@ if __name__ == '__main__':
     FeCO5=False
     FeO_H2=False
     NiL2Br2=True
+    NiL2Br2_tetr=False
 
     if QCHEM: from qchem import *
     elif ORCA: from orca import *
@@ -112,8 +113,11 @@ if __name__ == '__main__':
     elif NiL2Br2:
         filepath = 'tests/NiL2Br2_sqpl.xyz'
         states = [(1,0),(3,0)]
-        basis = '6-31G(d)'
-        driving_coords = [('Torsion',1,12,13,15)]
+        driving_coords = [('Torsion',18,12,13,23)]
+    elif NiL2Br2_tetr:
+        filepath = 'tests/NiL2Br2_tetr.xyz'
+        states = [(1,0),(3,0)]
+        driving_coords = [('Torsion',16,14,1,13)]
 
     mol = pb.readfile('xyz',filepath).next()
     if QCHEM:
