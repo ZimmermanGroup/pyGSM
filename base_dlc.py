@@ -165,7 +165,7 @@ class Base_DLC(Utils,ICoords):
                 n+=1
 
         # atoms attached to linear atoms
-        clist=[[]]
+        clist=[[]]*n
         m =[]
         for i in range(n):
             # b is the vertex 
