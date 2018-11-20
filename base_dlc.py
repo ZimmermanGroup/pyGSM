@@ -165,7 +165,7 @@ class Base_DLC(Utils,ICoords):
                 n+=1
 
         # atoms attached to linear atoms
-        clist=[[]]
+        clist=[[]]*n
         m =[]
         for i in range(n):
             # b is the vertex 
@@ -215,6 +215,9 @@ class Base_DLC(Utils,ICoords):
                         print(" adding torsion via linear ties %s" %torsion)
                         self.TObj.torsions.append(torsion)
                         self.TObj.ntor +=1
+        self.BObj.update(self.mol)
+        self.AObj.update(self.mol)
+        self.TObj.update(self.mol)
 
     def bond_frags(self):
         raise NotImplementedError()

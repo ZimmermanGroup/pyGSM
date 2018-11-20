@@ -48,7 +48,7 @@ class SE_GSM(Base_Method):
         print " Initial energy is %1.4f" % self.icoords[0].energy
         self.interpolate(1) 
         self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
-        self.growth_iters(iters=max_iters,opt_steps=max_steps)
+        self.growth_iters(iters=max_iters,maxopt=max_steps)
         if self.tscontinue==True:
             if self.pastts==1: #normal over the hill
                 #self.add_node(self.nR-1,self.nR)
@@ -147,10 +147,10 @@ class SE_GSM(Base_Method):
 
     def tangent(self,n1,n2):
         if n2 ==self.nR-1:
-            #print" getting tangent from node ",n2
+            print" getting tangent from node ",n2
             return DLC.tangent_SE(self.icoords[n2],self.driving_coords)
         elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
-            #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
             return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
         else:
             raise ValueError("can't make tan")

@@ -9,7 +9,8 @@ from copy import deepcopy
 import manage_xyz
 from _icoord import ICoords
 from _bmat import Bmat
-from pes import *
+#from pes import *
+from penalty_pes import *
 from base_dlc import *
 from sklearn import preprocessing
 np.set_printoptions(precision=4)
@@ -172,6 +173,59 @@ class DLC(Base_DLC,Bmat,Utils):
 
         return ICoordC
 
+    def add_node_SE_X(ICoordA,driving_coordinate):
+
+        dq0 = np.zeros((ICoordA.nicd,1))
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
+        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes = Penalty_PES(pes1,pes2)
+
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : pes
+            }))
+
+        ICoordC.setup()
+        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ICoordC.opt_constraint(ictan)
+        bdist = np.linalg.norm(ictan)
+        #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
+        ICoordC.bmatp_create()
+        ICoordC.bmat_create()
+        DQMAG_SSM_MAX=0.8
+        DQMAG_SSM_MIN=0.2
+        DQMAG_SSM_SCALE=1.5
+        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
+        a = bdist/DQMAG_SSM_SCALE
+        if a>1:
+            a=1
+        dqmag = DQMAG_SSM_MIN+minmax*a
+        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
+
+        dq0[ICoordC.nicd-1] = -dqmag
+
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
+        ICoordC.bdist = bdist
+        
+        #ICoordC.dqmag = dqmag
+
+        return ICoordC
 
     @staticmethod
     def add_node(ICoordA,ICoordB,nmax,ncurr):
@@ -239,6 +293,27 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ICoordC.setup()
 
+        return ICoordC
+
+    def copy_node_X(ICoordA,new_node_id):
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
+        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes = Penalty_PES(pes1,pes2)
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol":mol1,
+            "bonds":ICoordA.BObj.bonds,
+            "angles":ICoordA.AObj.angles,
+            "torsions":ICoordA.TObj.torsions,
+            "PES":pes
+            }))
+        ICoordC.setup()
         return ICoordC
 
     def ic_create(self):

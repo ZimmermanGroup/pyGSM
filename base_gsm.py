@@ -246,6 +246,7 @@ class Base_Method(object,Print,Analyze):
             #TODO convergence 
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
+            print
         print(self.icoords[n].buf.getvalue())
         if self.icoords[n].print_level>0:
             print "Final energy is %2.5f" % (self.icoords[n].energy)
@@ -508,7 +509,8 @@ class Base_Method(object,Print,Analyze):
 #           #     print np.transpose(ictan[nlist[2*n]])
 
 
-    def growth_iters(self,iters=1,opt_steps=1,nconstraints=1,current=0):
+    def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
+        print ''
         print "*********************************************************************"
         print "************************ in growth_iters ****************************"
         print "*********************************************************************"
@@ -519,7 +521,7 @@ class Base_Method(object,Print,Analyze):
             self.get_tangents_1g()
             self.ic_reparam_g()
             self.get_tangents_1g()
-            self.opt_steps(opt_steps,nconstraints)
+            self.opt_steps(3,nconstraints)
             self.store_energies()
 
             isDone = self.check_if_grown()
