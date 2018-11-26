@@ -143,6 +143,9 @@ class GSM(Base_Method):
         self.nR=1
         self.nP=1
 
+    def check_string_opt(self,totalgrad,fp):
+        pass
+
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False

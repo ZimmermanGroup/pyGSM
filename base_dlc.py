@@ -406,7 +406,7 @@ class Base_DLC(Utils,ICoords):
             print " norm_dg is %1.4f" % norm_dg,
             print " dE is %1.4f" % self.PES.dE,
 
-       dq = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg 
+        dq = -self.PES.dE/KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
             dq=-0.075
 

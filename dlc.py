@@ -781,6 +781,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.DMAX=self.DMIN0
 
     def update_DLC(self):
+        pass
         #TODO
 
     def opt_step(self,nconstraints,constraint_steps):
@@ -891,7 +892,11 @@ class DLC(Base_DLC,Bmat,Utils):
         #print "Cn written in terms of U"
         #print C_U
         # normalize C_U
-        C_U = preprocessing.normalize(C_U.T,norm='l2')
+        try:
+            C_U = preprocessing.normalize(C_U.T,norm='l2')
+        except:
+            print C
+            exit(-1)
         #print C_U
         #print "shape of overlaps is %s, shape of Ut is %s, shape of C_U is %s" %(np.shape(dots),np.shape(self.Ut),np.shape(C_U))
 
