@@ -146,6 +146,7 @@ class DLC(Base_DLC,Bmat,Utils):
         ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
         ICoordC.opt_constraint(ictan)
         bdist = np.linalg.norm(ictan)
+        print 'bdist: {:2.14f}'.format(bdist)
         #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
@@ -200,6 +201,7 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.opt_constraint(ictan)
         bdist = np.linalg.norm(ictan)
         #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
+        print 'bdist: {:2.14f}'.format(bdist)
         ICoordC.bmatp_create()
         ICoordC.bmat_create()
         DQMAG_SSM_MAX=0.8

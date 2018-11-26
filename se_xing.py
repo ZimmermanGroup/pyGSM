@@ -45,9 +45,9 @@ class SE_Cross(SE_GSM):
 
     def check_if_grown(self):
         isDone = False
-        MAGIC_NUM = 4.0
-        if abs(self.icoords[self.nR-1].PES.dE) < MAGIC_NUM:
-            if self.icoords[self.nR-1].bdist < 0.5 * self.icoords[1].bdist:
+            epsilon = 1.5
+        if abs(self.icoords[self.nR-1].PES.dE) < epsilon:
+            if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist):
                 isDone = True
         return isDone
 
@@ -72,8 +72,8 @@ if __name__ == '__main__':
     fluoroethene=False
     butadiene_ethene=False
     FeCO5=False
-    FeO_H2=False
-    NiL2Br2=True
+    FeO_H2=True
+    NiL2Br2=False
     NiL2Br2_tetr=False
 
     if QCHEM: from qchem import *
@@ -82,22 +82,23 @@ if __name__ == '__main__':
 
     states = [(1,0),(3,0)]
     basis = '6-31G(d)'
+    charge=0
 
     if fluoroethene:
         filepath = 'tests/fluoroethene.xyz'
         nocc=11
         nactive=2
-        driving_coords = [('BREAK',1,2)]
+        driving_coords = [('BREAK',1,2,0.1)]
     elif ethylene:
         filepath = 'tests/ethylene.xyz'
         nocc=7
         nactive=2
-        driving_coords = [('BREAK',1,2)]
+        driving_coords = [('BREAK',1,2,0.1)]
     elif sih4:
         filepath = 'tests/SiH4.xyz'
         nocc=8
         nactive=2
-        driving_coords = [('ADD',3,4),('BREAK',1,3),("BREAK",1,4)]
+        driving_coords = [('ADD',3,4,0.1),('BREAK',1,3,0.1),("BREAK",1,4,0.1)]
     elif butadiene_ethene:
         filepath = 'tests/butadiene_ethene.xyz'
         nocc=21
@@ -105,25 +106,26 @@ if __name__ == '__main__':
     elif FeCO5:
         filepath = 'tests/FeCO5.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Add',1,3),('Add',2,4)]
+        driving_coords = [('Add',1,3,0.1),('Add',2,4,0.1)]
     elif FeO_H2:
         filepath = 'tests/FeO_H2.xyz'
         states = [(4,0),(6,0)]
-        driving_coords = [('Add',1,3),('Add',2,4)]
+        driving_coords = [('Add',1,3,0.1),('Add',2,4,0.1)]
+        charge=1
     elif NiL2Br2:
         filepath = 'tests/NiL2Br2_sqpl.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Torsion',18,12,13,23)]
+        driving_coords = [('Torsion',18,12,13,23,10.)]
     elif NiL2Br2_tetr:
         filepath = 'tests/NiL2Br2_tetr.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Torsion',16,14,1,13)]
+        driving_coords = [('Torsion',16,14,1,13,10.)]
 
     mol = pb.readfile('xyz',filepath).next()
     if QCHEM:
-        lot = QChem.from_options(states=states,charge=0,basis=basis,functional='B3LYP',nproc=nproc)
+        lot = QChem.from_options(states=states,charge=charge,basis=basis,functional='B3LYP',nproc=nproc)
     elif ORCA:
-        lot = Orca.from_options(states=[(1,0)],charge=0,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
+        lot = Orca.from_options(states=states,charge=charge,basis='6-31g(d)',functional='B3LYP',nproc=nproc)
     elif PYTC:
         lot = PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31g')
         lot.cas_from_file(filepath)
