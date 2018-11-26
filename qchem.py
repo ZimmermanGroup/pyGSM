@@ -15,6 +15,7 @@ class QChem(Lot):
         tempfile.write(' SCF_ALGORITHM rca_diis\n')
         tempfile.write(' SCF_MAX_CYCLES 150\n')
         tempfile.write(' BASIS {}\n'.format(self.basis))
+        tempfile.write(' ECP LANL2DZ \n')
         tempfile.write(' WAVEFUNCTION_ANALYSIS FALSE\n')
         tempfile.write(' GEOM_OPT_MAX_CYCLES 300\n')
         tempfile.write('scf_convergence 6\n')
