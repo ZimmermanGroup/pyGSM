@@ -177,13 +177,21 @@ class SE_GSM(Base_Method):
             isDone=True
         return isDone
 
+    def check_string_opt(self,totalgrad,fp):
+        if self.nmax==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
+            print "TS node is second to last node, adding one more node"
+            self.add_last_node()
+            self.nnodes=self.nR
+            active[self.nnodes-2]=active[self.nnodes-1]=1
+        return 1
+
 
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=False
-    PYTC=True
-    nproc=8
+    QCHEM=True
+    PYTC=False
+    nproc=4
 
     if QCHEM:
         from qchem import *
