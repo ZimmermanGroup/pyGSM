@@ -216,7 +216,7 @@ class Base_Method(object,Print,Analyze):
             if all(dlc_fix==True for dlc_fix in fixed_DLCs):
                 pass
             # => step with climb
-            elif fixed_DLCs=[False]:
+            elif fixed_DLCs==[False]:
                 constraints[0]=self.icoords[n].walk_up()
             # => MECI step
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
@@ -246,7 +246,6 @@ class Base_Method(object,Print,Analyze):
             #TODO convergence 
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
-            print
         print(self.icoords[n].buf.getvalue())
         if self.icoords[n].print_level>0:
             print "Final energy is %2.5f" % (self.icoords[n].energy)
@@ -307,6 +306,7 @@ class Base_Method(object,Print,Analyze):
 
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
+            self.check_string_opt(totalgrad,fp)
 
             # => set stage <= #
             ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
@@ -341,13 +341,14 @@ class Base_Method(object,Print,Analyze):
         nbonds = self.icoords[0].BObj.nbonds
         nangles = self.icoords[0].AObj.nangles
         ntor = self.icoords[0].TObj.ntor
-        ictan = np.zeros((self.nnodes+1,size_ic))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
         for n in range(n0+1,self.nnodes):
-            ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
+            #ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
+            self.ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[n-1])
             dqmaga[n] = 0.
-            ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
+            #ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
+            ictan0= np.copy(self.ictan[n])
             self.icoords[n].bmatp = self.icoords[n].bmatp_create()
             self.icoords[n].bmatp_to_U()
             self.icoords[n].opt_constraint(ictan0)
@@ -356,7 +357,6 @@ class Base_Method(object,Print,Analyze):
             dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
         self.dqmaga = dqmaga
-        self.ictan = ictan
 
     def get_tangents_1e(self,n0=0):
         size_ic = self.icoords[0].num_ics
@@ -547,7 +547,7 @@ class Base_Method(object,Print,Analyze):
         for i in range(1):
 
             assert nconstraints>0,"opt steps doesn't work without constraints"
-            if self.icoords[n].PES.lot.do_coupling==True: 
+            if self.icoords[0].PES.lot.do_coupling==True: 
                 assert nconstraint>2,"nconstraints wrong size"
             fixed_DLC = [True]*nconstraints
 
@@ -668,24 +668,36 @@ class Base_Method(object,Print,Analyze):
         self.emax = float(max(self.energies[1:-1]))
         self.nmax = np.where(self.energies==self.emax)[0][0]
         self.TSnode = self.nmax
-        print "TSnode: {} Emax: {:4.1}".format(self.TSnode,float(self.emax))
+        print "TSnode: {} Emax: {:4.5}".format(self.TSnode,float(self.emax))
         
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
+            ictan0 = np.copy(self.ictan)
+
+            print " printing spacings dqmaga:"
+            for n in range(1,self.nnodes):
+                print " %1.2f" % self.dqmaga[n], 
+            print 
+
             totaldqmag = 0.
             for n in range(n0+1,self.nnodes):
                 totaldqmag += self.dqmaga[n]
+            print " totaldqmag = %1.3f" %totaldqmag
             dqavg = totaldqmag/(self.nnodes-1)
-            if self.climb:
+
+            #if climb:
+            if self.stage==1 or rtype==2:
                 for n in range(n0+1,self.TSnode+1):
                     h1dqmag += self.dqmaga[n]
                 for n in range(self.TSnode+1,self.nnodes):
                     h2dqmag += self.dqmaga[n]
-            
+           
+            # => Using average <= #
             if i==0 and rtype==0:
-                if not self.climb:
+                print " using average"
+                if self.stage!=1:
                     for n in range(n0+1,self.nnodes):
-                        rpart[n] = 1./(self.TSnode-n0)
+                        rpart[n] = 1./(self.nnodes)
                 else:
                     for n in range(n0+1,self.TSnode):
                         rpart[n] = 1./(self.TSnode-n0)
@@ -715,48 +727,50 @@ class Base_Method(object,Print,Analyze):
                     print " {:1.2}".format(rpart[n]),
                 print
 
-            if not self.climb and rtype !=2:
+            if self.stage!=1 and rtype!=2:
                 for n in range(n0+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - totaldqmag * rpart[n]
                     if n==self.nnodes-2:
-                        deltadq += totaldqmag * rpart[n] - self.dqmaga[n+1]
+                        deltadq += totaldqmag * rpart[n] - self.dqmaga[n+1] # so zero?
                     rpmove[n] = -deltadq
             else:
-                    deltadq = 0.
-                    rpmove[self.TSnode] = 0.
-                    for n in range(n0+1,self.TSnode):
-                        deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
-                        if n==self.nnodes-2:
-                            deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
-                        rpmove[n]
-                    for n in range(self.TSnode+1,self.nnodes-1):
-                        deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
-                        if n==self.nnodes-2:
-                            deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
-                        rpmove[n] = -deltadq
-            MAXRE = 0.5
+                deltadq = 0.
+                rpmove[self.TSnode] = 0.
+                for n in range(n0+1,self.TSnode):
+                    deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
+                    if n==self.nnodes-2:
+                        deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
+                    rpmove[n]
+                for n in range(self.TSnode+1,self.nnodes-1):
+                    deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
+                    if n==self.nnodes-2:
+                        deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
+                    rpmove[n] = -deltadq
 
+            MAXRE = 0.5
             for n in range(n0+1,self.nnodes):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
             for n in range(n0+1,self.nnodes-2):
-                if n+1 != self.TSnode or not self.climb:
+                if n+1 != self.TSnode or self.stage!=1:
                     rpmove[n+1] += rpmove[n]
             for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
-            if self.climb or rtype==2:
+            if self.stage==1 or rtype==2:
                 rpmove[self.TSnode] = 0.
             for n in range(n0+1,self.nnodes-1):
                 print " disp[{}]: {:1.2}".format(n,rpmove[n]),
             print
             
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
+            print " disprms: {:1.3}\n".format(disprms)
             lastdispr = disprms
 
             if disprms < 0.02:
                 break
             for n in range(n0+1,self.nnodes-1):
+
                 self.icoords[n].update_ics()
                 self.icoords[n].bmatp=self.icoords[n].bmatp_create()
                 self.icoords[n].bmatp_to_U()
@@ -764,14 +778,21 @@ class Base_Method(object,Print,Analyze):
                 if rpmove[n] < 0.:
                     pass
                 else:
-                    self.ictan[n] = np.copy(ictan0[n+1])
-                ictan0 = np.reshape(np.copy(ictan[n]),(num_ics,1))
-                self.icoords[n].opt_constraint(ictan0) #3815
-            
-            print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
-            for n in range(self.nnodes):
-                print " {:1.2}".format(self.dqmaga[n]),
-            print "\n\n"
+                    self.ictan[n] = np.copy(ictan0[n+1]) 
+                self.icoords[n].opt_constraint(self.ictan[n]) #3815
+                self.icoords[n].bmat_create()
+                dq = np.zeros((self.icoords[n].nicd,1),dtype=float)
+                dq[-1] = rpmove[n]
+                self.icoords[n].ic_to_xyz(dq)
+
+                #TODO might need to recalculate energy here for seam? 
+
+        print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
+        for n in range(self.nnodes):
+            print " {:1.2}".format(self.dqmaga[n]),
+        print
+        print "  disprms: {:1.3}".format(disprms)
+        print "\n\n"
 
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
