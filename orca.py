@@ -10,8 +10,8 @@ class Orca(Lot):
         inpstring = '!'
         inpstring += ' '+self.functional
         inpstring += ' '+self.basis
-        inpstring += ' EnGrad\n\n'
-        inpstring += '%scf\nMaxIter 150\nend\n\n'
+        inpstring += ' EnGrad SOSCF \n\n'
+        inpstring += '%scf\nMaxIter 150\nconvergence medium\n end\n'
         inpstring += '%pal\nnproc {}\nend\n\n'.format(self.nproc)
         inpstring += '*xyz {} {}\n'.format(self.charge,multiplicity)
         for coord in geom:
@@ -19,7 +19,7 @@ class Orca(Lot):
                 inpstring += str(i)+' '
             inpstring += '\n'
         inpstring += '*'
-        tempfilename = 'tempORCAinp'
+        tempfilename = 'tempORCAinp_{}'.format(multiplicity)
         tempfile = open(tempfilename,'w')
         tempfile.write(inpstring)
         tempfile.close()
@@ -36,7 +36,7 @@ class Orca(Lot):
         with open(engradpath) as engradfile:
             engradlines = engradfile.readlines()
 
-        temp = 1000
+        temp = 100000
         for i,lines in enumerate(engradlines):
             if 'current total energy' in lines:
                 temp = i
@@ -44,7 +44,7 @@ class Orca(Lot):
                 self.E.append((multiplicity,float(lines.split()[0]))) 
                 break
 
-        temp = 1000
+        temp = 100000
         tmp = []
         tmp2 = []
         for i,lines in enumerate(engradlines):
@@ -98,7 +98,7 @@ class Orca(Lot):
 
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])#*ANGSTROM_TO_AU #ORCA grad is given in AU
 
     @staticmethod
     def copy(OrcaA,node_id):
@@ -112,3 +112,17 @@ class Orca(Lot):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return Orca(Orca.default_options().set_values(kwargs))
 
+if __name__ == '__main__':
+    from se_xing import *
+    filepath = 'tests/SiH4.xyz'
+    basis = '6-31G*'
+    lot = Orca.from_options(states=[(1,0)],charge=0,basis=basis,functional='B3LYP',nproc=4)
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    print 'ic1'
+    mol=pb.readfile('xyz',filepath).next()
+    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=1,resetopt=False)
+    ic1.PES.get_energy(ic1.geom)
+    print 'getting gradient'
+    ic1.PES.get_gradient(ic1.geom)
+    print 'printing gradient -----------'
+    print ic1.PES.lot.grada

@@ -173,16 +173,26 @@ class Base_DLC(Utils,ICoords):
             b=self.mol.OBMol.GetAtom(blist[i][1])
             c=self.mol.OBMol.GetAtom(blist[i][2])
             tmp=0
+            tmplist=[]
             for nbr in ob.OBAtomAtomIter(a):
                 if nbr.GetIndex() != b.GetIndex():
-                    clist[i].append(nbr.GetIndex()+1)
+                    tmplist.append(nbr.GetIndex()+1)
+                    print nbr.GetIndex(),
                     tmp+=1
             for nbr in ob.OBAtomAtomIter(c):
                 if nbr.GetIndex() != b.GetIndex():
-                    clist[i].append(nbr.GetIndex()+1)
+                    print nbr.GetIndex(),
+                    tmplist.append(nbr.GetIndex()+1)
                     tmp+=1
+            clist[i]=tmplist
             m.append(tmp)
-
+            print
+        #print 'printing m'
+        #print m
+        #print 'printing clist:'
+        #print clist
+        #print 'printing blist:'
+        #print blist
         # cross linking 
         for i in range(n):
             a1=blist[i][0]
@@ -212,9 +222,10 @@ class Base_DLC(Utils,ICoords):
                         if self.bond_exists((b2,a2))==True:
                             c2=b2
                         torsion= (c1,a1,a2,c2)
-                        print(" adding torsion via linear ties %s" %torsion)
-                        self.TObj.torsions.append(torsion)
-                        self.TObj.ntor +=1
+                        if not self.torsion_exists(torsion) and len(set(torsion))==4:
+                            print(" adding torsion via linear ties %s" %(torsion,))
+                            self.TObj.torsions.append(torsion)
+                            self.TObj.ntor +=1
         self.BObj.update(self.mol)
         self.AObj.update(self.mol)
         self.TObj.update(self.mol)
@@ -227,7 +238,6 @@ class Base_DLC(Utils,ICoords):
     def bmatp_to_U(self):
         N3=3*self.natoms
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
-
         # Singular value decomposition
         v_temp,e,vh  = np.linalg.svd(G)
         v = np.transpose(v_temp)
