@@ -1,5 +1,6 @@
 import options
 from pes import * 
+import sys
 
 class Penalty_PES(PES):
     """ penalty potential energy surface calculators """
@@ -22,12 +23,22 @@ class Penalty_PES(PES):
         return Penalty_PES(Penalty_PES.default_options().set_values(kwargs))
 
     def get_energy(self,geom):
-        avgE = 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
-        self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
+        E1 = self.PES1.get_energy(geom)
+        E2 = self.PES2.get_energy(geom)
+        #avgE = 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
+        avgE = 0.5*(E1+E2)
+        #self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
+        self.dE = E2-E1
+        print "E1: %1.4f E2: %1.4f"%(E1,E2),
         print "delta E = %1.4f" %self.dE,
         #TODO what to do if PES2 is or goes lower than PES1?
-        G = (self.dE**2.)/(self.dE + self.alpha)
-        #print "G = %1.4f" % G,
+        G = (self.dE*self.dE)/(abs(self.dE) + self.alpha)
+        #if self.dE < 0:
+        #    G*=-1
+        print "G = %1.4f" % G
+        print "alpha: %1.4f sigma: %1.4f"%(self.alpha,self.sigma),
+        print "F: %1.4f"%(avgE+self.sigma*G)
+        sys.stdout.flush()
         return avgE+self.sigma*G
 
     def get_gradient(self,geom):
@@ -35,7 +46,7 @@ class Penalty_PES(PES):
         dgrad = self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom)
         if self.dE < 0:
             dgrad *= -1
-        factor = self.sigma*(self.dE**2. + 2.*self.alpha*abs(self.dE))/((abs(self.dE) + self.alpha)**2.)
+        factor = self.sigma*((self.dE*self.dE) + 2.*self.alpha*abs(self.dE))/((abs(self.dE) + self.alpha)**2)
         #print "factor is %1.4f" % factor
         return avg_grad + factor*dgrad
 

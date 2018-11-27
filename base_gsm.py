@@ -244,6 +244,8 @@ class Base_Method(object,Print,Analyze):
             self.write_node(n,opt_molecules,energies,grmss,steps)
    
             #TODO convergence 
+            print
+            sys.stdout.flush()
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
         print(self.icoords[n].buf.getvalue())

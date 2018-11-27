@@ -5,6 +5,7 @@ from se_gsm import *
 from dlc import *
 from penalty_pes import *
 import pybel as pb
+import sys
 
 
 class SE_Cross(SE_GSM):
@@ -17,6 +18,7 @@ class SE_Cross(SE_GSM):
         self.icoords[0].gradrms=0.
         self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         print 'initial energy is {:1.4f}'.format(self.icoords[0].energy)
+        sys.stdout.flush()
         self.interpolate(1)
         self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
         self.growth_iters(iters=iters,maxopt=3,nconstraints=self.nconstraints)
@@ -35,17 +37,17 @@ class SE_Cross(SE_GSM):
         print "adding node: %i from node %i"%(n2,n1)
         return DLC.add_node_SE_X(self.icoords[n1],self.driving_coords)
     
-    def opt_steps(self,maxopt,nconstraints):
-        for i in range(1):
-            for n in range(self.nnodes):
-                if self.icoords[n] != 0 and self.active[n]==True:
-                    print "optimizing node %i" % n
-                    self.icoords[n].opt_constraint(self.ictan[n])
-                    self.icoords[n].smag = self.optimize(n,maxopt,nconstraints)
+#    def opt_steps(self,maxopt,nconstraints):
+#        for i in range(1):
+#            for n in range(self.nnodes):
+#                if self.icoords[n] != 0 and self.active[n]==True:
+#                    print "optimizing node %i" % n
+#                    self.icoords[n].opt_constraint(self.ictan[n])
+#                    self.icoords[n].smag = self.optimize(n,maxopt,nconstraints)
 
     def check_if_grown(self):
         isDone = False
-            epsilon = 1.5
+        epsilon = 1.5
         if abs(self.icoords[self.nR-1].PES.dE) < epsilon:
             if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist):
                 isDone = True
@@ -72,8 +74,8 @@ if __name__ == '__main__':
     fluoroethene=False
     butadiene_ethene=False
     FeCO5=False
-    FeO_H2=True
-    NiL2Br2=False
+    FeO_H2=False
+    NiL2Br2=True
     NiL2Br2_tetr=False
 
     if QCHEM: from qchem import *
@@ -88,17 +90,17 @@ if __name__ == '__main__':
         filepath = 'tests/fluoroethene.xyz'
         nocc=11
         nactive=2
-        driving_coords = [('BREAK',1,2,0.1)]
+        driving_coords = [('BREAK',1,2,0.2)]
     elif ethylene:
         filepath = 'tests/ethylene.xyz'
         nocc=7
         nactive=2
-        driving_coords = [('BREAK',1,2,0.1)]
+        driving_coords = [('BREAK',1,2,0.2)]
     elif sih4:
         filepath = 'tests/SiH4.xyz'
         nocc=8
         nactive=2
-        driving_coords = [('ADD',3,4,0.1),('BREAK',1,3,0.1),("BREAK",1,4,0.1)]
+        driving_coords = [('ADD',3,4,0.2),('BREAK',1,3,0.2),("BREAK",1,4,0.2)]
     elif butadiene_ethene:
         filepath = 'tests/butadiene_ethene.xyz'
         nocc=21
@@ -106,11 +108,11 @@ if __name__ == '__main__':
     elif FeCO5:
         filepath = 'tests/FeCO5.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Add',1,3,0.1),('Add',2,4,0.1)]
+        driving_coords = [('BREAK',1,6,0.2)]
     elif FeO_H2:
         filepath = 'tests/FeO_H2.xyz'
         states = [(4,0),(6,0)]
-        driving_coords = [('Add',1,3,0.1),('Add',2,4,0.1)]
+        driving_coords = [('Add',1,3,0.2),('Add',2,4,0.2)]
         charge=1
     elif NiL2Br2:
         filepath = 'tests/NiL2Br2_sqpl.xyz'
@@ -134,11 +136,11 @@ if __name__ == '__main__':
     pes2 = PES.from_options(lot=lot,ad_idx=0,multiplicity=states[1][0])
     pes = Penalty_PES(pes1,pes2)
     print ' IC1 '
-    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=1,resetopt=False)
+    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=2,resetopt=False)
 
     if True:
         print ' Starting GSM '
         gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=driving_coords,ADD_NODE_TOL=0.05)
-        gsm.go_gsm(20)
+        gsm.go_gsm(10)
 
 

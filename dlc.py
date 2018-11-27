@@ -174,6 +174,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
         return ICoordC
 
+    @staticmethod
     def add_node_SE_X(ICoordA,driving_coordinate):
 
         dq0 = np.zeros((ICoordA.nicd,1))
@@ -849,6 +850,7 @@ class DLC(Base_DLC,Bmat,Utils):
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
         # => step controller  <= #
         self.step_controller()
+        print
 
         return  self.smag
 
