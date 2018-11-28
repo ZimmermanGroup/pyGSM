@@ -306,9 +306,6 @@ class Base_Method(object,Print,Analyze):
 
             fp = self.find_peaks(2)
 
-            #TODO special SSM criteria if TSNode is second to last node
-            #TODO special SSM criteria if first opt'd node is too high?
-            self.check_string_opt(totalgrad,fp)
 
             # => set stage <= #
             ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
@@ -319,13 +316,20 @@ class Base_Method(object,Print,Analyze):
 
             #TODO resetting
 
+            #TODO special SSM criteria if TSNode is second to last node
+            #TODO special SSM criteria if first opt'd node is too high?
+            isDone = self.check_opt(totalgrad,fp)
 
-            #if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
-            if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
+
+            ##if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
+            #if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
+            #    break
+            #if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+            #    break
+
+            if isDone:
                 break
-            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
-                break
-            if not self.climber and not self.finder and totalgrad<0.025:
+            if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
                 break
 
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -345,12 +349,16 @@ class Base_Method(object,Print,Analyze):
         ntor = self.icoords[0].TObj.ntor
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
+        ictan = [[]]*self.nnodes
+        print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
-            self.ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[n-1])
+            #print "getting tangent between %i %i" % (n,n-1)
+            assert self.icoords[n]!=0,"n is bad"
+            assert self.icoords[n-1]!=0,"n-1 is bad"
+            ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[n-1])
             dqmaga[n] = 0.
-            #ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
-            ictan0= np.copy(self.ictan[n])
+            ictan0= np.copy(ictan[n])
             self.icoords[n].bmatp = self.icoords[n].bmatp_create()
             self.icoords[n].bmatp_to_U()
             self.icoords[n].opt_constraint(ictan0)
@@ -359,6 +367,7 @@ class Base_Method(object,Print,Analyze):
             dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
         self.dqmaga = dqmaga
+        self.ictan = ictan
 
     def get_tangents_1e(self,n0=0):
         size_ic = self.icoords[0].num_ics

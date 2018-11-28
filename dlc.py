@@ -334,6 +334,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.bond_frags()
                 self.AObj = self.make_angles()
                 self.TObj = self.make_torsions()
+                self.linear_ties()
                 self.AObj.update(self.mol)
                 self.TObj.update(self.mol)
         else:
@@ -342,8 +343,6 @@ class DLC(Base_DLC,Bmat,Utils):
             self.TObj.update(self.mol)
 
         #self.make_imptor()
-        if self.isOpt==1:
-            self.linear_ties()
         #self.make_nonbond() 
 
     def update_ics(self):

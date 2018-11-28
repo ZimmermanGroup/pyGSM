@@ -185,3 +185,5 @@ class Analyze:
         print "check_for_reaction_g isrxn: %i nadd+nbrk: %i" %(isrxn,nadds+nbreaks)
         return isrxn
 
+    def check_for_reaction(self):
+        raise NotImplementedError

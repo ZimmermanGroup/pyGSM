@@ -3,3 +3,4 @@
 *.pid
 *.molden
 *temp
+temp*
