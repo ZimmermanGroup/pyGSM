@@ -60,19 +60,6 @@ class Orca(Lot):
         self.grada.append((multiplicity,tmp))
         return
 
-    def runall(self,geom):
-        self.E=[]
-        self.grada = []
-        singlets=self.search_tuple(self.states,1)
-        len_singlets=len(singlets) 
-        if len_singlets is not 0:
-            self.run(geom,1)
-        triplets=self.search_tuple(self.states,3)
-        len_triplets=len(triplets) 
-        if len_triplets is not 0:
-            self.run(geom,3)
-        self.hasRanForCurrentCoords=True
-
     def get_energy(self,geom,multiplicity,state):
         if self.has_nelectrons==False:
             for i in self.states:

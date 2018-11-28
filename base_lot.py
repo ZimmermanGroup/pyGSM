@@ -128,6 +128,35 @@ class Lot(object):
         print("Not yet implemented")
         return 0
 
+    def runall(self,geom):
+        self.E=[]
+        self.grada = []
+        singlets=self.search_tuple(self.states,1)
+        len_singlets=len(singlets) 
+        if len_singlets is not 0:
+            self.run(geom,1)
+        triplets=self.search_tuple(self.states,3)
+        len_triplets=len(triplets) 
+        if len_triplets is not 0:
+            self.run(geom,3)
+        doublets=self.search_tuple(self.states,2)
+        len_doublets=len(doublets) 
+        if len_doublets is not 0:
+            self.run(geom,2)
+        quartets=self.search_tuple(self.states,4)
+        len_quartets=len(quartets) 
+        if len_quartets is not 0:
+            self.run(geom,4)
+        pentets=self.search_tuple(self.states,5)
+        len_pentets=len(pentets) 
+        if len_pentets is not 0:
+            self.run(geom,5)
+        hextets=self.search_tuple(self.states,6)
+        len_hextets=len(hextets) 
+        if len_hextets is not 0:
+            self.run(geom,6)
+        self.hasRanForCurrentCoords=True
+
     def search_tuple(self,tups, elem):
         return filter(lambda tup: elem==tup[0], tups)
 

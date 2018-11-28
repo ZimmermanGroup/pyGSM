@@ -29,7 +29,7 @@ class SE_Cross(SE_GSM):
         if self.check_if_grown():
             self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],self.nR)
             self.nR += 1
-        self.optimize(n=self.nR-1,nsteps=100)
+        self.optimize(n=self.nR-1,nsteps=50)
             
         self.write_xyz_files(iters=1,base="grown_string",nconstraints=self.nconstraints)
 
@@ -75,8 +75,8 @@ if __name__ == '__main__':
     butadiene_ethene=False
     FeCO5=False
     FeO_H2=False
-    NiL2Br2=True
-    NiL2Br2_tetr=False
+    NiL2Br2=False
+    NiL2Br2_tetr=True
 
     if QCHEM: from qchem import *
     elif ORCA: from orca import *
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     elif NiL2Br2_tetr:
         filepath = 'tests/NiL2Br2_tetr.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Torsion',16,14,1,13,10.)]
+        driving_coords = [('Torsion',16,14,1,13,-10.)]
 
     mol = pb.readfile('xyz',filepath).next()
     if QCHEM:
@@ -136,11 +136,11 @@ if __name__ == '__main__':
     pes2 = PES.from_options(lot=lot,ad_idx=0,multiplicity=states[1][0])
     pes = Penalty_PES(pes1,pes2)
     print ' IC1 '
-    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=2,resetopt=False)
+    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=1,resetopt=False)
 
     if True:
         print ' Starting GSM '
         gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=driving_coords,ADD_NODE_TOL=0.05)
-        gsm.go_gsm(10)
+        gsm.go_gsm(20)
 
 

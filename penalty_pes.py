@@ -13,8 +13,6 @@ class Penalty_PES(PES):
         self.lot = PES1.lot
         self.alpha = 0.02*KCAL_MOL_PER_AU
         self.sigma = 3.5
-    #    self.alpha = 0.02*KCAL_MOL_PER_AU
-    #    self.sigma = 3.5
 
 
     @staticmethod
