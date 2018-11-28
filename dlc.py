@@ -396,8 +396,8 @@ class DLC(Base_DLC,Bmat,Utils):
                     #TODO what is getIndex doing here?
                     if (self.getIndex(comb[0][1]) > 1 or self.getIndex(comb[1][1])>1) and dist21 > 4.5 and dist22 >4. and close<mclose2 and close < self.MAX_FRAG_DIST: 
                         mclose2 = close
-                        b1=i
-                        b2=j
+                        b1=comb[0][1]
+                        b2=comb[1][1]
                         found2=1
     
                 #TODO

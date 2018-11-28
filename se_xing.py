@@ -27,7 +27,7 @@ class SE_Cross(SE_GSM):
         print 'Warning last node still not fully optimized'
 
         if self.check_if_grown():
-            self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],self.nR)
+            self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-2],self.nR)
             self.nR += 1
         self.optimize(n=self.nR-1,nsteps=50)
             
@@ -48,8 +48,10 @@ class SE_Cross(SE_GSM):
     def check_if_grown(self):
         isDone = False
         epsilon = 1.5
-        if abs(self.icoords[self.nR-1].PES.dE) < epsilon:
-            if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist):
+        pes1dE = self.icoords[self.nR-1].PES.dE
+        pes2dE = self.icoords[self.nR-2].PES.dE
+        if abs(pes1dE) < epsilon:
+            if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist) and abs(pes1dE) > abs(pes2dE):
                 isDone = True
         return isDone
 
@@ -112,16 +114,16 @@ if __name__ == '__main__':
     elif FeO_H2:
         filepath = 'tests/FeO_H2.xyz'
         states = [(4,0),(6,0)]
-        driving_coords = [('Add',1,3,0.2),('Add',2,4,0.2)]
+        driving_coords = [('ADD',1,3,0.2),('ADD',2,4,0.2)]
         charge=1
     elif NiL2Br2:
         filepath = 'tests/NiL2Br2_sqpl.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Torsion',18,12,13,23,10.)]
+        driving_coords = [('TORSION',18,12,13,23,10.)]
     elif NiL2Br2_tetr:
         filepath = 'tests/NiL2Br2_tetr.xyz'
         states = [(1,0),(3,0)]
-        driving_coords = [('Torsion',16,14,1,13,-10.)]
+        driving_coords = [('TORSION',16,14,1,13,10.)]
 
     mol = pb.readfile('xyz',filepath).next()
     if QCHEM:

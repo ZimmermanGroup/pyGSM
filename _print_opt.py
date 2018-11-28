@@ -5,7 +5,7 @@ import os
 
 
 class Print:
-    def write_node(self,n,opt_molecules,energies,grmss,steps):
+    def write_node(self,n,opt_molecules,energies,grmss,steps,deltaEs=[]):
         xyzfile=os.getcwd()+"/scratch/node_{}.xyz".format(n)
         largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
         for mol in opt_molecules:
@@ -25,7 +25,12 @@ class Print:
             f.write("max-step\n")
             for step in steps:
                 f.write('{}\n'.format(step))
-
+            if isinstance(self.icoords[0].PES,Penalty_PES):
+                print 'NOTE: printing dEs as rms-step'
+                f.write('rms-step\n')
+                for dE in deltaEs:
+                    f.write('{}\n'.format(dE))
+                
     def write_xyz_files(self,iters=0,base='xyzgeom',nconstraints=1):
         xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}.xyz'.format(iters)
         stringxyz = pb.Outputfile('xyz',xyzfile,overwrite=True)

@@ -192,6 +192,7 @@ class Base_Method(object,Print,Analyze):
         grmss = []
         steps = []
         energies=[]
+        deltaEs=[]
         Es =[]
         self.icoords[n].do_bfgs=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
@@ -239,9 +240,11 @@ class Base_Method(object,Print,Analyze):
             steps.append(smag)
             energies.append(self.icoords[n].energy-self.icoords[n].V0)
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
+            if isinstance(self.icoords[n].PES,Penalty_PES):
+                deltaEs.append(self.icoords[n].PES.dE)
     
             #write convergence
-            self.write_node(n,opt_molecules,energies,grmss,steps)
+            self.write_node(n,opt_molecules,energies,grmss,steps,deltaEs)
    
             #TODO convergence 
             print

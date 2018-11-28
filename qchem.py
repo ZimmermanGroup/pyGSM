@@ -13,7 +13,7 @@ class QChem(Lot):
         tempfile.write(' JOBTYPE FORCE\n')
         tempfile.write(' EXCHANGE {}\n'.format(self.functional))
         tempfile.write(' SCF_ALGORITHM rca_diis\n')
-        tempfile.write(' SCF_MAX_CYCLES 150\n')
+        tempfile.write(' SCF_MAX_CYCLES 300\n')
         tempfile.write(' BASIS {}\n'.format(self.basis))
         tempfile.write(' ECP LANL2DZ \n')
         tempfile.write(' WAVEFUNCTION_ANALYSIS FALSE\n')
@@ -33,7 +33,7 @@ class QChem(Lot):
         tempfile.write('$end')
         tempfile.close()
 
-        cmd = "qchem -np {} -save {} {}.qchem.out {}".format(self.nproc,tempfilename,tempfilename,multiplicity)
+        cmd = "qchem -nt {} -save {} {}.qchem.out {}".format(self.nproc,tempfilename,tempfilename,multiplicity)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
