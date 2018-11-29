@@ -47,7 +47,7 @@ class SE_Cross(SE_GSM):
 
     def check_if_grown(self):
         isDone = False
-        epsilon = 1.5
+        epsilon = 15
         pes1dE = self.icoords[self.nR-1].PES.dE
         pes2dE = self.icoords[self.nR-2].PES.dE
         if abs(pes1dE) < epsilon:

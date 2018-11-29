@@ -10,8 +10,9 @@ class Orca(Lot):
         inpstring = '!'
         inpstring += ' '+self.functional
         inpstring += ' '+self.basis
-        inpstring += ' EnGrad SOSCF \n\n'
-        inpstring += '%scf\nMaxIter 150\nconvergence medium\n end\n'
+        inpstring += ' EnGrad\n\n'# SOSCF SlowConv \n\n'
+        inpstring += '%scf\nMaxIter 150\nconvergence medium\n sthresh 1e-7\n'
+        inpstring += 'thresh 1e-11\n tcut 1e-13 \n directresetfreq 1 \nend\n'
         inpstring += '%pal\nnproc {}\nend\n\n'.format(self.nproc)
         inpstring += '*xyz {} {}\n'.format(self.charge,multiplicity)
         for coord in geom:
