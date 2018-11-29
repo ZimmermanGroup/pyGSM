@@ -52,7 +52,7 @@ class Analyze:
         print "max nodes" 
         print maxnodes
         npeaks1 = len(maxnodes)
-        print "number of peaks is ",npeaks1
+        #print "number of peaks is ",npeaks1
         ediff=0.5
         PEAK4_EDIFF = 2.0
         if rtype==1:
@@ -81,15 +81,15 @@ class Analyze:
         #handle dissociative case
         if rtype==3 and npeaks==1:
             nextmin=0
-            for n in range(found,numnodes-1):
+            for n in range(found,nnodes-1):
                 if n in minnodes:
                     nextmin=n
                     break
-            if nextmin:
+            if nextmin>0:
                 npeaks=2
 
         if rtype==3:
-            return num_nodes
+            return nmax
         if allup==True and npeaks==0:
             return -1
         if diss==True and npeaks==0:
@@ -150,7 +150,7 @@ class Analyze:
         if ispast==0:
             bch=self.check_for_reaction_g(1)
             if ispast3>1 and bch:
-                print "over the hill(3) %i connection changed" %bch
+                print "over the hill(3) connection changed " %bch
                 ispast=3
         print "ispast=",ispast
         return ispast
@@ -158,8 +158,10 @@ class Analyze:
     def check_for_reaction_g(self,rtype):
         nadds = self.driving_coords.count("ADD")
         nbreaks = self.driving_coords.count("BREAK")
+        isrxn=False
+
         if (nadds+nbreaks) <1:
-            return 0
+            return False
         nadded=0
         nbroken=0
         for i in self.driving_coords:
@@ -178,12 +180,33 @@ class Analyze:
                 if d>d0:
                     nbroken+=1
         if rtype==1:
-            if (nadded+nbroken)>(nadds+nbreaks):
-                isrxn=nadded+nbroken
+            if (nadded+nbroken)>=(nadds+nbreaks): 
+                isrxn=True
+                #isrxn=nadded+nbroken
         else:
-            isrxn=nadded+nbroken
+            isrxn=True
+            #isrxn=nadded+nbroken
         print "check_for_reaction_g isrxn: %i nadd+nbrk: %i" %(isrxn,nadds+nbreaks)
         return isrxn
 
     def check_for_reaction(self):
-        raise NotImplementedError
+        isrxn = self.check_for_reaction_g(1)
+        minnodes=[]
+        maxnodes=[]
+        wint=0
+        if self.energies[1]>self.energies[0]:
+            minnodes.append(0)
+        for n in range(self.n0,self.nnodes):
+            if self.energies[n+1]>self.energies[n]:
+                if self.energies[n]<self.energies[n-1]:
+                    minnodes.append(n)
+            if self.energies[n+1]<self.energies[n]:
+                if self.energies[n]>self.energies[n-1]:
+                    maxnodes.append(n)
+        if len(minnodes)>2 and len(maxnodes)>1:
+            wint=minnodes[1] # the real reaction ends at first minimum
+            print " wint ", wint
+
+        return isrxn,wint
+
+

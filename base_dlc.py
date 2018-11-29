@@ -395,15 +395,19 @@ class Base_DLC(Utils,ICoords):
 
     def walk_up(self,n):
         """ walk up the n'th DLC"""
+        print "walking up the %i coordinate" % n
+        #print "print gradq[n]", self.gradq[n]
+        #print "type", type(self.gradq[n])
+        assert isinstance(self.gradq[n,0],float), "gradq[n] is not float!"
         if self.print_level>0:
-            print(' gts: {:1.4f}'.format(self.gradq[n]))
-        self.buf.write(' gts: {:1.4f}'.format(self.gradq[n]))
+            print(' gts: {:1.4f}'.format(self.gradq[n,0]))
+        self.buf.write(' gts: {:1.4f}'.format(self.gradq[n,0]))
         SCALEW = 1.0
         SCALE = self.SCALEQN*1.0 
-        
-        dq = gradq[n]/SCALE
+       
+        dq = self.gradq[n,0]/SCALE
         if abs(dq) > self.MAXAD/SCALEW:
-            dq0 = np.sign(dq)*self.MAXAD/SCALE
+            dq = np.sign(dq)*self.MAXAD/SCALE
 
         return dq
 
@@ -422,11 +426,7 @@ class Base_DLC(Utils,ICoords):
 
         return dq
 
-
-
-
     def update_ic_eigen_ts(self,Cn,Dn,nconstraints=0):
-        
         #assert self.isTSnode==False,"Can work for TSNOde but not currently using?"
         
         lambda1 = 0.

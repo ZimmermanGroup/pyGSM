@@ -849,7 +849,6 @@ class DLC(Base_DLC,Bmat,Utils):
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
         # => step controller  <= #
         self.step_controller()
-        print
 
         return  self.smag
 

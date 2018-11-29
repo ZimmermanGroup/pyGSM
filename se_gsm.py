@@ -43,41 +43,42 @@ class SE_GSM(Base_Method):
         self.icoords[0].setup()
 
     def go_gsm(self,max_iters,max_steps):
-        self.icoords[0].gradrms = 0.
-        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        print " Initial energy is %1.4f" % self.icoords[0].energy
-        self.interpolate(1) 
-        self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
-        self.growth_iters(iters=max_iters,maxopt=max_steps)
-        if self.tscontinue==True:
-            if self.pastts==1: #normal over the hill
-                #self.add_node(self.nR-1,self.nR)
-                self.interpolateR(1)
-                self.add_last_node(2)
-            elif self.pastts==2 or self.pastts==3: #when cgrad is positive
-                self.add_last_node(1)
-                if self.icoords[self.nR-1].gradrms>5.*self.CONV_TOL:
+        if self.isRestarted==False:
+            self.icoords[0].gradrms = 0.
+            self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+            print " Initial energy is %1.4f" % self.icoords[0].energy
+            self.interpolate(1) 
+            self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
+            self.growth_iters(iters=max_iters,maxopt=max_steps)
+            if self.tscontinue==True:
+                if self.pastts==1: #normal over the hill
+                    #self.add_node(self.nR-1,self.nR)
+                    self.interpolateR(1)
+                    self.add_last_node(2)
+                elif self.pastts==2 or self.pastts==3: #when cgrad is positive
                     self.add_last_node(1)
-            elif self.pastts==3: #product detected by bonding
-                self.add_last_node(1)
+                    if self.icoords[self.nR-1].gradrms>5.*self.CONV_TOL:
+                        self.add_last_node(1)
+                elif self.pastts==3: #product detected by bonding
+                    self.add_last_node(1)
 
-        self.nnodes=self.nR
-        print " Number of nodes is ",self.nnodes
-        print " Warning last node still not optimized fully"
-        self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
-        print " SSM growth phase over"
+            self.nnodes=self.nR
+            print " Number of nodes is ",self.nnodes
+            print " Warning last node still not optimized fully"
+            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            print " SSM growth phase over"
 
-        print " beginning opt phase"
-        print "Setting all interior nodes to active"
-        for n in range(1,self.nnodes-1):
-            self.active[n]==True
-            self.icoords[n].OPTTHRESH=self.CONV_TOL
+            print " beginning opt phase"
+            print "Setting all interior nodes to active"
+            for n in range(1,self.nnodes-1):
+                self.active[n]=True
+                self.icoords[n].OPTTHRESH=self.CONV_TOL
 
         print " initial ic_reparam"
         self.ic_reparam()
-
+        self.stage=1
         if self.tscontinue==True:
-            self.opt_iters(max_iter=max_iters,optsteps=max_steps)
+            self.opt_iters(max_iter=max_iters,optsteps=3) #opt steps fixed at 3
         else:
             print "Exiting early"
 
@@ -189,30 +190,27 @@ class SE_GSM(Base_Method):
             added=True
             print "done adding node"
             print "nnodes = ",self.nnodes
-            print type(self.icoords[self.nR-1])
             return isDone
 
         # => check string profile <= #
         if fp==-1: #total string is uphill
             print "fp == -1, check V_profile"
-            fp=0
-        if fp==--2:
-            print "termination due to dissociation"
-            self.tscontinue=False
-            self.endearly=True #bools
-            isDone=True
-        if fp==0:
-            done=False
+
             if self.tstype==2:
                 print "check for total dissociation"
                 #check break
                 #TODO
                 isDone=True
-
-            if not done or self.tstype!=2:
+            if self.tstype!=2:
                 print "flatland? set new start node to endpoint"
                 self.tscontinue=0
                 isDone=True
+
+        if fp==--2:
+            print "termination due to dissociation"
+            self.tscontinue=False
+            self.endearly=True #bools
+            isDone=True
 
         # check for intermediates
         if self.stage==1 and fp>0:
@@ -224,11 +222,12 @@ class SE_GSM(Base_Method):
                 isDone=True
 
         # => Convergence Criteria
-        if (self.stage==2 and self.tstype!=2 and self.icoords[self.TSnode].gradrms< self.CONV_TOL):
+        if (((self.stage==1 and self.tstype==1) or self.stage==2) and
+                self.icoords[self.TSnode].gradrms< self.CONV_TOL):
             self.tscontinue=False
             isDone=True
-        if (self.stage==2 and self.tstype!=2 and totalgrad < 0.1 and 
-                self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOLL and self.emaxp+0.02> self.emax and 
+        if (((self.stage==1 and self.tstype==1) or self.stage==2) and totalgrad<0.1 and
+                self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL and self.emaxp+0.02> self.emax and 
                 self.emaxp-0.02< self.emax):
             self.tscontinue=False
             isDone=True
@@ -286,7 +285,8 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=2)
-        gsm.go_gsm(max_iters=30,max_steps=3)
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=1)
+        gsm.restart_string()
+        gsm.go_gsm(max_iters=30,max_steps=20)
 
 

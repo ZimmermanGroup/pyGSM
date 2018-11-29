@@ -93,9 +93,66 @@ class Base_Method(object,Print,Analyze):
     def from_options(**kwargs):
         return Base_Method(Base_Method.default_options().set_values(kwargs))
 
-#    def restart_string(self,xyzbase='restart'):#,nR,nP):
-#        with open(xyzfile) as xyzcoords:
-#            xyzlines = xyzcoords.readlines()
+    def restart_string(self,xyzbase='restart'):#,nR,nP):
+        xyzfile=xyzbase+".xyz"
+        with open(xyzfile) as f:
+            nlines = sum(1 for _ in f)
+        print "number of lines is ", nlines
+        with open(xyzfile) as f:
+            natoms = int(f.readlines()[2])
+
+        print "number of atoms is ",natoms
+        nstructs = (nlines-5)/ (natoms+4) #this is for two blocks after GEOCON
+        
+        print "number of structures in restart file is %i" % nstructs
+        coords=[]
+        energy = []
+        grmss = []
+        with open(xyzfile) as f:
+            f.readline()
+            f.readline() #header lines
+            for struct in range(nstructs):
+                tmpcoords=np.zeros((natoms,3))
+                f.readline() #natoms
+                f.readline() #space
+                for a in range(natoms):
+                    line=f.readline()
+                    tmp = line.split()
+                    #coords.append([float(i) for i in tmp[1:]])
+                    tmpcoords[a,:] = [float(i) for i in tmp[1:]]
+                coords.append(tmpcoords)
+            
+            # Get energies
+            f.readline() # line
+            f.readline() #energy
+            for struct in range(nstructs):
+                energy.append(float(f.readline()))
+            f.readline() # max-force
+            for struct in range(nstructs):
+                grmss.append(float(f.readline()))
+
+        self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        self.icoords[0].gradrms=grmss[0]
+        print "initial energy is %3.4f" % self.icoords[0].energy
+        for struct in range(1,nstructs):
+            self.icoords[struct] = DLC.copy_node(self.icoords[0],struct)
+            self.icoords[struct].set_xyz(coords[struct])
+            self.icoords[struct].update_ics()
+            self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
+            self.icoords[struct].gradrms=grmss[struct]
+
+        self.store_energies() 
+        self.nnodes=self.nR=nstructs
+        self.isRestarted=True
+        print "setting all interior nodes to active"
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.icoords[n].OPTTHRESH=self.CONV_TOL
+        print " V_profile: ",
+        for n in range(self.nnodes):
+            print " {:7.3f}".format(float(self.energies[n])),
+        print
+
 #        
 #    def write_restart(self,xyzbase='restart'):
 #        rxyzfile = os.getcwd()+"/"+xyzbase+'_r.xyz'
@@ -122,8 +179,8 @@ class Base_Method(object,Print,Analyze):
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
         self.active = [False] * self.nnodes
-        self.active[0] = False
-        self.active[-1] = False
+        #self.active[0] = False
+        #self.active[-1] = False
         self.driving_coords = self.options['driving_coords']
         self.nconstraints = self.options['nconstraints']
         self.CONV_TOL = self.options['CONV_TOL']
@@ -132,12 +189,14 @@ class Base_Method(object,Print,Analyze):
         self.tstype=self.options['tstype']
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
+        self.isRestarted=False
         if self.tstype==0:
             print("set climber and finder to True")
             self.climber=True
             self.finder=True
         elif self.tstype==1:
             print("setting climber to True")
+            self.climber=True
         else:
             print(" Turning off climbing image and exact TS search")
 
@@ -179,7 +238,7 @@ class Base_Method(object,Print,Analyze):
                  raise NotImplemented
 
     def optimize(self,n=0,nsteps=100,nconstraints=0,fixed_DLCs=[]):
-        assert len(fixed_DLCs)==nconstraints, "need to specify constraint_steps even if zero"
+        assert len(fixed_DLCs)==nconstraints, "nconstraints != fixed_DLC"
         assert self.icoords[n]!=0,"icoord not set"
         output_format = 'xyz'
         obconversion = ob.OBConversion()
@@ -217,8 +276,8 @@ class Base_Method(object,Print,Analyze):
             if all(dlc_fix==True for dlc_fix in fixed_DLCs):
                 pass
             # => step with climb
-            elif fixed_DLCs==[False]:
-                constraints[0]=self.icoords[n].walk_up()
+            elif self.icoords[n].PES.lot.do_coupling is False and fixed_DLCs==[False]:
+                constraints[0]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
             # => MECI step
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
                 constraints[1] = self.icoords[n].dgrad_step()
@@ -228,7 +287,7 @@ class Base_Method(object,Print,Analyze):
             # => seam climb
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False,False]:
                 constraints[1] = self.icoords[n].dgrad_step()
-                constraints[2]=self.icoords[n].walk_up()
+                constraints[2]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
             else:
                 raise ValueError(" Optimize doesn't know what to do ")
 
@@ -247,7 +306,6 @@ class Base_Method(object,Print,Analyze):
             self.write_node(n,opt_molecules,energies,grmss,steps,deltaEs)
    
             #TODO convergence 
-            print
             sys.stdout.flush()
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
@@ -269,8 +327,9 @@ class Base_Method(object,Print,Analyze):
         print "convergence criteria 1: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
         nclimb=0
 
-        for i in range(1,self.nnodes-1):
-            self.active[i] = True
+        #for i in range(1,self.nnodes-1):
+        #    self.active[i] = True
+
         for oi in range(max_iter):
             sys.stdout.flush()
 
@@ -278,6 +337,12 @@ class Base_Method(object,Print,Analyze):
             self.get_tangents_1e()
             # => do opt steps <= #
             self.opt_steps(optsteps,nconstraints)
+            self.store_energies()
+            print " V_profile: ",
+            for n in range(self.nnodes):
+                print " {:7.3f}".format(float(self.energies[n])),
+            print
+        
 
             # => Turn off converged nodes for next round? <= #
             #for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
@@ -304,18 +369,16 @@ class Base_Method(object,Print,Analyze):
             elif self.stage==2: print("x")
 
             #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
-
+            
             print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
 
             fp = self.find_peaks(2)
-
 
             # => set stage <= #
             ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
             ts_gradrms=self.icoords[self.nmax].gradrms
             dE_iter=abs(self.emax-self.emaxp)
             nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
-
 
             #TODO resetting
 
@@ -386,11 +449,6 @@ class Base_Method(object,Print,Analyze):
         dqa = np.zeros((self.nnodes,self.nnodes))
 
         self.store_energies()
-        
-        print " V_profile: ",
-        for n in range(self.nnodes):
-            print " {:7.3f}".format(float(self.energies[n])),
-        print
         
         self.TSnode = self.nmax
         for n in range(n0+1,self.nnodes-1):
@@ -535,7 +593,7 @@ class Base_Method(object,Print,Analyze):
             self.get_tangents_1g()
             self.ic_reparam_g()
             self.get_tangents_1g()
-            self.opt_steps(3,nconstraints)
+            self.opt_steps(maxopt,nconstraints)
             self.store_energies()
 
             isDone = self.check_if_grown()
@@ -558,57 +616,54 @@ class Base_Method(object,Print,Analyze):
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
 
     def opt_steps(self,opt_steps,nconstraints):
-        for i in range(1):
+        assert nconstraints>0,"opt steps doesn't work without constraints"
+        if self.icoords[0].PES.lot.do_coupling==True: 
+            assert nconstraint>2,"nconstraints wrong size"
 
-            assert nconstraints>0,"opt steps doesn't work without constraints"
-            if self.icoords[0].PES.lot.do_coupling==True: 
-                assert nconstraint>2,"nconstraints wrong size"
-            fixed_DLC = [True]*nconstraints
+        for n in range(self.nnodes):
+            self.icoords[n].isTSnode=False
+        fp=0
+        if self.stage>0:
+            fp = self.find_peaks(2)
+        if fp>0:
+            nmax = np.argmax(self.energies)
+            self.icoords[nmax].isTSnode=True
 
-            fp=0
-            if self.stage>0:
-                fp = self.find_peaks(2)
+        optlastnode=False
+        if self.last_node_fixed==False:
+            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
+                optlastnode=True
 
-            if fp>0:
-                nmax = np.argmax(self.energies)
-                self.icoords[nmax].isTSnode=True
+        for n in range(self.nnodes):
+            if self.icoords[n] != 0 and self.active[n]==True:
+                print " Optimizing node %i" % n
+                fixed_DLC = [True]*nconstraints
 
-            optlastnode=False
-            if self.last_node_fixed==False:
-                if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
-                    optlastnode=True
+                exsteps=1 #multiplier for nodes near the TS node
+                if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
+                    exsteps=2
+                
+                # => do constrained optimization
+                if self.stage<2 and not self.icoords[n].isTSnode:
+                    # => do CI constrained optimization
+                    if self.icoords[n].PES.lot.do_coupling:
+                        fixed_DLC=[True,False,True]
+                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
 
-            for n in range(self.nnodes):
-                if self.icoords[n] != 0 and self.active[n]==True:
-                    print " Optimizing node %i" % n
+                # => do constrained optimization with climb
+                elif self.stage==1 and self.icoords[n].isTSnode:
+                    fixed_DLC=[False]
+                    # => do constrained seam optimization with climb
+                    if self.icoords[n].PES.lot.do_coupling==True:
+                        fixed_DLC=[True,False,False]
+                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
 
-                    exsteps=1 #multiplier for nodes near the TS node
-                    if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
-                        exsteps=2
-                    
-                    # => form constraint space?
-                    #self.icoords[n].opt_constraint(self.ictan[n])
-                    # => do constrained optimization
-                    if self.stage<2 and not self.icoords[n].isTSnode:
-                        # => do CI constrained optimization
-                        if self.icoords[n].PES.lot.do_coupling:
-                            fixed_DLC=[True,False,True]
-                        self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
+                # => follow maximum overlap with Hessian for TS node if find <= #
+                elif self.stage==2 and self.icoords[n].isTSnode:
+                    self.optimize_TS_exact(n,opt_steps,nconstraints)
 
-                    # => do constrained optimization with climb
-                    elif self.stage==1 and self.icoords[n].isTSnode:
-                        fixed_DLC=[False]
-                        # => do constrained seam optimization with climb
-                        if self.icoords[n].PES.lot.do_coupling==True:
-                            fixed_DLC=[True,False,False]
-                        self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
-
-                    # => follow maximum overlap with Hessian for TS node if find <= #
-                    elif self.stage==2 and self.icoords[n].isTSnode:
-                        self.optimize_TS_exact(n,opt_steps,nconstraints)
-
-                if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
-                    self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
+            if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
+                self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
 
     @property
     def stage(self):
@@ -806,8 +861,6 @@ class Base_Method(object,Print,Analyze):
             print " {:1.2}".format(self.dqmaga[n]),
         print
         print "  disprms: {:1.3}".format(disprms)
-        print "\n\n"
-
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
