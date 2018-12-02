@@ -10,6 +10,7 @@ import manage_xyz
 from _obutils import Utils
 from _icoord import *
 import elements 
+from sklearn import preprocessing
 
 class Base_DLC(Utils,ICoords):
 
@@ -114,7 +115,8 @@ class Base_DLC(Utils,ICoords):
         self.madeBonds = False
         self.isTSnode = False
         self.use_constraint = False
-        self.stage1opt = False
+        #self.stage1opt = False
+        self.HESS_TANG_TOL_TS=0.75
 
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
@@ -337,6 +339,9 @@ class Base_DLC(Utils,ICoords):
 
         return change
 
+    def update_bofill(self):
+        raise NotImplementedError
+
     def compute_predE(self,dq0):
         # compute predicted change in energy 
         assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
@@ -426,13 +431,20 @@ class Base_DLC(Utils,ICoords):
 
         return dq
 
-    def update_ic_eigen_ts(self,Cn,Dn,nconstraints=0):
-        #assert self.isTSnode==False,"Can work for TSNOde but not currently using?"
-        
+    def update_ic_eigen_ts(self,ictan,nconstraints=1):
+        """ this method follows the overlap with reaction tangent"""
         lambda1 = 0.
         SCALE = self.SCALEQN
         if SCALE > 10:
             SCALE = 10.
+
+        # Cn 
+        C = preprocessing.normalize(ictan,norm='l2')
+        print "shape of C is %s" %(np.shape(C),)
+        dots = np.dot(self.Ut,C)
+        Cn = np.matmul(self.Ut.T,dots)
+        print "shape of Cn is %s" %(np.shape(Cn),)
+
 
         #TODO should we diagonalize the full matrix? Full matrix done in GSM
         eigen,tmph = np.linalg.eigh(self.Hint)
@@ -443,7 +455,7 @@ class Base_DLC(Utils,ICoords):
                 nneg += 1
 
         #=> Overlap metric <= #
-        overlap = np.dot(Cn,np.dot(tmph,self.Ut))
+        overlap = np.dot(np.dot(tmph.T,self.Ut),Cn)
 
         # Max overlap metrics
         absoverlap = np.absolute(overlap)
@@ -453,16 +465,17 @@ class Base_DLC(Utils,ICoords):
         self.path_overlap = maxol
         self.path_overlap_n = maxoln
 
-        if self.print_level>0:
+        if self.print_level>-1:
             print "t/ol %i: %3.2f" % (maxoln,maxol)
         self.buf.write("t/ol %i: %3.2f" % (maxoln,maxol))
 
         # => if overlap is small use Cn as Constraint <= #
-        if maxol < HESS_TANG_TOL or self.gradrms > self.OPTTHRESH*20.: 
+        if maxol < self.HESS_TANG_TOL_TS or self.gradrms > self.OPTTHRESH*20.: 
+            print "doing normal step"
             self.form_unconstrained_DLC()
-            self.opt_constraint(Cn)
+            self.opt_constraint(ictan)
             self.gradq = self.grad_to_q(self.gradq)
-            #self.use_constraint = 1
+            #self.use_constraint = 1 #TODO would this triger something in regular GSM?
             self.update_ic_eigen(nconstraints)
             return
 
@@ -485,14 +498,19 @@ class Base_DLC(Utils,ICoords):
         else:
             dqe0[maxoln] = gqe[maxoln] / abs(eigen[maxoln] + lambda1)/SCALE
             path_overlap_e_g = gqe[maxoln]
-            print ' gtse: {:1.4f} '.format(gqe[maxoln])
+            print ' gtse: {:1.4f} '.format(gqe[maxoln,0])
 
         for i in range(self.nicd):
             if i != maxoln:
                 dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
            
         # => Convert step back to DLC basis <= #
-        dq0 = np.dot(temph,dqe0)
+        dq0 = np.dot(tmph,dqe0)
         dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
+        dq = np.zeros((self.nicd,1))
+        for i in range(self.nicd):
+            dq[i,0] = dq0[i]
+        
+        #TODO can do something special here for seams by setting the second to last two values to zero
 
-        return dq0
+        return dq

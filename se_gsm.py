@@ -285,7 +285,7 @@ if __name__ == '__main__':
     if True:
         print "\n Starting GSM \n"
         #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
-        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=1)
+        gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=0)
         gsm.restart_string()
         gsm.go_gsm(max_iters=30,max_steps=20)
 

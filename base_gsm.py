@@ -216,6 +216,7 @@ class Base_Method(object,Print,Analyze):
         self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
         print " gaddmax:",self.gaddmax
         self.stage=0 #growing
+        self.ictan = [[]]*self.nnodes
 
     def store_energies(self):
         for i,ico in enumerate(self.icoords):
@@ -237,7 +238,7 @@ class Base_Method(object,Print,Analyze):
              elif nconstraints==3:
                  raise NotImplemented
 
-    def optimize(self,n=0,nsteps=100,nconstraints=0,fixed_DLCs=[]):
+    def optimize(self,n=0,nsteps=100,nconstraints=0,fixed_DLCs=[],follow_overlap=False):
         assert len(fixed_DLCs)==nconstraints, "nconstraints != fixed_DLC"
         assert self.icoords[n]!=0,"icoord not set"
         output_format = 'xyz'
@@ -253,7 +254,7 @@ class Base_Method(object,Print,Analyze):
         energies=[]
         deltaEs=[]
         Es =[]
-        self.icoords[n].do_bfgs=False # gets reset after each step
+        self.icoords[n].update_hess=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
         self.icoords[n].node_id = n  # set node id is this necessary?
         if self.icoords[n].print_level>0:
@@ -270,29 +271,29 @@ class Base_Method(object,Print,Analyze):
             # => Update DLC obj <= #
             self.update_DLC_obj(n,nconstraints)
 
-            ######### => form constraints <= ###########
-            constraints=[0]*nconstraints
+            ######### => form constraint steps <= ###########
+            constraint_steps=[0]*nconstraints
             # => step no climb
             if all(dlc_fix==True for dlc_fix in fixed_DLCs):
                 pass
             # => step with climb
             elif self.icoords[n].PES.lot.do_coupling is False and fixed_DLCs==[False]:
-                constraints[0]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
+                constraint_steps[0]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
             # => MECI step
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
-                constraints[1] = self.icoords[n].dgrad_step()
+                constraint_steps[1] = self.icoords[n].dgrad_step()
             # => seam step
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,True,False]:
-                constraints[2] = self.icoords[n].dgrad_step()
+                constraint_steps[2] = self.icoords[n].dgrad_step()
             # => seam climb
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False,False]:
-                constraints[1] = self.icoords[n].dgrad_step()
-                constraints[2]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
+                constraint_steps[1] = self.icoords[n].dgrad_step()
+                constraint_steps[2]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
             else:
                 raise ValueError(" Optimize doesn't know what to do ")
 
             ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(nconstraints,constraints)
+            smag =self.icoords[n].opt_step(nconstraints,constraint_steps,self.ictan[n],follow_overlap)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
@@ -309,14 +310,15 @@ class Base_Method(object,Print,Analyze):
             sys.stdout.flush()
             if self.icoords[n].gradrms<self.CONV_TOL:
                 break
+
+        #TODO if gradrms is greater than gradrmsl than further reduce DMAX
+        #TODO change how revertopt is done is opt_step?
+
         print(self.icoords[n].buf.getvalue())
         if self.icoords[n].print_level>0:
             print "Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
-    def optimize_TS_exact(self,n=0,nsteps=100,nconstraints=0):
-        """ this method follows the overlap with reaction tangent"""
-        raise NotImplementedError()
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
         print "*********************************************************************"
@@ -335,6 +337,7 @@ class Base_Method(object,Print,Analyze):
 
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
+
             # => do opt steps <= #
             self.opt_steps(optsteps,nconstraints)
             self.store_energies()
@@ -378,7 +381,7 @@ class Base_Method(object,Print,Analyze):
             ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
             ts_gradrms=self.icoords[self.nmax].gradrms
             dE_iter=abs(self.emax-self.emaxp)
-            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
+            nclimb,form_eigenv_finite = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
 
             #TODO resetting
 
@@ -387,6 +390,7 @@ class Base_Method(object,Print,Analyze):
             isDone = self.check_opt(totalgrad,fp)
 
 
+            #TODO put in de-gsm
             ##if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
             #if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
             #    break
@@ -401,6 +405,9 @@ class Base_Method(object,Print,Analyze):
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
+            if form_eigenv_finite==True:
+                self.get_eigenv_finite(self.nmax)
+
             #also prints tgrads and jobGradCount
 
         print " Printing string to opt_converged_000.xyz"
@@ -660,7 +667,8 @@ class Base_Method(object,Print,Analyze):
 
                 # => follow maximum overlap with Hessian for TS node if find <= #
                 elif self.stage==2 and self.icoords[n].isTSnode:
-                    self.optimize_TS_exact(n,opt_steps,nconstraints)
+                    #self.optimize_TS_exact(n,opt_steps,nconstraints)
+                    self.optimize(n,opt_steps,nconstraints,fixed_DLC,follow_overlap=True)
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
@@ -677,6 +685,7 @@ class Base_Method(object,Print,Analyze):
         self._stage=value
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
+        form_eigenv_finite=False
         if totalgrad<0.3 and fp>0:
             if self.stage!=1 and self.climber:
                 print(" ** starting climb **")
@@ -688,10 +697,10 @@ class Base_Method(object,Print,Analyze):
                     ):
                 print(" ** starting exact climb **")
                 self.stage=2
-                raise NotImplementedError
+                form_eigenv_finite=True
             if self.stage==1:
                 nclimb-=1
-            return nclimb
+        return nclimb,form_eigenv_finite
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
@@ -716,7 +725,6 @@ class Base_Method(object,Print,Analyze):
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=4,n0=0,nconstraints=1,rtype=0):
-        #TODO stuff about climb and find
         num_ics = self.icoords[0].num_ics
         len_d = self.icoords[0].nicd
         ictalloc = self.nnodes+1
@@ -981,6 +989,50 @@ class Base_Method(object,Print,Analyze):
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
+    def get_eigenv_finite(self,en):
+        ''' Modifies Hessian using RP direction'''
+        self.icoords[en].form_constrained_DLC(self.ictan[en])
+        nicd = self.icoords[en].nicd  #len
+        num_ics = self.icoords[en].num_ics #size_ic
+
+        E0 = self.energies[en]/KCAL_MOL_PER_AU
+        Em1 = self.energies[en-1]/KCAL_MOL_PER_AU
+        if en+1<self.nnodes:
+            Ep1 = self.energies[en+1]/KCAL_MOL_PER_AU
+        else:
+            Ep1 = Em1
+
+        q0 = self.icoords[en].q[nicd-1]
+        tan0 = self.icoords[en].Ut[nicd-1,:]
+
+        self.icoords[en-1].form_unconstrained_DLC()
+        qm1 = self.icoords[en-1].q[nicd-1]
+        if en+1<self.nnodes:
+            self.icoords[en+1].form_unconstrained_DLC()
+            qp1 = self.icoords[en+1].q[nicd-1]
+        else:
+            qp1 = qm1
+
+        if self.icoords[en].isTSnode:
+            print " TS Hess init'd w/ existing Hintp"
+
+        tan = np.dot(self.icoords[en].Ut,tan0.T)  #nicd,1 
+
+        Ht = np.dot(self.icoords[en].Hint,tan) #nicd,1
+        tHt = np.dot(tan.T,Ht) 
+
+        a = abs(q0-qm1)
+        b = abs(qp1-q0)
+        c = 2*(Em1/a/(a+b) - E0/a/b + Ep1/b/(a+b))
+        print "tHt is ",tHt
+        print "a is ",a
+        print "b is ",b
+        print "c is ",c
+        print " tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0])
+
+        ttt = np.outer(tan,tan)
+        self.icoords[en].Hint += (c-tHt)*ttt
+        self.icoords[en].newHess = 5
 
 
 if __name__ == '__main__':
