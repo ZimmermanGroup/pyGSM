@@ -16,6 +16,16 @@ class Utils:
         for i,xyz in enumerate(coords):
             self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
 
+    @staticmethod
+    def make_mol_from_coords(coords,atomic_symbols):
+        mol = ob.OBMol()
+        for s,xyz in zip(atomic_symbols,coords):
+            i = mol.NewAtom()
+            a = Elements.from_symbol(s).atomic_num
+            i.SetAtomicNum(a)
+            i.SetVector(xyz[0],xyz[1],xyz[2])
+        return pb.Molecule(mol)
+
     def print_xyz(self):
         for a in ob.OBMolAtomIter(self.mol.OBMol):
             print(" %1.4f %1.4f %1.4f" %(a.GetX(), a.GetY(), a.GetZ()) )
