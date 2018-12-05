@@ -108,6 +108,7 @@ class Base_Method(object,Print,Analyze):
         coords=[]
         energy = []
         grmss = []
+        atomic_symbols=[]
         with open(xyzfile) as f:
             f.readline()
             f.readline() #header lines
@@ -120,6 +121,8 @@ class Base_Method(object,Print,Analyze):
                     tmp = line.split()
                     #coords.append([float(i) for i in tmp[1:]])
                     tmpcoords[a,:] = [float(i) for i in tmp[1:]]
+                    if struct==0:
+                        atomic_symbols.append(tmp[0])
                 coords.append(tmpcoords)
             
             # Get energies
@@ -131,13 +134,23 @@ class Base_Method(object,Print,Analyze):
             for struct in range(nstructs):
                 grmss.append(float(f.readline()))
 
+        print "copying node and setting values"
+        mol = DLC.make_mol_from_coords(coords[-1],atomic_symbols)
+        tmp=DLC(self.icoords[0].options.copy().set_values({
+            'mol':mol,
+            }))
+
+        print "doing union"
+        self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
         self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.icoords[0].gradrms=grmss[0]
+
         print "initial energy is %3.4f" % self.icoords[0].energy
         for struct in range(1,nstructs):
             self.icoords[struct] = DLC.copy_node(self.icoords[0],struct)
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
+            self.icoords[struct].setup()
             self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
             self.icoords[struct].gradrms=grmss[struct]
 
@@ -262,7 +275,7 @@ class Base_Method(object,Print,Analyze):
 
         for step in range(nsteps):
             if self.icoords[n].print_level>0:
-                print(" Opt step: %i" %(step+1)),
+                print(" \nOpt step: %i" %(step+1)),
             if step==0:
                 self.icoords[n].buf.write(" Opt step: %d" %(step+1))
             else:
@@ -277,7 +290,7 @@ class Base_Method(object,Print,Analyze):
             if all(dlc_fix==True for dlc_fix in fixed_DLCs):
                 pass
             # => step with climb
-            elif self.icoords[n].PES.lot.do_coupling is False and fixed_DLCs==[False]:
+            elif self.icoords[n].PES.lot.do_coupling is False and fixed_DLCs==[False] and follow_overlap==False:
                 constraint_steps[0]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
             # => MECI step
             elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
@@ -687,9 +700,10 @@ class Base_Method(object,Print,Analyze):
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
         form_eigenv_finite=False
         if totalgrad<0.3 and fp>0:
-            if self.stage!=1 and self.climber:
+            if self.stage==0 and self.climber:
                 print(" ** starting climb **")
                 self.stage=1
+                return nclimb,form_eigenv_finite
             if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
                     (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
@@ -991,9 +1005,14 @@ class Base_Method(object,Print,Analyze):
 
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
-        self.icoords[en].form_constrained_DLC(self.ictan[en])
-        nicd = self.icoords[en].nicd  #len
-        num_ics = self.icoords[en].num_ics #size_ic
+
+        #self.icoords[en].form_constrained_DLC(self.ictan[en])
+        self.icoords[en].form_unconstrained_DLC()
+
+        newic = DLC.copy_node(self.icoords[en],1)
+        newic.form_constrained_DLC(self.ictan[en])
+        nicd = newic.nicd  #len
+        num_ics = newic.num_ics #size_ic
 
         E0 = self.energies[en]/KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/KCAL_MOL_PER_AU
@@ -1002,37 +1021,68 @@ class Base_Method(object,Print,Analyze):
         else:
             Ep1 = Em1
 
-        q0 = self.icoords[en].q[nicd-1]
-        tan0 = self.icoords[en].Ut[nicd-1,:]
+        q0 =  newic.q[nicd-1]
+        #print "q0 is %1.3f" % q0
+        tan0 = newic.Ut[nicd-1,:]
+        #print "tan0"
+        #print tan0
 
-        self.icoords[en-1].form_unconstrained_DLC()
-        qm1 = self.icoords[en-1].q[nicd-1]
+        newic.set_xyz(self.icoords[en-1].coords)
+        newic.bmatp_create()
+        newic.bmat_create()
+        qm1 = newic.q[nicd-1]
+        #print "qm1 is %1.3f " %qm1
+
         if en+1<self.nnodes:
-            self.icoords[en+1].form_unconstrained_DLC()
-            qp1 = self.icoords[en+1].q[nicd-1]
+            newic.set_xyz(self.icoords[en+1].coords)
+            newic.bmatp_create()
+            newic.bmat_create()
+            qp1 = newic.q[nicd-1]
         else:
             qp1 = qm1
+
+        #print "qp1 is %1.3f" % qp1
 
         if self.icoords[en].isTSnode:
             print " TS Hess init'd w/ existing Hintp"
 
-        tan = np.dot(self.icoords[en].Ut,tan0.T)  #nicd,1 
+        newic.set_xyz(self.icoords[en].coords)
+        newic.form_unconstrained_DLC()
+        newic.Hintp=np.copy(self.icoords[en].Hintp)
+        newic.Hint = newic.Hintp_to_Hint()
 
-        Ht = np.dot(self.icoords[en].Hint,tan) #nicd,1
+        tan = np.dot(newic.Ut,tan0.T)  #(nicd,numic)(num_ic,1)=nicd,1 
+        #print "tan"
+        #print tan
+
+        Ht = np.dot(newic.Hint,tan) #nicd,1
         tHt = np.dot(tan.T,Ht) 
 
         a = abs(q0-qm1)
         b = abs(qp1-q0)
         c = 2*(Em1/a/(a+b) - E0/a/b + Ep1/b/(a+b))
-        print "tHt is ",tHt
-        print "a is ",a
-        print "b is ",b
-        print "c is ",c
         print " tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0])
 
+
         ttt = np.outer(tan,tan)
-        self.icoords[en].Hint += (c-tHt)*ttt
+        #print "Hint before"
+        #with np.printoptions(threshold=np.inf):
+        #    print newic.Hint
+        eig,tmph = np.linalg.eigh(newic.Hint)
+        #print "initial eigenvalues"
+        #print eig
+       
+        newic.Hint += (c-tHt)*ttt
+        self.icoords[en].Hint = np.copy(newic.Hint)
+        #print "Hint"
+        #with np.printoptions(threshold=np.inf):
+        #    print self.icoords[en].Hint
+        #print "shape of Hint is %s" % (np.shape(self.icoords[en].Hint),)
         self.icoords[en].newHess = 5
+
+        eigen,tmph = np.linalg.eigh(self.icoords[en].Hint) #nicd,nicd
+        #print "eigenvalues of new Hess"
+        #print eigen
 
 
 if __name__ == '__main__':
