@@ -101,6 +101,7 @@ class DLC(Base_DLC,Bmat,Utils):
         print "printing Union ICs"
         print bondA
         print angleA
+        print "Number of bonds,angles and torsions is %i %i %i" % (len(bondA),len(angleA),len(torsionA))
         print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
@@ -285,6 +286,7 @@ class DLC(Base_DLC,Bmat,Utils):
         PES1 = PES(ICoordA.PES.options.copy().set_values({
             "lot": lot1,
             }))
+
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.BObj.bonds,
@@ -292,8 +294,6 @@ class DLC(Base_DLC,Bmat,Utils):
             "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1
             }))
-
-        ICoordC.setup()
 
         return ICoordC
 
@@ -712,6 +712,8 @@ class DLC(Base_DLC,Bmat,Utils):
         #if self.print_level==2:
         #    print "bmatti"
         #    print self.bmatti
+        if not follow_overlap:
+            self.Hintp_to_Hint()
         self.coorp = np.copy(self.coords)
         # grad in ics
         self.gradq = self.grad_to_q(grad)
@@ -719,6 +721,7 @@ class DLC(Base_DLC,Bmat,Utils):
             print "gradq"
             print self.gradq.T
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+        print "gradrms after update %1.3f" %self.gradrms 
         self.pgradrms = self.gradrms
         if self.gradrms < self.OPTTHRESH:
             return 0.
@@ -739,7 +742,7 @@ class DLC(Base_DLC,Bmat,Utils):
         # => Take Eigenvector Step <=#
 
         if not follow_overlap:
-            dq = self.update_ic_eigen(self.gradq,nconstraints)
+            dq = self.update_ic_eigen(nconstraints)
         else:
             dq = self.update_ic_eigen_ts(ictan)
 
@@ -821,27 +824,28 @@ class DLC(Base_DLC,Bmat,Utils):
             raise NotImplementedError
 
         # => update PES info <= #
+        self.update_DLC(nconstraints,ictan)
         self.update_for_step(nconstraints,follow_overlap)
 
         # => form eigenvector step in non-constrained space <= #
-        dq = self.eigenvector_step(nconstraints,ictan,follow_overlap)
+        self.dq = self.eigenvector_step(nconstraints,ictan,follow_overlap)
         if self.print_level==2:
             print "dq for step is "
             print dq.T
 
         # => add constraint_step to step <= #
         for n in range(nconstraints):
-            dq[-nconstraints+n]=constraint_steps[n]
+            self.dq[-nconstraints+n]=constraint_steps[n]
 
         # => update geometry <=#
-        rflag = self.ic_to_xyz_opt(dq)
+        rflag = self.ic_to_xyz_opt(self.dq)
 
         #TODO if rflag and ixflag
         if rflag==True:
             print "rflag" 
             self.DMAX=self.DMAX/1.6
-            dq=self.update_ic_eigen(self.gradq,nconstraints)
-            self.ic_to_xyz_opt(dq)
+            self.dq=self.update_ic_eigen(nconstraints)
+            self.ic_to_xyz_opt(self.dq)
             self.update_hess=False
 
         ## => update ICs,xyz <= #
@@ -858,13 +862,13 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
-        self.dEpre = self.compute_predE(dq)
+        self.dEpre = self.compute_predE(self.dq)
         self.dEstep = self.energy - self.energyp
-        self.dEpre = self.compute_predE(dq)
+        self.dEpre = self.compute_predE(self.dq)
 
         # constraint contribution
         for n in range(nconstraints):
-            self.dEpre += self.gradq[-n-1]*dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
+            self.dEpre += self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
@@ -872,6 +876,7 @@ class DLC(Base_DLC,Bmat,Utils):
             print "ratio is %1.4f" % self.ratio,
 
         grad = self.PES.get_gradient(self.geom)
+        self.pgradq = np.copy(self.gradq)
         self.gradq = self.grad_to_q(grad)
         self.pgradrms = self.gradrms
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
@@ -894,16 +899,20 @@ class DLC(Base_DLC,Bmat,Utils):
         assert mode==1 or mode==2, "no update implemented with that mode"
         self.newHess-=1
 
-        if mode==1:
-            change = self.update_bfgsp()
-        if mode==2:
-            change = self.update_bofill()
+        # do this even if mode==2
+        change = self.update_bfgsp()
 
         self.Hintp += change
         if self.print_level==2:
             print "Hintp"
             print self.Hintp
-        self.Hint=self.Hintp_to_Hint()
+
+        if mode==1:
+            self.Hint=self.Hintp_to_Hint()
+        if mode==2:
+            self.update_bofill()
+    
+
 
     def fromDLC_to_ICbasis(self,vecq):
         """
@@ -923,7 +932,7 @@ class DLC(Base_DLC,Bmat,Utils):
         """
         # normalize all constraints
         Cn = preprocessing.normalize(C.T,norm='l2')
-        dots = np.matmul(Cn,Cn.T)
+        #dots = np.matmul(Cn,Cn.T)
 
         # orthogonalize
         Cn = self.orthogonalize(Cn) 
@@ -985,19 +994,19 @@ class DLC(Base_DLC,Bmat,Utils):
         constraints[:,1] = dgradq_U[:,0]
         self.opt_constraint(constraints)
         self.bmat_create()
-        self.Hint = self.Hintp_to_Hint()
+        #self.Hint = self.Hintp_to_Hint()
 
     def form_constrained_DLC(self,constraints):
         self.form_unconstrained_DLC()
         self.opt_constraint(constraints)
         self.bmat_create()
-        self.Hint = self.Hintp_to_Hint()
+        #self.Hint = self.Hintp_to_Hint()
 
     def form_unconstrained_DLC(self):
         self.bmatp = self.bmatp_create()
         self.bmatp_to_U()
         self.bmat_create()
-        self.Hint = self.Hintp_to_Hint()
+        #self.Hint = self.Hintp_to_Hint()
 
 
 
