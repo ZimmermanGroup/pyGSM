@@ -721,7 +721,7 @@ class DLC(Base_DLC,Bmat,Utils):
             print "gradq"
             print self.gradq.T
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
-        print "gradrms after update %1.3f" %self.gradrms 
+        #print "gradrms after update %1.3f" %self.gradrms 
         self.pgradrms = self.gradrms
         if self.gradrms < self.OPTTHRESH:
             return 0.
@@ -765,7 +765,7 @@ class DLC(Base_DLC,Bmat,Utils):
         if ((self.dEstep>0.01 and self.PES.lot.do_coupling==False) or
                 (self.dEstep>0.01 and self.PES.dE<1.0 and self.PES.lot.do_coupling==True) and 
                 (not self.isTSnode and self.stage==2)):
-            if self.print_level>0:
+            if self.print_level>1:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag <self.DMAX:
@@ -787,7 +787,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.DMAX = self.DMAX/1.35
 
         elif (self.ratio<0.25 or self.ratio>1.5):
-            if self.print_level>0:
+            if self.print_level>1:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag<self.DMAX:
@@ -795,7 +795,7 @@ class DLC(Base_DLC,Bmat,Utils):
             else:
                 self.DMAX = self.DMAX/1.2
         elif self.ratio>0.75 and self.ratio<1.25 and self.smag > self.DMAX and self.gradrms<(self.pgradrms*1.35):
-            if self.print_level>0:
+            if self.print_level>1:
                 print("increasing DMAX"),
             self.buf.write(" increasing DMAX")
             self.DMAX=self.DMAX*1.1 + 0.01
@@ -824,18 +824,19 @@ class DLC(Base_DLC,Bmat,Utils):
             raise NotImplementedError
 
         # => update PES info <= #
-        self.update_DLC(nconstraints,ictan)
+        if not follow_overlap: 
+            self.update_DLC(nconstraints,ictan)
         self.update_for_step(nconstraints,follow_overlap)
 
         # => form eigenvector step in non-constrained space <= #
         self.dq = self.eigenvector_step(nconstraints,ictan,follow_overlap)
-        if self.print_level==2:
-            print "dq for step is "
-            print dq.T
 
         # => add constraint_step to step <= #
         for n in range(nconstraints):
             self.dq[-nconstraints+n]=constraint_steps[n]
+        if self.print_level>2:
+            print "dq for step is "
+            print self.dq.T
 
         # => update geometry <=#
         rflag = self.ic_to_xyz_opt(self.dq)
@@ -854,7 +855,7 @@ class DLC(Base_DLC,Bmat,Utils):
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
         self.buf.write(" E(M): %3.2f" %(self.energy - self.V0))
-        if self.print_level>0:
+        if self.print_level>1:
             print "E(M): %3.5f" % (self.energy-self.V0),
 
         #form DLC at new position
@@ -872,7 +873,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
-        if self.print_level>0:
+        if self.print_level>1:
             print "ratio is %1.4f" % self.ratio,
 
         grad = self.PES.get_gradient(self.geom)
@@ -880,7 +881,7 @@ class DLC(Base_DLC,Bmat,Utils):
         self.gradq = self.grad_to_q(grad)
         self.pgradrms = self.gradrms
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
-        if self.print_level>0:
+        if self.print_level>1:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
 
