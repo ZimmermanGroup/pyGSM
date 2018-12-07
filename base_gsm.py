@@ -464,7 +464,7 @@ class Base_Method(object,Print,Analyze):
         ntor = self.icoords[0].TObj.ntor
         #ictan = np.zeros((self.nnodes,size_ic))
 
-        ictan = [[]]*self.nnodes
+        #ictan = [[]]*self.nnodes
         #ictan0 = np.copy(ictan[0])
         ictan0 = np.zeros((size_ic,1))
         dqmaga = [0.]*self.nnodes
@@ -501,7 +501,7 @@ class Base_Method(object,Print,Analyze):
                     int2ic_n = n-1
             if not do3:
                 #ictan[n,:]=np.transpose(self.tangent(newic_n,intic_n))
-                ictan[n] = self.tangent(newic_n,intic_n)
+                ictan0 = self.tangent(newic_n,intic_n)
             else:
                 f1 = 0.
                 dE1 = abs(self.energies[n+1]-self.energies[n])
@@ -538,11 +538,12 @@ class Base_Method(object,Print,Analyze):
                     t1[nbonds+nangles+i] = tmp1
                     t2[nbonds+nangles+i] = tmp2
                 #ictan[n,:] = f1*t1 + (1-f1)*t2
-                ictan[n] = f1*t1 +(1-f1)*t2
-                ictan[n] = ictan[n].reshape((size_ic,1))
+                ictan0 = f1*t1 +(1-f1)*t2
+                ictan0 = ictan0.reshape((size_ic,1))
+                self.ictan[n]=ictan0
             
             dqmaga[n]=0.0
-            ictan0 = np.reshape(np.copy(ictan[n]),(size_ic,1))
+            ictan0 = np.reshape(np.copy(self.ictan[n]),(size_ic,1))
             self.icoords[newic_n].bmatp = self.icoords[newic_n].bmatp_create()
             self.icoords[newic_n].bmatp_to_U()
             self.icoords[newic_n].opt_constraint(ictan0)
@@ -557,14 +558,14 @@ class Base_Method(object,Print,Analyze):
         print '------------printing dqmaga---------------'
         print dqmaga
         self.dqmaga = dqmaga
-        self.ictan = ictan
+        #self.ictan = ictan
 
     def get_tangents_1g(self):
         """
         Finds the tangents during the growth phase. 
         Tangents referenced to left or right during growing phase
         """
-        ictan = [[]]*self.nnodes
+        #ictan = [[]]*self.nnodes
         dqmaga = [0.]*self.nnodes
         dqa = [[],]*self.nnodes
 
@@ -572,33 +573,33 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(ncurrent):
             #ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
-            ictan[nlist[2*n]] = self.tangent(nlist[2*n],nlist[2*n+1])
-            ictan0 = np.copy(ictan[nlist[2*n]])
+            self.ictan[nlist[2*n]] = self.tangent(nlist[2*n],nlist[2*n+1])
+            ictan0 = np.copy(self.ictan[nlist[2*n]])
 
             if self.icoords[nlist[2*n+1]].print_level>1:
                 print "forming space for", nlist[2*n+1]
             self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
             self.icoords[nlist[2*n+1]].bmatp_to_U()
-            self.icoords[nlist[2*n+1]].opt_constraint(ictan[nlist[2*n]])
+            self.icoords[nlist[2*n+1]].opt_constraint(self.ictan[nlist[2*n]])
             self.icoords[nlist[2*n+1]].bmat_create()
             
             dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
-        self.ictan = ictan
+        #self.ictan = ictan
        
         if False:
             for n in range(ncurrent):
                 print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
                 print "printing ictan[%i]" %nlist[2*n]       
                 for i in range(self.icoords[nlist[2*n]].BObj.nbonds):
-                    print "%1.2f " % ictan[nlist[2*n]][i],
+                    print "%1.2f " % self.ictan[nlist[2*n]][i],
                 print 
                 for i in range(self.icoords[nlist[2*n]].BObj.nbonds,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds):
-                    print "%1.2f " % ictan[nlist[2*n]][i],
+                    print "%1.2f " % self.ictan[nlist[2*n]][i],
                 for i in range(self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].AObj.nangles,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].TObj.ntor):
-                    print "%1.2f " % ictan[nlist[2*n]][i],
+                    print "%1.2f " % self.ictan[nlist[2*n]][i],
                 print "\n"
 #           #     print np.transpose(ictan[nlist[2*n]])
 
