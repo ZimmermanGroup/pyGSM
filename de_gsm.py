@@ -85,7 +85,7 @@ class GSM(Base_Method):
 
         for i in range(self.nnodes):
             if self.icoords[i] !=0:
-                self.active[i] = False;
+                #self.active[i] = False;
                 self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
         self.active[nR] = True
         self.active[nP] = True
@@ -96,20 +96,22 @@ class GSM(Base_Method):
         return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
 
     def check_if_grown(self):
-        isDone=True
-        for act in self.active:
-            if act:
-                isDone = False
-                break
+        isDone=False
+        #for act in self.active:
+        #    if act:
+        #        isDone = False
+        #        break
+        if self.nn==self.nnodes:
+            isDone=True
         return isDone
 
     def check_add_node(self):
         if self.icoords[self.nR-1].gradrms < self.gaddmax:
-            self.active[self.nR-1] = False
+            #self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
                 self.interpolateR()
         if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
-            self.active[self.nnodes-self.nP] = False
+            #self.active[self.nnodes-self.nP] = False
             if self.icoords[-self.nP-1] == 0:
                 self.interpolateP()
 
