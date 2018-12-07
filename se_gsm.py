@@ -40,6 +40,7 @@ class SE_GSM(Base_Method):
                     print "adding torsion ",torsion
                     self.icoords[0].TObj.torsions.append(torsion)
 
+        self.icoords[0].madeBonds=True
         self.icoords[0].setup()
 
     def go_gsm(self,max_iters,max_steps):
@@ -76,7 +77,6 @@ class SE_GSM(Base_Method):
 
         print " initial ic_reparam"
         self.ic_reparam()
-        self.stage=1
         if self.tscontinue==True:
             self.opt_iters(max_iter=max_iters,optsteps=3) #opt steps fixed at 3
         else:
@@ -101,6 +101,7 @@ class SE_GSM(Base_Method):
         print " Optimizing node %i" % self.nR
         self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
         self.optimize(n=self.nR,nsteps=noptsteps)
+        self.active[self.nR]=True
         if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
             print "Opt did not produce new geometry"
         else:
@@ -183,13 +184,17 @@ class SE_GSM(Base_Method):
         isDone=False
         added=False
         if self.nmax==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
-            print "TS node is second to last node, adding one more node"
-            self.add_last_node(1)
-            self.nnodes=self.nR
-            self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
-            added=True
-            print "done adding node"
-            print "nnodes = ",self.nnodes
+            if self.icoords[self.nR-1].gradrms>self.CONV_TOL:
+
+                print "TS node is second to last node, adding one more node"
+                self.add_last_node(1)
+                self.nnodes=self.nR
+                self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
+                self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
+                added=True
+                print "done adding node"
+                print "nnodes = ",self.nnodes
+                self.get_tangents_1()
             return isDone
 
         # => check string profile <= #
@@ -286,7 +291,20 @@ if __name__ == '__main__':
         print "\n Starting GSM \n"
         #gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=9,nconstraints=1,CONV_TOL=0.001,driving_coords=[("TORSION",2,1,4,6,90.)])
         gsm=SE_GSM.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,driving_coords=[("ADD",6,4),("ADD",5,1)],ADD_NODE_TOL=0.05,tstype=0)
-        gsm.restart_string()
-        gsm.go_gsm(max_iters=30,max_steps=20)
+        #gsm.restart_string()
+        gsm.go_gsm(max_iters=50,max_steps=20)
+        #print "getting tangents"
+        #gsm.get_tangents_1()
+        #gsm.icoords[6].isTSnode=True
+        #print "making initial Hint"
+        #gsm.icoords[6].make_Hint()
+        #eig,tmph = np.linalg.eigh(gsm.icoords[6].Hint)
+        #print "initial eigenvalues"
+        #print eig
 
-
+        #print "getting eigenv finite"
+        #gsm.get_eigenv_finite(6)
+        #print "taking follow eigenvector step"
+        ##gsm.icoords[6].opt_step(1,[False],gsm.ictan[6],True)
+        #gsm.optimize(n=6,nsteps=2,nconstraints=0,follow_overlap=True)
+        #gsm.icoords[6].update_bofill()
