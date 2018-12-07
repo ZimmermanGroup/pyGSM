@@ -151,6 +151,7 @@ class Base_Method(object,Print,Analyze):
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
             self.icoords[struct].setup()
+            self.icoords[struct].DMAX=0.05 #half of default value
             self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
             self.icoords[struct].gradrms=grmss[struct]
 
@@ -251,9 +252,11 @@ class Base_Method(object,Print,Analyze):
              elif nconstraints==3:
                  raise NotImplemented
 
-    def optimize(self,n=0,nsteps=100,nconstraints=0,fixed_DLCs=[],follow_overlap=False):
+    def optimize(self,n=0,nsteps=100,nconstraints=0,ictan=None,fixed_DLCs=[],follow_overlap=False):
         assert len(fixed_DLCs)==nconstraints, "nconstraints != fixed_DLC"
         assert self.icoords[n]!=0,"icoord not set"
+        if nconstraints==1 and ictan.any()==None:
+            print "warning no ictan"
         output_format = 'xyz'
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
@@ -271,13 +274,13 @@ class Base_Method(object,Print,Analyze):
         self.icoords[n].buf = StringIO.StringIO()
         self.icoords[n].node_id = n  # set node id is this necessary?
         if self.icoords[n].print_level>0:
-            print "Initial energy is %1.4f\n" % self.icoords[n].V0
+            print "Initial energy is %1.4f" % self.icoords[n].V0
 
         for step in range(nsteps):
-            if self.icoords[n].print_level>0:
+            if self.icoords[n].print_level>1:
                 print(" \nOpt step: %i" %(step+1)),
             if step==0:
-                self.icoords[n].buf.write(" Opt step: %d" %(step+1))
+                self.icoords[n].buf.write(" \nOpt step: %d" %(step+1))
             else:
                 self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
 
@@ -306,7 +309,7 @@ class Base_Method(object,Print,Analyze):
                 raise ValueError(" Optimize doesn't know what to do ")
 
             ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(nconstraints,constraint_steps,self.ictan[n],follow_overlap)
+            smag =self.icoords[n].opt_step(nconstraints,constraint_steps,ictan,follow_overlap)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
