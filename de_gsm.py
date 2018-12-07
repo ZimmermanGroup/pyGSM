@@ -44,11 +44,20 @@ class GSM(Base_Method):
 
         self.interpolate(2) 
 
-        self.growth_iters(iters=max_iters,opt_steps=opt_steps,nconstraints=nconstraints)
+        self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
         print("Done Growing the String!!!")
+        self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
 
-        #TODO maxiters should decrement somehow
-        self.opt_iters(max_iter=max_iters,optsteps=opt_steps)
+        print " initial ic_reparam"
+        self.ic_reparam()
+        self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+        if self.tscontinue==True:
+            #TODO maxiters should decrement somehow
+            self.opt_iters(max_iter=max_iters,optsteps=opt_steps)
+        else:
+            print "Exiting early"
+
+        print "Finished GSM!"  
 
 
     def interpolate(self,newnodes=1):
