@@ -644,7 +644,8 @@ class Base_Method(object,Print,Analyze):
             assert nconstraint>2,"nconstraints wrong size"
 
         for n in range(self.nnodes):
-            self.icoords[n].isTSnode=False
+            if self.icoords[n]!=0:
+                self.icoords[n].isTSnode=False
         fp=0
         if self.stage>0:
             fp = self.find_peaks(2)
