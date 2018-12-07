@@ -782,18 +782,21 @@ class Base_Method(object,Print,Analyze):
             dqavg = totaldqmag/(self.nnodes-1)
 
             #if climb:
-            if self.stage==1 or rtype==2:
-                for n in range(n0+1,self.TSnode+1):
-                    h1dqmag += self.dqmaga[n]
-                for n in range(self.TSnode+1,self.nnodes):
-                    h2dqmag += self.dqmaga[n]
+            if self.stage>0 or rtype==2:
+                h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
+                h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
+                print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
+                #for n in range(n0+1,self.TSnode+1):
+                #    h1dqmag += self.dqmaga[n]
+                #for n in range(self.TSnode+1,self.nnodes):
+                #    h2dqmag += self.dqmaga[n]
            
             # => Using average <= #
             if i==0 and rtype==0:
                 print " using average"
-                if self.stage!=1:
+                if self.stage==0:
                     for n in range(n0+1,self.nnodes):
-                        rpart[n] = 1./(self.nnodes)
+                        rpart[n] = 1./(self.nnodes-1)
                 else:
                     for n in range(n0+1,self.TSnode):
                         rpart[n] = 1./(self.TSnode-n0)
@@ -823,7 +826,7 @@ class Base_Method(object,Print,Analyze):
                     print " {:1.2}".format(rpart[n]),
                 print
 
-            if self.stage!=1 and rtype!=2:
+            if self.stage==0 and rtype!=2:
                 for n in range(n0+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - totaldqmag * rpart[n]
                     if n==self.nnodes-2:
@@ -919,7 +922,8 @@ class Base_Method(object,Print,Analyze):
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.icoords[0].print_level>0:
-                print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
+                if i==0:
+                    print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
                 print " printing spacings dqmaga: "
                 for n in range(self.nnodes):
                     print " {:1.2}".format(self.dqmaga[n]),
@@ -928,20 +932,23 @@ class Base_Method(object,Print,Analyze):
                 print 
             
             if i == 0:
-                rpart = np.zeros(self.nnodes)
-                for n in range(n0+1,self.nR):
-                    rpart[n] = 1.0/(self.nn-2)
-                for n in range(self.nnodes-self.nP,self.nnodes-1):
-                    rpart[n] = 1.0/(self.nn-2)
-#                rpart[0] = 0.0
-#                rpart[-1] = 0.0
-                if self.icoords[0].print_level>0:
-                    print " rpart: "
-                    for n in range(1,self.nnodes):
-                        print " {:1.2}".format(rpart[n]),
-                        if (n)%5==0:
+                if self.nn!=self.nnodes:
+                    rpart = np.zeros(self.nnodes)
+                    for n in range(n0+1,self.nR):
+                        rpart[n] = 1.0/(self.nn-2)
+                    for n in range(self.nnodes-self.nP,self.nnodes-1):
+                        rpart[n] = 1.0/(self.nn-2)
+                    if self.icoords[0].print_level>0:
+                        if i==0:
+                            print " rpart: "
+                            for n in range(1,self.nnodes):
+                                print " {:1.2}".format(rpart[n]),
+                                if (n)%5==0:
+                                    print
                             print
-                    print
+                else:
+                    for n in range(n0+1,self.nnodes):
+                        rpart[n] = 1./(self.nnodes-1)
             nR0 = self.nR
             nP0 = self.nP
 
@@ -976,25 +983,22 @@ class Base_Method(object,Print,Analyze):
             if disprms < 1e-2:
                 break
 
-                            #TODO check how range is defined in gstring, uses n0...
+            #TODO check how range is defined in gstring, uses n0...
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
                         if len(self.ictan[n]) != 0:# and self.active[n]: #may need to change active requirement TODO
                             #print "May need to make copy_CI"
                             #This does something to ictan0
-                            #self.icoords[n].update_ics()
+                            self.icoords[n].update_ics()
                             self.icoords[n].bmatp = self.icoords[n].bmatp_create()
                             self.icoords[n].bmatp_to_U()
                             self.icoords[n].opt_constraint(self.ictan[n])
                             self.icoords[n].bmat_create()
                             dq0 = np.zeros((self.icoords[n].nicd,1))
                             dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
-                            #print ' dq0:',
-                            #for iii in dq0:
-                            #    print iii,
-                            #print
-                            #print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
+                            if self.icoords[0].print_level>0:
+                                print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
                             self.icoords[n].ic_to_xyz(dq0)
                             self.icoords[n].update_ics()
                         else:
@@ -1011,6 +1015,7 @@ class Base_Method(object,Print,Analyze):
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
 
+        print "modifying Hessian with RP"
         #self.icoords[en].form_constrained_DLC(self.ictan[en])
         self.icoords[en].form_unconstrained_DLC()
 
