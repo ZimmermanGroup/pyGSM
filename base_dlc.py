@@ -120,6 +120,7 @@ class Base_DLC(Utils,ICoords):
         self.update_hess=False
         self.buf = StringIO.StringIO()
         self.HESS_TANG_TOL_TS=0.75
+        self.path_overlap=0.0
 
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
@@ -345,14 +346,22 @@ class Base_DLC(Utils,ICoords):
 
     def update_bofill(self):
 
-        dx = np.copy(self.dq) #nicd,1
-        #print self.gradq .T
-        #print self.pgradq.T
-        dg = self.gradq - self.pgradq #nicd,1
-        print "dg" 
-        print dg.T
-        print "dx" 
-        print dx.T
+        #print "in update bofill"
+        #unit test
+        if False:
+            self.Hint = np.loadtxt("hint.txt")
+            self.Ut = np.loadtxt("Ut.txt")
+            dx = np.loadtxt("dx.txt")
+            dg = np.loadtxt("dg.txt")
+            dx = np.reshape(dx,(self.nicd,1))
+            dg = np.reshape(dg,(self.nicd,1))
+        else:
+            dx = np.copy(self.dq) #nicd,1
+            dg = self.gradq - self.pgradq #nicd,1
+        #print "dg" 
+        #print dg.T
+        #print "dx" 
+        #print dx.T
         G = np.copy(self.Hint) #nicd,nicd
         Gdx = np.dot(G,dx) #(nicd,nicd)(nicd,1) = (nicd,1)
         dgmGdx = dg - Gdx # (nicd,1)
@@ -360,14 +369,10 @@ class Base_DLC(Utils,ICoords):
         # MS
         dgmGdxtdx = np.dot(dgmGdx.T,dx) #(1,nicd)(nicd,1)
         Gms = np.outer(dgmGdx,dgmGdx)/dgmGdxtdx
-        print "dgmGdxtdx" 
-        print dgmGdxtdx
 
         #PSB
         dxdx = np.outer(dx,dx)
         dxtdx = np.dot(dx.T,dx)
-        print "dxtdx" 
-        print dxtdx
         dxtdg = np.dot(dx.T,dg)
         dxtGdx = np.dot(dx.T,Gdx)
         dxtdx2 = dxtdx*dxtdx
@@ -376,19 +381,27 @@ class Base_DLC(Utils,ICoords):
 
         # Bofill mixing 
         dxtE = np.dot(dx.T,dgmGdx) #(1,nicd)(nicd,1)
-        print "dxtE" 
-        print dxtE
         EtE = np.dot(dgmGdx.T,dgmGdx)  #E is dgmGdx
-        print "EtE" 
-        print EtE
         phi = 1. - dxtE*dxtE/(dxtdx*EtE)
-        print "phi" 
-        print phi
 
         self.Hint += (1.-phi)*Gms + phi*Gpsb
-        print "Hint after bofill"
-        print self.Hint
-        print np.shape(self.Hint)
+        #print "dxtdx" 
+        #print dxtdx
+        #print "dxtdx" 
+        #print "dgmGdxtdx" 
+        #print dgmGdxtdx
+        #print dxtdg
+        #print "dxtGdx" 
+        #print dxtGdx
+        #print "dxtE" 
+        #print dxtE
+        #print "EtE" 
+        #print EtE
+        #print "phi" 
+        #print phi
+        #print "Hint after bofill"
+        #with np.printoptions(threshold=np.inf):
+        #    print self.Hint
         self.Hinv = np.linalg.inv(self.Hint)
 
 
@@ -401,7 +414,7 @@ class Base_DLC(Utils,ICoords):
         dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
         dEpre *=KCAL_MOL_PER_AU
         if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
-        if self.print_level>0:
+        if self.print_level>1:
             print( "predE: %1.4f " % dEpre),
         return dEpre
 
@@ -484,8 +497,7 @@ class Base_DLC(Utils,ICoords):
     def update_ic_eigen_ts(self,ictan,nconstraints=1):
         """ this method follows the overlap with reaction tangent"""
         lambda1 = 0.
-        #SCALE = self.SCALEQN
-        SCALE = 2.0
+        SCALE = self.SCALEQN
         if SCALE > 10:
             SCALE = 10.
 
