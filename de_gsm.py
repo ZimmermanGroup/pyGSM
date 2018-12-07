@@ -155,13 +155,20 @@ class GSM(Base_Method):
         self.nP=1
 
     def check_opt(self,totalgrad,fp):
-        raise NotImplementedError
+        isDone=False
+        if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
+            isDone=True
+            self.tscontinue=False
+        if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+            isDone=True
+            self.tscontinue=False
+        return isDone
 
 if __name__ == '__main__':
 #    from icoord import *
     ORCA=False
-    QCHEM=False
-    PYTC=True
+    QCHEM=True
+    PYTC=False
     nproc=8
 
     if QCHEM:
@@ -191,7 +198,7 @@ if __name__ == '__main__':
 
     mol=pb.readfile("xyz",filepath).next()
     mol2=pb.readfile("xyz",filepath2).next()
-    basis = 'sto-3g'
+    basis = '6-31G*'
     if QCHEM:
         lot=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='B3LYP',nproc=nproc)
         lot2=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='B3LYP',nproc=nproc)
@@ -211,13 +218,13 @@ if __name__ == '__main__':
     pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
 
     print "\n IC1 \n"
-    ic1=DLC.from_options(mol=mol,PES=pes,print_level=0)
+    ic1=DLC.from_options(mol=mol,PES=pes,print_level=1)
     print "\n IC2 \n"
     ic2=DLC.from_options(mol=mol2,PES=pes2,print_level=0)
         
     nnodes=9
     if True:
         print "\n Starting GSM \n"
-        gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,CONV_TOL=0.001)
-        gsm.go_gsm(max_iters=30,opt_steps=3,nconstraints=1)
+        gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,tstype=0)
+        gsm.go_gsm(max_iters=50)
 
