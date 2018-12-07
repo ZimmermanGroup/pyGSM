@@ -405,13 +405,12 @@ class Base_Method(object,Print,Analyze):
             #TODO special SSM criteria if first opt'd node is too high?
             isDone = self.check_opt(totalgrad,fp)
 
+            # => modify hessian if overlap is becoming too small <= #
+            if self.stage==2 and self.icoords[self.nmax].path_overlap<self.icoords[self.nmax].HESS_TANG_TOL_TS:
+                form_eigenv_finite=True
+
 
             #TODO put in de-gsm
-            ##if totalgrad < self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5:
-            #if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
-            #    break
-            #if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
-            #    break
 
             if isDone:
                 break
@@ -439,7 +438,7 @@ class Base_Method(object,Print,Analyze):
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
         ictan = [[]]*self.nnodes
-        print "getting tangents for nodes 0 to ",self.nnodes
+        #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
             #print "getting tangent between %i %i" % (n,n-1)
