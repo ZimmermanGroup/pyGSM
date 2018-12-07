@@ -666,13 +666,14 @@ class Base_Method(object,Print,Analyze):
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                     exsteps=2
+                    print "doubling steps for node %i" % n
                 
                 # => do constrained optimization
-                if self.stage<2 and not self.icoords[n].isTSnode:
+                if self.stage==0 or (self.stage==1 and not self.icoords[n].isTSnode):
                     # => do CI constrained optimization
                     if self.icoords[n].PES.lot.do_coupling:
                         fixed_DLC=[True,False,True]
-                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
+                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n],fixed_DLC)
 
                 # => do constrained optimization with climb
                 elif self.stage==1 and self.icoords[n].isTSnode:
@@ -680,12 +681,12 @@ class Base_Method(object,Print,Analyze):
                     # => do constrained seam optimization with climb
                     if self.icoords[n].PES.lot.do_coupling==True:
                         fixed_DLC=[True,False,False]
-                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,fixed_DLC)
+                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n],fixed_DLC)
 
                 # => follow maximum overlap with Hessian for TS node if find <= #
                 elif self.stage==2 and self.icoords[n].isTSnode:
                     #self.optimize_TS_exact(n,opt_steps,nconstraints)
-                    self.optimize(n,opt_steps,nconstraints,fixed_DLC,follow_overlap=True)
+                    self.optimize(n,opt_steps,nconstraints,self.ictan[n],fixed_DLC,follow_overlap=True)
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
