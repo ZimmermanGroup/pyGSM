@@ -405,13 +405,13 @@ class Base_DLC(Utils,ICoords):
         self.Hinv = np.linalg.inv(self.Hint)
 
 
-    def compute_predE(self,dq0):
+    def compute_predE(self,dq0,nconstraints):
         # compute predicted change in energy 
         assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
         assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
         assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
-        dEtemp = np.dot(self.Hint,dq0)
-        dEpre = np.dot(np.transpose(dq0),self.gradq) + 0.5*np.dot(np.transpose(dEtemp),dq0)
+        dEtemp = np.dot(self.Hint[:self.nicd-nconstraints,:self.nicd-nconstraints],dq0[:self.nicd-nconstraints])
+        dEpre = np.dot(np.transpose(dq0[:self.nicd-nconstraints]),self.gradq[:self.nicd-nconstraints]) + 0.5*np.dot(np.transpose(dEtemp),dq0[:self.nicd-nconstraints])
         dEpre *=KCAL_MOL_PER_AU
         if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
         if self.print_level>1:

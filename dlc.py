@@ -863,13 +863,11 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
-        self.dEpre = self.compute_predE(self.dq)
-        self.dEstep = self.energy - self.energyp
-        self.dEpre = self.compute_predE(self.dq)
+        self.dEpre = self.compute_predE(self.dq,nconstraints)
 
         # constraint contribution
         for n in range(nconstraints):
-            self.dEpre += self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
+            self.dEpre +=self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
