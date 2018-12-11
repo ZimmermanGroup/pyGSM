@@ -36,17 +36,18 @@ class GSM(Base_Method):
         print "print levels at beginning are ",self.icoords[-1].print_level
 
     def go_gsm(self,max_iters=50,opt_steps=3,nconstraints=1):
-        self.icoords[0].gradrms = 0.
-        self.icoords[-1].gradrms = 0.
-        self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
-        print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
+        if self.isRestarted==False:
+            self.icoords[0].gradrms = 0.
+            self.icoords[-1].gradrms = 0.
+            self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+            self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+            print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
 
-        self.interpolate(2) 
+            self.interpolate(2) 
 
-        self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
-        print("Done Growing the String!!!")
-        self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
+            print("Done Growing the String!!!")
+            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
 
         print " initial ic_reparam"
         self.ic_reparam()
