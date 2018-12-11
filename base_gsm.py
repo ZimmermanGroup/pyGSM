@@ -285,7 +285,11 @@ class Base_Method(object,Print,Analyze):
                 self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
 
             # => Update DLC obj <= #
-            self.update_DLC_obj(n,nconstraints)
+            if not follow_overlap:
+                self.update_DLC_obj(n,nconstraints)
+            else:
+                self.icoords[n].bmatp = self.icoords[n].bmatp_create()
+                self.icoords[n].bmat_create()
 
             ######### => form constraint steps <= ###########
             constraint_steps=[0]*nconstraints
@@ -669,7 +673,7 @@ class Base_Method(object,Print,Analyze):
                     print "doubling steps for node %i" % n
                 
                 # => do constrained optimization
-                if self.stage==0 or (self.stage==1 and not self.icoords[n].isTSnode):
+                if self.stage==0 or (self.stage>0 and not self.icoords[n].isTSnode):
                     # => do CI constrained optimization
                     if self.icoords[n].PES.lot.do_coupling:
                         fixed_DLC=[True,False,True]
@@ -715,6 +719,7 @@ class Base_Method(object,Print,Analyze):
                     (ts_gradrms<self.CONV_TOL*5.))
                     ):
                 print(" ** starting exact climb **")
+                print "totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
                 self.stage=2
                 form_eigenv_finite=True
             if self.stage==1:
@@ -1088,6 +1093,8 @@ class Base_Method(object,Print,Analyze):
         #with np.printoptions(threshold=np.inf):
         #    print self.icoords[en].Hint
         #print "shape of Hint is %s" % (np.shape(self.icoords[en].Hint),)
+
+        #this can also work on non-TS nodes?
         self.icoords[en].newHess = 5
 
         eigen,tmph = np.linalg.eigh(self.icoords[en].Hint) #nicd,nicd
