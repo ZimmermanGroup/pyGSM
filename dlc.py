@@ -826,6 +826,10 @@ class DLC(Base_DLC,Bmat,Utils):
         # => update PES info <= #
         if not follow_overlap: 
             self.update_DLC(nconstraints,ictan)
+        else:
+            self.bmatp = self.bmatp_create()
+            self.bmat_create()
+
         self.update_for_step(nconstraints,follow_overlap)
 
         # => form eigenvector step in non-constrained space <= #
