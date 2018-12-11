@@ -57,7 +57,7 @@ class Base_Method(object,Print,Analyze):
 
         opt.add_option(
             key='CONV_TOL',
-            value=0.001,
+            value=0.0005,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold')
