@@ -39,8 +39,8 @@ class Analyze:
         maxnodes=[]
         if self.energies[1]>self.energies[0]:
             minnodes.append(0)
-        if self.energies[nnodes]<self.energies[nnodes-1]:
-            minnodes.append(nnodes)
+        if self.energies[nnodes-1]<self.energies[nnodes-2]:
+            minnodes.append(nnodes-1)
         for n in range(self.n0,nnodes-1):
             if self.energies[n+1]>self.energies[n]:
                 if self.energies[n]<self.energies[n-1]:
