@@ -119,7 +119,7 @@ class Base_DLC(Utils,ICoords):
         #self.stage1opt = False
         self.update_hess=False
         self.buf = StringIO.StringIO()
-        self.HESS_TANG_TOL_TS=0.75
+        self.HESS_TANG_TOL_TS=0.35
         self.path_overlap=0.0
 
         if self.bonds is not None:
