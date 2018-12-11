@@ -498,48 +498,65 @@ class Base_DLC(Utils,ICoords):
         """ this method follows the overlap with reaction tangent"""
         lambda1 = 0.
         SCALE = self.SCALEQN
+        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if SCALE > 10:
             SCALE = 10.
+            
+        #TODO buf print SCALE
 
+        #testing
+        unit_test=False
         self.form_unconstrained_DLC()
-
-        norm = np.linalg.norm(ictan)
-        C = ictan/norm
+        if unit_test:
+            self.Hint = np.loadtxt("hint.txt",dtype=float)
+            self.Ut = np.loadtxt("Ut.txt",dtype=float)
+            self.bmatti = np.loadtxt("bmatti.txt")
+            grad = np.loadtxt("grad.txt")
+            grad = np.reshape(grad,(len(grad),1))
+            self.gradq = self.grad_to_q(grad)
+            self.gradq = self.gradq.T
+            self.gradq = np.reshape(self.gradq,(self.nicd,1))
+            Cn=np.loadtxt('Cn.txt',dtype=float)
+            Cn=np.reshape(Cn,(self.num_ics,1))
+        else:
+            norm = np.linalg.norm(ictan)
+            C = ictan/norm
+            dots = np.dot(self.Ut,C) #(nicd,numic)(numic,1)
+            Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
+            norm = np.linalg.norm(Cn)
+            Cn = Cn/norm
+        
         #print "C"
         #for i in C:
         #    print " %1.3f" %i,
         #print
-
         #print "Ut"
         #with np.printoptions(threshold=np.inf):
         #    print(self.Ut)
-
-        dots = np.dot(self.Ut,C) #(nicd,numic)(numic,1)
         #print "dots"
         #for i in dots:
         #    print " %1.3f" %i,
         #print
-        Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
-        #print "shape of Cn is %s" %(np.shape(Cn),)
-        norm = np.linalg.norm(Cn)
-        Cn = Cn/norm
         #print "Cn"
         #for i in Cn:
         #    print " %1.3f" %i,
         #print
-
-
-        #TODO should we diagonalize the full matrix? Full matrix done in GSM
         #print "Hint"
         #with np.printoptions(threshold=np.inf):
         #    print self.Hint
+        
+        if unit_test:
+            tmph=np.loadtxt('tmph.txt',dtype=float)
+            eigen =np.loadtxt('eigenvalues.txt')
+        else:
+            eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
+            tmph = tmph.T
 
-        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
-        tmph = tmph.T
-        #tmph,eigen,vh  = np.linalg.svd(self.Hint)
-        #print "eigenvalues"
-        #print eigen
-        #print "vectors"
+        #print "printing eigenvalues"
+        #for i in eigen:
+        #    print "%1.3f" % i,
+        #print
+        #print "tmph"
         #with np.printoptions(threshold=np.inf):
         #    print tmph
       
@@ -576,7 +593,6 @@ class Base_DLC(Utils,ICoords):
             print "doing normal step"
             self.form_constrained_DLC(ictan)
             self.Hintp_to_Hint()
-            #self.use_constraint = 1 #TODO would this triger something in regular GSM?
             dq = self.update_ic_eigen(nconstraints)
             dq[-1]=self.walk_up(self.nicd-1)
             return dq
@@ -594,23 +610,15 @@ class Base_DLC(Utils,ICoords):
 
         # => grad in eigenvector basis <= #
         gqe = np.dot(tmph,self.gradq)
-
-        print "printing eigenvalues"
-        for i in eigen:
-            print "%1.3f" % i,
-        print
         print "printing gqe"
         for i in gqe:
             print "%1.3f" % i,
         print
     
-        #if not self.isTSnode:
-        #    dqe0[maxoln] = 0
-        #else:
         path_overlap_e_g = gqe[maxoln]
         print ' gtse: {:1.4f} '.format(gqe[maxoln,0])
 
-        #print "SCALE=%1.1f lambda=%1.3f" %(SCALE,lambda1)
+        print "SCALE=%1.1f lambda=%1.3f" %(SCALE,lambda1)
         dqe0 = np.zeros(self.nicd)
         lambda0 = 0.0025
         dqe0[maxoln] = gqe[maxoln] / (abs(eigen[maxoln]) + lambda0)/SCALE
@@ -618,18 +626,17 @@ class Base_DLC(Utils,ICoords):
             if i != maxoln:
                 dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
            
-        #print "printing dqe0"
-        #print dqe0.T
+        print "printing dqe0"
+        print dqe0.T
 
         # => Convert step back to DLC basis <= #
-        dq0 = np.dot(tmph,dqe0)
+        dq0 = np.dot(tmph.T,dqe0)
+        #regulate max step size
         dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
         dq = np.zeros((self.nicd,1))
         for i in range(self.nicd):
             dq[i,0] = dq0[i]
         
         #TODO can do something special here for seams by setting the second to last two values to zero
-        #print "printing dq"
-        #print dq.T
 
         return dq
