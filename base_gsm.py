@@ -142,12 +142,16 @@ class Base_Method(object,Print,Analyze):
 
         print "doing union"
         self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
+        self.newic = DLC.copy_node(self.icoords[0],0,-1)
         self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         self.icoords[0].gradrms=grmss[0]
 
         print "initial energy is %3.4f" % self.icoords[0].energy
         for struct in range(1,nstructs):
-            self.icoords[struct] = DLC.copy_node(self.icoords[0],struct)
+            if struct==nstructs-1:
+                self.icoords[struct] = DLC.copy_node(self.icoords[0],struct,0)
+            else:
+                self.icoords[struct] = DLC.copy_node(self.icoords[0],struct,1)
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
             self.icoords[struct].setup()
