@@ -983,10 +983,11 @@ class Base_Method(object,Print,Analyze):
         #self.icoords[en].form_constrained_DLC(self.ictan[en])
         self.icoords[en].form_unconstrained_DLC()
 
-        newic = DLC.copy_node(self.icoords[en],1)
-        newic.form_constrained_DLC(self.ictan[en])
-        nicd = newic.nicd  #len
-        num_ics = newic.num_ics #size_ic
+        self.newic.set_xyz(self.icoords[en].coords)
+        self.newic.update_ics()
+        self.newic.form_constrained_DLC(self.ictan[en])
+        nicd = self.newic.nicd  #len
+        num_ics = self.newic.num_ics #size_ic
 
         E0 = self.energies[en]/KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/KCAL_MOL_PER_AU
@@ -995,23 +996,23 @@ class Base_Method(object,Print,Analyze):
         else:
             Ep1 = Em1
 
-        q0 =  newic.q[nicd-1]
+        q0 =  self.newic.q[nicd-1]
         #print "q0 is %1.3f" % q0
-        tan0 = newic.Ut[nicd-1,:]
+        tan0 = self.newic.Ut[nicd-1,:]
         #print "tan0"
         #print tan0
 
-        newic.set_xyz(self.icoords[en-1].coords)
-        newic.bmatp_create()
-        newic.bmat_create()
-        qm1 = newic.q[nicd-1]
+        self.newic.set_xyz(self.icoords[en-1].coords)
+        self.newic.bmatp_create()
+        self.newic.bmat_create()
+        qm1 = self.newic.q[nicd-1]
         #print "qm1 is %1.3f " %qm1
 
         if en+1<self.nnodes:
-            newic.set_xyz(self.icoords[en+1].coords)
-            newic.bmatp_create()
-            newic.bmat_create()
-            qp1 = newic.q[nicd-1]
+            self.newic.set_xyz(self.icoords[en+1].coords)
+            self.newic.bmatp_create()
+            self.newic.bmat_create()
+            qp1 = self.newic.q[nicd-1]
         else:
             qp1 = qm1
 
@@ -1020,16 +1021,16 @@ class Base_Method(object,Print,Analyze):
         if self.icoords[en].isTSnode:
             print " TS Hess init'd w/ existing Hintp"
 
-        newic.set_xyz(self.icoords[en].coords)
-        newic.form_unconstrained_DLC()
-        newic.Hintp=np.copy(self.icoords[en].Hintp)
-        newic.Hint = newic.Hintp_to_Hint()
+        self.newic.set_xyz(self.icoords[en].coords)
+        self.newic.form_unconstrained_DLC()
+        self.newic.Hintp=np.copy(self.icoords[en].Hintp)
+        self.newic.Hint = self.newic.Hintp_to_Hint()
 
-        tan = np.dot(newic.Ut,tan0.T)  #(nicd,numic)(num_ic,1)=nicd,1 
+        tan = np.dot(self.newic.Ut,tan0.T)  #(nicd,numic)(num_ic,1)=nicd,1 
         #print "tan"
         #print tan
 
-        Ht = np.dot(newic.Hint,tan) #nicd,1
+        Ht = np.dot(self.newic.Hint,tan) #nicd,1
         tHt = np.dot(tan.T,Ht) 
 
         a = abs(q0-qm1)
@@ -1041,13 +1042,13 @@ class Base_Method(object,Print,Analyze):
         ttt = np.outer(tan,tan)
         #print "Hint before"
         #with np.printoptions(threshold=np.inf):
-        #    print newic.Hint
-        eig,tmph = np.linalg.eigh(newic.Hint)
+        #    print self.newic.Hint
+        eig,tmph = np.linalg.eigh(self.newic.Hint)
         #print "initial eigenvalues"
         #print eig
        
-        newic.Hint += (c-tHt)*ttt
-        self.icoords[en].Hint = np.copy(newic.Hint)
+        self.newic.Hint += (c-tHt)*ttt
+        self.icoords[en].Hint = np.copy(self.newic.Hint)
         #print "Hint"
         #with np.printoptions(threshold=np.inf):
         #    print self.icoords[en].Hint
