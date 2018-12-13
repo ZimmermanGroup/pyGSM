@@ -833,26 +833,27 @@ class Base_Method(object,Print,Analyze):
 
             if disprms < 0.02:
                 break
-            for n in range(n0+1,self.nnodes-1):
 
-                self.icoords[n].update_ics()
-                self.icoords[n].bmatp=self.icoords[n].bmatp_create()
-                self.icoords[n].bmatp_to_U()
+            for n in range(n0+1,self.nnodes-1):
+                #print "moving node %i %1.3f" % (n,rpmove[n])
+                self.newic.set_xyz(self.icoords[n].coords) 
+                self.newic.update_ics()
 
                 if rpmove[n] < 0.:
-                    pass
+                    ictan[n] = np.copy(ictan0[n]) 
                 else:
-                    self.ictan[n] = np.copy(ictan0[n+1]) 
-                self.icoords[n].opt_constraint(self.ictan[n]) #3815
-                self.icoords[n].bmat_create()
-                dq = np.zeros((self.icoords[n].nicd,1),dtype=float)
+                    ictan[n] = np.copy(ictan0[n+1]) 
+
+                self.newic.form_constrained_DLC(ictan[n])
+                dq = np.zeros((self.newic.nicd,1),dtype=float)
                 dq[-1] = rpmove[n]
-                self.icoords[n].ic_to_xyz(dq)
+                self.newic.ic_to_xyz(dq)
+                self.icoords[n].set_xyz(self.newic.coords)
 
                 #TODO might need to recalculate energy here for seam? 
 
         print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
-        for n in range(self.nnodes):
+        for n in range(1,self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
         print
         print "  disprms: {:1.3}".format(disprms)
