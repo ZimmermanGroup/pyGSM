@@ -590,11 +590,6 @@ class Base_Method(object,Print,Analyze):
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
 
-            isDone = self.check_if_grown()
-            if isDone:
-                print "is Done growing"
-                break
-
             totalgrad = 0.0
             gradrms = 0.0
             self.emaxp = self.emax            
@@ -608,6 +603,13 @@ class Base_Method(object,Print,Analyze):
             
             print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax))
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
+            isDone = self.check_if_grown()
+            if isDone:
+                print "is Done growing"
+                break
+
+        self.newic = DLC.copy_node(self.icoords[0],0,-1)
+        return n
 
     def opt_steps(self,opt_steps,nconstraints):
         assert nconstraints>0,"opt steps doesn't work without constraints"
@@ -631,33 +633,19 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(self.nnodes):
             if self.icoords[n] != 0 and self.active[n]==True:
-                print " Optimizing node %i" % n
+                print " \nOptimizing node %i" % n
                 fixed_DLC = [True]*nconstraints
 
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                     exsteps=2
                     print "doubling steps for node %i" % n
+                if self.stage==2 and n==self.TSnode and self.icoords[n].opt_type==4:
+                    exsteps=2
+                    print "doubling steps for node %i" % n
                 
                 # => do constrained optimization
-                if self.stage==0 or (self.stage>0 and not self.icoords[n].isTSnode):
-                    # => do CI constrained optimization
-                    if self.icoords[n].PES.lot.do_coupling:
-                        fixed_DLC=[True,False,True]
-                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n],fixed_DLC)
-
-                # => do constrained optimization with climb
-                elif self.stage==1 and self.icoords[n].isTSnode:
-                    fixed_DLC=[False]
-                    # => do constrained seam optimization with climb
-                    if self.icoords[n].PES.lot.do_coupling==True:
-                        fixed_DLC=[True,False,False]
-                    self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n],fixed_DLC)
-
-                # => follow maximum overlap with Hessian for TS node if find <= #
-                elif self.stage==2 and self.icoords[n].isTSnode:
-                    #self.optimize_TS_exact(n,opt_steps,nconstraints)
-                    self.optimize(n,opt_steps,nconstraints,self.ictan[n],fixed_DLC,follow_overlap=True)
+                self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n])
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
