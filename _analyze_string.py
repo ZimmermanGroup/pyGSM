@@ -212,3 +212,17 @@ class Analyze:
         return isrxn,wint
 
 
+    def calc_grad(self):
+        totalgrad = 0.0
+        gradrms = 0.0
+        for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
+            print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
+            if i%5 == 0:
+                print
+            totalgrad += ico.gradrms*self.rn3m6
+            gradrms += ico.gradrms*ico.gradrms
+        print
+        gradrms = np.sqrt(gradrms/(self.nnodes-2))
+        return totalgrad,gradrms
+
+
