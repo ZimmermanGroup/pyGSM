@@ -844,7 +844,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
         return constraint_steps
 
-    def opt_step(self,nconstraints,ictan=None):
+    def opt_step(self,nconstraints,ictan=None,refE=0):
         if ictan is not None:
             assert nconstraints>=1,"nconstraints >= 1 if ictan is not None"
 
@@ -887,9 +887,9 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %3.2f" %(self.energy - self.V0))
+        self.buf.write(" E(M): %3.2f" %(self.energy - refE))
         if self.print_level>1:
-            print "E(M): %3.5f" % (self.energy-self.V0),
+            print "E(M): %3.5f" % (self.energy-refE),
 
         #form DLC at new position
         if self.opt_type!=3 and self.opt_type!=4:

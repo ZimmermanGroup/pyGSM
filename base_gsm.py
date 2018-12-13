@@ -265,8 +265,7 @@ class Base_Method(object,Print,Analyze):
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        if self.icoords[n].V0 == 0.0:
-            self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
+        self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
         self.icoords[n].gradq = self.icoords[n].grad_to_q(grad)
         self.icoords[n].energy=0
@@ -285,12 +284,12 @@ class Base_Method(object,Print,Analyze):
             if self.icoords[n].print_level>1:
                 print(" \n Opt step: %i" %(step+1)),
             if step==0:
-                self.icoords[n].buf.write("  Opt step: %d" %(step+1))
+                self.icoords[n].buf.write(" Opt step: %d" %(step+1))
             else:
                 self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
 
             ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(nconstraints,ictan)
+            smag =self.icoords[n].opt_step(nconstraints=nconstraints,ictan=ictan,refE = self.icoords[0].V0)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
