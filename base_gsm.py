@@ -304,7 +304,9 @@ class Base_Method(object,Print,Analyze):
    
             #TODO convergence 
             sys.stdout.flush()
-            if self.icoords[n].gradrms<self.CONV_TOL:
+            #if self.icoords[n].gradrms<self.CONV_TOL:
+            if self.converged(n):
+                print 'TRIUMPH! Optimization converged!'
                 break
 
         #TODO if gradrms is greater than gradrmsl than further reduce DMAX
@@ -315,6 +317,15 @@ class Base_Method(object,Print,Analyze):
             print " Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
+    def converged(self,n):
+        if self.icoords[n].gradrms<self.CONV_TOL:
+            return True
+        else:
+            return False
+
+    def optimize_TS_exact(self,n=0,nsteps=100,nconstraints=0):
+        """ this method follows the overlap with reaction tangent"""
+        raise NotImplementedError()
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
         print "*********************************************************************"

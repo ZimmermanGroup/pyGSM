@@ -11,8 +11,10 @@ class Orca(Lot):
         inpstring += ' '+self.functional
         inpstring += ' '+self.basis
         inpstring += ' EnGrad\n\n'# SOSCF SlowConv \n\n'
-        inpstring += '%scf\nMaxIter 150\nconvergence medium\n sthresh 1e-7\n'
-        inpstring += 'thresh 1e-11\n tcut 1e-13 \n directresetfreq 1 \nend\n'
+        inpstring += '%scf\nMaxIter 300\nconvergence strong\n sthresh 1e-7\n'
+        inpstring += 'thresh 1e-11\n tcut 1e-13 \n directresetfreq 1 \n SOSCFStart 0.00033\nend\n'
+        #inpstring += '%scf\nMaxIter 300\nend\n'
+        inpstring += '\n%maxcore 1000\n\n'
         inpstring += '%pal\nnproc {}\nend\n\n'.format(self.nproc)
         inpstring += '*xyz {} {}\n'.format(self.charge,multiplicity)
         for coord in geom:
@@ -27,13 +29,24 @@ class Orca(Lot):
         
         path2orca = os.popen('which orca').read().rstrip()
 #        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
-        orcascr = 'temporcarun'
-        os.system('mkdir -p {}'.format(orcascr))
-        os.system('mv {} {}/'.format(tempfilename,orcascr))
-        cmd = 'cd {}; {} {} > {}.log; cd ..'.format(orcascr,path2orca,tempfilename,tempfilename)
+        user = os.environ['USER']
+        cwd = os.environ['PWD']
+        try:
+            slurmTASK = os.environ['SLURM_ARRAY_TASK_ID']
+            slurmID = os.environ['SLURM_ARRAY_JOB_ID']
+            runscr = '/tmp/'+user+'/'+slurmID+'/'+slurmTASK
+        except:
+            orcascr = 'temporcarun'
+            runscr = '/tmp/'+user+'/'+orcascr
+
+        if user not in os.listdir('/tmp/'):
+            os.system('mkdir -p {}'.format('/tmp/'+user))
+        os.system('mkdir -p {}'.format(runscr))
+        os.system('mv {} {}/'.format(tempfilename,runscr))
+        cmd = 'cd {}; {} {} > {}/{}.log; cd {}'.format(runscr,path2orca,tempfilename,runscr,tempfilename,cwd)
         os.system(cmd)
 
-        engradpath = 'temporcarun/{}.engrad'.format(tempfilename) 
+        engradpath = runscr+'/{}.engrad'.format(tempfilename) 
         with open(engradpath) as engradfile:
             engradlines = engradfile.readlines()
 

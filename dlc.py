@@ -195,7 +195,8 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds" : ICoordA.BObj.bonds,
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
-            "PES" : pes
+            "PES" : pes,
+            'opt_type' : 1,
             }))
 
         ICoordC.setup()

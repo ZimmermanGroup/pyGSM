@@ -236,6 +236,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
                             c2=b1
                         if self.bond_exists((b2,a2))==True:
                             c2=b2
+                        #SHould add a try except here?
                         torsion= (c1,a1,a2,c2)
                         if not self.torsion_exists(torsion) and len(set(torsion))==4:
                             print(" adding torsion via linear ties %s" %(torsion,))

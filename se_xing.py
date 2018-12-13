@@ -14,22 +14,27 @@ class SE_Cross(SE_GSM):
     def from_options(**kwargs):
         return SE_Cross(SE_Cross.default_options().set_values(kwargs))
 
-    def go_gsm(self,iters):
+    def go_gsm(self,giters,oiters):
         self.icoords[0].gradrms=0.
         self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
         print 'initial energy is {:1.4f}'.format(self.icoords[0].energy)
         sys.stdout.flush()
         self.interpolate(1)
         self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
-        self.growth_iters(iters=iters,maxopt=3,nconstraints=self.nconstraints)
+        self.growth_iters(iters=giters,maxopt=3,nconstraints=self.nconstraints)
 
         print 'SE_Cross growth phase over'
         print 'Warning last node still not fully optimized'
 
         if self.check_if_grown():
-            self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-2],self.nR)
+            self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],self.nR)
+#            if self.string_status[1]:
+#                self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-2],self.nR)
+#            elif self.string_status[0]:
+#                self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],self.nR)
             self.nR += 1
-        self.optimize(n=self.nR-1,nsteps=50)
+        self.icoords[self.nR-1].opt_type=0
+        self.optimize(n=self.nR-1,nsteps=oiters)
             
         self.write_xyz_files(iters=1,base="grown_string",nconstraints=self.nconstraints)
 
@@ -45,14 +50,34 @@ class SE_Cross(SE_GSM):
 #                    self.icoords[n].opt_constraint(self.ictan[n])
 #                    self.icoords[n].smag = self.optimize(n,maxopt,nconstraints)
 
+    def converged(self,n):
+        tmp1 = np.copy(self.icoords[n].PES.grad1)
+        tmp2 = np.copy(self.icoords[n].PES.grad2)
+        print 'norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)),
+        print 'ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2))
+        tmp1 = tmp1/np.linalg.norm(tmp1)
+        tmp2 = tmp2/np.linalg.norm(tmp2)
+        print 'normalized gradient dot product:',float(np.dot(tmp1.T,tmp2))
+        print '\n'
+        sys.stdout.flush()
+        if self.icoords[n].gradrms<self.CONV_TOL and 1.-abs(float(np.dot(tmp1.T,tmp2))) <= 0.02 and abs(self.icoords[n].PES.dE) <= 1.25:
+            return True
+        else:
+            return False
+
     def check_if_grown(self):
         isDone = False
-        epsilon = 15
+        epsilon = 1.5
         pes1dE = self.icoords[self.nR-1].PES.dE
         pes2dE = self.icoords[self.nR-2].PES.dE
-        if abs(pes1dE) < epsilon:
-            if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist) and abs(pes1dE) > abs(pes2dE):
-                isDone = True
+        condition1 = (abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist) and (abs(pes1dE) > abs(pes2dE)))
+#        condition2 = abs(pes1dE) < epsilon
+        #if abs(pes1dE) < epsilon:
+        if condition1: #or condition2:
+            isDone = True
+            #if abs(self.icoords[self.nR-1].bdist) <= 0.5 * abs(self.icoords[1].bdist) and abs(pes1dE) > abs(pes2dE):
+            #    isDone = True
+#        self.string_status=(condition1,condition2)
         return isDone
 
     def check_add_node(self):
@@ -143,6 +168,6 @@ if __name__ == '__main__':
     if True:
         print ' Starting GSM '
         gsm = SE_Cross.from_options(ICoord1=ic1,nnodes=20,nconstraints=1,CONV_TOL=0.001,driving_coords=driving_coords,ADD_NODE_TOL=0.05)
-        gsm.go_gsm(20)
+        gsm.go_gsm(20,200)
 
 

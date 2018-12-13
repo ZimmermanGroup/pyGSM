@@ -51,6 +51,8 @@ class PES(object):
         self.multiplicity = self.options['multiplicity']
         #self.do_coupling = False
         self.dE = 1000.
+        print 'PES object parameters:'
+        print 'Multiplicity:',self.multiplicity,'ad_idx:',self.ad_idx
 
     def get_energy(self,geom):
         #if self.checked_input == False:

@@ -99,6 +99,15 @@ class Lot(object):
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
 
+        if self.node_id == 0:
+            print 'using {} processors'.format(self.nproc)
+            print 'LOT parameters:'
+            print 'Basis     :',self.basis
+            print 'Functional:',self.functional
+            print 'Charge    :',self.charge
+            print 'States    :',self.states
+            print 'do_coupling:',self.do_coupling
+
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
             raise ValueError("Spin multiplicity too high.")
@@ -155,6 +164,10 @@ class Lot(object):
         len_hextets=len(hextets) 
         if len_hextets is not 0:
             self.run(geom,6)
+        septets=self.search_tuple(self.states,7)
+        len_septets=len(septets) 
+        if len_septets is not 0:
+            self.run(geom,7)
         self.hasRanForCurrentCoords=True
 
     def search_tuple(self,tups, elem):
