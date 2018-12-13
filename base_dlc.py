@@ -553,18 +553,8 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         #testing
         unit_test=False
-        self.form_unconstrained_DLC()
         if unit_test:
-            self.Hint = np.loadtxt("hint.txt",dtype=float)
-            self.Ut = np.loadtxt("Ut.txt",dtype=float)
-            self.bmatti = np.loadtxt("bmatti.txt")
-            grad = np.loadtxt("grad.txt")
-            grad = np.reshape(grad,(len(grad),1))
-            self.gradq = self.grad_to_q(grad)
-            self.gradq = self.gradq.T
-            self.gradq = np.reshape(self.gradq,(self.nicd,1))
-            Cn=np.loadtxt('Cn.txt',dtype=float)
-            Cn=np.reshape(Cn,(self.num_ics,1))
+            self.prepare_unit_test()
         else:
             norm = np.linalg.norm(ictan)
             C = ictan/norm
@@ -572,44 +562,10 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
             Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
             norm = np.linalg.norm(Cn)
             Cn = Cn/norm
-        
-        #print "C"
-        #for i in C:
-        #    print " %1.3f" %i,
-        #print
-        #print "Ut"
-        #with np.printoptions(threshold=np.inf):
-        #    print(self.Ut)
-        #print "dots"
-        #for i in dots:
-        #    print " %1.3f" %i,
-        #print
-        #print "Cn"
-        #for i in Cn:
-        #    print " %1.3f" %i,
-        #print
-        #print "Hint"
-        #with np.printoptions(threshold=np.inf):
-        #    print self.Hint
-        
-        if unit_test:
-            tmph=np.loadtxt('tmph.txt',dtype=float)
-            eigen =np.loadtxt('eigenvalues.txt')
-        else:
-            eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
-            tmph = tmph.T
-
-        #print "printing eigenvalues"
-        #for i in eigen:
-        #    print "%1.3f" % i,
-        #print
-        #print "tmph"
-        #with np.printoptions(threshold=np.inf):
-        #    print tmph
-      
-        #print "checking Ut"
-        #with np.printoptions(threshold=np.inf):
-        #    print self.Ut
+       
+        # => get eigensolution of Hessian <= 
+        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
+        tmph = tmph.T
 
         #TODO nneg should be self and checked
         nneg = 0
@@ -618,71 +574,34 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
                 nneg += 1
 
         #=> Overlap metric <= #
-        overlap = np.dot(np.matmul(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
-    
-        #print "printing overlaps"
-        #print overlap.T
+        overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
+        print " printing overlaps ", overlap[:4].T
 
         # Max overlap metrics
-        absoverlap = np.abs(overlap)
-        maxol = np.max(absoverlap)
-        maxoln = np.argmax(absoverlap)
-        maxols = overlap[maxoln]
-        self.path_overlap = maxol
-        self.path_overlap_n = maxoln
+        self.maxol_w_Hess(overlap)
 
-        if self.print_level>-1:
-            print "t/ol %i: %3.2f" % (maxoln,maxol)
-        self.buf.write("t/ol %i: %3.2f" % (maxoln,maxol))
+        # => set lamda1 scale factor <=#
+        lambda1 = self.set_lambda1(eigen)
 
         # => if overlap is small use Cn as Constraint <= #
-        if maxol < self.HESS_TANG_TOL_TS or self.gradrms > self.OPTTHRESH*20.: 
-            print "doing normal step"
-            self.form_constrained_DLC(ictan)
-            self.Hintp_to_Hint()
-            dq = self.update_ic_eigen(nconstraints)
-            dq[-1]=self.walk_up(self.nicd-1)
+        dq = self.check_overlap(ictan)
+        if dq is not None:
+            if self.opt_type==4:
+                self.opt_type = 2 # reform get_eigenv_finite and all future opt_steps in this batch will do climb
+            elif self.opt_type==3:
+                self.opt_type = 1
             return dq
-
-        leig = eigen[1]
-        if maxoln!=0:
-            leig = eigen[0]
-        if leig < 0. and maxoln==0:
-            lambda1 = -leig
-        else:
-            lambda1 = 0.01
-
-        if abs(lambda1)<0.005:
-            lambda1 = 0.005
 
         # => grad in eigenvector basis <= #
         gqe = np.dot(tmph,self.gradq)
-        print "printing gqe"
-        for i in gqe:
-            print "%1.3f" % i,
-        print
-    
-        path_overlap_e_g = gqe[maxoln]
-        print ' gtse: {:1.4f} '.format(gqe[maxoln,0])
+        path_overlap_e_g = gqe[self.path_overlap_n]
+        print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
 
-        print "SCALE=%1.1f lambda=%1.3f" %(SCALE,lambda1)
-        dqe0 = np.zeros(self.nicd)
-        lambda0 = 0.0025
-        dqe0[maxoln] = gqe[maxoln] / (abs(eigen[maxoln]) + lambda0)/SCALE
-        for i in range(self.nicd):
-            if i != maxoln:
-                dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
-           
-        print "printing dqe0"
-        print dqe0.T
+        # => calculate eigenvector step <=#
+        dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen)
 
         # => Convert step back to DLC basis <= #
-        dq0 = np.dot(tmph.T,dqe0)
-        #regulate max step size
-        dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
-        dq = np.zeros((self.nicd,1))
-        for i in range(self.nicd):
-            dq[i,0] = dq0[i]
+        dq = self.convert_dqe0_to_dq(dqe0,tmph)
         
         #TODO can do something special here for seams by setting the second to last two values to zero
 
