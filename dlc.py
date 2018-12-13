@@ -236,10 +236,10 @@ class DLC(Base_DLC,Bmat,Utils):
 
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        if ICoordA.PES.lot.node_id > ICoordB.PES.lot.node_id:
-            node_id = ICoordA.PES.lot.node_id - 1
+        if ICoordB.PES.lot.node_id > ICoordA.PES.lot.node_id:
+            node_id = ICoordA.PES.lot.node_id + 1
         else:
-            node_id = ICoordB.PES.lot.node_id + 1
+            node_id = ICoordA.PES.lot.node_id - 1
         lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,node_id)
         PES1 = PES(ICoordA.PES.options.copy().set_values({
             "lot": lot1,
