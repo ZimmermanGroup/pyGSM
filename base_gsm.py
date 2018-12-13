@@ -417,7 +417,10 @@ class Base_Method(object,Print,Analyze):
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
 
+            ictan[n] /= np.linalg.norm(ictan[n])
+
             self.newic.set_xyz(self.icoords[n].coords)
+            self.newic.update_ics()
             self.newic.bmatp = self.newic.bmatp_create()
             self.newic.bmatp_to_U()
             self.newic.opt_constraint(ictan0)
@@ -855,6 +858,7 @@ class Base_Method(object,Print,Analyze):
                 dq[-1] = rpmove[n]
                 self.newic.ic_to_xyz(dq)
                 self.icoords[n].set_xyz(self.newic.coords)
+                self.icoords[n].update_ics()
 
                 #TODO might need to recalculate energy here for seam? 
 
