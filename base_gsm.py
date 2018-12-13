@@ -546,22 +546,22 @@ class Base_Method(object,Print,Analyze):
         ncurrent,nlist = self.make_nlist()
 
         for n in range(ncurrent):
-            #ictan[nlist[2*n]] = DLC.tangent_1(self.icoords[nlist[2*n+1]],self.icoords[nlist[2*n+0]])
             self.ictan[nlist[2*n]] = self.tangent(nlist[2*n],nlist[2*n+1])
+
+            #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
 
             if self.icoords[nlist[2*n+1]].print_level>1:
                 print "forming space for", nlist[2*n+1]
-            self.icoords[nlist[2*n+1]].bmatp = self.icoords[nlist[2*n+1]].bmatp_create()
-            self.icoords[nlist[2*n+1]].bmatp_to_U()
-            self.icoords[nlist[2*n+1]].opt_constraint(self.ictan[nlist[2*n]])
-            self.icoords[nlist[2*n+1]].bmat_create()
+            self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+
+            #normalize ictan
+            self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
             
             dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
-        #self.ictan = ictan
        
         if False:
             for n in range(ncurrent):
