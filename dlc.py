@@ -139,7 +139,8 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds" : ICoordA.BObj.bonds,
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1
+            "PES" : PES1,
+            'opt_type' : 1,
             }))
 
         ICoordC.setup()
@@ -249,17 +250,15 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds" : ICoordA.BObj.bonds,
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1
+            "PES" : PES1,
+            'opt_type':1,
             }))
 
         ICoordC.setup()
         ictan = DLC.tangent_1(ICoordA,ICoordB)
-        #print ictan.T
-        ICoordC.opt_constraint(ictan)
+        ICoordC.form_constrained_DLC(ictan)
         dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
         print " dqmag: %1.3f"%dqmag
-        ICoordC.bmatp_create()
-        ICoordC.bmat_create()
         if nmax-ncurr > 1:
             dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
         else:
@@ -268,16 +267,14 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
-        ICoordC.bmatp_create()
-        ICoordC.bmatp_to_U()
-        ICoordC.bmat_create()
+        ICoordC.form_unconstrained_DLC()
 
         #TODO can have ICoordC get Hintp matrix from A...
 
         return ICoordC
 
     @staticmethod
-    def copy_node(ICoordA,new_node_id):
+    def copy_node(ICoordA,new_node_id,rtype=0):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
         lot1 = ICoordA.PES.lot.copy(
@@ -292,7 +289,8 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds" : ICoordA.BObj.bonds,
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1
+            "PES" : PES1,
+            'opt_type':rtype,
             }))
 
         return ICoordC
@@ -313,7 +311,8 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds":ICoordA.BObj.bonds,
             "angles":ICoordA.AObj.angles,
             "torsions":ICoordA.TObj.torsions,
-            "PES":pes
+            "PES":pes,
+            'opt_type': 1,
             }))
         ICoordC.setup()
         return ICoordC
