@@ -588,19 +588,10 @@ class Base_Method(object,Print,Analyze):
             self.check_add_node()
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
-            self.ic_reparam_g()
-            self.get_tangents_1g()
             self.opt_steps(maxopt,nconstraints)
             self.store_energies()
 
-            totalgrad = 0.0
-            gradrms = 0.0
-            self.emaxp = self.emax            
-            for ico in self.icoords:
-                if ico != 0:
-                    totalgrad += ico.gradrms*self.rn3m6
-                    gradrms += ico.gradrms*ico.gradrms
-            gradrms = np.sqrt(gradrms/(self.nnodes-2))
+            totalgrad,gradrms = self.calc_grad()
             self.emax = float(max(self.energies[1:-1]))
             self.nmax = np.where(self.energies==self.emax)[0][0]
             
@@ -608,8 +599,8 @@ class Base_Method(object,Print,Analyze):
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             isDone = self.check_if_grown()
             if isDone:
-                print "is Done growing"
                 break
+            self.ic_reparam_g()
 
         self.newic = DLC.copy_node(self.icoords[0],0,-1)
         return n
