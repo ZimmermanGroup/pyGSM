@@ -256,16 +256,17 @@ class Base_Method(object,Print,Analyze):
              elif nconstraints==3:
                  raise NotImplemented
 
-    def optimize(self,n=0,nsteps=100,nconstraints=0,ictan=None,fixed_DLCs=[],follow_overlap=False):
-        assert len(fixed_DLCs)==nconstraints, "nconstraints != fixed_DLC"
+    def optimize(self,n=0,nsteps=100,nconstraints=0,ictan=None):
         assert self.icoords[n]!=0,"icoord not set"
         if nconstraints==1 and ictan.any()==None:
             print "warning no ictan"
+
         output_format = 'xyz'
         obconversion = ob.OBConversion()
         obconversion.SetOutFormat(output_format)
         opt_molecules=[]
-        self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
+        if self.icoords[n].V0 == 0.0:
+            self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
         self.icoords[n].gradq = self.icoords[n].grad_to_q(grad)
         self.icoords[n].energy=0
@@ -278,53 +279,25 @@ class Base_Method(object,Print,Analyze):
         self.icoords[n].buf = StringIO.StringIO()
         self.icoords[n].node_id = n  # set node id is this necessary?
         if self.icoords[n].print_level>0:
-            print "Initial energy is %1.4f" % self.icoords[n].V0
+            print " Initial energy is %1.4f" % self.icoords[n].V0
 
         for step in range(nsteps):
             if self.icoords[n].print_level>1:
-                print(" \nOpt step: %i" %(step+1)),
+                print(" \n Opt step: %i" %(step+1)),
             if step==0:
-                self.icoords[n].buf.write(" \nOpt step: %d" %(step+1))
+                self.icoords[n].buf.write("  Opt step: %d" %(step+1))
             else:
                 self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
 
-            # => Update DLC obj <= #
-            if not follow_overlap:
-                self.update_DLC_obj(n,nconstraints)
-            else:
-                self.icoords[n].bmatp = self.icoords[n].bmatp_create()
-                self.icoords[n].bmat_create()
-
-            ######### => form constraint steps <= ###########
-            constraint_steps=[0]*nconstraints
-            # => step no climb
-            if all(dlc_fix==True for dlc_fix in fixed_DLCs):
-                pass
-            # => step with climb
-            elif self.icoords[n].PES.lot.do_coupling is False and fixed_DLCs==[False] and follow_overlap==False:
-                constraint_steps[0]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
-            # => MECI step
-            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False]:
-                constraint_steps[1] = self.icoords[n].dgrad_step()
-            # => seam step
-            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,True,False]:
-                constraint_steps[2] = self.icoords[n].dgrad_step()
-            # => seam climb
-            elif self.icoords[n].PES.lot.do_coupling is True and fixed_DLCs==[True,False,False]:
-                constraint_steps[1] = self.icoords[n].dgrad_step()
-                constraint_steps[2]=self.icoords[n].walk_up(self.icoords[n].nicd-1)
-            else:
-                raise ValueError(" Optimize doesn't know what to do ")
-
             ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(nconstraints,constraint_steps,ictan,follow_overlap)
+            smag =self.icoords[n].opt_step(nconstraints,ictan)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
             steps.append(smag)
             energies.append(self.icoords[n].energy-self.icoords[n].V0)
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
-            if isinstance(self.icoords[n].PES,Penalty_PES):
+            if isinstance(self.icoords[n].PES,Penalty_PES): # or isinstance(self.icoords[n].PES,Avg_PES): 
                 deltaEs.append(self.icoords[n].PES.dE)
     
             #write convergence
@@ -340,7 +313,7 @@ class Base_Method(object,Print,Analyze):
 
         print(self.icoords[n].buf.getvalue())
         if self.icoords[n].print_level>0:
-            print "Final energy is %2.5f" % (self.icoords[n].energy)
+            print " Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
 
