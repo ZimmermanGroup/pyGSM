@@ -418,11 +418,13 @@ class Base_Method(object,Print,Analyze):
             ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[n-1])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
-            self.icoords[n].bmatp = self.icoords[n].bmatp_create()
-            self.icoords[n].bmatp_to_U()
-            self.icoords[n].opt_constraint(ictan0)
-            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.icoords[n].Ut[-1,:nbonds])*2.5
-            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.icoords[n].Ut[-1,nbonds:])
+
+            self.newic.set_xyz(self.icoords[n].coords)
+            self.newic.bmatp = self.newic.bmatp_create()
+            self.newic.bmatp_to_U()
+            self.newic.opt_constraint(ictan0)
+            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.newic.Ut[-1,:nbonds])*2.5
+            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.newic.Ut[-1,nbonds:])
             dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
         self.dqmaga = dqmaga
@@ -515,11 +517,12 @@ class Base_Method(object,Print,Analyze):
             
             dqmaga[n]=0.0
             ictan0 = np.reshape(np.copy(self.ictan[n]),(size_ic,1))
-            self.icoords[newic_n].bmatp = self.icoords[newic_n].bmatp_create()
-            self.icoords[newic_n].bmatp_to_U()
-            self.icoords[newic_n].opt_constraint(ictan0)
-            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.icoords[newic_n].Ut[-1,:nbonds])*2.5
-            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.icoords[newic_n].Ut[-1,nbonds:])
+            self.newic.set_xyz(self.icoords[newic_n].coords)
+            self.newic.bmatp = self.newic.bmatp_create()
+            self.newic.bmatp_to_U()
+            self.newic.opt_constraint(ictan0)
+            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.newic.Ut[-1,:nbonds])*2.5
+            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.newic.Ut[-1,nbonds:])
             dqmaga[n] = float(dqmaga[n])
         
 
