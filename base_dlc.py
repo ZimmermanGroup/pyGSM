@@ -8,12 +8,13 @@ import itertools
 from copy import deepcopy
 import manage_xyz
 from _obutils import Utils
+from _opt_utils import OStep_utils
 from _icoord import *
 import elements 
 from sklearn import preprocessing
 import StringIO
 
-class Base_DLC(Utils,ICoords):
+class Base_DLC(object,Utils,ICoords,OStep_utils):
 
     @staticmethod
     def default_options():
@@ -430,48 +431,32 @@ class Base_DLC(Utils,ICoords):
         SCALE =self.SCALEQN
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
-        lambda1 = 0.0
 
         nicd_c = self.nicd-nconstraints
         temph = self.Hint[:nicd_c,:nicd_c]
         e,v_temp = np.linalg.eigh(temph)
-
-        v = np.transpose(v_temp)
-        leig = e[0]
-
-        if leig < 0:
-            lambda1 = -leig+0.015
-        else:
-            lambda1 = 0.005
-        if abs(lambda1)<0.005: lambda1 = 0.005
+        v_temp = v_temp.T
+        
+        # => get lambda1
+        lambda1 = self.set_lambda1(e)
 
         # => grad in eigenvector basis <= #
         gradq = self.gradq[:nicd_c,0]
-        gqe = np.dot(v,gradq)
+        gqe = np.dot(v_temp,gradq)
 
         dqe0 = np.divide(-gqe,e+lambda1)/SCALE
         dqe0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dqe0 ]
 
         # => Convert step back to DLC basis <= #
-        dq0 = np.dot(v_temp,dqe0)
-        dq0 = [ np.sign(i)*self.MAXAD if abs(i)>self.MAXAD else i for i in dq0 ]
-        if self.print_level==2:
-            print "eigen opt Hint ev:"
-            print e
-            print "gqe"
-            print gqe.T
-            print "dqe0"
-            print dqe0
-            print "dq0"
-            print ["{0:0.5f}".format(i) for i in dq0]
+        dq = self.convert_dqe0_to_dq(dqe0,v_temp)
         dq_c = np.zeros((self.nicd,1))
-        for i in range(nicd_c):
-            dq_c[i,0] = dq0[i]
+        for i in range(nicd_c): dq_c[i,0] = dq[i]
+        
         return dq_c
 
     def walk_up(self,n):
         """ walk up the n'th DLC"""
-        print "walking up the %i coordinate" % n
+        print " walking up the %i coordinate" % n
         #print "print gradq[n]", self.gradq[n]
         #print "type", type(self.gradq[n])
         assert isinstance(self.gradq[n,0],float), "gradq[n] is not float!"
