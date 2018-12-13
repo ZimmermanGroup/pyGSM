@@ -1,9 +1,9 @@
 import sys
-sys.path.append('/export/zimmerman/craldaz/pyGSM/')
+import os
+sys.path.append(os.popen('cd ..;pwd').read().rstrip('\n'))
 
 from de_gsm import *
 
-#    from icoord import *
 ORCA=False
 QCHEM=True
 PYTC=False
@@ -17,17 +17,6 @@ if PYTC:
     from pytc import *
 import manage_xyz
 
-if False:
-    filepath="tests/fluoroethene.xyz"
-    filepath2="tests/stretched_fluoroethene.xyz"
-    nocc=11
-    nactive=2
-
-if False:
-    filepath2="tests/SiH2H2.xyz"
-    filepath="tests/SiH4.xyz"
-    nocc=8
-    nactive=2
 if True:
     filepath="tests/butadiene_ethene.xyz"
     filepath2="tests/cyclohexene.xyz"
@@ -36,6 +25,7 @@ if True:
 
 mol=pb.readfile("xyz",filepath).next()
 mol2=pb.readfile("xyz",filepath2).next()
+
 basis = '6-31G*'
 if QCHEM:
     lot=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='B3LYP',nproc=nproc)
@@ -64,8 +54,5 @@ nnodes=9
 if True:
     print "\n Starting GSM \n"
     gsm=GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=nnodes,nconstraints=1,tstype=0)
-    #gsm.restart_string()
-    #gsm.ic_reparam(ic_reparam_steps=25)
-    #gsm.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
     gsm.go_gsm(max_iters=50)
 
