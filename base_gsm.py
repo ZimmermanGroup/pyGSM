@@ -811,17 +811,18 @@ class Base_Method(object,Print,Analyze):
                     rpmove[n] = -deltadq
 
             MAXRE = 0.5
-            for n in range(n0+1,self.nnodes):
+            for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
             for n in range(n0+1,self.nnodes-2):
-                if n+1 != self.TSnode or self.stage!=1:
+                if n+1 != self.TSnode or self.stage==0:
                     rpmove[n+1] += rpmove[n]
             for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
-            if self.stage==1 or rtype==2:
+            if self.stage>0 or rtype==2:
                 rpmove[self.TSnode] = 0.
+
             for n in range(n0+1,self.nnodes-1):
                 print " disp[{}]: {:1.2}".format(n,rpmove[n]),
             print
