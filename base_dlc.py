@@ -595,7 +595,9 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         # => grad in eigenvector basis <= #
         gqe = np.dot(tmph,self.gradq)
         path_overlap_e_g = gqe[self.path_overlap_n]
-        print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+        if self.print_level>0:
+            print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+        self.buf.write(' gtse: {:1.4f}'.format(path_overlap_e_g[0]))
 
         # => calculate eigenvector step <=#
         dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen)
