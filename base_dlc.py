@@ -487,6 +487,60 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         return dq
 
+    def update_ic_eigen_h(self,ictan):
+        SCALE = self.SCALEQN
+        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
+        if SCALE > 10:
+            SCALE = 10.
+        # => get eigensolution of Hessian <= 
+        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
+        tmph = tmph.T
+
+        #TODO nneg should be self and checked
+        nneg = 0
+        for i in range(self.nicd):
+            if eigen[i] < -0.01:
+                nneg += 1
+
+        norm = np.linalg.norm(ictan)
+        C = ictan/norm
+        dots = np.dot(self.Ut,C) #(nicd,numic)(numic,1)
+        Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
+        norm = np.linalg.norm(Cn)
+        Cn = Cn/norm
+
+        #=> Overlap metric <= #
+        overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
+
+        # Max overlap metrics
+        self.maxol_w_Hess(overlap)
+
+        # => set lamda1 scale factor <=#
+        lambda1 = self.set_lambda1(eigen)
+
+        # => if overlap is small use Cn as Constraint <= #
+        dq = self.check_overlap(ictan)
+        if dq is not None:
+            if self.opt_type==4:
+                self.opt_type = 2 # reform get_eigenv_finite and all future opt_steps in this batch will do climb
+            elif self.opt_type==3:
+                self.opt_type = 1
+            return dq
+
+        # => grad in eigenvector basis <= #
+        gqe = np.dot(tmph,self.gradq)
+        path_overlap_e_g = gqe[self.path_overlap_n]
+        #print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+
+        # => calculate eigenvector step <=#
+        dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen)
+
+        # => Convert step back to DLC basis <= #
+        dq = self.convert_dqe0_to_dq(dqe0,tmph)
+
+        return dq
+
+        
     def update_ic_eigen_ts(self,ictan,nconstraints=1):
         """ this method follows the overlap with reaction tangent"""
         lambda1 = 0.
