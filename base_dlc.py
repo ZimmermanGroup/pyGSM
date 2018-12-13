@@ -606,3 +606,65 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         #TODO can do something special here for seams by setting the second to last two values to zero
 
         return dq
+
+    @property
+    def opt_type(self):
+        return self._opt_type
+
+    @opt_type.setter
+    def opt_type(self,value):
+        opts={
+        -1 : 'no optimization',
+         0 : 'non-constrained optimization',
+         1 : 'ictan constraint optimization',
+         2 : 'ictan constrained opt with climb',
+         3 : 'non-TS eigenvector follow',
+         4 : 'TS eigenvector follow',
+         5 : 'MECI optimization',
+         6 : 'constrained CI optimization',
+         7 : 'constrained CI optimization with climb',
+         }
+        node_id = self.PES.lot.node_id
+        if value>0:
+            print(" setting %i opt_type to %s (%i)" %(node_id,opts[value],value))
+        self._opt_type=value
+
+    def set_opt_type(self,stage):
+        assert stage<3, "stage is too high"
+
+        if stage==0:
+            if self.PES.lot.do_coupling:
+                self.opt_type=6
+            else:
+                self.opt_type=1
+
+        # => do constrained optimization with climb
+        elif stage==1 and self.isTSnode:
+            if self.PES.lot.do_coupling:
+                self.opt_type=7
+            else:
+                self.opt_type=2
+
+        # => follow maximum overlap with Hessian if find <= #
+        elif stage>0 and not self.isTSnode:
+            if self.PES.lot.do_coupling:
+                raise NotImplemented
+            else:
+                self.opt_type=3
+
+        elif stage==2 and self.isTSnode:
+            if self.PES.lot.do_coupling:
+                raise NotImplemented
+            else:
+                self.opt_type=4
+
+    def maxol_w_Hess(self,overlap):
+        # Max overlap metrics
+        absoverlap = np.abs(overlap)
+        self.path_overlap = np.max(absoverlap)
+        self.path_overlap_n = np.argmax(absoverlap)
+        #maxols = overlap[maxoln]
+        if self.print_level>-1:
+            print " t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap)
+        self.buf.write(" t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap))
+
