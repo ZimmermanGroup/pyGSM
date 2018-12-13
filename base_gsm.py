@@ -364,31 +364,35 @@ class Base_Method(object,Print,Analyze):
             ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
             ts_gradrms=self.icoords[self.nmax].gradrms
             dE_iter=abs(self.emax-self.emaxp)
-            nclimb,form_eigenv_finite = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
+            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
 
             #TODO resetting
-
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
+
+            # => Check Convergence <= #
             isDone = self.check_opt(totalgrad,fp)
-
-            # => modify hessian if overlap is becoming too small <= #
-            if self.stage==2 and self.icoords[self.nmax].path_overlap<self.icoords[self.nmax].HESS_TANG_TOL_TS:
-                form_eigenv_finite=True
-
-
-            #TODO put in de-gsm
-
             if isDone:
                 break
             if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
                 break
 
+            # => modify hessian if overlap is becoming too small <= #
+            if self.stage==2 and self.icoords[self.nmax].opt_type==2:
+                self.get_eigenv_finite(self.nmax)
+                self.icoords[self.nmax].set_opt_type(2) #start/retry doing exact TS
+
+            # retry doing overlap following, frequently gets turned off
+            for n in range(1,self.nnodes-1):
+                if self.stage>0 and self.icoords[n].opt_type==1 and not self.icoords[n].isTSnode:
+                    self.icoords[n].opt_type=3
+
+            # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
+
+            # => Reparam the String <= #
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
-            if form_eigenv_finite==True:
-                self.get_eigenv_finite(self.nmax)
 
             #also prints tgrads and jobGradCount
 
@@ -670,12 +674,13 @@ class Base_Method(object,Print,Analyze):
         self._stage=value
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
-        form_eigenv_finite=False
         if totalgrad<0.3 and fp>0:
             if self.stage==0 and self.climber:
                 print(" ** starting climb **")
                 self.stage=1
-                return nclimb,form_eigenv_finite
+                for n in range(self.nnodes):
+                    self.icoords[n].set_opt_type(self.stage)
+                return nclimb
             if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
                     (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
@@ -684,10 +689,10 @@ class Base_Method(object,Print,Analyze):
                 print(" ** starting exact climb **")
                 print "totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
                 self.stage=2
-                form_eigenv_finite=True
-            if self.stage==1:
+                # TS nodes opt type set after getting eigenv_finite
+            if self.stage==1: #TODO this doesn't do anything
                 nclimb-=1
-        return nclimb,form_eigenv_finite
+        return nclimb
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
