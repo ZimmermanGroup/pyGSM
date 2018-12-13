@@ -704,14 +704,15 @@ class DLC(Base_DLC,Bmat,Utils):
         #if self.optCG==False or self.isTSnode==False:
         #    print "Not implemented"
 
-    def update_for_step(self,nconstraints,follow_overlap):
+    def update_for_step(self,nconstraints):
         self.energy = self.PES.get_energy(self.geom)
         self.energyp = self.energy
         grad = self.PES.get_gradient(self.geom)
         #if self.print_level==2:
         #    print "bmatti"
         #    print self.bmatti
-        if not follow_overlap:
+
+        if self.opt_type!=3 and self.opt_type!=4:
             self.Hintp_to_Hint()
         self.coorp = np.copy(self.coords)
         # grad in ics
@@ -730,24 +731,25 @@ class DLC(Base_DLC,Bmat,Utils):
         self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
     
         mode=1
-        if follow_overlap==True:
+        if self.opt_type in [3,4]:
             mode=2
         if self.update_hess == True:
             self.update_Hessian(mode)
         self.update_hess = True
 
 
-    def eigenvector_step(self,nconstraints,ictan,follow_overlap):
+    def eigenvector_step(self,nconstraints,ictan):
         # => Take Eigenvector Step <=#
 
-        if not follow_overlap:
+        if self.opt_type in [0,1,2,5,6,7]:
             dq = self.update_ic_eigen(nconstraints)
-        else:
+        elif self.opt_type ==3:
+            dq = self.update_ic_eigen_h(ictan)
+        elif self.opt_type==4:
             dq = self.update_ic_eigen_ts(ictan)
 
-        #print " printing dq:",np.transpose(dq)
-
         # regulate max overall step
+        #TODO should this be after adding constraint step?
         self.smag = np.linalg.norm(dq)
         self.buf.write(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX))
         if self.print_level>0:
@@ -758,12 +760,10 @@ class DLC(Base_DLC,Bmat,Utils):
 
         return dq
 
-    def step_controller(self,check_sign):
+    def step_controller(self):
 
-        #do this if close to seam if coupling, don't do this if isTSnode and finding exact TS
-        if ((self.dEstep>0.01 and self.PES.lot.do_coupling==False) or
-                (self.dEstep>0.01 and self.PES.dE<1.0 and self.PES.lot.do_coupling==True) and 
-                (not self.isTSnode and self.stage==2)):
+        #do this if close to seam if coupling, don't do this if isTSnode or exact TS search (opt_type 4)
+        if ( self.dEstep>0.01 and not self.isTSnode and (self.opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<1.0))):
             if self.print_level>1:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
@@ -779,13 +779,13 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.update_ics()
                 self.update_hess=False
 
-        elif self.isTSnode and check_sign and self.ratio<0. and abs(self.dEpre)>0.05:
+        elif self.opt_type==4 and self.ratio<0. and abs(self.dEpre)>0.05:
             if self.print_level>0:
                 print("sign problem, decreasing DMAX"),
             self.buf.write(" sign problem, decreasing DMAX")
             self.DMAX = self.DMAX/1.35
 
-        elif (self.ratio<0.25 or self.ratio>1.5):
+        elif (self.ratio<0.25 or self.ratio>1.5): #can also check that dEpre >0.05?
             if self.print_level>1:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
@@ -793,6 +793,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.DMAX = self.smag/1.1
             else:
                 self.DMAX = self.DMAX/1.2
+
         elif self.ratio>0.75 and self.ratio<1.25 and self.smag > self.DMAX and self.gradrms<(self.pgradrms*1.35):
             if self.print_level>1:
                 print("increasing DMAX"),
@@ -817,27 +818,56 @@ class DLC(Base_DLC,Bmat,Utils):
             elif nconstraints==3:
                 raise NotImplemented #TODO for seams
 
-    def opt_step(self,nconstraints,constraint_steps,ictan=None,follow_overlap=False):
-        assert len(constraint_steps)==nconstraints, "need to specify constraint_steps even if zero"
-        if follow_overlap==True and nconstraints>1:
-            raise NotImplementedError
+    def get_constraint_steps(self,nconstraints):
+        if nconstraints>0:
+            assert self.opt_type not in [3,4],"eigenvector following does not use constraint"
+        if self.opt_type in [5,6,7]:
+            assert nconstraints>=2,"CI optimization requires >=2 constraints"
+
+        constraint_steps=[0]*nconstraints
+        # => normal,ictan opt,follow
+        if self.opt_type in [0,1,3,4]:
+            return constraint_steps
+        # => ictan climb
+        elif self.opt_type==2: 
+            constraint_steps[0]=self.walk_up(self.nicd-1)
+        # => MECI
+        elif self.opt_type==5: 
+            constraint_steps[1] = self.dgrad_step() #last vector is x
+        # => seam opt
+        elif self.opt_type==6:
+            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
+        # => seam climb
+        elif self.opt_type==7:
+            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
+            constraint_steps[2]=self.walk_up(self.nicd-1)
+
+        return constraint_steps
+
+    def opt_step(self,nconstraints,ictan=None):
+        if ictan is not None:
+            assert nconstraints>=1,"nconstraints >= 1 if ictan is not None"
 
         # => update PES info <= #
-        if not follow_overlap: 
+        if self.opt_type!=3 and self.opt_type!=4:
             self.update_DLC(nconstraints,ictan)
         else:
             self.bmatp = self.bmatp_create()
             self.bmat_create()
 
-        self.update_for_step(nconstraints,follow_overlap)
+        # => update DLC, grad, Hess, etc
+        self.update_for_step(nconstraints)
 
         # => form eigenvector step in non-constrained space <= #
-        self.dq = self.eigenvector_step(nconstraints,ictan,follow_overlap)
+        self.dq = self.eigenvector_step(nconstraints,ictan)
 
-        # => add constraint_step to step <= #
-        for n in range(nconstraints):
-            self.dq[-nconstraints+n]=constraint_steps[n]
-        if self.print_level>2:
+        # => calculate constraint step <= #
+        if self.opt_type not in [3,4]:
+            constraint_steps = self.get_constraint_steps(nconstraints)
+            # => add constraint_step to step <= #
+            for n in range(nconstraints):
+                self.dq[-nconstraints+n]=constraint_steps[n]
+        if self.print_level>1:
             print "dq for step is "
             print self.dq.T
 
@@ -862,7 +892,11 @@ class DLC(Base_DLC,Bmat,Utils):
             print "E(M): %3.5f" % (self.energy-self.V0),
 
         #form DLC at new position
-        self.update_DLC(nconstraints,ictan)
+        if self.opt_type!=3 and self.opt_type!=4:
+            self.update_DLC(nconstraints,ictan)
+        else:
+            self.bmatp = self.bmatp_create()
+            self.bmat_create()
 
         # check goodness of step
         self.dEstep = self.energy - self.energyp
@@ -886,11 +920,8 @@ class DLC(Base_DLC,Bmat,Utils):
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
 
-        check_sign=False
         # => step controller  <= #
-        if follow_overlap:
-            check_sign=True
-        self.step_controller(check_sign)
+        self.step_controller()
 
         return  self.smag
 
