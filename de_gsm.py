@@ -39,7 +39,7 @@ class GSM(Base_Method):
         if not self.isRestarted:
             self.icoords[0].gradrms = 0.
             self.icoords[-1].gradrms = 0.
-            self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+            self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
             self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
             print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
 
