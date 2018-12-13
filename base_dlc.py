@@ -91,6 +91,13 @@ class Base_DLC(Utils,ICoords):
             allowed_types=[float],
             doc='Convergence threshold')
 
+        opt.add_option(
+                key='opt_type',
+                value=0,
+                required=False,
+                allowed_types=[int],
+                doc='type of optimization')
+
         Base_DLC._default_options = opt
         return Base_DLC._default_options.copy()
 
@@ -113,14 +120,15 @@ class Base_DLC(Utils,ICoords):
         self.resetopt=self.options['resetopt']
         self.nicd=self.options['nicd']
         self.OPTTHRESH=self.options['OPTTHRESH']
+        self.opt_type=self.options['opt_type']
         self.madeBonds = False
         self.isTSnode = False
-        self.use_constraint = False
-        #self.stage1opt = False
         self.update_hess=False
         self.buf = StringIO.StringIO()
         self.HESS_TANG_TOL_TS=0.35
+        self.HESS_TANG_TOL=0.75
         self.path_overlap=0.0
+        self.V0 = 0.0
 
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
