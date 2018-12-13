@@ -411,7 +411,6 @@ class Base_Method(object,Print,Analyze):
         ictan = [[]]*self.nnodes
         #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
-            #ictan[n] = np.transpose(DLC.tangent_1(self.icoords[n],self.icoords[n-1]))
             #print "getting tangent between %i %i" % (n,n-1)
             assert self.icoords[n]!=0,"n is bad"
             assert self.icoords[n-1]!=0,"n-1 is bad"
@@ -429,6 +428,20 @@ class Base_Method(object,Print,Analyze):
         
         self.dqmaga = dqmaga
         self.ictan = ictan
+
+        if self.newic.print_level>0:
+            print '------------printing ictan[:]-------------'
+            for n in range(n0+1,self.nnodes):
+                print "ictan[%i]" %n
+                for i in range(self.newic.BObj.nbonds):
+                    print "%1.2f " % self.ictan[n][i],
+                print 
+                for i in range(self.newic.BObj.nbonds,self.newic.AObj.nangles+self.newic.BObj.nbonds):
+                    print "%1.2f " % self.ictan[n][i],
+                for i in range(self.newic.BObj.nbonds+self.newic.AObj.nangles,self.newic.AObj.nangles+self.newic.BObj.nbonds+self.newic.TObj.ntor):
+                    print "%1.2f " % self.ictan[n][i],
+                print "\n"
+
 
     def get_tangents_1e(self,n0=0):
         size_ic = self.icoords[0].num_ics
@@ -529,8 +542,9 @@ class Base_Method(object,Print,Analyze):
         #print '------------printing ictan[:]-------------'
         #for row in ictan:
         #    print row
-        print '------------printing dqmaga---------------'
-        print dqmaga
+        if self.newic.print_level>0:
+            print '------------printing dqmaga---------------'
+            print dqmaga
         self.dqmaga = dqmaga
         #self.ictan = ictan
 
@@ -728,10 +742,11 @@ class Base_Method(object,Print,Analyze):
             ictan0 = np.copy(self.ictan)
             ictan = np.copy(self.ictan)
 
-            print " printing spacings dqmaga:"
-            for n in range(1,self.nnodes):
-                print " %1.2f" % self.dqmaga[n], 
-            print 
+            if self.newic.print_level>0:
+                print " printing spacings dqmaga:"
+                for n in range(1,self.nnodes):
+                    print " %1.2f" % self.dqmaga[n], 
+                print 
 
             totaldqmag = 0.
             totaldqmag = np.sum(self.dqmaga[n0+1:self.nnodes])
@@ -742,7 +757,8 @@ class Base_Method(object,Print,Analyze):
             if self.stage>0 or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
+                if self.newic.print_leve>0:
+                    print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
            
             # => Using average <= #
             if i==0 and rtype==0:
@@ -812,13 +828,15 @@ class Base_Method(object,Print,Analyze):
             if self.stage>0 or rtype==2:
                 rpmove[self.TSnode] = 0.
 
-            for n in range(n0+1,self.nnodes-1):
-                print " disp[{}]: {:1.2}".format(n,rpmove[n]),
-            print
-            
+
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
-            print " disprms: {:1.3}\n".format(disprms)
             lastdispr = disprms
+
+            if self.newic.print_level>0:
+                for n in range(n0+1,self.nnodes-1):
+                    print " disp[{}]: {:1.2}".format(n,rpmove[n]),
+                print
+                print " disprms: {:1.3}\n".format(disprms)
 
             if disprms < 0.02:
                 break
@@ -845,7 +863,7 @@ class Base_Method(object,Print,Analyze):
         for n in range(1,self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
         print
-        print "  disprms: {:1.3}".format(disprms)
+        print "  disprms: {:1.3}\n".format(disprms)
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
@@ -876,7 +894,7 @@ class Base_Method(object,Print,Analyze):
             #print 'on ic_reparam step',i
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
-            if self.icoords[0].print_level>0:
+            if self.icoords[0].print_level>-1:
                 if i==0:
                     print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
                 print " printing spacings dqmaga: "
@@ -893,7 +911,7 @@ class Base_Method(object,Print,Analyze):
                         rpart[n] = 1.0/(self.nn-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
                         rpart[n] = 1.0/(self.nn-2)
-                    if self.icoords[0].print_level>0:
+                    if self.icoords[0].print_level>-1:
                         if i==0:
                             print " rpart: "
                             for n in range(1,self.nnodes):
@@ -929,7 +947,7 @@ class Base_Method(object,Print,Analyze):
 
             disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
-            if self.icoords[0].print_level>0:
+            if self.icoords[0].print_level>-1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
                 print
