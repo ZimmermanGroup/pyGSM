@@ -711,9 +711,8 @@ class Base_Method(object,Print,Analyze):
         num_ics = self.icoords[0].num_ics
         len_d = self.icoords[0].nicd
         ictalloc = self.nnodes+1
-
-        ictan0 = np.zeros((ictalloc,num_ics))
-        ictan = np.zeros((ictalloc,num_ics))
+        #ictan0 = np.zeros((ictalloc,num_ics))
+        #ictan = np.zeros((ictalloc,num_ics))
         
         rpmove = np.zeros(ictalloc)
         rpart = np.zeros(ictalloc)
@@ -728,11 +727,15 @@ class Base_Method(object,Print,Analyze):
         self.emax = float(max(self.energies[1:-1]))
         self.nmax = np.where(self.energies==self.emax)[0][0]
         self.TSnode = self.nmax
+        self.icoords[self.TSnode].isTSnode=True
         print "TSnode: {} Emax: {:4.5}".format(self.TSnode,float(self.emax))
         
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
+
+            # copies of original ictan
             ictan0 = np.copy(self.ictan)
+            ictan = np.copy(self.ictan)
 
             print " printing spacings dqmaga:"
             for n in range(1,self.nnodes):
@@ -740,8 +743,7 @@ class Base_Method(object,Print,Analyze):
             print 
 
             totaldqmag = 0.
-            for n in range(n0+1,self.nnodes):
-                totaldqmag += self.dqmaga[n]
+            totaldqmag = np.sum(self.dqmaga[n0+1:self.nnodes])
             print " totaldqmag = %1.3f" %totaldqmag
             dqavg = totaldqmag/(self.nnodes-1)
 
@@ -750,10 +752,6 @@ class Base_Method(object,Print,Analyze):
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
                 print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
-                #for n in range(n0+1,self.TSnode+1):
-                #    h1dqmag += self.dqmaga[n]
-                #for n in range(self.TSnode+1,self.nnodes):
-                #    h2dqmag += self.dqmaga[n]
            
             # => Using average <= #
             if i==0 and rtype==0:
@@ -953,24 +951,21 @@ class Base_Method(object,Print,Analyze):
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
-                        if len(self.ictan[n]) != 0:# and self.active[n]: #may need to change active requirement TODO
-                            #print "May need to make copy_CI"
-                            #This does something to ictan0
-                            self.icoords[n].update_ics()
-                            self.icoords[n].bmatp = self.icoords[n].bmatp_create()
-                            self.icoords[n].bmatp_to_U()
-                            self.icoords[n].opt_constraint(self.ictan[n])
-                            self.icoords[n].bmat_create()
-                            dq0 = np.zeros((self.icoords[n].nicd,1))
-                            dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
-                            if self.icoords[0].print_level>0:
-                                print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
-                            self.icoords[n].ic_to_xyz(dq0)
-                            self.icoords[n].update_ics()
-                        else:
-                            pass
-                else:
-                    pass
+                        #print "May need to make copy_CI"
+                        #This does something to ictan0
+                        self.icoords[n].update_ics()
+                        self.icoords[n].bmatp = self.icoords[n].bmatp_create()
+                        self.icoords[n].bmatp_to_U()
+                        self.icoords[n].opt_constraint(self.ictan[n])
+                        self.icoords[n].bmat_create()
+                        dq0 = np.zeros((self.icoords[n].nicd,1))
+                        dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
+                        if self.icoords[0].print_level>1:
+                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
+                        self.icoords[n].ic_to_xyz(dq0)
+                        self.icoords[n].update_ics()
+                    else:
+                        pass
         print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
         for n in range(self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
