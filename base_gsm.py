@@ -343,34 +343,20 @@ class Base_Method(object,Print,Analyze):
                 print " {:7.3f}".format(float(self.energies[n])),
             print
         
-
-            # => Turn off converged nodes for next round? <= #
-            #for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-            #    if ico.gradrms < self.CONV_TOL:
-            #        self.active[i] = False
-
             # => calculate totalgrad <= #
-            totalgrad = 0.0
-            gradrms = 0.0
-            for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-                print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
-                if i%5 == 0:
-                    print
-                totalgrad += ico.gradrms*self.rn3m6
-                gradrms += ico.gradrms*ico.gradrms
-            print
+            totalgrad,gradrms = self.calc_grad()
 
-            gradrms = np.sqrt(gradrms/(self.nnodes-2))
             self.emaxp = self.emax
             self.emax = float(max(self.energies[1:-1]))
-            self.nmax = np.where(self.energies==self.emax)[0][0]
+            self.nmax = np.argmax(self.energies)
+            self.icoords[self.nmax].isTSnode=True
 
             if self.stage==1: print("c")
             elif self.stage==2: print("x")
 
             #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
             
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}".format(oi,float(totalgrad),float(gradrms),float(self.emax))
+            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.nmax,float(self.emax))
 
             fp = self.find_peaks(2)
 
