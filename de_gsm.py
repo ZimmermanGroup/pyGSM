@@ -36,7 +36,7 @@ class GSM(Base_Method):
         print "print levels at beginning are ",self.icoords[-1].print_level
 
     def go_gsm(self,max_iters=50,opt_steps=3,nconstraints=1):
-        if self.isRestarted==False:
+        if not self.isRestarted:
             self.icoords[0].gradrms = 0.
             self.icoords[-1].gradrms = 0.
             self.icoords[0].energy = self.icoords[0].PES.get_energy(self.icoords[0].geom)
@@ -45,16 +45,21 @@ class GSM(Base_Method):
 
             self.interpolate(2) 
 
-            self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
+            oi = self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
             print("Done Growing the String!!!")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            print " initial ic_reparam"
+            self.get_tangents_1()
+            self.ic_reparam(ic_reparam_steps=25)
+            self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+        else:
+            oi=0
+            self.get_tangents_1()
 
-        print " initial ic_reparam"
-        self.ic_reparam()
-        self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
         if self.tscontinue==True:
-            #TODO maxiters should decrement somehow
-            self.opt_iters(max_iter=max_iters,optsteps=opt_steps)
+            if max_iters-oi>0:
+                opt_iters=max_iters-oi
+                self.opt_iters(max_iter=opt_iters,optsteps=opt_steps)
         else:
             print "Exiting early"
 
