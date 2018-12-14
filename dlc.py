@@ -276,27 +276,32 @@ class DLC(Base_DLC,Bmat,Utils):
 
     @staticmethod
     def copy_node(ICoordA,new_node_id,rtype=0):
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(
-                ICoordA.PES.lot,
-                new_node_id)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+        if isinstance(ICoordA.PES,Penalty_PES):
+            ICoordC = DLC.copy_node_X(ICoordA,new_node_id,rtype)
+            return ICoordC
+        else:
+            ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+            mol1 = pb.readfile('xyz','tmp1.xyz').next()
+            lot1 = ICoordA.PES.lot.copy(
+                    ICoordA.PES.lot,
+                    new_node_id)
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
 
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "angles" : ICoordA.AObj.angles,
-            "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1,
-            'opt_type':rtype,
-            }))
+            ICoordC = DLC(ICoordA.options.copy().set_values({
+                "mol" : mol1,
+                "bonds" : ICoordA.BObj.bonds,
+                "angles" : ICoordA.AObj.angles,
+                "torsions" : ICoordA.TObj.torsions,
+                "PES" : PES1,
+                'opt_type':rtype,
+                }))
 
-        return ICoordC
+            return ICoordC
 
-    def copy_node_X(ICoordA,new_node_id):
+    @staticmethod
+    def copy_node_X(ICoordA,new_node_id,rtype=0):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
         lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
@@ -313,7 +318,7 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles":ICoordA.AObj.angles,
             "torsions":ICoordA.TObj.torsions,
             "PES":pes,
-            'opt_type': 1,
+            'opt_type': rtype,
             }))
         ICoordC.setup()
         return ICoordC

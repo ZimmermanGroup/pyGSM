@@ -27,7 +27,7 @@ class SE_Cross(SE_GSM):
         print 'Warning last node still not fully optimized'
 
         if self.check_if_grown():
-            self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],self.nR)
+            self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR,0)
 #            if self.string_status[1]:
 #                self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-2],self.nR)
 #            elif self.string_status[0]:
