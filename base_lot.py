@@ -77,6 +77,18 @@ class Lot(object):
                 doc='unique id used for storing orbs,etc'
                 )
 
+        opt.add_option(
+                key="lot_inp_file",
+                required=False,
+                value=False,
+                doc='file name storing LOT input section. Used for custom basis sets,\
+                     custom convergence criteria, etc. Will override nproc, basis and\
+                     functional. Do not specify charge or spin in this file. Charge \
+                     and spin should be specified in charge and states options.\
+                     for QChem, include $molecule line. For ORCA, do not include *xyz\
+                     line.'
+                )
+
         Lot._default_options = opt
         return Lot._default_options.copy()
 
@@ -84,7 +96,6 @@ class Lot(object):
             options,
             ):
         """ Constructor """
-
         self.options = options
         # Cache some useful atributes
         self.states =self.options['states']
@@ -99,14 +110,22 @@ class Lot(object):
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
 
+        self.lot_inp_file = self.options['lot_inp_file']
+
         if self.node_id == 0:
-            print 'using {} processors'.format(self.nproc)
-            print 'LOT parameters:'
-            print 'Basis     :',self.basis
-            print 'Functional:',self.functional
-            print 'Charge    :',self.charge
-            print 'States    :',self.states
-            print 'do_coupling:',self.do_coupling
+            if self.lot_inp_file == False:
+                print 'using {} processors'.format(self.nproc)
+                print '************LOT parameters:************'
+                print 'Basis      :',self.basis
+                print 'Functional :',self.functional
+                print 'Charge     :',self.charge
+                print 'States     :',self.states
+                print 'do_coupling:',self.do_coupling
+            else:
+                with open(self.lot_inp_file) as lot_inp:
+                    lot_inp_lines = lot_inp.readlines()
+                for line in lot_inp_lines:
+                    print line.rstrip()
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:

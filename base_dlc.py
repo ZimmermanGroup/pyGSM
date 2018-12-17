@@ -417,7 +417,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
     def compute_predE(self,dq0,nconstraints):
         # compute predicted change in energy 
-        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
+        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1)={}, dq0 is {}".format((self.nicd,1),np.shape(dq0))
         assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
         assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
         dEtemp = np.dot(self.Hint[:self.nicd-nconstraints,:self.nicd-nconstraints],dq0[:self.nicd-nconstraints])

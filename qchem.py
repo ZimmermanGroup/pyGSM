@@ -9,22 +9,29 @@ class QChem(Lot):
 
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
-        tempfile.write(' $rem\n')
-        tempfile.write(' JOBTYPE FORCE\n')
-        tempfile.write(' EXCHANGE {}\n'.format(self.functional))
-        tempfile.write(' SCF_ALGORITHM rca_diis\n')
-        tempfile.write(' SCF_MAX_CYCLES 300\n')
-        tempfile.write(' BASIS {}\n'.format(self.basis))
-        tempfile.write(' ECP LANL2DZ \n')
-        tempfile.write(' WAVEFUNCTION_ANALYSIS FALSE\n')
-        tempfile.write(' GEOM_OPT_MAX_CYCLES 300\n')
-        tempfile.write('scf_convergence 6\n')
-        tempfile.write(' SYM_IGNORE TRUE\n')
-        tempfile.write(' SYMMETRY   FALSE\n')
-        tempfile.write('molden_format true\n')
-        tempfile.write(' $end\n')
-        tempfile.write('\n')
-        tempfile.write('$molecule\n')
+        if self.lot_inp_file == False:
+            tempfile.write(' $rem\n')
+            tempfile.write(' JOBTYPE FORCE\n')
+            tempfile.write(' EXCHANGE {}\n'.format(self.functional))
+            tempfile.write(' SCF_ALGORITHM rca_diis\n')
+            tempfile.write(' SCF_MAX_CYCLES 300\n')
+            tempfile.write(' BASIS {}\n'.format(self.basis))
+            tempfile.write(' ECP LANL2DZ \n')
+            tempfile.write(' WAVEFUNCTION_ANALYSIS FALSE\n')
+            tempfile.write(' GEOM_OPT_MAX_CYCLES 300\n')
+            tempfile.write('scf_convergence 6\n')
+            tempfile.write(' SYM_IGNORE TRUE\n')
+            tempfile.write(' SYMMETRY   FALSE\n')
+            tempfile.write('molden_format true\n')
+            tempfile.write(' $end\n')
+            tempfile.write('\n')
+            tempfile.write('$molecule\n')
+        else:
+            with open(self.lot_inp_file) as lot_inp:
+                lot_inp_lines = lot_inp.readlines()
+            for line in lot_inp_lines:
+                tempfile.write(line)
+
         tempfile.write('{} {}\n'.format(self.charge,multiplicity))
         for coord in geom:
             for i in coord:

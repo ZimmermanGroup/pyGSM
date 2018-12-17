@@ -281,8 +281,8 @@ class Base_Method(object,Print,Analyze):
             print " Initial energy is %1.4f" % self.icoords[n].V0
 
         for step in range(nsteps):
-            if self.icoords[n].print_level>1:
-                print(" \n Opt step: %i" %(step+1)),
+            if self.icoords[n].print_level>0:
+                print(" \n Opt step: %i" %(step+1))
             if step==0:
                 self.icoords[n].buf.write(" Opt step: %d" %(step+1))
             else:
