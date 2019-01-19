@@ -7,12 +7,14 @@ class Penalty_PES(PES):
 
     def __init__(self,
             PES1,
-            PES2):
+            PES2,
+            sigma=1.0,
+            alpha=0.02*KCAL_MOL_PER_AU):
         self.PES1 = PES1
         self.PES2 = PES2
         self.lot = PES1.lot
-        self.alpha = 0.02*KCAL_MOL_PER_AU
-        self.sigma = 3.5
+        self.alpha = alpha
+        self.sigma = sigma
         print 'PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
 
 
