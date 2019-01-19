@@ -50,12 +50,6 @@ class Base_Method(object,Print,Analyze):
                  indexed at 1')
 
         opt.add_option(
-            key='nconstraints',
-            required=False,
-            value=0,
-            allowed_types=[int])
-
-        opt.add_option(
             key='CONV_TOL',
             value=0.0005,
             required=False,
@@ -68,7 +62,6 @@ class Base_Method(object,Print,Analyze):
             required=False,
             allowed_types=[float],
             doc='Convergence threshold')
-
 
         opt.add_option(
                 key='tstype',
@@ -85,6 +78,35 @@ class Base_Method(object,Print,Analyze):
                 doc="Fix last node?"
                 )
 
+        opt.add_option(
+                key="growth_direction",
+                value=0,
+                required=False,
+                doc="how to grow string,0=Normal,1=from reactant,2=from product"
+                )
+
+        opt.add_option(
+                key="DQMAG_MAX",
+                value=0.8,
+                required=False,
+                doc="for SSM"
+                )
+        opt.add_option(
+                key="DQMAG_MIN",
+                value=0.2,
+                required=False,
+                doc=""
+                )
+    
+        opt.add_option(
+                key="BDIST_RATIO",
+                value=0.5,
+                required=False,
+                doc="bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
+                        to be considered grown.",
+                        )
+
+
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
 
@@ -92,6 +114,60 @@ class Base_Method(object,Print,Analyze):
     @staticmethod
     def from_options(**kwargs):
         return Base_Method(Base_Method.default_options().set_values(kwargs))
+
+    def __init__(
+            self,
+            options,
+            ):
+        """ Constructor """
+        self.options = options
+
+        # Cache attributes
+        self.optCG = False #TODO
+        self.nnodes = self.options['nnodes']
+        self.icoords = [0]*self.nnodes
+        self.icoords[0] = self.options['ICoord1']
+        self.active = [False] * self.nnodes
+        self.driving_coords = self.options['driving_coords']
+        self.CONV_TOL = self.options['CONV_TOL']
+        self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
+        self.last_node_fixed = self.options['last_node_fixed']
+        self.tstype=self.options['tstype']
+        self.climber=False  #is this string a climber?
+        self.finder=False   # is this string a finder?
+        self.growth_direction=self.options['growth_direction']
+        self.isRestarted=False
+        self.DQMAG_MAX=self.options['DQMAG_MAX']
+        self.DQMAG_MIN=self.options['DQMAG_MIN']
+        self.BDIST_RATIO=self.options['BDIST_RATIO']
+
+        if self.tstype==0:
+            print("set climber and finder to True")
+            self.climber=True
+            self.finder=True
+        elif self.tstype==1:
+            print("setting climber to True")
+            self.climber=True
+        else:
+            print(" Turning off climbing image and exact TS search")
+
+        # Set initial values
+        self.nn = 2
+        self.nR = 1
+        self.nP = 1        
+        self.energies = np.asarray([0.]*self.nnodes)
+        self.emax = 0.0
+        self.TSnode = 0 
+        self.climb = False #TODO
+        self.find = False  #TODO
+        self.n0 = 0 # something to do with added nodes? "first node along current block"
+        self.end_early=False
+        self.tscontinue=True # whether to continue with TS opt or not
+        self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
+        self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
+        print " gaddmax:",self.gaddmax
+        self.stage=0 #growing
+        self.ictan = [[]]*self.nnodes
 
     def restart_string(self,xyzbase='restart'):#,nR,nP):
         xyzfile=xyzbase+".xyz"
@@ -170,71 +246,6 @@ class Base_Method(object,Print,Analyze):
         for n in range(self.nnodes):
             print " {:7.3f}".format(float(self.energies[n])),
         print
-
-#        
-#    def write_restart(self,xyzbase='restart'):
-#        rxyzfile = os.getcwd()+"/"+xyzbase+'_r.xyz'
-#        pxyzfile = os.getcwd()+'/'+xyzbase+'_p.xyz'
-#        rxyz = pb.Outputfile('xyz',rxyzfile,overwrite=True)
-#        pxyz = pb.Outputfile('xyz',pxyzfile,overwrite=True)
-#        obconversion = ob.OBConversion()
-#        obconversion.SetOutFormat('xyz')
-#        r_mols = []
-#        for i in range(self.nR):
-#            r_mols.append(obconversion.WriteString(self.icoords[i]
-        
-
-    def __init__(
-            self,
-            options,
-            ):
-        """ Constructor """
-        self.options = options
-
-        # Cache attributes
-        self.optCG = False #TODO
-        self.nnodes = self.options['nnodes']
-        self.icoords = [0]*self.nnodes
-        self.icoords[0] = self.options['ICoord1']
-        self.active = [False] * self.nnodes
-        #self.active[0] = False
-        #self.active[-1] = False
-        self.driving_coords = self.options['driving_coords']
-        self.nconstraints = self.options['nconstraints']
-        self.CONV_TOL = self.options['CONV_TOL']
-        self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
-        self.last_node_fixed = self.options['last_node_fixed']
-        self.tstype=self.options['tstype']
-        self.climber=False  #is this string a climber?
-        self.finder=False   # is this string a finder?
-        self.isRestarted=False
-        if self.tstype==0:
-            print("set climber and finder to True")
-            self.climber=True
-            self.finder=True
-        elif self.tstype==1:
-            print("setting climber to True")
-            self.climber=True
-        else:
-            print(" Turning off climbing image and exact TS search")
-
-        # Set initial values
-        self.nn = 2
-        self.nR = 1
-        self.nP = 1        
-        self.energies = np.asarray([0.]*self.nnodes)
-        self.emax = float(max(self.energies))
-        self.nmax = 0 
-        self.climb = False #TODO
-        self.find = False  #TODO
-        self.n0 = 0 # something to do with added nodes? "first node along current block"
-        self.end_early=False
-        self.tscontinue=True # whether to continue with TS opt or not
-        self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
-        self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
-        print " gaddmax:",self.gaddmax
-        self.stage=0 #growing
-        self.ictan = [[]]*self.nnodes
 
     def store_energies(self):
         for i,ico in enumerate(self.icoords):
