@@ -59,6 +59,19 @@ class PES(object):
         #    self.check_input(geom)
         return self.lot.get_energy(geom,self.multiplicity,self.ad_idx)
 
+    def initial_energy(self,reffile,filepath,ref_nocc,nocc,
+            fomo_temp=0.3,
+            flip_occ_to_act=None,
+            flip_vir_to_act=None,
+            ):
+        # need to make onlly for pytc
+        if self.lot.from_template:
+            self.lot.casci_from_file_from_template(reffile,filepath,ref_nocc,nocc,fomo_temp,flip_occ_to_act,flip_vir_to_act) 
+        else:
+           self.lot.casci_from_file(filepath)
+        geom=manage_xyz.read_xyz(filepath,scale=1)   
+        return self.get_energy(geom)
+
     def get_gradient(self,geom):
         tmp =self.lot.get_gradient(geom,self.multiplicity,self.ad_idx)
         return np.reshape(tmp,(3*len(tmp),1))
