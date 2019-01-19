@@ -704,21 +704,30 @@ class Base_Method(object,Print,Analyze):
                 print(" ** starting exact climb **")
                 print "totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
                 self.stage=2
-                # TS nodes opt type set after getting eigenv_finite
+                self.get_eigenv_finite(self.TSnode)
             if self.stage==1: #TODO this doesn't do anything
                 nclimb-=1
         return nclimb
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
+        success= True
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
             self.icoords[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+            if self.icoords[self.nR]==0:
+                success= False
+                break
+            print "getting energy for  node ",self.nR
+            self.icoords[self.nR].energy = self.icoords[self.nR].PES.get_energy(self.icoords[self.nR].geom)
+            print self.icoords[self.nR].energy
             self.nn+=1
             self.nR+=1
             print " nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[self.nR-1] = True
+
+        return success
 
     def interpolateP(self,newnodes=1):
         print " Adding product node"
