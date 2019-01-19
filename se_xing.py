@@ -40,7 +40,7 @@ class SE_Cross(SE_GSM):
 
     def add_node(self,n1,n2,n3=None):
         print "adding node: %i from node %i"%(n2,n1)
-        return DLC.add_node_SE_X(self.icoords[n1],self.driving_coords)
+        return DLC.add_node_SE_X(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
     
 #    def opt_steps(self,maxopt,nconstraints):
 #        for i in range(1):

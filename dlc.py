@@ -11,6 +11,7 @@ from _icoord import ICoords
 from _bmat import Bmat
 #from pes import *
 from penalty_pes import *
+from avg_pes import *
 from base_dlc import *
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -140,25 +141,21 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1,
-            'opt_type' : 1,
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
         ICoordC.opt_constraint(ictan)
         bdist = np.linalg.norm(ictan)
-        print 'bdist: {:2.14f}'.format(bdist)
         #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
-        ICoordC.bmatp_create()
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        DQMAG_SSM_MAX=0.8
-        DQMAG_SSM_MIN=0.2
-        DQMAG_SSM_SCALE=1.5
-        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
-        a = bdist/DQMAG_SSM_SCALE
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
         if a>1:
             a=1
-        dqmag = DQMAG_SSM_MIN+minmax*a
+        dqmag = dqmag_min+minmax*a
         print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
 
         dq0[ICoordC.nicd-1] = -dqmag
@@ -166,17 +163,22 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
-        ICoordC.bmatp_create()
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         ICoordC.mol.write('xyz','after.xyz',overwrite=True)
         
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
+        ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
         #ICoordC.dqmag = dqmag
 
         return ICoordC
 
     @staticmethod
-    def add_node_SE_X(ICoordA,driving_coordinate):
+    def add_node_SE_X(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2,BDISTMIN=0.05):
 
         dq0 = np.zeros((ICoordA.nicd,1))
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
@@ -196,25 +198,24 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
             "PES" : pes,
-            'opt_type' : 1,
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
+        if bdist<BDISTMIN:
+            print "bdist too small"
+            return 0
         ICoordC.opt_constraint(ictan)
-        bdist = np.linalg.norm(ictan)
-        #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
+        #bdist = np.linalg.norm(ictan)
         print 'bdist: {:2.14f}'.format(bdist)
-        ICoordC.bmatp_create()
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        DQMAG_SSM_MAX=0.8
-        DQMAG_SSM_MIN=0.2
-        DQMAG_SSM_SCALE=1.5
-        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
-        a = bdist/DQMAG_SSM_SCALE
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
         if a>1:
             a=1
-        dqmag = DQMAG_SSM_MIN+minmax*a
+        dqmag = dqmag_min+minmax*a
         print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
 
         dq0[ICoordC.nicd-1] = -dqmag
@@ -226,7 +227,12 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         ICoordC.mol.write('xyz','after.xyz',overwrite=True)
+    
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
         ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
         
         #ICoordC.dqmag = dqmag
 
@@ -252,7 +258,6 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1,
-            'opt_type':1,
             }))
 
         ICoordC.setup()
@@ -295,7 +300,6 @@ class DLC(Base_DLC,Bmat,Utils):
                 "angles" : ICoordA.AObj.angles,
                 "torsions" : ICoordA.TObj.torsions,
                 "PES" : PES1,
-                'opt_type':rtype,
                 }))
 
             return ICoordC
@@ -304,21 +308,28 @@ class DLC(Base_DLC,Bmat,Utils):
     def copy_node_X(ICoordA,new_node_id,rtype=0):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
+        do_coupling=False
+        if rtype>=5:
+            do_coupling=True
+        else:
+            do_coupling=False
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id,do_coupling=do_coupling)
         pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
             "lot": lot1,
             }))
         pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
             "lot": lot1,
             }))
-        pes = Penalty_PES(pes1,pes2)
+        if rtype>=5:
+            pes = Avg_PES(pes1,pes2)
+        else:
+            pes = Penalty_PES(pes1,pes2)
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol":mol1,
             "bonds":ICoordA.BObj.bonds,
             "angles":ICoordA.AObj.angles,
             "torsions":ICoordA.TObj.torsions,
             "PES":pes,
-            'opt_type': rtype,
             }))
         ICoordC.setup()
         return ICoordC
@@ -681,7 +692,6 @@ class DLC(Base_DLC,Bmat,Utils):
 
     def grad_to_q(self,grad):
         gradq = np.dot(self.bmatti,grad)
-        #if nconstraints>0:
         return gradq
 
     def make_Hint(self):
