@@ -22,6 +22,7 @@ class GSM(Base_Method):
         tmp = self.options['ICoord2']
         self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
         print "after union"
+
         lot1 = tmp.PES.lot.copy(
                 tmp.PES.lot, 
                 self.nnodes-1)
@@ -33,19 +34,19 @@ class GSM(Base_Method):
             PES=PES1,
             )))
         print "print levels at beginning are ",self.icoords[0].print_level
-        print "print levels at beginning are ",self.icoords[-1].print_level
+        if self.growth_direction !=1:
+            print "print levels at beginning are ",self.icoords[-1].print_level
 
-    def go_gsm(self,max_iters=50,opt_steps=3,nconstraints=1):
+    def go_gsm(self,max_iters=50,opt_steps=3):
+        V0=self.set_V0()
         if not self.isRestarted:
-            self.icoords[0].gradrms = 0.
-            self.icoords[-1].gradrms = 0.
-            self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-            self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
-            print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
-
-            self.interpolate(2) 
-
-            oi = self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=nconstraints)
+            if self.growth_direction==0:
+                self.interpolate(2) 
+            elif self.growth_direction==1:
+                self.interpolateR(1)
+            elif self.growth_direction==2:
+                self.interpolateP(1)
+            oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
             print("Done Growing the String!!!")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
             print " initial ic_reparam"
@@ -55,6 +56,9 @@ class GSM(Base_Method):
         else:
             oi=0
             self.get_tangents_1()
+        for i in range(self.nnodes):
+            if self.icoords[i] !=0:
+                self.icoords[i].OPTTHRESH = self.CONV_TOL
 
         if self.tscontinue==True:
             if max_iters-oi>0:
@@ -62,9 +66,7 @@ class GSM(Base_Method):
                 self.opt_iters(max_iter=opt_iters,optsteps=opt_steps)
         else:
             print "Exiting early"
-
         print "Finished GSM!"  
-
 
     def interpolate(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
@@ -84,8 +86,12 @@ class GSM(Base_Method):
 
     def set_active(self,nR,nP):
         #print(" Here is active:",self.active)
-        if nR!=nP:
+        if nR!=nP and self.growth_direction==0:
             print(" setting active nodes to %i and %i"%(nR,nP))
+        elif self.growth_direction==1:
+            print(" setting active node to %i "%nR)
+        elif self.growth_direction==2:
+            print(" setting active node to %i "%nP)
         else:
             print(" setting active node to %i "%nR)
 
@@ -95,6 +101,10 @@ class GSM(Base_Method):
                 self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
         self.active[nR] = True
         self.active[nP] = True
+        if self.growth_direction==1:
+            self.active[nP]=False
+        if self.growth_direction==2:
+            self.active[nR]=False
         #print(" Here is new active:",self.active)
 
     def tangent(self,n1,n2):
@@ -103,23 +113,32 @@ class GSM(Base_Method):
 
     def check_if_grown(self):
         isDone=False
-        #for act in self.active:
-        #    if act:
-        #        isDone = False
-        #        break
         if self.nn==self.nnodes:
             isDone=True
+            if self.growth_direction==1:
+                self.icoords[-1].update_ics()
+                # copy previous node PES and calculate E
+                lot1 = self.icoords[-2].PES.lot.copy(
+                        self.icoords[-2].PES.lot,
+                        self.nnodes-1)
+                self.icoords[-1].PES = PES(self.icoords[-2].PES.options.copy().set_values({
+                    "lot": lot1,
+                    }))
+                self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+
         return isDone
 
     def check_add_node(self):
-        if self.icoords[self.nR-1].gradrms < self.gaddmax:
+        success=True 
+        if self.icoords[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             #self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
                 self.interpolateR()
-        if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax:
+        if self.icoords[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
             #self.active[self.nnodes-self.nP] = False
             if self.icoords[-self.nP-1] == 0:
                 self.interpolateP()
+        return success
 
     def make_nlist(self):
         ncurrent = 0
@@ -153,20 +172,26 @@ class GSM(Base_Method):
 
         return ncurrent,nlist
 
-    def start_string(self):
-        print "\n"
-        self.interpolate(2) 
-        self.nn=2
-        self.nR=1
-        self.nP=1
-
     def check_opt(self,totalgrad,fp):
         isDone=False
-        if self.icoords[self.TSnode].gradrms<self.CONV_TOL: #TODO should check totalgrad
+        if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
             isDone=True
             self.tscontinue=False
         if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
             isDone=True
             self.tscontinue=False
         return isDone
+
+    def set_V0(self):
+        self.icoords[0].gradrms = 0.
+        self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
+        if self.growth_direction!=1:
+            self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+            self.icoords[-1].gradrms = 0.
+            print " Energy of the end points are %4.3f, %4.3f" %(self.icoords[0].energy,self.icoords[-1].energy)
+            print " relative E %4.3f, %4.3f" %(0.0,self.icoords[-1].energy-self.icoords[0].energy)
+        else:
+            print " Energy of end points are %4.3f " % self.icoords[0].energy
+            self.icoords[-1].energy = self.icoords[0].energy
+            self.icoords[-1].gradrms = 0.
 
