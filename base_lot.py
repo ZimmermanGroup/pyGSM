@@ -15,11 +15,11 @@ class Lot(object):
 
         if hasattr(Lot, '_default_options'): return Lot._default_options.copy()
         opt = options.Options() 
-
-
+        
         opt.add_option(
             key='states',
-            allowed_types=[list],
+            value=[(1,0)],
+            required=False,
             doc='list of states 0-indexed')
 
         opt.add_option(
@@ -87,6 +87,13 @@ class Lot(object):
                      and spin should be specified in charge and states options.\
                      for QChem, include $molecule line. For ORCA, do not include *xyz\
                      line.'
+                     )
+
+        opt.add_option(
+                key="from_template",
+                required=False,
+                value=False,
+                doc='how to do MOM,only for pytc'
                 )
 
         Lot._default_options = opt
@@ -109,6 +116,9 @@ class Lot(object):
         self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
+        self.from_template =self.options['from_template']
+        self.lot = None
+        self.casci1=None
 
         self.lot_inp_file = self.options['lot_inp_file']
 
