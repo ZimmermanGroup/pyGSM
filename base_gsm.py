@@ -744,8 +744,6 @@ class Base_Method(object,Print,Analyze):
         num_ics = self.icoords[0].num_ics
         len_d = self.icoords[0].nicd
         ictalloc = self.nnodes+1
-        #ictan0 = np.zeros((ictalloc,num_ics))
-        #ictan = np.zeros((ictalloc,num_ics))
         
         rpmove = np.zeros(ictalloc)
         rpart = np.zeros(ictalloc)
@@ -756,12 +754,6 @@ class Base_Method(object,Print,Analyze):
         h2dqmag = 0.0
         dE = np.zeros(ictalloc)
         edist = np.zeros(ictalloc)
-        
-        self.emax = float(max(self.energies[1:-1]))
-        self.nmax = np.where(self.energies==self.emax)[0][0]
-        self.TSnode = self.nmax
-        self.icoords[self.TSnode].isTSnode=True
-        print "TSnode: {} Emax: {:4.5}".format(self.TSnode,float(self.emax))
         
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
@@ -785,7 +777,7 @@ class Base_Method(object,Print,Analyze):
             if self.stage>0 or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                if self.newic.print_leve>0:
+                if self.newic.print_level>0:
                     print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
            
             # => Using average <= #
