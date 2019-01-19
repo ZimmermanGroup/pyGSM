@@ -296,7 +296,7 @@ class Base_Method(object,Print,Analyze):
             steps.append(smag)
             energies.append(self.icoords[n].energy-self.icoords[n].V0)
             opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
-            if isinstance(self.icoords[n].PES,Penalty_PES): # or isinstance(self.icoords[n].PES,Avg_PES): 
+            if isinstance(self.icoords[n].PES,Penalty_PES) or isinstance(self.icoords[n].PES,Avg_PES):
                 deltaEs.append(self.icoords[n].PES.dE)
     
             #write convergence
