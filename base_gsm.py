@@ -611,9 +611,13 @@ class Base_Method(object,Print,Analyze):
         print "*********************************************************************"
         print "************************ in growth_iters ****************************"
         print "*********************************************************************"
+
         for n in range(iters):
             sys.stdout.flush()
-            self.check_add_node()
+            success = self.check_add_node()
+            if not success:
+                print "can't add anymore nodes, bdist too small"
+                break
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
             self.opt_steps(maxopt,nconstraints)

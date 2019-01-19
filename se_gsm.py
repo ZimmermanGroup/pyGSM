@@ -110,10 +110,16 @@ class SE_GSM(Base_Method):
 
 
     def check_add_node(self):
-        if self.icoords[self.nR-1].gradrms < self.gaddmax:
+        success=True
+        #if self.icoords[self.nR-1].gradrms < self.gaddmax:
+        if self.icoords[self.nR-1].gradrms < self.ADD_NODE_TOL:
+            if self.nR == self.nnodes:
+                print " Ran out of nodes, exiting GSM"
+                raise ValueError
             self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
-                self.interpolateR()
+                success=self.interpolateR()
+        return success
 
     def interpolate(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
