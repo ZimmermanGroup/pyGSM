@@ -93,11 +93,11 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
             doc='Convergence threshold')
 
         opt.add_option(
-                key='opt_type',
-                value=0,
+                key='EXTRA_BONDS',
+                value='[]',
                 required=False,
-                allowed_types=[int],
-                doc='type of optimization')
+                doc='extra bond internal coordinate for creating DLC.'
+                )
 
         Base_DLC._default_options = opt
         return Base_DLC._default_options.copy()
@@ -121,7 +121,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         self.resetopt=self.options['resetopt']
         self.nicd=self.options['nicd']
         self.OPTTHRESH=self.options['OPTTHRESH']
-        self.opt_type=self.options['opt_type']
+        self.EXTRA_BONDS=self.options['EXTRA_BONDS']
         self.madeBonds = False
         self.isTSnode = False
         self.update_hess=False
@@ -267,6 +267,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         self.nicd -= lowev
         if lowev>3:
             print(" Error: optimization space less than 3N-6 DOF")
+            print e
             exit(-1)
 
         #print(" Number of internal coordinate dimensions %i" %self.nicd)

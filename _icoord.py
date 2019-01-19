@@ -19,10 +19,18 @@ class ICoords:
             for j in range(1,i):
                 a = self.getAtomicNum(i)
                 b = self.getAtomicNum(j)
-                MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.
+                MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
                 d = self.distance(i,j)
                 if d<MAX_BOND_DIST:
                     bonds.append((i,j))
+
+        if not self.EXTRA_BONDS:
+            for bond in self.EXTRA_BONDS:
+                if bond in bonds or tuple(reversed(bond)) in bonds:
+                    pass
+                else:
+                    bonds.append(bond)
+
         #for bond in ob.OBMolBondIter(self.mol.OBMol):
         #    nbonds+=1
         #    a=bond.GetBeginAtomIdx()
@@ -31,9 +39,8 @@ class ICoords:
         #        bonds.append((a,b))
         #    else:
         #        bonds.append((b,a))
-
-
         #bonds = sorted(bonds)
+        print bonds
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
         nbonds = len(bonds)
