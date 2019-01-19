@@ -395,23 +395,6 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         phi = 1. - dxtE*dxtE/(dxtdx*EtE)
 
         self.Hint += (1.-phi)*Gms + phi*Gpsb
-        #print "dxtdx" 
-        #print dxtdx
-        #print "dxtdx" 
-        #print "dgmGdxtdx" 
-        #print dgmGdxtdx
-        #print dxtdg
-        #print "dxtGdx" 
-        #print dxtGdx
-        #print "dxtE" 
-        #print dxtE
-        #print "EtE" 
-        #print EtE
-        #print "phi" 
-        #print phi
-        #print "Hint after bofill"
-        #with np.printoptions(threshold=np.inf):
-        #    print self.Hint
         self.Hinv = np.linalg.inv(self.Hint)
 
 

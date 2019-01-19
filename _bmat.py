@@ -197,7 +197,6 @@ class Bmat:
             print bmatp
             print "\n"
         #print "shape of bmatp is %s" %(np.shape(bmatp),)
-        #print bmatp
         return bmatp
 
 
