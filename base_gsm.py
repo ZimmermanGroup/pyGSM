@@ -323,58 +323,49 @@ class Base_Method(object,Print,Analyze):
         else:
             return False
 
-    def optimize_TS_exact(self,n=0,nsteps=100,nconstraints=0):
-        """ this method follows the overlap with reaction tangent"""
-        raise NotImplementedError()
-
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
         print "*********************************************************************"
         print "************************** in opt_iters *****************************"
         print "*********************************************************************"
 
-        print "beginning opt iters" 
-        print "convergence criteria 1: totalgrad < ",self.CONV_TOL*(self.nnodes-2)*self.rn3m6*5
         nclimb=0
-
-        #for i in range(1,self.nnodes-1):
-        #    self.active[i] = True
 
         for oi in range(max_iter):
             sys.stdout.flush()
 
+            # => get TS node <=
+            self.emaxp = self.emax
+            self.TSnode = np.argmax(self.energies)
+            self.icoords[self.TSnode].isTSnode=True
+
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
-
             # => do opt steps <= #
-            self.opt_steps(optsteps,nconstraints)
+            self.opt_steps(optsteps)
             self.store_energies()
+            self.emax = float(max(self.energies[1:-1]))
             print " V_profile: ",
             for n in range(self.nnodes):
                 print " {:7.3f}".format(float(self.energies[n])),
             print
-        
             # => calculate totalgrad <= #
             totalgrad,gradrms = self.calc_grad()
-
-            self.emaxp = self.emax
-            self.emax = float(max(self.energies[1:-1]))
-            self.nmax = np.argmax(self.energies)
-            self.icoords[self.nmax].isTSnode=True
 
             if self.stage==1: print("c")
             elif self.stage==2: print("x")
 
             #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
             
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.nmax,float(self.emax))
+            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax))
 
             fp = self.find_peaks(2)
 
             # => set stage <= #
-            ts_cgradq=abs(self.icoords[self.nmax].gradq[self.icoords[self.nmax].nicd-1])
-            ts_gradrms=self.icoords[self.nmax].gradrms
-            dE_iter=abs(self.emax-self.emaxp)
-            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb)
+            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
+            ts_gradrms=self.icoords[self.TSnode].gradrms
+            self.dE_iter=abs(self.emax-self.emaxp)
+            print "dE_iter ={:1.2}".format(self.dE_iter)
+            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,self.dE_iter,nclimb)
 
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
@@ -471,7 +462,6 @@ class Base_Method(object,Print,Analyze):
 
         self.store_energies()
         
-        self.TSnode = self.nmax
         for n in range(n0+1,self.nnodes-1):
             do3 = False
             if not self.find:
@@ -644,9 +634,10 @@ class Base_Method(object,Print,Analyze):
         if self.stage>0:
             fp = self.find_peaks(2)
         if fp>0:
-            nmax = np.argmax(self.energies)
-            self.icoords[nmax].isTSnode=True
+            self.TSnode = np.argmax(self.energies)
+            self.icoords[self.TSnode].isTSnode=True
 
+        # this can be put in a function
         optlastnode=False
         if self.last_node_fixed==False:
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
