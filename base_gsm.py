@@ -225,14 +225,15 @@ class Base_Method(object,Print,Analyze):
         print "initial energy is %3.4f" % self.icoords[0].energy
         for struct in range(1,nstructs):
             if struct==nstructs-1:
-                self.icoords[struct] = DLC.copy_node(self.icoords[0],struct,0)
+                self.icoords[struct] = DLC.copy_node(self.icoords[struct-1],struct,0)
             else:
-                self.icoords[struct] = DLC.copy_node(self.icoords[0],struct,1)
+                self.icoords[struct] = DLC.copy_node(self.icoords[struct-1],struct,1)
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
             self.icoords[struct].setup()
             self.icoords[struct].DMAX=0.05 #half of default value
-            self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
+            #self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
+            self.icoords[struct].energy = self.icoords[struct].PES.get_energy(self.icoords[struct].geom)
             self.icoords[struct].gradrms=grmss[struct]
 
         self.store_energies() 
@@ -252,29 +253,22 @@ class Base_Method(object,Print,Analyze):
             if ico != 0:
                 self.energies[i] = ico.energy - self.icoords[0].energy
 
-    
-    def update_DLC_obj(self,n,nconstraints):
-         # => update DLCs <= #
-         if self.icoords[n].PES.lot.do_coupling is False:
-             if nconstraints==0:
-                 self.icoords[n].form_unconstrained_DLC()
-             else:
-                 constraints=self.ictan[n]
-                 self.icoords[n].form_constrained_DLC(constraints)
-         else:
-             if nconstraints==2:
-                 self.icoords[n].form_CI_DLC()
-             elif nconstraints==3:
-                 raise NotImplemented
-
-    def optimize(self,n=0,nsteps=100,nconstraints=0,ictan=None):
+    def optimize(self,n=0,nsteps=100,opt_type=0,ictan=None):
         assert self.icoords[n]!=0,"icoord not set"
-        if nconstraints==1 and ictan.any()==None:
-            print "warning no ictan"
-
-        output_format = 'xyz'
+        assert opt_type in range(-1,8), "opt_type {} not defined".format(opt_type)
+        if opt_type==0:
+            assert ictan==None
+        if opt_type in [5,6,7]:
+            assert self.icoords[n].PES.lot.do_coupling==True,"Turn do_coupling on."
+        elif opt_type not in [5,6,7]:
+            assert self.icoords[n].PES.lot.do_coupling==False,"Turn do_coupling off."
+        if opt_type in [1,2,6,7] and ictan.any()==None:
+            raise RuntimeError, "Need ictan"
+        if opt_type in [2,4]:
+            assert self.icoords[n].isTSnode,"only run climb and eigenvector follow on TSnode."
+            
         obconversion = ob.OBConversion()
-        obconversion.SetOutFormat(output_format)
+        obconversion.SetOutFormat('xyz')
         opt_molecules=[]
         self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
@@ -287,20 +281,23 @@ class Base_Method(object,Print,Analyze):
         Es =[]
         self.icoords[n].update_hess=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
-        self.icoords[n].node_id = n  # set node id is this necessary?
+        #self.icoords[n].node_id = n  # set node id is this necessary?
+
         if self.icoords[n].print_level>0:
             print " Initial energy is %1.4f" % self.icoords[n].V0
 
         for step in range(nsteps):
             if self.icoords[n].print_level>0:
-                print(" \n Opt step: %i" %(step+1))
-            if step==0:
-                self.icoords[n].buf.write(" Opt step: %d" %(step+1))
-            else:
-                self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
+                print(" \n Opt step: %i" %(step+1)),
+            self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
 
             ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(nconstraints=nconstraints,ictan=ictan,refE = self.icoords[0].V0)
+            smag =self.icoords[n].opt_step(opt_type=opt_type,ictan=ictan,refE=self.icoords[0].V0)
+
+            ## => modify hessian if overlap is becoming too small <= #
+            if opt_type==4:
+                if self.icoords[n].check_overlap_good()==False:
+                    self.get_eigenv_finite(n)
 
             # convergence quantities
             grmss.append(float(self.icoords[n].gradrms))
@@ -315,8 +312,7 @@ class Base_Method(object,Print,Analyze):
    
             #TODO convergence 
             sys.stdout.flush()
-            #if self.icoords[n].gradrms<self.CONV_TOL:
-            if self.converged(n):
+            if self.converged(n,opt_type):
                 print 'TRIUMPH! Optimization converged!'
                 break
 
@@ -328,8 +324,8 @@ class Base_Method(object,Print,Analyze):
             print " Final energy is %2.5f" % (self.icoords[n].energy)
         return smag
 
-    def converged(self,n):
-        if self.icoords[n].gradrms<self.CONV_TOL:
+    def converged(self,n,opt_type):
+        if self.icoords[n].gradrms<self.icoords[n].OPTTHRESH:
             return True
         else:
             return False
@@ -388,16 +384,6 @@ class Base_Method(object,Print,Analyze):
                 break
             if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
                 break
-
-            # => modify hessian if overlap is becoming too small <= #
-            if self.stage==2 and self.icoords[self.nmax].opt_type==2:
-                self.get_eigenv_finite(self.nmax)
-                self.icoords[self.nmax].set_opt_type(2) #start/retry doing exact TS
-
-            # retry doing overlap following, frequently gets turned off
-            for n in range(1,self.nnodes-1):
-                if self.stage>0 and self.icoords[n].opt_type==1 and not self.icoords[n].isTSnode:
-                    self.icoords[n].opt_type=3
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -604,6 +590,10 @@ class Base_Method(object,Print,Analyze):
                     print "%1.2f " % self.ictan[nlist[2*n]][i],
                 print "\n"
 #           #     print np.transpose(ictan[nlist[2*n]])
+        for i,tan in enumerate(self.ictan):
+            if np.all(tan==0.0):
+                print "tan %i of the tangents is 0" %i
+                raise RuntimeError
 
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
@@ -620,28 +610,22 @@ class Base_Method(object,Print,Analyze):
                 break
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
-            self.opt_steps(maxopt,nconstraints)
+            self.opt_steps(maxopt)
             self.store_energies()
-
             totalgrad,gradrms = self.calc_grad()
             self.emax = float(max(self.energies[1:-1]))
-            self.nmax = np.where(self.energies==self.emax)[0][0]
-            
+            self.TSnode = np.where(self.energies==self.emax)[0][0]
             print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax))
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
-            isDone = self.check_if_grown()
-            if isDone:
+            if self.check_if_grown(): 
                 break
             self.ic_reparam_g()
-
         self.newic = DLC.copy_node(self.icoords[0],0,-1)
         return n
 
-    def opt_steps(self,opt_steps,nconstraints):
-        assert nconstraints>0,"opt steps doesn't work without constraints"
-        if self.icoords[0].PES.lot.do_coupling==True: 
-            assert nconstraint>2,"nconstraints wrong size"
+    def opt_steps(self,opt_steps):
 
+        # these can be put in a function
         for n in range(self.nnodes):
             if self.icoords[n]!=0:
                 self.icoords[n].isTSnode=False
@@ -660,22 +644,24 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(self.nnodes):
             if self.icoords[n] != 0 and self.active[n]==True:
+
                 print " \nOptimizing node %i" % n
-                fixed_DLC = [True]*nconstraints
+                # => set opt type <= #
+                opt_type = self.set_opt_type(n)
 
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                     exsteps=2
                     print "doubling steps for node %i" % n
-                if self.stage==2 and n==self.TSnode and self.icoords[n].opt_type==4:
+                if self.stage==2 and n==self.TSnode and opt_type==4:
                     exsteps=2
                     print "doubling steps for node %i" % n
                 
                 # => do constrained optimization
-                self.icoords[n].smag = self.optimize(n,opt_steps*exsteps,nconstraints,self.ictan[n])
+                self.icoords[n].smag = self.optimize(n=n,nsteps=opt_steps*exsteps,opt_type=opt_type,ictan=self.ictan[n])
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
-                self.icoords[n].smag = self.optimize(n,opt_steps,nconstraints=0)
+                self.icoords[n].smag = self.optimize(n,opt_steps,opt_type=0) #non-constrained optimization
 
     @property
     def stage(self):
@@ -693,8 +679,6 @@ class Base_Method(object,Print,Analyze):
             if self.stage==0 and self.climber:
                 print(" ** starting climb **")
                 self.stage=1
-                for n in range(self.nnodes):
-                    self.icoords[n].set_opt_type(self.stage)
                 return nclimb
             if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
@@ -1065,7 +1049,6 @@ class Base_Method(object,Print,Analyze):
         c = 2*(Em1/a/(a+b) - E0/a/b + Ep1/b/(a+b))
         print " tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0])
 
-
         ttt = np.outer(tan,tan)
         #print "Hint before"
         #with np.printoptions(threshold=np.inf):
@@ -1088,3 +1071,28 @@ class Base_Method(object,Print,Analyze):
         #print "eigenvalues of new Hess"
         #print eigen
 
+    def set_V0(self):
+        raise NotImplementedError 
+
+    def set_opt_type(self,n):
+        #TODO
+        opts={
+        -1 : 'no optimization',
+         0 : 'non-constrained optimization',
+         1 : 'ictan constraint optimization',
+         2 : 'ictan constrained opt with climb',
+         3 : 'non-TS eigenvector follow',
+         4 : 'TS eigenvector follow',
+         5 : 'MECI optimization',
+         6 : 'constrained CI optimization',
+         7 : 'constrained CI optimization with climb',
+         }
+        opt_type=1 
+        if self.stage==1 and self.icoords[n].isTSnode==True:
+            opt_type=2 #climb
+        #if self.stage==1 and n!=self.nmax: #turning off, OG gsm does, but it's useleess
+        #    opt_type==3
+        if self.stage>1 and self.icoords[n].isTSnode==True:
+            opt_type=4 #eigenvector follow
+        print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
+        return opt_type
