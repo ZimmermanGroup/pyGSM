@@ -64,14 +64,6 @@ class Base_Method(object,Print,Analyze):
             doc='Convergence threshold')
 
         opt.add_option(
-                key='tstype',
-                value=0,
-                required=False,
-                allowed_types=[int],
-                doc='0==Find and Climb TS,1 Climb with no exact find, 2==turning of climbing image and TS search'
-                )
-
-        opt.add_option(
                 key="last_node_fixed",
                 value=True,
                 required=False,
@@ -132,7 +124,6 @@ class Base_Method(object,Print,Analyze):
         self.CONV_TOL = self.options['CONV_TOL']
         self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
         self.last_node_fixed = self.options['last_node_fixed']
-        self.tstype=self.options['tstype']
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.growth_direction=self.options['growth_direction']
@@ -140,16 +131,6 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
-
-        if self.tstype==0:
-            print("set climber and finder to True")
-            self.climber=True
-            self.finder=True
-        elif self.tstype==1:
-            print("setting climber to True")
-            self.climber=True
-        else:
-            print(" Turning off climbing image and exact TS search")
 
         # Set initial values
         self.nn = 2
@@ -330,12 +311,13 @@ class Base_Method(object,Print,Analyze):
         else:
             return False
 
-    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1):
+    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=0):
         print "*********************************************************************"
         print "************************** in opt_iters *****************************"
         print "*********************************************************************"
 
         nclimb=0
+        self.set_finder(rtype)
 
         for oi in range(max_iter):
             sys.stdout.flush()
@@ -379,7 +361,7 @@ class Base_Method(object,Print,Analyze):
             #TODO special SSM criteria if first opt'd node is too high?
 
             # => Check Convergence <= #
-            isDone = self.check_opt(totalgrad,fp)
+            isDone = self.check_opt(totalgrad,fp,rtype)
             if isDone:
                 break
             if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
@@ -1096,3 +1078,19 @@ class Base_Method(object,Print,Analyze):
             opt_type=4 #eigenvector follow
         print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
         return opt_type
+
+    def set_finder(self,rtype):
+        assert rtype in [0,1,2], "rtype not defined"
+        print ''
+        print "*********************************************************************"
+        if rtype==0:
+            print "****************** set climber and finder to True*****************"
+            self.climber=True
+            self.finder=True
+        elif rtype==1:
+            print("***************** setting climber to True*************************")
+            self.climber=True
+        else:
+            print("******** Turning off climbing image and exact TS search **********")
+        print "*********************************************************************"
+

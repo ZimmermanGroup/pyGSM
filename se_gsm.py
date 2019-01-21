@@ -43,7 +43,11 @@ class SE_GSM(Base_Method):
         self.icoords[0].madeBonds=True
         self.icoords[0].setup()
 
-    def go_gsm(self,max_iters,max_steps):
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
+        """rtype=0 Find and Climb TS,
+        1 Climb with no exact find, 
+        2 turning of climbing image and TS search"""
+
         if self.isRestarted==False:
             self.icoords[0].gradrms = 0.
             self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
@@ -78,7 +82,7 @@ class SE_GSM(Base_Method):
         print " initial ic_reparam"
         self.ic_reparam()
         if self.tscontinue==True:
-            self.opt_iters(max_iter=max_iters,optsteps=3) #opt steps fixed at 3
+            self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
         else:
             print "Exiting early"
 
@@ -186,10 +190,10 @@ class SE_GSM(Base_Method):
             isDone=True
         return isDone
 
-    def check_opt(self,totalgrad,fp):
+    def check_opt(self,totalgrad,fp,rtype):
         isDone=False
         added=False
-        if self.nmax==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
+        if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
             if self.icoords[self.nR-1].gradrms>self.CONV_TOL:
 
                 print "TS node is second to last node, adding one more node"
@@ -207,18 +211,25 @@ class SE_GSM(Base_Method):
         if fp==-1: #total string is uphill
             print "fp == -1, check V_profile"
 
-            if self.tstype==2:
-                print "check for total dissociation"
-                #check break
-                #TODO
-                isDone=True
-            if self.tstype!=2:
-                print "flatland? set new start node to endpoint"
-                self.tscontinue=0
-                isDone=True
+            #if self.tstype==2:
+            #    print "check for total dissociation"
+            #    #check break
+            #    #TODO
+            #    isDone=True
+            #if self.tstype!=2:
+            #    print "flatland? set new start node to endpoint"
+            #    self.tscontinue=0
+            #    isDone=True
+            print "total dissociation"
+            self.tscontinue
+            isDone=True
 
-        if fp==--2:
+        if fp==-2:
             print "termination due to dissociation"
+            self.tscontinue=False
+            self.endearly=True #bools
+            isDone=True
+        if fp==0:
             self.tscontinue=False
             self.endearly=True #bools
             isDone=True
@@ -233,11 +244,11 @@ class SE_GSM(Base_Method):
                 isDone=True
 
         # => Convergence Criteria
-        if (((self.stage==1 and self.tstype==1) or self.stage==2) and
+        if (((self.stage==1 and rtype==1) or self.stage==2) and
                 self.icoords[self.TSnode].gradrms< self.CONV_TOL):
             self.tscontinue=False
             isDone=True
-        if (((self.stage==1 and self.tstype==1) or self.stage==2) and totalgrad<0.1 and
+        if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
                 self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL and self.emaxp+0.02> self.emax and 
                 self.emaxp-0.02< self.emax):
             self.tscontinue=False

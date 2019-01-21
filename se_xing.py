@@ -14,39 +14,51 @@ class SE_Cross(SE_GSM):
     def from_options(**kwargs):
         return SE_Cross(SE_Cross.default_options().set_values(kwargs))
 
-    def go_gsm(self,max_iters=50,opt_steps=3):
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
+        """rtype=0 MECI search
+           rtype=1 MESX search
+        """
+        assert rtype in [0,1], "rtype not defined"
+        print "*********************************************************************"
+        if rtype==0:
+            print "Doing MECI search"
+        else:
+            print "Doing MESX search"
+        print "*********************************************************************"
+
         self.icoords[0].gradrms=0.
         self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        print 'initial energy is {:1.4f}'.format(self.icoords[0].energy)
+        print ' Initial energy is {:1.4f}'.format(self.icoords[0].energy)
         sys.stdout.flush()
+
         # stash bdist for node 0
         _,self.icoords[0].bdist = DLC.tangent_SE(self.icoords[0],self.driving_coords,quiet=True)
-        print "Initial bdist is %1.3f" %self.icoords[0].bdist
+        print " Initial bdist is %1.3f" %self.icoords[0].bdist
+
         # interpolate first node
         self.interpolate(1)
+
+        # grow string
         self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=1)
+        print ' SE_Cross growth phase over'
+        print ' Warning last node still not fully optimized'
 
-        print 'SE_Cross growth phase over'
-        print 'Warning last node still not fully optimized'
-
-        #if self.check_if_grown():
-        #    self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR,0)
-        #    self.nR += 1
-
-        if self.tstype==3:
+        if rtype==0:
+            # doing extra constrained penalty optimization for MECI
             self.icoords[self.nR-1].OPTTHRESH=0.01
             oiters=50
             ictan = DLC.tangent_1(self.icoords[self.nR-1],self.icoords[self.nR-2])
             self.icoords[self.nR-1].PES.sigma=3.5
             self.optimize(n=self.nR-1,opt_type=1,nsteps=oiters,ictan=ictan)
         else:
+            # unconstrained penalty optimization
             self.icoords[self.nR-1].OPTTHRESH=self.CONV_TOL
             oiters=100
             nconstraints=0
             ictan=None
             self.optimize(n=self.nR-1,opt_type=0,nsteps=oiters)
             
-        if self.tstype==3:
+        if rtype==0:
             self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
             self.icoords[self.nR] = DLC.copy_node_X(self.icoords[self.nR-1],new_node_id=self.nR,rtype=5)
             self.icoords[self.nR].OPTTHRESH=self.CONV_TOL
