@@ -67,8 +67,36 @@ class SE_Cross(SE_GSM):
         else:
             self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
 
+    def opt_string(self,max_iters=50,optsteps=3,rtype=0):
+        self.nnodes=self.nR
+        print "getting energies"
+        for ico in self.icoords[0:self.nR]:
+            if ico!=0:
+                lot = ico.PES.lot.copy(ico.PES.lot,ico.PES.lot.node_id)
+                pes = PES(ico.PES.PES2.options.copy().set_values({
+                    "lot":lot,
+                    }))
+                ico.PES = pes
+                ico.energy = ico.PES.get_energy(ico.geom)
+        self.icoords[0].V0 = self.icoords[0].energy 
+        print "initial energy is %4.3f" % self.icoords[0].V0
+
+        self.store_energies()
+        print " V_profile: ",
+        for n in range(self.nnodes):
+            print " {:7.3f}".format(float(self.energies[n])),
+        print
+        print "Setting all interior nodes to active"
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.icoords[n].OPTTHRESH=self.CONV_TOL
+        self.ic_reparam(ic_reparam_steps=25)
+        self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+        self.opt_iters(max_iter=max_iters,optsteps=optsteps,rtype=rtype)
+        self.icoords[self.TSnode].mol.write('xyz','TS.xyz',overwrite=True)
+
     def add_node(self,n1,n2,n3=None):
-        print "adding node: %i from node %i"%(n2,n1)
+        print " adding node: %i from node %i"%(n2,n1)
         return DLC.add_node_SE_X(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
     
     def converged(self,n,opt_type):
