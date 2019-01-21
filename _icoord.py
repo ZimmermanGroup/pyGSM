@@ -24,12 +24,13 @@ class ICoords:
                 if d<MAX_BOND_DIST:
                     bonds.append((i,j))
 
-        if not self.EXTRA_BONDS:
-            for bond in self.EXTRA_BONDS:
-                if bond in bonds or tuple(reversed(bond)) in bonds:
-                    pass
-                else:
-                    bonds.append(bond)
+        for bond in self.EXTRA_BONDS:
+            print "CHECK",bond
+            if bond in bonds or tuple(reversed(bond)) in bonds:
+                pass
+            else:
+                print "adding bond ",bond
+                bonds.append(bond)
 
         #for bond in ob.OBMolBondIter(self.mol.OBMol):
         #    nbonds+=1
@@ -195,7 +196,7 @@ class ICoords:
                     bdist += (ictan[wbond]*ictan[wbond])
 
                 if ICoord1.print_level>0 and not quiet:
-                    print "bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
+                    print " bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
 
             if "BREAK" in i:
                 bond = (i[1],i[2])
@@ -213,7 +214,7 @@ class ICoords:
                     bdist += (ictan[wbond]*ictan[wbond])
 
                 if ICoord1.print_level>0 and not quiet:
-                    print "bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
+                    print " bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
             if "ANGLE" in i:
                 angle=(i[1],i[2],i[3])
                 ang_idx = ICoord1.AObj.angle_num(angle)
@@ -239,8 +240,8 @@ class ICoords:
                     tor_diff+=360.
                 ictan[tmp_idx] = -tor_diff*np.pi/180.
                 #TODO need to come up with an adist
-                #if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                #    bdist+=ictan[tmp_idx]*ictan[tmp_idx]
+                if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
+                    bdist+=ictan[tmp_idx]*ictan[tmp_idx]
                 if ICoord1.print_level>0 and not quiet:
                     print(" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
 

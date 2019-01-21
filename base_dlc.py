@@ -94,7 +94,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         opt.add_option(
                 key='EXTRA_BONDS',
-                value='[]',
+                value='',
                 required=False,
                 doc='extra bond internal coordinate for creating DLC.'
                 )
@@ -508,7 +508,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         #=> Overlap metric <= #
         overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
-        print " printing overlaps ", overlap[:4].T
+        #print " printing overlaps ", overlap[:4].T
 
         # Max overlap metrics
         self.maxol_w_Hess(overlap[0:4])
