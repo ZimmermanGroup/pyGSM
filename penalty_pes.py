@@ -15,7 +15,7 @@ class Penalty_PES(PES):
         self.lot = PES1.lot
         self.alpha = alpha
         self.sigma = sigma
-        print 'PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
+        print ' PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
 
 
     @staticmethod
@@ -30,15 +30,15 @@ class Penalty_PES(PES):
         avgE = 0.5*(E1+E2)
         #self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
         self.dE = E2-E1
-        print "E1: %1.4f E2: %1.4f"%(E1,E2),
-        print "delta E = %1.4f" %self.dE,
+        #print "E1: %1.4f E2: %1.4f"%(E1,E2),
+        #print "delta E = %1.4f" %self.dE,
         #TODO what to do if PES2 is or goes lower than PES1?
         G = (self.dE*self.dE)/(abs(self.dE) + self.alpha)
         #if self.dE < 0:
         #    G*=-1
-        print "G = %1.4f" % G
-        print "alpha: %1.4f sigma: %1.4f"%(self.alpha,self.sigma),
-        print "F: %1.4f"%(avgE+self.sigma*G)
+        #print "G = %1.4f" % G
+        #print "alpha: %1.4f sigma: %1.4f"%(self.alpha,self.sigma),
+        #print "F: %1.4f"%(avgE+self.sigma*G)
         sys.stdout.flush()
         return avgE+self.sigma*G
 

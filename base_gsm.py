@@ -348,12 +348,13 @@ class Base_Method(object,Print,Analyze):
             print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax))
 
             fp = self.find_peaks(2)
+            print " fp = ",fp
 
             # => set stage <= #
             ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
             ts_gradrms=self.icoords[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
-            print "dE_iter ={:1.2}".format(self.dE_iter)
+            print " dE_iter ={:1.2}".format(self.dE_iter)
             nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,self.dE_iter,nclimb)
 
             #TODO resetting
@@ -412,7 +413,7 @@ class Base_Method(object,Print,Analyze):
         self.dqmaga = dqmaga
         self.ictan = ictan
 
-        if self.newic.print_level>0:
+        if self.newic.print_level>1:
             print '------------printing ictan[:]-------------'
             for n in range(n0+1,self.nnodes):
                 print "ictan[%i]" %n
@@ -627,17 +628,17 @@ class Base_Method(object,Print,Analyze):
         for n in range(self.nnodes):
             if self.icoords[n] != 0 and self.active[n]==True:
 
-                print " \nOptimizing node %i" % n
+                print "\n Optimizing node %i" % n
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
 
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                     exsteps=2
-                    print "doubling steps for node %i" % n
+                    print " doubling steps for node %i" % n
                 if self.stage==2 and n==self.TSnode and opt_type==4:
                     exsteps=2
-                    print "doubling steps for node %i" % n
+                    print " doubling steps for node %i" % n
                 
                 # => do constrained optimization
                 self.icoords[n].smag = self.optimize(n=n,nsteps=opt_steps*exsteps,opt_type=opt_type,ictan=self.ictan[n])
@@ -668,7 +669,7 @@ class Base_Method(object,Print,Analyze):
                     (ts_gradrms<self.CONV_TOL*5.))
                     ):
                 print(" ** starting exact climb **")
-                print "totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
                 self.stage=2
                 self.get_eigenv_finite(self.TSnode)
             if self.stage==1: #TODO this doesn't do anything
@@ -685,7 +686,7 @@ class Base_Method(object,Print,Analyze):
             if self.icoords[self.nR]==0:
                 success= False
                 break
-            print "getting energy for  node ",self.nR
+            print " getting energy for  node ",self.nR
             self.icoords[self.nR].energy = self.icoords[self.nR].PES.get_energy(self.icoords[self.nR].geom)
             print self.icoords[self.nR].energy
             self.nn+=1
@@ -728,7 +729,7 @@ class Base_Method(object,Print,Analyze):
             ictan0 = np.copy(self.ictan)
             ictan = np.copy(self.ictan)
 
-            if self.newic.print_level>0:
+            if self.newic.print_level>1:
                 print " printing spacings dqmaga:"
                 for n in range(1,self.nnodes):
                     print " %1.2f" % self.dqmaga[n], 
@@ -743,7 +744,7 @@ class Base_Method(object,Print,Analyze):
             if self.stage>0 or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                if self.newic.print_level>0:
+                if self.newic.print_level>1:
                     print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
            
             # => Using average <= #
@@ -818,7 +819,7 @@ class Base_Method(object,Print,Analyze):
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
             lastdispr = disprms
 
-            if self.newic.print_level>0:
+            if self.newic.print_level>1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2}".format(n,rpmove[n]),
                 print
@@ -881,7 +882,7 @@ class Base_Method(object,Print,Analyze):
             #print 'on ic_reparam step',i
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
-            if self.icoords[0].print_level>-1:
+            if self.icoords[0].print_level>1:
                 if i==0:
                     print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
                 print " printing spacings dqmaga: "
@@ -898,7 +899,7 @@ class Base_Method(object,Print,Analyze):
                         rpart[n] = 1.0/(self.nn-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
                         rpart[n] = 1.0/(self.nn-2)
-                    if self.icoords[0].print_level>-1:
+                    if self.icoords[0].print_level>1:
                         if i==0:
                             print " rpart: "
                             for n in range(1,self.nnodes):
@@ -934,7 +935,7 @@ class Base_Method(object,Print,Analyze):
 
             disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
-            if self.icoords[0].print_level>-1:
+            if self.icoords[0].print_level>1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
                 print

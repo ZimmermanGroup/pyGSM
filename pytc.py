@@ -270,8 +270,6 @@ class PyTC(Lot):
         if num_triplets>0:
             S_inds.append(2)
        
-        print S_nstates
-        print S_inds
         geom1 = psiw.Geometry.build(
             resources=resources,
             molecule=molecule,
@@ -299,8 +297,10 @@ class PyTC(Lot):
             S_inds=S_inds,
             S_nstates=S_nstates,
             print_level=0,
-            #g_convergence=1.0E-6, #work?
-            grad_thre_dp = 1.0E-6,
+            grad_thre_dp = 1.0E-8,
+            grad_thre_sp = 1.0E-16,
+            thre_dp = 1.0E-8,
+            thre_sp=1.0E-16,
             )
 
         self.casci1.compute_energy()

@@ -36,7 +36,7 @@ class OStep_utils:
     def eigenvector_follow_step(self,SCALE,lambda1,gqe,eigen,opt_type):
         #assert self.opt_step in [3,4],"not implemented for other types"
         if self.print_level>0:
-            print "SCALE=%1.1f lambda1=%1.3f" %(SCALE,lambda1)
+            print " SCALE=%1.1f lambda1=%1.3f" %(SCALE,lambda1)
         dqe0 = np.zeros(self.nicd)
         for i in range(self.nicd):
             if i != self.path_overlap_n:

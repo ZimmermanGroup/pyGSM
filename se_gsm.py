@@ -26,18 +26,18 @@ class SE_GSM(Base_Method):
             if "ADD" or "BREAK" in i:
                 bond=(i[1],i[2])
                 if not self.icoords[0].bond_exists(bond):
-                    print "adding bond ",bond
+                    print " adding bond ",bond
                     self.icoords[0].mol.OBMol.AddBond(bond[0],bond[1],1)
                     self.icoords[0].BObj.bonds.append(bond)
             if "ANGLE" in i:
                 angle=(i[1],i[2],i[3])
                 if not self.icoords[0].angle_exists(angle):
                     self.icoords[0].AObj.angles.append(bond)
-                    print "adding angle ",angle
+                    print " adding angle ",angle
             if "TORSION" in i:
                 torsion=(i[1],i[2],i[3],i[4])
                 if not self.icoords[0].torsion_exists(torsion):
-                    print "adding torsion ",torsion
+                    print " adding torsion ",torsion
                     self.icoords[0].TObj.torsions.append(torsion)
 
         self.icoords[0].madeBonds=True
@@ -57,7 +57,6 @@ class SE_GSM(Base_Method):
             self.growth_iters(iters=max_iters,maxopt=max_steps)
             if self.tscontinue==True:
                 if self.pastts==1: #normal over the hill
-                    #self.add_node(self.nR-1,self.nR)
                     self.interpolateR(1)
                     self.add_last_node(2)
                 elif self.pastts==2 or self.pastts==3: #when cgrad is positive
@@ -90,24 +89,24 @@ class SE_GSM(Base_Method):
 
 
     def add_node(self,n1,n2,n3=None):
-        print "adding node: %i from node %i" %(n2,n1)
+        print " adding node: %i from node %i" %(n2,n1)
         return DLC.add_node_SE(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
 
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
         if rtype==1:
-            print "copying last node, opting"
+            print " copying last node, opting"
             self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
         elif rtype==2:
-            print "already created node, opting"
+            print " already created node, opting"
         noptsteps=15
         print " Optimizing node %i" % self.nR
         self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
         self.optimize(n=self.nR,nsteps=noptsteps)
         self.active[self.nR]=True
         if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
-            print "Opt did not produce new geometry"
+            print " Opt did not produce new geometry"
         else:
             self.nR+=1
         return

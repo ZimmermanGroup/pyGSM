@@ -31,8 +31,9 @@ class Analyze:
                     print "possible dissociative profile"
                     diss=True
 
-        print "nnodes ",nnodes  
-        print "allup? ",allup
+        print " nnodes ",nnodes  
+        print " allup? ",allup
+        print " diss? ",diss
         npeaks1=0
         npeaks2=0
         minnodes=[]
@@ -49,10 +50,8 @@ class Analyze:
                 if self.energies[n]>self.energies[n-1]:
                     maxnodes.append(n)
 
-        print "min nodes"
-        print minnodes
-        print "max nodes" 
-        print maxnodes
+        print " min nodes ",minnodes
+        print " max nodes ", maxnodes
         npeaks1 = len(maxnodes)
         #print "number of peaks is ",npeaks1
         ediff=0.5
@@ -69,7 +68,7 @@ class Analyze:
             emax = float(max(self.energies))
             nmax = np.argmax(self.energies)
 
-        print "emax and nmax in find peaks %3.4f,%i " % (emax,nmax)
+        print " emax and nmax in find peaks %3.4f,%i " % (emax,nmax)
 
         #check if any node after peak is less than 2 kcal below
         for n in maxnodes:

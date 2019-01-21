@@ -207,7 +207,6 @@ class DLC(Base_DLC,Bmat,Utils):
             return 0
         ICoordC.opt_constraint(ictan)
         #bdist = np.linalg.norm(ictan)
-        print 'bdist: {:2.14f}'.format(bdist)
         ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmat_create()
         dqmag_scale=1.5
