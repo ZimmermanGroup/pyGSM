@@ -93,11 +93,11 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
             doc='Convergence threshold')
 
         opt.add_option(
-                key='opt_type',
-                value=0,
+                key='EXTRA_BONDS',
+                value='',
                 required=False,
-                allowed_types=[int],
-                doc='type of optimization')
+                doc='extra bond internal coordinate for creating DLC.'
+                )
 
         Base_DLC._default_options = opt
         return Base_DLC._default_options.copy()
@@ -121,7 +121,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         self.resetopt=self.options['resetopt']
         self.nicd=self.options['nicd']
         self.OPTTHRESH=self.options['OPTTHRESH']
-        self.opt_type=self.options['opt_type']
+        self.EXTRA_BONDS=self.options['EXTRA_BONDS']
         self.madeBonds = False
         self.isTSnode = False
         self.update_hess=False
@@ -236,6 +236,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
                             c2=b1
                         if self.bond_exists((b2,a2))==True:
                             c2=b2
+                        #SHould add a try except here?
                         torsion= (c1,a1,a2,c2)
                         if not self.torsion_exists(torsion) and len(set(torsion))==4:
                             print(" adding torsion via linear ties %s" %(torsion,))
@@ -266,6 +267,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         self.nicd -= lowev
         if lowev>3:
             print(" Error: optimization space less than 3N-6 DOF")
+            print e
             exit(-1)
 
         #print(" Number of internal coordinate dimensions %i" %self.nicd)
@@ -394,40 +396,25 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         phi = 1. - dxtE*dxtE/(dxtdx*EtE)
 
         self.Hint += (1.-phi)*Gms + phi*Gpsb
-        #print "dxtdx" 
-        #print dxtdx
-        #print "dxtdx" 
-        #print "dgmGdxtdx" 
-        #print dgmGdxtdx
-        #print dxtdg
-        #print "dxtGdx" 
-        #print dxtGdx
-        #print "dxtE" 
-        #print dxtE
-        #print "EtE" 
-        #print EtE
-        #print "phi" 
-        #print phi
-        #print "Hint after bofill"
-        #with np.printoptions(threshold=np.inf):
-        #    print self.Hint
         self.Hinv = np.linalg.inv(self.Hint)
 
 
     def compute_predE(self,dq0,nconstraints):
         # compute predicted change in energy 
-        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1) "
+        assert np.shape(dq0)==(self.nicd,1), "dq0 not (nicd,1)={}, dq0 is {}".format((self.nicd,1),np.shape(dq0))
         assert np.shape(self.gradq)==(self.nicd,1), "gradq not (nicd,1) "
         assert np.shape(self.Hint)==(self.nicd,self.nicd), "Hint not (nicd,nicd) "
         dEtemp = np.dot(self.Hint[:self.nicd-nconstraints,:self.nicd-nconstraints],dq0[:self.nicd-nconstraints])
         dEpre = np.dot(np.transpose(dq0[:self.nicd-nconstraints]),self.gradq[:self.nicd-nconstraints]) + 0.5*np.dot(np.transpose(dEtemp),dq0[:self.nicd-nconstraints])
         dEpre *=KCAL_MOL_PER_AU
-        if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
+        #if abs(dEpre)<0.05: dEpre = np.sign(dEpre)*0.05
         if self.print_level>1:
             print( "predE: %1.4f " % dEpre),
         return dEpre
 
-    def update_ic_eigen(self,nconstraints=0):
+    def update_ic_eigen(self,opt_type):
+        assert opt_type not in [3,4],"use different updater."
+        nconstraints=self.get_nconstraints(opt_type)
         SCALE =self.SCALEQN
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if self.SCALEQN>10.0: SCALE=10.0
@@ -438,7 +425,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         v_temp = v_temp.T
         
         # => get lambda1
-        lambda1 = self.set_lambda1(e)
+        lambda1 = self.set_lambda1(e,opt_type)
 
         # => grad in eigenvector basis <= #
         gradq = self.gradq[:nicd_c,0]
@@ -452,7 +439,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         dq_c = np.zeros((self.nicd,1))
         for i in range(nicd_c): dq_c[i,0] = dq[i]
         
-        return dq_c
+        return dq_c,opt_type
 
     def walk_up(self,n):
         """ walk up the n'th DLC"""
@@ -487,68 +474,14 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         return dq
 
-    def update_ic_eigen_h(self,ictan):
-        SCALE = self.SCALEQN
-        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
-        if SCALE > 10:
-            SCALE = 10.
-        # => get eigensolution of Hessian <= 
-        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
-        tmph = tmph.T
-
-        #TODO nneg should be self and checked
-        nneg = 0
-        for i in range(self.nicd):
-            if eigen[i] < -0.01:
-                nneg += 1
-
-        norm = np.linalg.norm(ictan)
-        C = ictan/norm
-        dots = np.dot(self.Ut,C) #(nicd,numic)(numic,1)
-        Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
-        norm = np.linalg.norm(Cn)
-        Cn = Cn/norm
-
-        #=> Overlap metric <= #
-        overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
-
-        # Max overlap metrics
-        self.maxol_w_Hess(overlap)
-
-        # => set lamda1 scale factor <=#
-        lambda1 = self.set_lambda1(eigen)
-
-        # => if overlap is small use Cn as Constraint <= #
-        dq = self.check_overlap(ictan)
-        if dq is not None:
-            if self.opt_type==4:
-                self.opt_type = 2 # reform get_eigenv_finite and all future opt_steps in this batch will do climb
-            elif self.opt_type==3:
-                self.opt_type = 1
-            return dq
-
-        # => grad in eigenvector basis <= #
-        gqe = np.dot(tmph,self.gradq)
-        path_overlap_e_g = gqe[self.path_overlap_n]
-        #print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
-
-        # => calculate eigenvector step <=#
-        dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen)
-
-        # => Convert step back to DLC basis <= #
-        dq = self.convert_dqe0_to_dq(dqe0,tmph)
-
-        return dq
-
-        
-    def update_ic_eigen_ts(self,ictan,nconstraints=1):
+    def update_ic_eigen_ts(self,ictan):
         """ this method follows the overlap with reaction tangent"""
+        opt_type=3
         lambda1 = 0.
         SCALE = self.SCALEQN
         if self.newHess>0: SCALE = self.SCALEQN*self.newHess
         if SCALE > 10:
             SCALE = 10.
-            
         #TODO buf print SCALE
 
         #testing
@@ -575,90 +508,33 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
         #=> Overlap metric <= #
         overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
-        print " printing overlaps ", overlap[:4].T
+        #print " printing overlaps ", overlap[:4].T
 
         # Max overlap metrics
-        self.maxol_w_Hess(overlap)
+        self.maxol_w_Hess(overlap[0:4])
 
         # => set lamda1 scale factor <=#
-        lambda1 = self.set_lambda1(eigen)
+        lambda1 = self.set_lambda1(eigen,4)
 
         # => if overlap is small use Cn as Constraint <= #
-        dq = self.check_overlap(ictan)
-        if dq is not None:
-            if self.opt_type==4:
-                self.opt_type = 2 # reform get_eigenv_finite and all future opt_steps in this batch will do climb
-            elif self.opt_type==3:
-                self.opt_type = 1
-            return dq
+        if self.check_overlap_good(opt_type=4):
+            # => grad in eigenvector basis <= #
+            gqe = np.dot(tmph,self.gradq)
+            path_overlap_e_g = gqe[self.path_overlap_n]
+            if self.print_level>0:
+                print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+            self.buf.write(' gtse: {:1.4f}'.format(path_overlap_e_g[0]))
+            # => calculate eigenvector step <=#
+            dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen,4)
+            # => Convert step back to DLC basis <= #
+            dq = self.convert_dqe0_to_dq(dqe0,tmph)
+        else:
+            self.form_constrained_DLC(ictan) 
+            self.Hint = self.Hintp_to_Hint()
+            dq,tmp = self.update_ic_eigen(1)
+            opt_type=2
 
-        # => grad in eigenvector basis <= #
-        gqe = np.dot(tmph,self.gradq)
-        path_overlap_e_g = gqe[self.path_overlap_n]
-        if self.print_level>0:
-            print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
-        self.buf.write(' gtse: {:1.4f}'.format(path_overlap_e_g[0]))
-
-        # => calculate eigenvector step <=#
-        dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen)
-
-        # => Convert step back to DLC basis <= #
-        dq = self.convert_dqe0_to_dq(dqe0,tmph)
-        
-        #TODO can do something special here for seams by setting the second to last two values to zero
-
-        return dq
-
-    @property
-    def opt_type(self):
-        return self._opt_type
-
-    @opt_type.setter
-    def opt_type(self,value):
-        opts={
-        -1 : 'no optimization',
-         0 : 'non-constrained optimization',
-         1 : 'ictan constraint optimization',
-         2 : 'ictan constrained opt with climb',
-         3 : 'non-TS eigenvector follow',
-         4 : 'TS eigenvector follow',
-         5 : 'MECI optimization',
-         6 : 'constrained CI optimization',
-         7 : 'constrained CI optimization with climb',
-         }
-        node_id = self.PES.lot.node_id
-        if value>0:
-            print(" setting %i opt_type to %s (%i)" %(node_id,opts[value],value))
-        self._opt_type=value
-
-    def set_opt_type(self,stage):
-        assert stage<3, "stage is too high"
-
-        if stage==0:
-            if self.PES.lot.do_coupling:
-                self.opt_type=6
-            else:
-                self.opt_type=1
-
-        # => do constrained optimization with climb
-        elif stage==1 and self.isTSnode:
-            if self.PES.lot.do_coupling:
-                self.opt_type=7
-            else:
-                self.opt_type=2
-
-        # => follow maximum overlap with Hessian if find <= #
-        elif stage>0 and not self.isTSnode:
-            if self.PES.lot.do_coupling:
-                raise NotImplemented
-            else:
-                self.opt_type=3
-
-        elif stage==2 and self.isTSnode:
-            if self.PES.lot.do_coupling:
-                raise NotImplemented
-            else:
-                self.opt_type=4
+        return dq,opt_type
 
     def maxol_w_Hess(self,overlap):
         # Max overlap metrics
@@ -670,3 +546,12 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
             print " t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap)
         self.buf.write(" t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap))
 
+    def get_nconstraints(self,opt_type):
+        nconstraints=0
+        if opt_type in [1,2]:
+            nconstraints=1
+        elif opt_type==5:
+            nconstraints=2
+        elif opt_type in [6,7]:
+            nconstraints==3
+        return nconstraints

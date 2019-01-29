@@ -15,11 +15,11 @@ class Lot(object):
 
         if hasattr(Lot, '_default_options'): return Lot._default_options.copy()
         opt = options.Options() 
-
-
+        
         opt.add_option(
             key='states',
-            allowed_types=[list],
+            value=[(1,0)],
+            required=False,
             doc='list of states 0-indexed')
 
         opt.add_option(
@@ -77,6 +77,25 @@ class Lot(object):
                 doc='unique id used for storing orbs,etc'
                 )
 
+        opt.add_option(
+                key="lot_inp_file",
+                required=False,
+                value=False,
+                doc='file name storing LOT input section. Used for custom basis sets,\
+                     custom convergence criteria, etc. Will override nproc, basis and\
+                     functional. Do not specify charge or spin in this file. Charge \
+                     and spin should be specified in charge and states options.\
+                     for QChem, include $molecule line. For ORCA, do not include *xyz\
+                     line.'
+                     )
+
+        opt.add_option(
+                key="from_template",
+                required=False,
+                value=False,
+                doc='how to do MOM,only for pytc'
+                )
+
         Lot._default_options = opt
         return Lot._default_options.copy()
 
@@ -84,7 +103,6 @@ class Lot(object):
             options,
             ):
         """ Constructor """
-
         self.options = options
         # Cache some useful atributes
         self.states =self.options['states']
@@ -98,6 +116,26 @@ class Lot(object):
         self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
+        self.from_template =self.options['from_template']
+        self.lot = None
+        self.casci1=None
+
+        self.lot_inp_file = self.options['lot_inp_file']
+
+        if self.node_id == 0:
+            if self.lot_inp_file == False:
+                print ' using {} processors'.format(self.nproc)
+                print ' ************LOT parameters:************'
+                print ' Basis      :',self.basis
+                print ' Functional :',self.functional
+                print ' Charge     :',self.charge
+                print ' States     :',self.states
+                print ' do_coupling:',self.do_coupling
+            else:
+                with open(self.lot_inp_file) as lot_inp:
+                    lot_inp_lines = lot_inp.readlines()
+                for line in lot_inp_lines:
+                    print line.rstrip()
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
@@ -155,6 +193,10 @@ class Lot(object):
         len_hextets=len(hextets) 
         if len_hextets is not 0:
             self.run(geom,6)
+        septets=self.search_tuple(self.states,7)
+        len_septets=len(septets) 
+        if len_septets is not 0:
+            self.run(geom,7)
         self.hasRanForCurrentCoords=True
 
     def search_tuple(self,tups, elem):

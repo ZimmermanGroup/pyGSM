@@ -11,6 +11,7 @@ from _icoord import ICoords
 from _bmat import Bmat
 #from pes import *
 from penalty_pes import *
+from avg_pes import *
 from base_dlc import *
 np.set_printoptions(precision=4)
 np.set_printoptions(suppress=True)
@@ -40,7 +41,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.energy = 0.
             self.DMAX = 0.1
             self.nretry = 0 
-            self.DMIN0 =self.DMAX/10.
+            self.DMIN0 =0.001#self.DMAX/10.
             self.coords = np.zeros((len(self.mol.atoms),3))
             self.isTSnode=False
             for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
@@ -125,7 +126,7 @@ class DLC(Base_DLC,Bmat,Utils):
         #        nicd= icoordA.nicd
         #        )
     @staticmethod
-    def add_node_SE(ICoordA,driving_coordinate):
+    def add_node_SE(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2):
 
         dq0 = np.zeros((ICoordA.nicd,1))
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
@@ -140,25 +141,21 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1,
-            'opt_type' : 1,
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
         ICoordC.opt_constraint(ictan)
         bdist = np.linalg.norm(ictan)
-        print 'bdist: {:2.14f}'.format(bdist)
         #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
-        ICoordC.bmatp_create()
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        DQMAG_SSM_MAX=0.8
-        DQMAG_SSM_MIN=0.2
-        DQMAG_SSM_SCALE=1.5
-        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
-        a = bdist/DQMAG_SSM_SCALE
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
         if a>1:
             a=1
-        dqmag = DQMAG_SSM_MIN+minmax*a
+        dqmag = dqmag_min+minmax*a
         print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
 
         dq0[ICoordC.nicd-1] = -dqmag
@@ -166,17 +163,22 @@ class DLC(Base_DLC,Bmat,Utils):
         print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
-        ICoordC.bmatp_create()
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         ICoordC.mol.write('xyz','after.xyz',overwrite=True)
         
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
+        ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
         #ICoordC.dqmag = dqmag
 
         return ICoordC
 
     @staticmethod
-    def add_node_SE_X(ICoordA,driving_coordinate):
+    def add_node_SE_X(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2,BDISTMIN=0.05):
 
         dq0 = np.zeros((ICoordA.nicd,1))
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
@@ -195,25 +197,24 @@ class DLC(Base_DLC,Bmat,Utils):
             "bonds" : ICoordA.BObj.bonds,
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
-            "PES" : pes
+            "PES" : pes,
             }))
 
         ICoordC.setup()
-        ictan = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
+        if bdist<BDISTMIN:
+            print "bdist too small"
+            return 0
         ICoordC.opt_constraint(ictan)
-        bdist = np.linalg.norm(ictan)
-        #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
-        print 'bdist: {:2.14f}'.format(bdist)
-        ICoordC.bmatp_create()
+        #bdist = np.linalg.norm(ictan)
+        ICoordC.bmatp=ICoordC.bmatp_create()
         ICoordC.bmat_create()
-        DQMAG_SSM_MAX=0.8
-        DQMAG_SSM_MIN=0.2
-        DQMAG_SSM_SCALE=1.5
-        minmax = DQMAG_SSM_MAX - DQMAG_SSM_MIN
-        a = bdist/DQMAG_SSM_SCALE
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
         if a>1:
             a=1
-        dqmag = DQMAG_SSM_MIN+minmax*a
+        dqmag = dqmag_min+minmax*a
         print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
 
         dq0[ICoordC.nicd-1] = -dqmag
@@ -225,7 +226,12 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.bmatp_to_U()
         ICoordC.bmat_create()
         ICoordC.mol.write('xyz','after.xyz',overwrite=True)
+    
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
         ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
         
         #ICoordC.dqmag = dqmag
 
@@ -251,7 +257,6 @@ class DLC(Base_DLC,Bmat,Utils):
             "angles" : ICoordA.AObj.angles,
             "torsions" : ICoordA.TObj.torsions,
             "PES" : PES1,
-            'opt_type':1,
             }))
 
         ICoordC.setup()
@@ -275,44 +280,55 @@ class DLC(Base_DLC,Bmat,Utils):
 
     @staticmethod
     def copy_node(ICoordA,new_node_id,rtype=0):
+        if isinstance(ICoordA.PES,Penalty_PES):
+            ICoordC = DLC.copy_node_X(ICoordA,new_node_id,rtype)
+            return ICoordC
+        else:
+            ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+            mol1 = pb.readfile('xyz','tmp1.xyz').next()
+            lot1 = ICoordA.PES.lot.copy(
+                    ICoordA.PES.lot,
+                    new_node_id)
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
+
+            ICoordC = DLC(ICoordA.options.copy().set_values({
+                "mol" : mol1,
+                "bonds" : ICoordA.BObj.bonds,
+                "angles" : ICoordA.AObj.angles,
+                "torsions" : ICoordA.TObj.torsions,
+                "PES" : PES1,
+                }))
+
+            return ICoordC
+
+    @staticmethod
+    def copy_node_X(ICoordA,new_node_id,rtype=0):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(
-                ICoordA.PES.lot,
-                new_node_id)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
-
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "angles" : ICoordA.AObj.angles,
-            "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1,
-            'opt_type':rtype,
-            }))
-
-        return ICoordC
-
-    def copy_node_X(ICoordA,new_node_id):
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
+        do_coupling=False
+        if rtype>=5:
+            do_coupling=True
+        else:
+            do_coupling=False
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id,do_coupling=do_coupling)
         pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
             "lot": lot1,
             }))
         pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
             "lot": lot1,
             }))
-        pes = Penalty_PES(pes1,pes2)
+        if rtype>=5:
+            pes = Avg_PES(pes1,pes2)
+        else:
+            pes = Penalty_PES(pes1,pes2)
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol":mol1,
             "bonds":ICoordA.BObj.bonds,
             "angles":ICoordA.AObj.angles,
             "torsions":ICoordA.TObj.torsions,
             "PES":pes,
-            'opt_type': 1,
             }))
         ICoordC.setup()
         return ICoordC
@@ -675,7 +691,6 @@ class DLC(Base_DLC,Bmat,Utils):
 
     def grad_to_q(self,grad):
         gradq = np.dot(self.bmatti,grad)
-        #if nconstraints>0:
         return gradq
 
     def make_Hint(self):
@@ -704,49 +719,40 @@ class DLC(Base_DLC,Bmat,Utils):
         #if self.optCG==False or self.isTSnode==False:
         #    print "Not implemented"
 
-    def update_for_step(self,nconstraints):
-        self.energy = self.PES.get_energy(self.geom)
-        self.energyp = self.energy
+    def update_for_step(self,opt_type):
+        self.energy=self.energyp=self.PES.get_energy(self.geom)
         grad = self.PES.get_gradient(self.geom)
-        #if self.print_level==2:
-        #    print "bmatti"
-        #    print self.bmatti
-
-        if self.opt_type!=3 and self.opt_type!=4:
-            self.Hintp_to_Hint()
-        self.coorp = np.copy(self.coords)
-        # grad in ics
+        nconstraints=self.get_nconstraints(opt_type)
+        if opt_type!=3 and opt_type!=4:
+            self.Hint = self.Hintp_to_Hint()
+        # =>grad in ics<= #
         self.gradq = self.grad_to_q(grad)
         if self.print_level==2:
             print "gradq"
             print self.gradq.T
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
-        #print "gradrms after update %1.3f" %self.gradrms 
         self.pgradrms = self.gradrms
-        if self.gradrms < self.OPTTHRESH:
-            return 0.
 
         # => Update Hessian <= #
         self.pgradqprim=self.gradqprim
         self.gradqprim = np.dot(np.transpose(self.Ut),self.gradq)
     
         mode=1
-        if self.opt_type in [3,4]:
+        if opt_type in [3,4]:
             mode=2
         if self.update_hess == True:
             self.update_Hessian(mode)
         self.update_hess = True
 
 
-    def eigenvector_step(self,nconstraints,ictan):
+    def eigenvector_step(self,opt_type,ictan):
         # => Take Eigenvector Step <=#
-
-        if self.opt_type in [0,1,2,5,6,7]:
-            dq = self.update_ic_eigen(nconstraints)
-        elif self.opt_type ==3:
-            dq = self.update_ic_eigen_h(ictan)
-        elif self.opt_type==4:
-            dq = self.update_ic_eigen_ts(ictan)
+        if opt_type in [0,1,2,5,6,7]:
+            dq,opt_type = self.update_ic_eigen(opt_type)
+        elif opt_type ==3:
+            dq,opt_type = self.update_ic_eigen_h(ictan)
+        elif opt_type==4:
+            dq,opt_type = self.update_ic_eigen_ts(ictan)
 
         # regulate max overall step
         #TODO should this be after adding constraint step?
@@ -758,13 +764,13 @@ class DLC(Base_DLC,Bmat,Utils):
             dq = np.fromiter(( xi*self.DMAX/self.smag for xi in dq), dq.dtype)
         dq= np.asarray(dq).reshape(self.nicd,1)
 
-        return dq
+        return dq,opt_type
 
-    def step_controller(self):
+    def step_controller(self,opt_type):
 
         #do this if close to seam if coupling, don't do this if isTSnode or exact TS search (opt_type 4)
-        if ( self.dEstep>0.01 and not self.isTSnode and (self.opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<1.0))):
-            if self.print_level>1:
+        if ( self.dEstep>0.01 and not self.isTSnode and (opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<1.0))):
+            if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag <self.DMAX:
@@ -772,21 +778,21 @@ class DLC(Base_DLC,Bmat,Utils):
             else: 
                 self.DMAX = self.DMAX/1.5
             if self.dEstep > 2.0 and self.resetopt==True:
-                if self.print_level>0:
-                    print "resetting coords to coorp"
+                #if self.print_level>0:
+                print "resetting coords to coorp"
                 self.coords = self.coorp
-                self.energy = self.PES.get_energy(self.geom)
                 self.update_ics()
+                self.energy = self.PES.get_energy(self.geom)
                 self.update_hess=False
 
-        elif self.opt_type==4 and self.ratio<0. and abs(self.dEpre)>0.05:
+        elif opt_type==4 and self.ratio<0. and abs(self.dEpre)>0.05:
             if self.print_level>0:
                 print("sign problem, decreasing DMAX"),
             self.buf.write(" sign problem, decreasing DMAX")
             self.DMAX = self.DMAX/1.35
 
         elif (self.ratio<0.25 or self.ratio>1.5): #can also check that dEpre >0.05?
-            if self.print_level>1:
+            if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
             if self.smag<self.DMAX:
@@ -795,7 +801,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.DMAX = self.DMAX/1.2
 
         elif self.ratio>0.75 and self.ratio<1.25 and self.smag > self.DMAX and self.gradrms<(self.pgradrms*1.35):
-            if self.print_level>1:
+            if self.print_level>0:
                 print("increasing DMAX"),
             self.buf.write(" increasing DMAX")
             self.DMAX=self.DMAX*1.1 + 0.01
@@ -805,73 +811,64 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
 
-    def update_DLC(self,nconstraints,ictan):
-        if self.PES.lot.do_coupling is False:
-            if nconstraints==0:
-                self.form_unconstrained_DLC()
-            else:
-                constraints=ictan
-                self.form_constrained_DLC(constraints)
-        else:
-            if nconstraints==2:
-                self.form_CI_DLC()
-            elif nconstraints==3:
-                raise NotImplemented #TODO for seams
+    def update_DLC(self,opt_type,ictan):
+        if opt_type==0:
+            self.form_unconstrained_DLC()
+        elif opt_type in [1,2]:
+            self.form_constrained_DLC(ictan)
+        elif opt_type==5:
+            self.form_CI_DLC()
+        elif opt_type in [6,7]:
+            raise NotImplementedError #TODO for seams
 
-    def get_constraint_steps(self,nconstraints):
-        if nconstraints>0:
-            assert self.opt_type not in [3,4],"eigenvector following does not use constraint"
-        if self.opt_type in [5,6,7]:
-            assert nconstraints>=2,"CI optimization requires >=2 constraints"
-
+    def get_constraint_steps(self,opt_type):
+        nconstraints=self.get_nconstraints(opt_type)
         constraint_steps=[0]*nconstraints
         # => normal,ictan opt,follow
-        if self.opt_type in [0,1,3,4]:
+        if opt_type in [0,1,3,4]:
             return constraint_steps
         # => ictan climb
-        elif self.opt_type==2: 
+        elif opt_type==2: 
             constraint_steps[0]=self.walk_up(self.nicd-1)
         # => MECI
-        elif self.opt_type==5: 
+        elif opt_type==5: 
             constraint_steps[1] = self.dgrad_step() #last vector is x
         # => seam opt
-        elif self.opt_type==6:
+        elif opt_type==6:
             constraint_steps[1] = self.dgrad_step()  #2nd to last is x
         # => seam climb
-        elif self.opt_type==7:
+        elif opt_type==7:
             constraint_steps[1] = self.dgrad_step()  #2nd to last is x
             constraint_steps[2]=self.walk_up(self.nicd-1)
 
         return constraint_steps
 
-    def opt_step(self,nconstraints,ictan=None,refE=0):
-        if ictan is not None:
-            assert nconstraints>=1,"nconstraints >= 1 if ictan is not None"
-
+    def opt_step(self,opt_type=0,ictan=None,refE=0):
         # => update PES info <= #
-        if self.opt_type!=3 and self.opt_type!=4:
-            self.update_DLC(nconstraints,ictan)
+        if opt_type!=3 and opt_type!=4:
+            self.update_DLC(opt_type,ictan)
         else:
             self.bmatp = self.bmatp_create()
             self.bmat_create()
 
         # => update DLC, grad, Hess, etc
-        self.update_for_step(nconstraints)
+        self.update_for_step(opt_type)
 
         # => form eigenvector step in non-constrained space <= #
-        self.dq = self.eigenvector_step(nconstraints,ictan)
+        self.dq,opt_type = self.eigenvector_step(opt_type,ictan)
+        nconstraints=self.get_nconstraints(opt_type)
 
         # => calculate constraint step <= #
-        if self.opt_type not in [3,4]:
-            constraint_steps = self.get_constraint_steps(nconstraints)
-            # => add constraint_step to step <= #
-            for n in range(nconstraints):
-                self.dq[-nconstraints+n]=constraint_steps[n]
+        constraint_steps = self.get_constraint_steps(opt_type)
+        # => add constraint_step to step <= #
+        for n in range(nconstraints):
+            self.dq[-nconstraints+n]=constraint_steps[n]
         if self.print_level>1:
             print "dq for step is "
             print self.dq.T
 
         # => update geometry <=#
+        self.coorp = np.copy(self.coords)
         rflag = self.ic_to_xyz_opt(self.dq)
 
         #TODO if rflag and ixflag
@@ -887,13 +884,13 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %3.2f" %(self.energy - refE))
-        if self.print_level>1:
-            print "E(M): %3.5f" % (self.energy-refE),
+        self.buf.write(" E(M): %3.4f" %(self.energy - refE))
+        if self.print_level>0:
+            print " E(M): %3.5f" % (self.energy-refE),
 
         #form DLC at new position
-        if self.opt_type!=3 and self.opt_type!=4:
-            self.update_DLC(nconstraints,ictan)
+        if opt_type!=3 and opt_type!=4:
+            self.update_DLC(opt_type,ictan)
         else:
             self.bmatp = self.bmatp_create()
             self.bmat_create()
@@ -905,26 +902,28 @@ class DLC(Base_DLC,Bmat,Utils):
         # constraint contribution
         for n in range(nconstraints):
             self.dEpre +=self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
+            self.buf.write(" cg[%i] %1.3f" %(n,self.gradq[-n-1]))
 
         self.ratio = self.dEstep/self.dEpre
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
-        if self.print_level>1:
-            print "ratio is %1.4f" % self.ratio,
+        if self.print_level>0:
+            print " ratio is %1.4f" % self.ratio,
+            print " predE: %1.4f" %self.dEpre,
+            print " dEstep = %3.2f" %self.dEstep,
 
         grad = self.PES.get_gradient(self.geom)
         self.pgradq = np.copy(self.gradq)
         self.gradq = self.grad_to_q(grad)
         self.pgradrms = self.gradrms
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
-        if self.print_level>1:
+        if self.print_level>0:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
 
         # => step controller  <= #
-        self.step_controller()
+        self.step_controller(opt_type)
 
         return  self.smag
-
 
     def update_Hessian(self,mode=1):
         #print("In update bfgsp")

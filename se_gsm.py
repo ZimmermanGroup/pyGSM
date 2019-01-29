@@ -26,24 +26,28 @@ class SE_GSM(Base_Method):
             if "ADD" or "BREAK" in i:
                 bond=(i[1],i[2])
                 if not self.icoords[0].bond_exists(bond):
-                    print "adding bond ",bond
+                    print " adding bond ",bond
                     self.icoords[0].mol.OBMol.AddBond(bond[0],bond[1],1)
                     self.icoords[0].BObj.bonds.append(bond)
             if "ANGLE" in i:
                 angle=(i[1],i[2],i[3])
                 if not self.icoords[0].angle_exists(angle):
                     self.icoords[0].AObj.angles.append(bond)
-                    print "adding angle ",angle
+                    print " adding angle ",angle
             if "TORSION" in i:
                 torsion=(i[1],i[2],i[3],i[4])
                 if not self.icoords[0].torsion_exists(torsion):
-                    print "adding torsion ",torsion
+                    print " adding torsion ",torsion
                     self.icoords[0].TObj.torsions.append(torsion)
 
         self.icoords[0].madeBonds=True
         self.icoords[0].setup()
 
-    def go_gsm(self,max_iters,max_steps):
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
+        """rtype=0 Find and Climb TS,
+        1 Climb with no exact find, 
+        2 turning of climbing image and TS search"""
+
         if self.isRestarted==False:
             self.icoords[0].gradrms = 0.
             self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
@@ -53,7 +57,6 @@ class SE_GSM(Base_Method):
             self.growth_iters(iters=max_iters,maxopt=max_steps)
             if self.tscontinue==True:
                 if self.pastts==1: #normal over the hill
-                    #self.add_node(self.nR-1,self.nR)
                     self.interpolateR(1)
                     self.add_last_node(2)
                 elif self.pastts==2 or self.pastts==3: #when cgrad is positive
@@ -78,7 +81,7 @@ class SE_GSM(Base_Method):
         print " initial ic_reparam"
         self.ic_reparam()
         if self.tscontinue==True:
-            self.opt_iters(max_iter=max_iters,optsteps=3) #opt steps fixed at 3
+            self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
         else:
             print "Exiting early"
 
@@ -86,34 +89,40 @@ class SE_GSM(Base_Method):
 
 
     def add_node(self,n1,n2,n3=None):
-        print "adding node: %i from node %i" %(n2,n1)
-        return DLC.add_node_SE(self.icoords[n1],self.driving_coords)
+        print " adding node: %i from node %i" %(n2,n1)
+        return DLC.add_node_SE(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
 
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
         if rtype==1:
-            print "copying last node, opting"
+            print " copying last node, opting"
             self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
         elif rtype==2:
-            print "already created node, opting"
+            print " already created node, opting"
         noptsteps=15
         print " Optimizing node %i" % self.nR
         self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
         self.optimize(n=self.nR,nsteps=noptsteps)
         self.active[self.nR]=True
         if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
-            print "Opt did not produce new geometry"
+            print " Opt did not produce new geometry"
         else:
             self.nR+=1
         return
 
 
     def check_add_node(self):
-        if self.icoords[self.nR-1].gradrms < self.gaddmax:
+        success=True
+        #if self.icoords[self.nR-1].gradrms < self.gaddmax:
+        if self.icoords[self.nR-1].gradrms < self.ADD_NODE_TOL:
+            if self.nR == self.nnodes:
+                print " Ran out of nodes, exiting GSM"
+                raise ValueError
             self.active[self.nR-1] = False
             if self.icoords[self.nR] == 0:
-                self.interpolateR()
+                success=self.interpolateR()
+        return success
 
     def interpolate(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
@@ -151,7 +160,7 @@ class SE_GSM(Base_Method):
     def tangent(self,n1,n2):
         if n2 ==self.nR-1:
             print" getting tangent from node ",n2
-            return DLC.tangent_SE(self.icoords[n2],self.driving_coords)
+            return DLC.tangent_SE(self.icoords[n2],self.driving_coords,quiet=True)[0]
         elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
             print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
             return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
@@ -180,10 +189,10 @@ class SE_GSM(Base_Method):
             isDone=True
         return isDone
 
-    def check_opt(self,totalgrad,fp):
+    def check_opt(self,totalgrad,fp,rtype):
         isDone=False
         added=False
-        if self.nmax==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
+        if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
             if self.icoords[self.nR-1].gradrms>self.CONV_TOL:
 
                 print "TS node is second to last node, adding one more node"
@@ -201,18 +210,25 @@ class SE_GSM(Base_Method):
         if fp==-1: #total string is uphill
             print "fp == -1, check V_profile"
 
-            if self.tstype==2:
-                print "check for total dissociation"
-                #check break
-                #TODO
-                isDone=True
-            if self.tstype!=2:
-                print "flatland? set new start node to endpoint"
-                self.tscontinue=0
-                isDone=True
+            #if self.tstype==2:
+            #    print "check for total dissociation"
+            #    #check break
+            #    #TODO
+            #    isDone=True
+            #if self.tstype!=2:
+            #    print "flatland? set new start node to endpoint"
+            #    self.tscontinue=0
+            #    isDone=True
+            print "total dissociation"
+            self.tscontinue
+            isDone=True
 
-        if fp==--2:
+        if fp==-2:
             print "termination due to dissociation"
+            self.tscontinue=False
+            self.endearly=True #bools
+            isDone=True
+        if fp==0:
             self.tscontinue=False
             self.endearly=True #bools
             isDone=True
@@ -227,11 +243,11 @@ class SE_GSM(Base_Method):
                 isDone=True
 
         # => Convergence Criteria
-        if (((self.stage==1 and self.tstype==1) or self.stage==2) and
+        if (((self.stage==1 and rtype==1) or self.stage==2) and
                 self.icoords[self.TSnode].gradrms< self.CONV_TOL):
             self.tscontinue=False
             isDone=True
-        if (((self.stage==1 and self.tstype==1) or self.stage==2) and totalgrad<0.1 and
+        if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
                 self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL and self.emaxp+0.02> self.emax and 
                 self.emaxp-0.02< self.emax):
             self.tscontinue=False

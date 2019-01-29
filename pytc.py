@@ -4,6 +4,7 @@ from base_lot import *
 import numpy as np
 import manage_xyz as mx
 from units import *
+from collections import Counter
 
 
 class PyTC(Lot):
@@ -13,16 +14,37 @@ class PyTC(Lot):
     """
 
     def get_energy(self,geom,multiplicity,state):
+        if self.hasRanForCurrentCoords==False:
+            self.run(geom)
+        return self.getE(state,multiplicity)
+
+    def getE(self,state,multiplicity):
+        tmp = self.search_tuple(self.E,multiplicity)
+        return tmp[state][1]*KCAL_MOL_PER_AU
+
+    def run(self,geom):
+        self.E=[]
         #normal update
         coords = mx.xyz_to_np(geom)
         T = ls.Tensor.array(coords*ANGSTROM_TO_AU)
-        self.lot = self.lot.update_xyz(T)
         # from template
-        #geom = self.lot.casci.geometry.update_xyz(T)
-        #self.casci_from_template(geom,self.nocc)
-        S=multiplicity-1
-        tmp = self.lot.compute_energy(S=S,index=state)
-        return tmp*KCAL_MOL_PER_AU
+        if self.from_template:
+            geom2 = self.lot.casci.geometry.update_xyz(T)
+            self.casci_from_template(geom2,self.nocc) #creates new updated lot from casci1
+        else:
+            self.lot = self.lot.update_xyz(T)
+            filename="{}_rhf_update.molden".format(self.node_id)
+            self.lot.casci.reference.save_molden_file(filename)
+
+        for state in self.states:
+            multiplicity=state[0]
+            ad_idx=state[1]
+            S=multiplicity-1
+            self.E.append((multiplicity,self.lot.compute_energy(S=S,index=ad_idx)))
+        self.hasRanForCurrentCoords=True
+        print self.E
+
+        return
 
     def get_gradient(self,geom,multiplicity,state):
         S=multiplicity-1
@@ -36,10 +58,11 @@ class PyTC(Lot):
         return np.reshape(tmp[...],(3*len(tmp[...]),1))*ANGSTROM_TO_AU
 
     @staticmethod
-    def copy(PyTCA,node_id):
+    def copy(PyTCA,node_id,do_coupling=False):
         """ create a copy of this lot object"""
         obj = PyTC(PyTCA.options.copy().set_values({
             "node_id" :node_id,
+            "do_coupling":do_coupling,
             }))
         obj.lot = PyTCA.lot
         obj.casci1 = PyTCA.casci1
@@ -94,16 +117,28 @@ class PyTC(Lot):
         
         # => Calculate RHF of  the new molecule <= #
         ref2.compute_energy(Cact_mom=Cact_mom2)
-        ref2.save_molden_file('rhf2.molden')
+        filename="{}_rhf2.molden".format(self.node_id)
+        ref2.save_molden_file(filename)
    
 
         casci2 = psiw.CASCI(self.casci1.options.copy().set_values(dict(
             reference=ref2,
             nocc=fomo_nocc2,
             grad_thre_dp = 1.0E-8,
+            grad_thre_sp = 1.0E-16,
+            thre_dp = 1.0E-8,
+            thre_sp=1.0E-16,
+            print_level = 0,
             )))
     
         casci2.compute_energy()
+
+        ##over write self.casci1
+        self.casci1 = psiw.CASCI(casci2.options.copy().set_values(dict(
+            reference=ref2,
+            nocc=fomo_nocc2,
+            grad_thre_dp = 1.0E-6,
+            )))
 
         self.lot = psiw.CASCI_LOT.from_options(
             casci=casci2,
@@ -117,6 +152,9 @@ class PyTC(Lot):
             filepath2,
             nocc1,
             nocc2,
+            fomo_temp=0.3,
+            flip_occ_to_act=None,
+            flip_vir_to_act=None,
             ):
         """ creates casci1 object and geom2 and then calls casci_from_template"""
 
@@ -129,18 +167,21 @@ class PyTC(Lot):
 
         nalpha = nbeta = self.nactive/2
         fomo_method = 'gaussian'
-        fomo_temp = 0.3
         
-        singlets=self.search_tuple(self.states,1)
-        len_singlets = len(singlets)
-        triplets=self.search_tuple(self.states,3)
-        len_triplets = len(triplets)
-        singlet_inds = [i for i in range(len(singlets))]
-        triplet_inds = [i for i in range(len(triplets))]
-        singlet_states = [len_singlets]
-        triplet_states = [len_triplets]
-        S_inds = singlet_inds+triplet_inds
-        S_nstates = singlet_states+triplet_states
+        c = Counter(elem[0] for elem in self.states)
+        num_singlets = c[1] # returns number of singlets
+        num_triplets = c[3] # returns number of triplets
+        S_nstates=[]
+        if num_singlets>0:
+            S_nstates.append(num_singlets)
+        if num_triplets>0:
+            S_nstates.append(num_triplets)
+
+        S_inds=[]
+        if num_singlets>0:
+            S_inds.append(0)
+        if num_triplets>0:
+            S_inds.append(2)
 
         geom1 = psiw.Geometry.build(
             resources=resources,
@@ -160,6 +201,21 @@ class PyTC(Lot):
             )
         ref1.compute_energy()
 
+        Cocc = ls.Tensor.array(ref1.tensors['Cocc'])
+        Cvir = ls.Tensor.array(ref1.tensors['Cvir'])
+        Cact = ls.Tensor.array(ref1.tensors['Cact'])
+        if flip_occ_to_act is not None:
+            for flip in flip_occ_to_act:
+                Cact[:,flip[0]] =  ref1.tensors['Cocc'][:,flip[1]]
+        if flip_vir_to_act is not None:
+            for flip in flip_vir_to_act:
+                Cact[:,flip[0]] =  ref1.tensors['Cvir'][:,flip[1]]
+        if flip_occ_to_act is not None or flip_vir_to_act is not None:
+            ref1.compute_energy(
+                Cocc_mom=Cocc,
+                Cact_mom=Cact,
+                )
+
         # => save casci1 to memory <= #
         self.casci1 = psiw.CASCI.from_options(
             reference=ref1,
@@ -174,6 +230,7 @@ class PyTC(Lot):
 
         self.casci1.compute_energy()
         print "saving casci1 to memory"
+        self.casci1.reference.save_molden_file('rhf_ref.molden')
 
         geom2 = psiw.Geometry.build(
             resources=resources,
@@ -184,7 +241,7 @@ class PyTC(Lot):
         self.casci_from_template(geom2,nocc2)
 
 
-    def cas_from_file(
+    def casci_from_file(
             self,
             filepath,
             ):
@@ -197,22 +254,22 @@ class PyTC(Lot):
         nalpha = nbeta = self.nactive/2
         fomo_method = 'gaussian'
         fomo_temp = 0.3
-        
-        singlets=self.search_tuple(self.states,1)
-        len_singlets = len(singlets)
-        triplets=self.search_tuple(self.states,3)
-        len_triplets = len(triplets)
-        singlet_inds =  [len_singlets]
-        triplet_inds =  [len_triplets]
-        S_nstates = singlet_inds+triplet_inds
+       
+        c = Counter(elem[0] for elem in self.states)
+        num_singlets = c[1] # returns number of singlets
+        num_triplets = c[3] # returns number of triplets
+        S_nstates=[]
+        if num_singlets>0:
+            S_nstates.append(num_singlets)
+        if num_triplets>0:
+            S_nstates.append(num_triplets)
+
         S_inds=[]
-        if len_singlets>0:
+        if num_singlets>0:
             S_inds.append(0)
-        if len_triplets>0:
+        if num_triplets>0:
             S_inds.append(2)
        
-        print S_nstates
-        print S_inds
         geom1 = psiw.Geometry.build(
             resources=resources,
             molecule=molecule,
@@ -240,8 +297,10 @@ class PyTC(Lot):
             S_inds=S_inds,
             S_nstates=S_nstates,
             print_level=0,
-            #g_convergence=1.0E-6, #work?
             grad_thre_dp = 1.0E-8,
+            grad_thre_sp = 1.0E-16,
+            thre_dp = 1.0E-8,
+            thre_sp=1.0E-16,
             )
 
         self.casci1.compute_energy()

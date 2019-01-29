@@ -7,13 +7,15 @@ class Penalty_PES(PES):
 
     def __init__(self,
             PES1,
-            PES2):
+            PES2,
+            sigma=1.0,
+            alpha=0.02*KCAL_MOL_PER_AU):
         self.PES1 = PES1
         self.PES2 = PES2
         self.lot = PES1.lot
-        self.alpha = 0.02*KCAL_MOL_PER_AU
-        self.sigma = 3.5
-        print 'PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
+        self.alpha = alpha
+        self.sigma = sigma
+        print ' PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
 
 
     @staticmethod
@@ -28,21 +30,23 @@ class Penalty_PES(PES):
         avgE = 0.5*(E1+E2)
         #self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)
         self.dE = E2-E1
-        print "E1: %1.4f E2: %1.4f"%(E1,E2),
-        print "delta E = %1.4f" %self.dE,
+        #print "E1: %1.4f E2: %1.4f"%(E1,E2),
+        #print "delta E = %1.4f" %self.dE,
         #TODO what to do if PES2 is or goes lower than PES1?
         G = (self.dE*self.dE)/(abs(self.dE) + self.alpha)
         #if self.dE < 0:
         #    G*=-1
-        print "G = %1.4f" % G
-        print "alpha: %1.4f sigma: %1.4f"%(self.alpha,self.sigma),
-        print "F: %1.4f"%(avgE+self.sigma*G)
+        #print "G = %1.4f" % G
+        #print "alpha: %1.4f sigma: %1.4f"%(self.alpha,self.sigma),
+        #print "F: %1.4f"%(avgE+self.sigma*G)
         sys.stdout.flush()
         return avgE+self.sigma*G
 
     def get_gradient(self,geom):
-        avg_grad = 0.5*(self.PES1.get_gradient(geom) + self.PES2.get_gradient(geom))
-        dgrad = self.PES2.get_gradient(geom) - self.PES1.get_gradient(geom)
+        self.grad1 = self.PES1.get_gradient(geom)
+        self.grad2 = self.PES2.get_gradient(geom)
+        avg_grad = 0.5*(self.grad1 + self.grad2)
+        dgrad = self.grad2 - self.grad1
         if self.dE < 0:
             dgrad *= -1
         factor = self.sigma*((self.dE*self.dE) + 2.*self.alpha*abs(self.dE))/((abs(self.dE) + self.alpha)**2)

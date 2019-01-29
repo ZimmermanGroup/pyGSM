@@ -19,10 +19,19 @@ class ICoords:
             for j in range(1,i):
                 a = self.getAtomicNum(i)
                 b = self.getAtomicNum(j)
-                MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.
+                MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
                 d = self.distance(i,j)
                 if d<MAX_BOND_DIST:
                     bonds.append((i,j))
+
+        for bond in self.EXTRA_BONDS:
+            print "CHECK",bond
+            if bond in bonds or tuple(reversed(bond)) in bonds:
+                pass
+            else:
+                print "adding bond ",bond
+                bonds.append(bond)
+
         #for bond in ob.OBMolBondIter(self.mol.OBMol):
         #    nbonds+=1
         #    a=bond.GetBeginAtomIdx()
@@ -31,9 +40,8 @@ class ICoords:
         #        bonds.append((a,b))
         #    else:
         #        bonds.append((b,a))
-
-
         #bonds = sorted(bonds)
+        print bonds
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
         nbonds = len(bonds)
@@ -161,58 +169,86 @@ class ICoords:
         #print "\n"
         return np.asarray(ictan).reshape((ICoord1.num_ics,1))
 
-    def tangent_SE(ICoord1,driving_coordinates):
-        ictan = []
+    def tangent_SE(ICoord1,driving_coordinates,quiet=False):
         nadds = driving_coordinates.count("ADD")
         nbreaks = driving_coordinates.count("BREAK")
         nangles = driving_coordinates.count("ANGLE")
         ntorsions = driving_coordinates.count("TORSION")
         ictan = np.zeros((ICoord1.num_ics,1),dtype=float)
         breakdq = 0.3
+        bdist=0.0
 
         for i in driving_coordinates:
             if "ADD" in i:
                 bond = (i[1],i[2])
                 wbond = ICoord1.BObj.bond_num(bond)
-                d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))/2.8
+                if len(i)==3:
+                    d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))/2.8
+                elif len(i)==4:
+                    d0=i[3]
+                current_d = ICoord1.distance(bond[0],bond[1])
+                ictan[wbond] = -1*(d0-current_d)
+                #if nbreaks>0:
+                #    ictan[wbond] *= 2
+
+                # => calc bdist <=
                 if ICoord1.distance(bond[0],bond[1])>d0:
-                    ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1]))
-                if nbreaks>0:
-                    ictan[wbond] *= 2
-                if ICoord1.print_level>0:
-                    print "bond %s d0: %4.3f diff: %4.3f " % (i[1],d0,ictan[wbond])
+                    bdist += (ictan[wbond]*ictan[wbond])
+
+                if ICoord1.print_level>0 and not quiet:
+                    print " bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
+
             if "BREAK" in i:
                 bond = (i[1],i[2])
                 wbond = ICoord1.BObj.bond_num(bond)
-                d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))*2.
+                if len(i)==3:
+                    d0 = (ICoord1.get_element_VDW(bond[0]) + ICoord1.get_element_VDW(bond[1]))*2.
+                elif len(i)==4:
+                    d0=i[3]
+
+                current_d = ICoord1.distance(bond[0],bond[1])
+                ictan[wbond] = -1*(d0-current_d) 
+
+                # => calc bdist <=
                 if ICoord1.distance(bond[0],bond[1])<d0:
-                    ictan[wbond] = -1*(d0-ICoord1.distance(bond[0],bond[1])) # NOTE THAT THIS IS NOT HOW THE ORIGINAL GSM WORKED 
-                if ICoord1.print_level>0:
-                    print "bond %s d0: %4.3f diff: %4.3f " % (i[1],d0,ictan[wbond])
+                    bdist += (ictan[wbond]*ictan[wbond])
+
+                if ICoord1.print_level>0 and not quiet:
+                    print " bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
             if "ANGLE" in i:
                 angle=(i[1],i[2],i[3])
                 ang_idx = ICoord1.AObj.angle_num(angle)
                 anglet = i[4]
                 ang_diff = (anglet -ICoord1.AObj.anglev[ang_idx]) *np.pi/180.
-                print(" angle: %s is index %i " %(angle,ang_idx))
-                print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.AObj.anglev[ang_idx],anglet,ang_diff))
+                #print(" angle: %s is index %i " %(angle,ang_idx))
+                if ICoord1.print_level>0 and not quiet:
+                    print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.AObj.anglev[ang_idx],anglet,ang_diff))
                 ictan[ICoord1.BObj.nbonds+ang_idx] = -ang_diff
+
+                #TODO need to come up with an adist
+                #if abs(ang_diff)>0.1:
+                #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
             if "TORSION" in i:
                 torsion=(i[1],i[2],i[3],i[4])
                 tor_idx = ICoord1.TObj.torsion_num(torsion)
                 tort = i[5]
                 tor_diff = (tort -ICoord1.TObj.torv[tor_idx]) 
+                tmp_idx = ICoord1.BObj.nbonds+ICoord1.AObj.nangles+tor_idx
                 if tor_diff>180.:
                     tor_diff-=360.
                 elif tor_diff<-180.:
                     tor_diff+=360.
+                ictan[tmp_idx] = -tor_diff*np.pi/180.
+                #TODO need to come up with an adist
                 if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                    ictan[ICoord1.BObj.nbonds+ICoord1.AObj.nangles+tor_idx] = -tor_diff*np.pi/180.
-                print(" torsion: %s is index %i "%(i[1],tor_idx))
-                print(" torv: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
+                    bdist+=ictan[tmp_idx]*ictan[tmp_idx]
+                if ICoord1.print_level>0 and not quiet:
+                    print(" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
 
-
-        return ictan
+        bdist = np.sqrt(bdist)
+        if np.all(ictan==0.0):
+            raise RuntimeError, " All elements are zero"
+        return ictan,bdist[0]
 
 
 ######################  IC objects #####################################

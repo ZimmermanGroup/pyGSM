@@ -7,14 +7,24 @@ class Orca(Lot):
     
     def run(self,geom,multiplicity):
         
-        inpstring = '!'
-        inpstring += ' '+self.functional
-        inpstring += ' '+self.basis
-        inpstring += ' EnGrad\n\n'# SOSCF SlowConv \n\n'
-        inpstring += '%scf\nMaxIter 150\nconvergence medium\n sthresh 1e-7\n'
-        inpstring += 'thresh 1e-11\n tcut 1e-13 \n directresetfreq 1 \nend\n'
-        inpstring += '%pal\nnproc {}\nend\n\n'.format(self.nproc)
-        inpstring += '*xyz {} {}\n'.format(self.charge,multiplicity)
+        if self.lot_inp_file == False:
+            inpstring = '!'
+            inpstring += ' '+self.functional
+            inpstring += ' '+self.basis
+            inpstring += ' EnGrad\n\n'# SOSCF SlowConv \n\n'
+            inpstring += '%scf\nMaxIter 300\nconvergence strong\n sthresh 1e-7\n'
+            inpstring += 'thresh 1e-11\n tcut 1e-13 \n directresetfreq 1 \n SOSCFStart 0.00033\nend\n'
+            #inpstring += '%scf\nMaxIter 300\nend\n'
+            inpstring += '\n%maxcore 1000\n\n'
+            inpstring += '%pal\nnproc {}\nend\n\n'.format(self.nproc)
+        else:
+            inpstring = ''
+            with open(self.lot_inp_file) as lot_inp:
+                lot_inp_lines = lot_inp.readlines()
+            for line in lot_inp_lines:
+                inpstring += line
+
+        inpstring += '\n*xyz {} {}\n'.format(self.charge,multiplicity)
         for coord in geom:
             for i in coord:
                 inpstring += str(i)+' '
@@ -27,13 +37,25 @@ class Orca(Lot):
         
         path2orca = os.popen('which orca').read().rstrip()
 #        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
-        orcascr = 'temporcarun'
-        os.system('mkdir -p {}'.format(orcascr))
-        os.system('mv {} {}/'.format(tempfilename,orcascr))
-        cmd = 'cd {}; {} {} > {}.log; cd ..'.format(orcascr,path2orca,tempfilename,tempfilename)
+        user = os.environ['USER']
+        cwd = os.environ['PWD']
+        try:
+            slurmID = os.environ['SLURM_ARRAY_JOB_ID']
+            try:
+                slurmTASK = os.environ['SLURM_ARRAY_TASK_ID']
+                runscr = '/tmp/'+user+'/'+slurmID+'/'+slurmTASK
+            except:
+                runscr = '/tmp/'+user+'/'+slurmID
+        except:
+            orcascr = 'temporcarun'
+            runscr = '/tmp/'+user+'/'+orcascr
+
+        os.system('mkdir -p {}'.format(runscr))
+        os.system('mv {} {}/'.format(tempfilename,runscr))
+        cmd = 'cd {}; {} {} > {}/{}.log; cd {}'.format(runscr,path2orca,tempfilename,runscr,tempfilename,cwd)
         os.system(cmd)
 
-        engradpath = 'temporcarun/{}.engrad'.format(tempfilename) 
+        engradpath = runscr+'/{}.engrad'.format(tempfilename) 
         with open(engradpath) as engradfile:
             engradlines = engradfile.readlines()
 

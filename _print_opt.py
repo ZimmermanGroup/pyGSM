@@ -1,6 +1,7 @@
 import openbabel as ob
 import pybel as pb
 from penalty_pes import Penalty_PES
+from avg_pes import Avg_PES
 import os 
 
 
@@ -25,8 +26,7 @@ class Print:
             f.write("max-step\n")
             for step in steps:
                 f.write('{}\n'.format(step))
-            if isinstance(self.icoords[0].PES,Penalty_PES):
-                print 'NOTE: printing dEs as rms-step'
+            if isinstance(self.icoords[0].PES,Penalty_PES) or isinstance(self.icoords[0].PES,Avg_PES):
                 f.write('rms-step\n')
                 for dE in deltaEs:
                     f.write('{}\n'.format(dE))
@@ -68,7 +68,7 @@ class Print:
                     f.write('{}\n'.format(float(ico.gradrms)))
                 elif ico != 0:
                     f.write('{}\n'.format(float(ico.gradrms)))
-            if isinstance(self.icoords[0].PES,Penalty_PES):
+            if isinstance(self.icoords[0].PES,Penalty_PES) or isinstance(self.icoords[0].PES,Avg_PES):
                 print " WARNING: Printing dE as max-step in molden output "
                 f.write("max-step\n")
                 for ico,act in zip(self.icoords,self.active):
