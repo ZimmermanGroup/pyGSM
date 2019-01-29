@@ -193,7 +193,7 @@ class ICoords:
 
                 # => calc bdist <=
                 if ICoord1.distance(bond[0],bond[1])>d0:
-                    bdist += (ictan[wbond]*ictan[wbond])
+                    bdist += np.dot(ictan[wbond],ictan[wbond])
 
                 if ICoord1.print_level>0 and not quiet:
                     print " bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
@@ -211,7 +211,7 @@ class ICoords:
 
                 # => calc bdist <=
                 if ICoord1.distance(bond[0],bond[1])<d0:
-                    bdist += (ictan[wbond]*ictan[wbond])
+                    bdist += np.dot(ictan[wbond],ictan[wbond])
 
                 if ICoord1.print_level>0 and not quiet:
                     print " bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[wbond])
@@ -241,14 +241,14 @@ class ICoords:
                 ictan[tmp_idx] = -tor_diff*np.pi/180.
                 #TODO need to come up with an adist
                 if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                    bdist+=ictan[tmp_idx]*ictan[tmp_idx]
+                    bdist += np.dot(ictan[tmp_idx],ictan[tmp_idx])
                 if ICoord1.print_level>0 and not quiet:
                     print(" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(ICoord1.TObj.torv[tor_idx],tort,tor_diff))
 
         bdist = np.sqrt(bdist)
         if np.all(ictan==0.0):
             raise RuntimeError, " All elements are zero"
-        return ictan,bdist[0]
+        return ictan,bdist
 
 
 ######################  IC objects #####################################
