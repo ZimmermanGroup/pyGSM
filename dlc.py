@@ -174,6 +174,7 @@ class DLC(Base_DLC,Bmat,Utils):
         if np.all(ictan==0.0):
             raise RuntimeError
         #ICoordC.dqmag = dqmag
+        ICoordC.Hintp = ICoordA.Hintp
 
         return ICoordC
 
@@ -234,6 +235,7 @@ class DLC(Base_DLC,Bmat,Utils):
             raise RuntimeError
         
         #ICoordC.dqmag = dqmag
+        ICoordC.Hintp = ICoordA.Hintp
 
         return ICoordC
 
@@ -274,7 +276,7 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.update_ics()
         ICoordC.form_unconstrained_DLC()
 
-        #TODO can have ICoordC get Hintp matrix from A...
+        ICoordC.Hintp = ICoordA.Hintp
 
         return ICoordC
 
@@ -300,6 +302,7 @@ class DLC(Base_DLC,Bmat,Utils):
                 "torsions" : ICoordA.TObj.torsions,
                 "PES" : PES1,
                 }))
+            ICoordC.Hintp = ICoordA.Hintp
 
             return ICoordC
 
@@ -331,6 +334,7 @@ class DLC(Base_DLC,Bmat,Utils):
             "PES":pes,
             }))
         ICoordC.setup()
+        ICoordC.Hintp = ICoordA.Hintp
         return ICoordC
 
     def ic_create(self):
