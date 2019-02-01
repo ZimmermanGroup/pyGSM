@@ -311,7 +311,7 @@ class Base_Method(object,Print,Analyze):
         else:
             return False
 
-    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=0):
+    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
         print "*********************************************************************"
         print "************************** in opt_iters *****************************"
         print "*********************************************************************"
@@ -350,13 +350,6 @@ class Base_Method(object,Print,Analyze):
             fp = self.find_peaks(2)
             print " fp = ",fp
 
-            # => set stage <= #
-            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
-            ts_gradrms=self.icoords[self.TSnode].gradrms
-            self.dE_iter=abs(self.emax-self.emaxp)
-            print " dE_iter ={:1.2}".format(self.dE_iter)
-            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,self.dE_iter,nclimb)
-
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
@@ -367,6 +360,13 @@ class Base_Method(object,Print,Analyze):
                 break
             if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
                 break
+
+            # => set stage <= #
+            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
+            ts_gradrms=self.icoords[self.TSnode].gradrms
+            self.dE_iter=abs(self.emax-self.emaxp)
+            print " dE_iter ={:1.2}".format(self.dE_iter)
+            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,self.dE_iter,nclimb)
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -658,22 +658,23 @@ class Base_Method(object,Print,Analyze):
         self._stage=value
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
-        if totalgrad<0.3 and fp>0:
+        if (fp>0 and ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10) or
+                (totalgrad<0.3 and dE_iter<0.1 and ts_gradrms<self.CONV_TOL*2.5))):
             if self.stage==0 and self.climber:
                 print(" ** starting climb **")
                 self.stage=1
                 return nclimb
-            if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
-                    ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
-                    (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
-                    (ts_gradrms<self.CONV_TOL*5.))
-                    ):
-                print(" ** starting exact climb **")
-                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
-                self.stage=2
-                self.get_eigenv_finite(self.TSnode)
-            if self.stage==1: #TODO this doesn't do anything
-                nclimb-=1
+        if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
+                ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
+                (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
+                (ts_gradrms<self.CONV_TOL*5.))
+                ):
+            print(" ** starting exact climb **")
+            print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+            self.stage=2
+            self.get_eigenv_finite(self.TSnode)
+        if self.stage==1: #TODO this doesn't do anything
+            nclimb-=1
         return nclimb
 
     def interpolateR(self,newnodes=1):
@@ -1077,14 +1078,19 @@ class Base_Method(object,Print,Analyze):
         #    opt_type==3
         if self.stage>1 and self.icoords[n].isTSnode==True:
             opt_type=4 #eigenvector follow
+        if self.icoords[n].PES.lot.do_coupling==True:
+            opt_type=6
+        if self.stage==1 and self.icoords[n].isTSnode==True and opt_type==5:
+            opt_type=7
         print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
+
         return opt_type
 
     def set_finder(self,rtype):
         assert rtype in [0,1,2], "rtype not defined"
         print ''
         print "*********************************************************************"
-        if rtype==0:
+        if rtype==2:
             print "****************** set climber and finder to True*****************"
             self.climber=True
             self.finder=True

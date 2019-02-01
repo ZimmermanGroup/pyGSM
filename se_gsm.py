@@ -43,10 +43,12 @@ class SE_GSM(Base_Method):
         self.icoords[0].madeBonds=True
         self.icoords[0].setup()
 
-    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
-        """rtype=0 Find and Climb TS,
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
+        """
+        rtype=2 Find and Climb TS,
         1 Climb with no exact find, 
-        2 turning of climbing image and TS search"""
+        0 turning of climbing image and TS search
+        """
 
         if self.isRestarted==False:
             self.icoords[0].gradrms = 0.

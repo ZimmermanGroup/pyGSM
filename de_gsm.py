@@ -37,10 +37,12 @@ class GSM(Base_Method):
         if self.growth_direction !=1:
             print "print levels at beginning are ",self.icoords[-1].print_level
 
-    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
-        """rtype=0 Find and Climb TS,
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
+        """
+        rtype=2 Find and Climb TS,
         1 Climb with no exact find, 
-        2 turning of climbing image and TS search"""
+        0 turning of climbing image and TS search
+        """
 
         V0=self.set_V0()
         if not self.isRestarted:
@@ -178,12 +180,13 @@ class GSM(Base_Method):
 
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
-        if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
-            isDone=True
-            self.tscontinue=False
-        if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
-            isDone=True
-            self.tscontinue=False
+        if rtype==self.stage:
+            if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
+                isDone=True
+                self.tscontinue=False
+            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+                isDone=True
+                self.tscontinue=False
         return isDone
 
     def set_V0(self):
