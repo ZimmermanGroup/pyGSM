@@ -263,7 +263,6 @@ class Base_Method(object,Print,Analyze):
         Es =[]
         self.icoords[n].update_hess=False # gets reset after each step
         self.icoords[n].buf = StringIO.StringIO()
-        #self.icoords[n].node_id = n  # set node id is this necessary?
 
         if self.icoords[n].print_level>0:
             print " Initial energy is %1.4f" % self.icoords[n].V0
@@ -433,10 +432,6 @@ class Base_Method(object,Print,Analyze):
         nbonds = self.icoords[0].BObj.nbonds
         nangles = self.icoords[0].AObj.nangles
         ntor = self.icoords[0].TObj.ntor
-        #ictan = np.zeros((self.nnodes,size_ic))
-
-        #ictan = [[]]*self.nnodes
-        #ictan0 = np.copy(ictan[0])
         ictan0 = np.zeros((size_ic,1))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes,self.nnodes))
@@ -470,7 +465,6 @@ class Base_Method(object,Print,Analyze):
                     intic_n = n+1
                     int2ic_n = n-1
             if not do3:
-                #ictan[n,:]=np.transpose(self.tangent(newic_n,intic_n))
                 ictan0 = self.tangent(newic_n,intic_n)
             else:
                 f1 = 0.
@@ -507,7 +501,6 @@ class Base_Method(object,Print,Analyze):
                         tmp2 = 2*np.pi + tmp2
                     t1[nbonds+nangles+i] = tmp1
                     t2[nbonds+nangles+i] = tmp2
-                #ictan[n,:] = f1*t1 + (1-f1)*t2
                 ictan0 = f1*t1 +(1-f1)*t2
                 ictan0 = ictan0.reshape((size_ic,1))
                 self.ictan[n]=ictan0
@@ -530,7 +523,6 @@ class Base_Method(object,Print,Analyze):
             print '------------printing dqmaga---------------'
             print dqmaga
         self.dqmaga = dqmaga
-        #self.ictan = ictan
 
     def get_tangents_1g(self):
         """
@@ -608,7 +600,6 @@ class Base_Method(object,Print,Analyze):
         return n
 
     def opt_steps(self,opt_steps):
-
         # these can be put in a function
         for n in range(self.nnodes):
             if self.icoords[n]!=0:
@@ -712,7 +703,7 @@ class Base_Method(object,Print,Analyze):
             print " nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[-self.nP] = True
 
-    def ic_reparam(self,ic_reparam_steps=4,n0=0,nconstraints=1,rtype=0):
+    def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
         num_ics = self.icoords[0].num_ics
         len_d = self.icoords[0].nicd
         ictalloc = self.nnodes+1
@@ -858,7 +849,7 @@ class Base_Method(object,Print,Analyze):
         print
         print "  disprms: {:1.3}\n".format(disprms)
 
-    def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
+    def ic_reparam_g(self,ic_reparam_steps=8,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
 
         #close_dist_fix(0) #done here in GString line 3427.

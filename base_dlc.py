@@ -143,9 +143,6 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
 
     def setup(self):
         raise NotImplementedError()
-
-    # can be inherited and modified for hybrid
-
     def ic_create(self):
         raise NotImplementedError()
     def update_ics(self):

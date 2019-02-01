@@ -117,14 +117,7 @@ class DLC(Base_DLC,Bmat,Utils):
             'mol':mol1,
             'PES':PES1,
             }))
-        #return DLC.from_options(
-        #        bonds= bondA,
-        #        angles= angleA,
-        #        torsions= torsionA,
-        #        mol = mol1,
-        #        PES = PES1,
-        #        nicd= icoordA.nicd
-        #        )
+
     @staticmethod
     def add_node_SE(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2):
 
@@ -344,7 +337,7 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.madeBonds==False:
             print " making bonds"
             self.BObj = self.make_bonds()
-            #TODO 
+            #TODO  not sure what this isOpt thing is for 1/30/2019 CRA
             if self.isOpt>0:
                 print(" isOpt: %i" %self.isOpt)
                 self.nfrags,self.frags = self.make_frags()

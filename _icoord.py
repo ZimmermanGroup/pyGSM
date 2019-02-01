@@ -25,11 +25,10 @@ class ICoords:
                     bonds.append((i,j))
 
         for bond in self.EXTRA_BONDS:
-            print "CHECK",bond
             if bond in bonds or tuple(reversed(bond)) in bonds:
                 pass
             else:
-                print "adding bond ",bond
+                print "adding EXTRA bond ",bond
                 bonds.append(bond)
 
         #for bond in ob.OBMolBondIter(self.mol.OBMol):
