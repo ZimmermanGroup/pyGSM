@@ -80,7 +80,7 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
                 )
 
         opt.add_option(
-                key="nicd",
+                key="FZN_ATOMS",
                 value=None,
                 required=False,
                 )
@@ -119,14 +119,14 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         self.torsions = self.options['torsions']
         self.print_level=self.options['print_level']
         self.resetopt=self.options['resetopt']
-        self.nicd=self.options['nicd']
         self.OPTTHRESH=self.options['OPTTHRESH']
+        self.FZN_ATOMS=self.options['FZN_ATOMS']
         self.EXTRA_BONDS=self.options['EXTRA_BONDS']
         self.madeBonds = False
         self.isTSnode = False
         self.update_hess=False
-        self.buf = StringIO.StringIO()
-        self.HESS_TANG_TOL_TS=0.35
+        self.buf = StringIO.StringIO() 
+        self.HESS_TANG_TOL_TS=0.5 #was 0.35
         self.HESS_TANG_TOL=0.75
         self.path_overlap=0.0
         self.V0 = 0.0

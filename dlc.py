@@ -55,6 +55,10 @@ class DLC(Base_DLC,Bmat,Utils):
         myelements = [ Elements.from_atomic_number(i) for i in atomic_nums]
         atomic_symbols = [ele.symbol for ele in myelements]
         self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
+        if self.FZN_ATOMS is not None:
+            print "Freezing atoms",self.FZN_ATOMS
+            assert self.FZN_ATOMS>0, "Frozen atom index is 1 indexed"
+            assert self.FZN_ATOMS<len(atomic_nums)+1, "Frozen atom index must be in set of atoms."
 
 
     @staticmethod
@@ -507,7 +511,10 @@ class DLC(Base_DLC,Bmat,Utils):
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
-            #TODO Frozen
+            # => Frozen <= #
+            if self.FZN_ATOMS is not None:
+                for a in [3*i for i in self.FZN_ATOMS]:
+                    xyzd[a:a+3]=0.
 
             # => Calc Mag <= #
             mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
@@ -584,7 +591,11 @@ class DLC(Base_DLC,Bmat,Utils):
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
-            #TODO frozen
+            # => Frozen <= #
+            if self.FZN_ATOMS is not None:
+                for a in [3*i for i in self.FZN_ATOMS]:
+                    xyzd[a:a+3]=0.
+
             # => Add Change in Coords <= #
             xyz1 = self.coords + xyzd/SCALEBT 
 
@@ -687,6 +698,9 @@ class DLC(Base_DLC,Bmat,Utils):
             return rflag
 
     def grad_to_q(self,grad):
+        if self.FZN_ATOMS is not None:
+            for a in [3*i for i in self.FZN_ATOMS]:
+                grad[a:a+3]=0.
         gradq = np.dot(self.bmatti,grad)
         return gradq
 
