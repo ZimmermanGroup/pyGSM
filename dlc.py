@@ -731,6 +731,7 @@ class DLC(Base_DLC,Bmat,Utils):
             self.Hint = self.Hintp_to_Hint()
         # =>grad in ics<= #
         self.gradq = self.grad_to_q(grad)
+        self.pgradq = np.copy(self.gradq)
         if self.print_level==2:
             print "gradq"
             print self.gradq.T
@@ -787,6 +788,10 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.coords = self.coorp
                 self.update_ics()
                 self.energy = self.PES.get_energy(self.geom)
+                grad = self.PES.get_gradient(self.geom)
+                self.gradq = self.grad_to_q(grad)
+                nconstraints=self.get_nconstraints(opt_type)
+                self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
                 self.update_hess=False
 
         elif opt_type==4 and self.ratio<0. and abs(self.dEpre)>0.05:
@@ -857,6 +862,8 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # => update DLC, grad, Hess, etc
         self.update_for_step(opt_type)
+        if self.gradrms<self.OPTTHRESH:
+            return 0.
 
         # => form eigenvector step in non-constrained space <= #
         self.dq,opt_type = self.eigenvector_step(opt_type,ictan)
@@ -888,9 +895,6 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %3.4f" %(self.energy - refE))
-        if self.print_level>0:
-            print " E(M): %3.5f" % (self.energy-refE),
 
         #form DLC at new position
         if opt_type!=3 and opt_type!=4:
@@ -906,26 +910,30 @@ class DLC(Base_DLC,Bmat,Utils):
         # constraint contribution
         for n in range(nconstraints):
             self.dEpre +=self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
-            self.buf.write(" cg[%i] %1.3f" %(n,self.gradq[-n-1]))
 
+        # ratio and gradrms
         self.ratio = self.dEstep/self.dEpre
+        grad = self.PES.get_gradient(self.geom)
+        self.gradq = self.grad_to_q(grad)
+        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+
+        # => step controller  <= #
+        self.step_controller(opt_type)
+
+        self.buf.write(" E(M): %3.4f" %(self.energy - refE))
+        if self.print_level>0:
+            print " E(M): %3.5f" % (self.energy-refE),
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
         if self.print_level>0:
             print " ratio is %1.4f" % self.ratio,
             print " predE: %1.4f" %self.dEpre,
             print " dEstep = %3.2f" %self.dEstep,
 
-        grad = self.PES.get_gradient(self.geom)
-        self.pgradq = np.copy(self.gradq)
-        self.gradq = self.grad_to_q(grad)
-        self.pgradrms = self.gradrms
-        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+        for n in range(nconstraints):
+            self.buf.write(" cg[%i] %1.3f" %(n,self.gradq[-n-1]))
         if self.print_level>0:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
-
-        # => step controller  <= #
-        self.step_controller(opt_type)
 
         return  self.smag
 
