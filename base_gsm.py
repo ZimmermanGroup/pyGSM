@@ -151,6 +151,7 @@ class Base_Method(object,Print,Analyze):
         self.ictan = [[]]*self.nnodes
 
     def restart_string(self,xyzbase='restart'):#,nR,nP):
+        self.growth_direction=0
         xyzfile=xyzbase+".xyz"
         with open(xyzfile) as f:
             nlines = sum(1 for _ in f)
@@ -624,6 +625,8 @@ class Base_Method(object,Print,Analyze):
         if self.last_node_fixed==False:
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
                 optlastnode=True
+            if self.icoords[self.nnodes-1].gradrms<self.CONV_TOL:
+                optlastnode=True
 
         for n in range(self.nnodes):
             if self.icoords[n] != 0 and self.active[n]==True:
@@ -635,16 +638,17 @@ class Base_Method(object,Print,Analyze):
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
                     exsteps=2
-                    print " doubling steps for node %i" % n
-                if self.stage==2 and n==self.TSnode and opt_type==4:
+                    print " multiplying steps for node %i by %i" % (n,exsteps)
+                if self.stage>0 and n==self.TSnode: #and opt_type==4:
                     exsteps=2
-                    print " doubling steps for node %i" % n
+                    print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
                 self.icoords[n].smag = self.optimize(n=n,nsteps=opt_steps*exsteps,opt_type=opt_type,ictan=self.ictan[n])
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
-                self.icoords[n].smag = self.optimize(n,opt_steps,opt_type=0) #non-constrained optimization
+                print " optimizing last node"
+                self.icoords[n].smag = self.optimize(n,opt_steps,opt_type=0) #non-constrained optimization  
 
     @property
     def stage(self):
