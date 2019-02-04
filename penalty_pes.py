@@ -9,11 +9,20 @@ class Penalty_PES(PES):
             PES1,
             PES2,
             sigma=1.0,
-            alpha=0.02*KCAL_MOL_PER_AU):
-        self.PES1 = PES1
-        self.PES2 = PES2
-        self.lot = PES1.lot
+            alpha=0.02*KCAL_MOL_PER_AU,
+            lot,
+            ):
+        #self.PES1 = PES1
+        #self.PES2 = PES2
+        self.PES1 = PES(PES1.options.copy().set_values({
+            "lot": lot,
+            }))
+        self.PES2 = PES(PES2.options.copy().set_values({
+            "lot": lot,
+            }))
+        self.lot = lot
         self.alpha = alpha
+        self.dE = 1000.
         self.sigma = sigma
         print ' PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity)
 
@@ -53,66 +62,4 @@ class Penalty_PES(PES):
         #print "factor is %1.4f" % factor
         return avg_grad + factor*dgrad
 
-
-if __name__ == '__main__':
-    if 1:
-        from pytc import *
-        import dlc as ic
-        import pybel as pb
-        from units import  *
-        #filepath1="tests/ethylene.xyz"
-        filepath2="tests/twisted_ethene.xyz"
-        nocc=7
-        nactive=2
-        lot=PyTC.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs')
-        lot.cas_from_file(filepath2)
-        #lot.casci_from_file_from_template(filepath1,filepath2,nocc,nocc)
-        pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-        pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
-
-        p = Penalty_PES(pes1.options.copy().set_values({
-            'PES1':pes1,
-            'PES2':pes2,
-            }))
-        #p.get_energy()
-        #p.getGrad()
-        mol=pb.readfile("xyz",filepath2).next()
-        mol.OBMol.AddBond(6,1,1)
-        print "ic1"
-        ic1=ic.ICoord.from_options(mol=mol,PES=p,resetopt=False)
-
-        for i in range(1):
-            ic1.optimize(100)
-            if ic1.gradrms<ic1.OPTTHRESH:
-                break
-            if  ic1.lot.dE>0.001*KCAL_MOL_PER_AU:
-                ic1.lot.sigma *=2.
-                print "increasing sigma %1.2f" % ic1.lot.sigma
-        print "Finished"
-    if 0:
-        from molpro import *
-        import icoord as ic
-        import pybel as pb
-        from units import  *
-        filepath="tests/twisted_ethene.xyz"
-        geom=manage_xyz.read_xyz(filepath,scale=1)   
-        nocc=7
-        nactive=2
-        lot=Molpro.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31g*',nproc=4)
-        pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-        pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
-        #p = Penalty_PES(pes1,pes2)
-        p = Penalty_PES(pes1.options.copy().set_values({
-            'PES1':pes1,
-            'PES2':pes2,
-            }))
-
-        #e =p.get_energy(geom)
-        #g =p.get_gradient(geom)
-        #print e 
-        #print g
-        mol=pb.readfile("xyz",filepath).next()
-        mol.OBMol.AddBond(6,1,1)
-        print "####### ic1 ##########"
-        ic1=ic.ICoord.from_options(mol=mol,PES=p,resetopt=False)
 

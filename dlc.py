@@ -110,10 +110,15 @@ class DLC(Base_DLC,Bmat,Utils):
         print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
+
         lot1 = icoordA.PES.lot.copy(icoordA.PES.lot,icoordA.PES.lot.node_id)
-        PES1 = PES(icoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+        if icoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(icoordA.PES.PES1,icoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(icoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
+
         return DLC(icoordA.options.copy().set_values({
             "bonds":bondA,
             "angles":angleA,
@@ -129,9 +134,12 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
         lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+        if ICoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.BObj.bonds,
@@ -188,7 +196,7 @@ class DLC(Base_DLC,Bmat,Utils):
         pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
             "lot": lot1,
             }))
-        pes = Penalty_PES(pes1,pes2)
+        pes = Penalty_PES(pes1,pes2,lot1)
 
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
@@ -247,9 +255,14 @@ class DLC(Base_DLC,Bmat,Utils):
         else:
             node_id = ICoordA.PES.lot.node_id - 1
         lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,node_id)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+
+        #TODO can make this better, ask Josh
+        if ICoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol" : mol1,
             "bonds" : ICoordA.BObj.bonds,
@@ -272,6 +285,7 @@ class DLC(Base_DLC,Bmat,Utils):
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
         ICoordC.form_unconstrained_DLC()
+        assert ICoordC.PES.lot.hasRanForCurrentCoords==False,"WTH1"
 
         ICoordC.Hintp = ICoordA.Hintp
 
@@ -288,9 +302,12 @@ class DLC(Base_DLC,Bmat,Utils):
             lot1 = ICoordA.PES.lot.copy(
                     ICoordA.PES.lot,
                     new_node_id)
-            PES1 = PES(ICoordA.PES.options.copy().set_values({
-                "lot": lot1,
-                }))
+            if ICoordA.PES.__class__.__name__=="Avg_PES":
+                PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+            else:
+                PES1 = PES(ICoordA.PES.options.copy().set_values({
+                    "lot": lot1,
+                    }))
 
             ICoordC = DLC(ICoordA.options.copy().set_values({
                 "mol" : mol1,
@@ -307,12 +324,9 @@ class DLC(Base_DLC,Bmat,Utils):
     def copy_node_X(ICoordA,new_node_id,rtype=0):
         ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        do_coupling=False
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
         if rtype>=5:
-            do_coupling=True
-        else:
-            do_coupling=False
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id,do_coupling=do_coupling)
+            lot1.do_coupling=True
         pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
             "lot": lot1,
             }))
@@ -320,9 +334,9 @@ class DLC(Base_DLC,Bmat,Utils):
             "lot": lot1,
             }))
         if rtype>=5:
-            pes = Avg_PES(pes1,pes2)
+            pes = Avg_PES(pes1,pes2,lot1)
         else:
-            pes = Penalty_PES(pes1,pes2)
+            pes = Penalty_PES(pes1,pes2,lot1)
         ICoordC = DLC(ICoordA.options.copy().set_values({
             "mol":mol1,
             "bonds":ICoordA.BObj.bonds,
@@ -488,7 +502,7 @@ class DLC(Base_DLC,Bmat,Utils):
 
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
-        self.update_ics()
+        assert np.shape(dq) == np.shape(self.q),"operands could not be broadcas"
         self.bmatp=self.bmatp_create()
         self.bmat_create()
         SCALEBT = 1.5
@@ -835,7 +849,8 @@ class DLC(Base_DLC,Bmat,Utils):
         elif opt_type==5:
             self.form_CI_DLC()
         elif opt_type in [6,7]:
-            raise NotImplementedError #TODO for seams
+            self.form_constrained_CI_DLC(constraints=ictan)
+            #raise NotImplementedError #TODO for seams
 
     def get_constraint_steps(self,opt_type):
         nconstraints=self.get_nconstraints(opt_type)
@@ -851,11 +866,11 @@ class DLC(Base_DLC,Bmat,Utils):
             constraint_steps[1] = self.dgrad_step() #last vector is x
         # => seam opt
         elif opt_type==6:
-            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
+            constraint_steps[1] = self.dgrad_step()  #0 is dvec, 1 is dgrad, 3 is ictan
         # => seam climb
         elif opt_type==7:
-            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
-            constraint_steps[2]=self.walk_up(self.nicd-1)
+            constraint_steps[1] = self.dgrad_step()  #0 is dvec, 1 is dgrad, 3 is ictan
+            constraint_steps[0]=self.walk_up(self.nicd-1)
 
         return constraint_steps
 
@@ -1046,6 +1061,23 @@ class DLC(Base_DLC,Bmat,Utils):
         self.opt_constraint(constraints)
         self.bmat_create()
         #self.Hint = self.Hintp_to_Hint()
+
+    def form_constrained_CI_DLC(self,constraints):
+        self.form_unconstrained_DLC()
+        dvec = self.PES.get_coupling(self.geom)
+        dgrad = self.PES.get_dgrad(self.geom)
+        dvecq = self.grad_to_q(dvec)
+        dgradq = self.grad_to_q(dgrad)
+        dvecq_U = self.fromDLC_to_ICbasis(dvecq)
+        dgradq_U = self.fromDLC_to_ICbasis(dgradq)
+        extra_constraints = np.shape(constraints)[1]
+        constraints = np.zeros((len(dvecq_U),3),dtype=float) #extra constraints=1
+        constraints[:,0] = dvecq_U[:,0]
+        constraints[:,1] = dgradq_U[:,0]
+        constraints[:,2] = constraints[:,0]
+        self.opt_constraint(constraints)
+        self.bmat_create()
+
 
     def form_constrained_DLC(self,constraints):
         self.form_unconstrained_DLC()
