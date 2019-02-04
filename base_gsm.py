@@ -540,10 +540,17 @@ class Base_Method(object,Print,Analyze):
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
-
             if self.icoords[nlist[2*n+1]].print_level>1:
                 print "forming space for", nlist[2*n+1]
-            self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+
+            opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)
+            if opt_type==6:
+                if nlist[2*n+1]== self.nnodes-1 and self.growth_direction==1:
+                    self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+                else:
+                    self.icoords[nlist[2*n+1]].form_constrained_CI_DLC(self.ictan[nlist[2*n]])
+            else:
+                self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
@@ -600,6 +607,8 @@ class Base_Method(object,Print,Analyze):
         return n
 
     def opt_steps(self,opt_steps):
+
+        print "in opt_steps"
         # these can be put in a function
         for n in range(self.nnodes):
             if self.icoords[n]!=0:
@@ -616,7 +625,7 @@ class Base_Method(object,Print,Analyze):
         if self.last_node_fixed==False:
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
                 optlastnode=True
-            if self.icoords[self.nnodes-1].gradrms<self.CONV_TOL:
+            if self.icoords[self.nnodes-1].gradrms>self.CONV_TOL:
                 optlastnode=True
 
         for n in range(self.nnodes):
@@ -690,6 +699,7 @@ class Base_Method(object,Print,Analyze):
             print " nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[self.nR-1] = True
 
+
         return success
 
     def interpolateP(self,newnodes=1):
@@ -733,7 +743,7 @@ class Base_Method(object,Print,Analyze):
 
             totaldqmag = 0.
             totaldqmag = np.sum(self.dqmaga[n0+1:self.nnodes])
-            print " totaldqmag = %1.3f" %totaldqmag
+            #print " totaldqmag = %1.3f" %totaldqmag
             dqavg = totaldqmag/(self.nnodes-1)
 
             #if climb:
@@ -828,28 +838,44 @@ class Base_Method(object,Print,Analyze):
                 #print "moving node %i %1.3f" % (n,rpmove[n])
                 self.newic.set_xyz(self.icoords[n].coords) 
                 self.newic.update_ics()
+                opt_type=self.set_opt_type(n,quiet=True)
 
                 if rpmove[n] < 0.:
                     ictan[n] = np.copy(ictan0[n]) 
                 else:
                     ictan[n] = np.copy(ictan0[n+1]) 
 
-                self.newic.form_constrained_DLC(ictan[n])
                 dq = np.zeros((self.newic.nicd,1),dtype=float)
                 dq[-1] = rpmove[n]
-                self.newic.ic_to_xyz(dq)
+
+                if opt_type==6:
+                    self.newic.PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
+                    self.newic.PES.lot.grada = self.icoords[n].PES.lot.grada
+                    self.newic.PES.lot.coup = self.icoords[n].PES.lot.coup
+                    self.newic.form_constrained_CI_DLC(self.ictan[n])
+                    self.newic.ic_to_xyz(dq)
+                else:
+                    self.newic.form_constrained_DLC(ictan[n])
+                    self.newic.ic_to_xyz(dq)
                 self.icoords[n].set_xyz(self.newic.coords)
                 self.icoords[n].update_ics()
+                if opt_type==6:
+                    self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
 
                 #TODO might need to recalculate energy here for seam? 
 
+        #turning back on BP calculation
+        for n in range(n0+1,self.nnodes-1):
+            if isinstance(self.icoords[n],DLC):
+                if self.set_opt_type(n,quiet=True)==6:
+                    self.icoords[n].PES.lot.hasRanForCurrentCoords=False
         print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
         for n in range(1,self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
         print
         print "  disprms: {:1.3}\n".format(disprms)
 
-    def ic_reparam_g(self,ic_reparam_steps=8,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
+    def ic_reparam_g(self,ic_reparam_steps=8,n0=0):  #see line 3863 of gstring.cpp
         """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
 
         #close_dist_fix(0) #done here in GString line 3427.
@@ -875,7 +901,6 @@ class Base_Method(object,Print,Analyze):
         emax = -1000 # And this?
 
         for i in range(ic_reparam_steps):
-            #print 'on ic_reparam step',i
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.icoords[0].print_level>1:
@@ -944,25 +969,34 @@ class Base_Method(object,Print,Analyze):
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
-                        #print "May need to make copy_CI"
-                        #This does something to ictan0
-                        self.icoords[n].update_ics()
-                        self.icoords[n].bmatp = self.icoords[n].bmatp_create()
-                        self.icoords[n].bmatp_to_U()
-                        self.icoords[n].opt_constraint(self.ictan[n])
-                        self.icoords[n].bmat_create()
+                        opt_type=self.set_opt_type(n,quiet=True)
+    
                         dq0 = np.zeros((self.icoords[n].nicd,1))
-                        dq0[self.icoords[n].nicd-nconstraints] = rpmove[n]
+                        if opt_type==6:
+                            self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
+                            self.icoords[n].form_constrained_CI_DLC(self.ictan[n])
+                        else:
+                            self.icoords[n].form_constrained_DLC(self.ictan[n])
+
+                        dq0[self.icoords[n].nicd-1] = rpmove[n]  # ictan is always last vector
                         if self.icoords[0].print_level>1:
-                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-nconstraints]))
+                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-1]))
                         self.icoords[n].ic_to_xyz(dq0)
-                        self.icoords[n].update_ics()
+                        if opt_type==6:
+                            self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
                     else:
                         pass
         print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
         for n in range(self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
         print "  disprms: {:1.3}".format(disprms)
+
+        #turning back on BP calculation
+        for n in range(n0+1,self.nnodes-1):
+            if isinstance(self.icoords[n],DLC):
+                if self.set_opt_type(n,quiet=True)==6:
+                    self.icoords[n].PES.lot.hasRanForCurrentCoords=False
+        
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
@@ -1053,7 +1087,7 @@ class Base_Method(object,Print,Analyze):
     def set_V0(self):
         raise NotImplementedError 
 
-    def set_opt_type(self,n):
+    def set_opt_type(self,n,quiet=False):
         #TODO
         opts={
         -1 : 'no optimization',
@@ -1077,7 +1111,8 @@ class Base_Method(object,Print,Analyze):
             opt_type=6
         if self.stage==1 and self.icoords[n].isTSnode==True and opt_type==5:
             opt_type=7
-        print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
+        if not quiet:
+            print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
 
         return opt_type
 
@@ -1095,4 +1130,3 @@ class Base_Method(object,Print,Analyze):
         else:
             print("******** Turning off climbing image and exact TS search **********")
         print "*********************************************************************"
-
