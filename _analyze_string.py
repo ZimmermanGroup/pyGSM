@@ -222,6 +222,7 @@ class Analyze:
                 totalgrad += ico.gradrms*self.rn3m6
                 gradrms += ico.gradrms*ico.gradrms
         print
+        #TODO wrong for growth
         gradrms = np.sqrt(gradrms/(self.nnodes-2))
         return totalgrad,gradrms
 

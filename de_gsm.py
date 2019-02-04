@@ -131,7 +131,7 @@ class GSM(Base_Method):
                         self.icoords[-2].PES.lot,
                         self.nnodes-1)
                 if self.icoords[-2].PES.__class__.__name__=="Avg_PES":
-                    self.icoords[-1].PES = Avg_PES(self.icoords[-2].PES.PES1,self.icoords[2].PES.PES2)
+                    self.icoords[-1].PES = Avg_PES(self.icoords[-2].PES.PES1,self.icoords[2].PES.PES2,lot1)
                 else:
                     self.icoords[-1].PES = PES(self.icoords[-2].PES.options.copy().set_values({
                         "lot": lot1,

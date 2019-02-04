@@ -550,5 +550,5 @@ class Base_DLC(object,Utils,ICoords,OStep_utils):
         elif opt_type==5:
             nconstraints=2
         elif opt_type in [6,7]:
-            nconstraints==3
+            nconstraints=3
         return nconstraints

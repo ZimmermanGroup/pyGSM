@@ -8,9 +8,9 @@ class Penalty_PES(PES):
     def __init__(self,
             PES1,
             PES2,
+            lot,
             sigma=1.0,
             alpha=0.02*KCAL_MOL_PER_AU,
-            lot,
             ):
         #self.PES1 = PES1
         #self.PES2 = PES2

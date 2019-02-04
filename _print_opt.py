@@ -72,9 +72,7 @@ class Print:
                 print " WARNING: Printing dE as max-step in molden output "
                 f.write("max-step\n")
                 for ico,act in zip(self.icoords,self.active):
-                    if act:
-                        f.write('{}\n'.format(float(ico.PES.dE)))
-                    elif ico != 0:
+                    if ico!=0:
                         f.write('{}\n'.format(float(ico.PES.dE)))
         f.close()
 
