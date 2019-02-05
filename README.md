@@ -17,7 +17,8 @@ git clone git@github.com:ZimmermanGroup/pyGSM.git\
 anaconda 2.5.1 or greater\
 openbabel 2.4.1\
 python 2.7\
-numpy
+numpy\
+scikit-learn
 
 ## Intalling Openbabel 
 1. create a conda environment if necessary
@@ -25,6 +26,7 @@ numpy
    1. source activate gsm_env
    1. conda install -c openbabel openbabel 
    1. conda install numpy
+   1. conda install -c anaconda scikit-learn 
 1. source conda environment with openbabel, numpy
    1. source gsm_env
 
