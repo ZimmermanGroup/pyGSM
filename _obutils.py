@@ -16,6 +16,15 @@ class Utils:
         for i,xyz in enumerate(coords):
             self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
 
+    def align(self,ref,target):
+        # align OBMOLS
+        a = ob.OBAlign(False, False)
+        a.SetRefMol(ref)
+        a.SetTargetMol(target)
+        a.Align()
+        a.UpdateCoords(target)
+        return target
+
     @staticmethod
     def make_mol_from_coords(coords,atomic_symbols):
         mol = ob.OBMol()
