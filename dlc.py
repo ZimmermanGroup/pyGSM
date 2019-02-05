@@ -57,8 +57,9 @@ class DLC(Base_DLC,Bmat,Utils):
         self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
         if self.FZN_ATOMS is not None:
             print "Freezing atoms",self.FZN_ATOMS
-            assert self.FZN_ATOMS>0, "Frozen atom index is 1 indexed"
-            assert self.FZN_ATOMS<len(atomic_nums)+1, "Frozen atom index must be in set of atoms."
+            for a in self.FZN_ATOMS:
+                assert a>0, "Frozen atom index is 1 indexed"
+                assert a<len(atomic_nums)+1, "Frozen atom index must be in set of atoms."
 
 
     @staticmethod
@@ -795,7 +796,7 @@ class DLC(Base_DLC,Bmat,Utils):
     def step_controller(self,opt_type):
 
         #do this if close to seam if coupling, don't do this if isTSnode or exact TS search (opt_type 4)
-        if ( self.dEstep>0.01 and not self.isTSnode and (opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<1.0))):
+        if ( self.dEstep>0.1 and not self.isTSnode and (opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<0.1))):
             if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
@@ -837,6 +838,12 @@ class DLC(Base_DLC,Bmat,Utils):
             self.DMAX=self.DMAX*1.1 + 0.01
             if self.DMAX>0.25:
                 self.DMAX=0.25
+
+        elif self.DMAX==self.DMIN0 and self.ratio>0.5 and self.dEstep<0.:
+            if self.print_level>0:
+                print("increasing DMAX"),
+            self.buf.write(" increasing DMAX")
+            self.DMAX=self.DMAX*1.1 + 0.01
 
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
