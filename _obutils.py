@@ -44,9 +44,11 @@ class Utils:
         a= self.mol.OBMol.GetAtom(i+1)
         return [a.GetX(),a.GetY(),a.GetZ()]
 
-    def getAllCoords(self,i):
+    def getAllCoords(self):
+        tmpcoords = np.zeros((self.natoms,3))
         for i in range(self.natoms):
-            getCoords(i)
+            tmpcoords[i,:] = self.getCoords(i)
+        return tmpcoords
 
     def getAtomicNums(self):
         atomic_nums = [ self.getAtomicNum(i+1) for i in range(self.natoms) ]

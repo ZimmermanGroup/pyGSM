@@ -1013,6 +1013,8 @@ class DLC(Base_DLC,Bmat,Utils):
         # normalize C_U
         try:
             C_U = preprocessing.normalize(C_U.T,norm='l2')
+            C_U = self.orthogonalize(C_U) 
+            dots = np.matmul(C_U,np.transpose(C_U))
         except:
             print C
             exit(-1)
@@ -1033,9 +1035,10 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.print_level>1:
             print "printing Ut"
             print self.Ut
-            #print "Check if Ut is orthonormal"
-            #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-            #print dots
+        #print "Check if Ut is orthonormal"
+        #print dots
+        dots = np.matmul(self.Ut,np.transpose(self.Ut))
+        assert (np.allclose(dots,np.eye(dots.shape[0],dtype=float))),"error in orthonormality"
 
     def orthogonalize(self,vecs):
         basis=np.zeros_like(vecs)
@@ -1071,13 +1074,12 @@ class DLC(Base_DLC,Bmat,Utils):
         dvecq_U = self.fromDLC_to_ICbasis(dvecq)
         dgradq_U = self.fromDLC_to_ICbasis(dgradq)
         extra_constraints = np.shape(constraints)[1]
-        constraints = np.zeros((len(dvecq_U),3),dtype=float) #extra constraints=1
-        constraints[:,0] = dvecq_U[:,0]
-        constraints[:,1] = dgradq_U[:,0]
-        constraints[:,2] = constraints[:,0]
-        self.opt_constraint(constraints)
+        new_constraints = np.zeros((len(dvecq_U),3),dtype=float) #extra constraints=1
+        new_constraints[:,0] = dvecq_U[:,0]
+        new_constraints[:,1] = dgradq_U[:,0]
+        new_constraints[:,2] = constraints[:,0]
+        self.opt_constraint(new_constraints)
         self.bmat_create()
-
 
     def form_constrained_DLC(self,constraints):
         self.form_unconstrained_DLC()
