@@ -16,7 +16,8 @@ class Molpro(Lot):
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
-        tempfile.write(' file,2,mp_0000_{0:03}\n').format(self.node_id)
+        print self.node_id
+        tempfile.write(' file,2,mp_0000_{:03}\n').format(self.node_id)
         tempfile.write(' memory,800,m\n')
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
@@ -26,11 +27,13 @@ class Molpro(Lot):
                 tempfile.write(' '+str(i))
             tempfile.write('\n')
         tempfile.write('}\n\n')
+        singlets=self.search_tuple(self.states,1)
+        len_singlets=len(singlets) 
+        triplets=self.search_tuple(self.states,3)
+        len_triplets=len(triplets) 
 
         if self.lot_inp_file == False:
             tempfile.write(' basis={}\n\n'.format(self.basis))
-            singlets=self.search_tuple(self.states,1)
-            len_singlets=len(singlets) 
             if len_singlets is not 0:
                 tempfile.write(' {multi\n')
                 nclosed = self.nocc
@@ -58,14 +61,6 @@ class Molpro(Lot):
                     tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
                 if self.do_coupling==True and len(singlets)==2:
                     tempfile.write('Force;SAMC,5200.1;varsav\n')
-            else:
-                with open(self.lot_inp_file) as lot_inp:
-                    lot_inp_lines = lot_inp.readlines()
-                for line in lot_inp_lines:
-                    tempfile.write(line)
-
-            triplets=self.search_tuple(self.states,3)
-            len_triplets=len(triplets) 
             if len_triplets is not 0:
                 tempfile.write(' {multi\n')
                 nclosed = self.nocc
@@ -86,8 +81,14 @@ class Molpro(Lot):
                     s=state[1]
                     grad_name="511"+str(s)+".1"
                     tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
+        else:
+            with open(self.lot_inp_file) as lot_inp:
+                lot_inp_lines = lot_inp.readlines()
+            for line in lot_inp_lines:
+                print line
+                tempfile.write(line)
 
-            tempfile.close()
+        tempfile.close()
 
         cmd = "molpro -W scratch -n {} {} --no-xml-output".format(self.nproc,tempfilename)
         os.system(cmd)
@@ -111,7 +112,7 @@ class Molpro(Lot):
         self.coup=[]
         with open(tempfileout,"r") as f:
             for line in f:
-                if line.startswith(" SA-MC GRADIENT FOR STATE"):
+                if line.startswith("GRADIENT FOR STATE",6): #will work for SA-MC and RSPT2 HF
                     for i in range(3):
                         next(f)
                     for i in range(len(geom)):
