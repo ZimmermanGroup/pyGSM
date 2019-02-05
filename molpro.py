@@ -16,13 +16,10 @@ class Molpro(Lot):
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
-        #tempfile.write(' memory,{},m\n'.format(self.memory))
-        tempfile.write(' memory,400,m\n')
-        #tempfile.write(' file,2,{}\n'.format(self.scratchname))
-        tempfile.write(' file,2,mp_0000_0000\n')
+        tempfile.write(' file,2,mp_0000_{0:03}\n').format(self.node_id)
+        tempfile.write(' memory,800,m\n')
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
-
         tempfile.write(' geometry={\n')
         for coord in geom:
             for i in coord:
@@ -30,61 +27,67 @@ class Molpro(Lot):
             tempfile.write('\n')
         tempfile.write('}\n\n')
 
-        tempfile.write(' basis={}\n\n'.format(self.basis))
-        singlets=self.search_tuple(self.states,1)
-        len_singlets=len(singlets) 
-        if len_singlets is not 0:
-            tempfile.write(' {multi\n')
-            nclosed = self.nocc
-            nocc = nclosed+self.nactive
-            tempfile.write(' direct\n')
-            tempfile.write(' closed,{}\n'.format(nclosed))
-            tempfile.write(' occ,{}\n'.format(nocc))
-            tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
-            #this can be made the len of singlets
-            tempfile.write(' state,{}\n'.format(len_singlets))
+        if self.lot_inp_file == False:
+            tempfile.write(' basis={}\n\n'.format(self.basis))
+            singlets=self.search_tuple(self.states,1)
+            len_singlets=len(singlets) 
+            if len_singlets is not 0:
+                tempfile.write(' {multi\n')
+                nclosed = self.nocc
+                nocc = nclosed+self.nactive
+                tempfile.write(' direct\n')
+                tempfile.write(' closed,{}\n'.format(nclosed))
+                tempfile.write(' occ,{}\n'.format(nocc))
+                tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
+                #this can be made the len of singlets
+                tempfile.write(' state,{}\n'.format(len_singlets))
 
-            for state in singlets:
-                s=state[1]
-                grad_name="510"+str(s)+".1"
-                tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
+                for state in singlets:
+                    s=state[1]
+                    grad_name="510"+str(s)+".1"
+                    tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
 
-            #TODO this can only do coupling if states is 2, want to generalize to 3 states
-            if self.do_coupling==True and len(singlets)==2:
-                tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(singlets[0][1]+1,singlets[1][1]+1))
-            tempfile.write(' }\n')
+                #TODO this can only do coupling if states is 2, want to generalize to 3 states
+                if self.do_coupling==True and len(singlets)==2:
+                    tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(singlets[0][1]+1,singlets[1][1]+1))
+                tempfile.write(' }\n')
 
-            for state in singlets:
-                s=state[1]
-                grad_name="510"+str(s)+".1"
-                tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
-            if self.do_coupling==True and len(singlets)==2:
-                tempfile.write('Force;SAMC,5200.1;varsav\n')
+                for state in singlets:
+                    s=state[1]
+                    grad_name="510"+str(s)+".1"
+                    tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
+                if self.do_coupling==True and len(singlets)==2:
+                    tempfile.write('Force;SAMC,5200.1;varsav\n')
+            else:
+                with open(self.lot_inp_file) as lot_inp:
+                    lot_inp_lines = lot_inp.readlines()
+                for line in lot_inp_lines:
+                    tempfile.write(line)
 
-        triplets=self.search_tuple(self.states,3)
-        len_triplets=len(triplets) 
-        if len_triplets is not 0:
-            tempfile.write(' {multi\n')
-            nclosed = self.nocc
-            nocc = nclosed+self.nactive
-            tempfile.write(' closed,{}\n'.format(nclosed))
-            tempfile.write(' occ,{}\n'.format(nocc))
-            tempfile.write(' wf,{},1,2\n'.format(self.n_electrons))
-            nstates = len(self.states)
-            tempfile.write(' state,{}\n'.format(len_triplets))
+            triplets=self.search_tuple(self.states,3)
+            len_triplets=len(triplets) 
+            if len_triplets is not 0:
+                tempfile.write(' {multi\n')
+                nclosed = self.nocc
+                nocc = nclosed+self.nactive
+                tempfile.write(' closed,{}\n'.format(nclosed))
+                tempfile.write(' occ,{}\n'.format(nocc))
+                tempfile.write(' wf,{},1,2\n'.format(self.n_electrons))
+                nstates = len(self.states)
+                tempfile.write(' state,{}\n'.format(len_triplets))
 
-            for state in triplets:
-                s=state[1]
-                grad_name="511"+str(s)+".1"
-                tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
-            tempfile.write(' }\n')
+                for state in triplets:
+                    s=state[1]
+                    grad_name="511"+str(s)+".1"
+                    tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
+                tempfile.write(' }\n')
 
-            for s in triplets:
-                s=state[1]
-                grad_name="511"+str(s)+".1"
-                tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
+                for s in triplets:
+                    s=state[1]
+                    grad_name="511"+str(s)+".1"
+                    tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
 
-        tempfile.close()
+            tempfile.close()
 
         cmd = "molpro -W scratch -n {} {} --no-xml-output".format(self.nproc,tempfilename)
         os.system(cmd)
