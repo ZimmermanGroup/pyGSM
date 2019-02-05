@@ -22,6 +22,7 @@ numpy
 ## Intalling Openbabel 
 1. create a conda environment if necessary
    1. conda create -n gsm_env python=2.7
+   1. source activate gsm_env
    1. conda install -c openbabel openbabel 
    1. conda install numpy
 1. source conda environment with openbabel, numpy
