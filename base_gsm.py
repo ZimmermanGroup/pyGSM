@@ -435,9 +435,8 @@ class Base_Method(object,Print,Analyze):
         ictan0 = np.zeros((size_ic,1))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes,self.nnodes))
-
         self.store_energies()
-        
+
         for n in range(n0+1,self.nnodes-1):
             do3 = False
             if not self.find:
@@ -544,13 +543,7 @@ class Base_Method(object,Print,Analyze):
                 print "forming space for", nlist[2*n+1]
 
             opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)
-            if opt_type==6:
-                if nlist[2*n+1]== self.nnodes-1 and self.growth_direction==1:
-                    self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
-                else:
-                    self.icoords[nlist[2*n+1]].form_constrained_CI_DLC(self.ictan[nlist[2*n]])
-            else:
-                self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+            self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
@@ -848,27 +841,13 @@ class Base_Method(object,Print,Analyze):
                 dq = np.zeros((self.newic.nicd,1),dtype=float)
                 dq[-1] = rpmove[n]
 
-                if opt_type==6:
-                    self.newic.PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
-                    self.newic.PES.lot.grada = self.icoords[n].PES.lot.grada
-                    self.newic.PES.lot.coup = self.icoords[n].PES.lot.coup
-                    self.newic.form_constrained_CI_DLC(self.ictan[n])
-                    self.newic.ic_to_xyz(dq)
-                else:
-                    self.newic.form_constrained_DLC(ictan[n])
-                    self.newic.ic_to_xyz(dq)
+                self.newic.form_constrained_DLC(ictan[n])
+                self.newic.ic_to_xyz(dq)
                 self.icoords[n].set_xyz(self.newic.coords)
                 self.icoords[n].update_ics()
-                if opt_type==6:
-                    self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
 
                 #TODO might need to recalculate energy here for seam? 
 
-        #turning back on BP calculation
-        for n in range(n0+1,self.nnodes-1):
-            if isinstance(self.icoords[n],DLC):
-                if self.set_opt_type(n,quiet=True)==6:
-                    self.icoords[n].PES.lot.hasRanForCurrentCoords=False
         print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
         for n in range(1,self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
@@ -969,21 +948,14 @@ class Base_Method(object,Print,Analyze):
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.icoords[n],DLC):
                     if rpmove[n] > 0:
-                        opt_type=self.set_opt_type(n,quiet=True)
     
                         dq0 = np.zeros((self.icoords[n].nicd,1))
-                        if opt_type==6:
-                            self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
-                            self.icoords[n].form_constrained_CI_DLC(self.ictan[n])
-                        else:
-                            self.icoords[n].form_constrained_DLC(self.ictan[n])
+                        self.icoords[n].form_constrained_DLC(self.ictan[n])
 
                         dq0[self.icoords[n].nicd-1] = rpmove[n]  # ictan is always last vector
                         if self.icoords[0].print_level>1:
                             print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-1]))
                         self.icoords[n].ic_to_xyz(dq0)
-                        if opt_type==6:
-                            self.icoords[n].PES.lot.hasRanForCurrentCoords=True # a Hack to stop branching plane from recalculating during reparam
                     else:
                         pass
         print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
@@ -991,12 +963,6 @@ class Base_Method(object,Print,Analyze):
             print " {:1.2}".format(self.dqmaga[n]),
         print "  disprms: {:1.3}".format(disprms)
 
-        #turning back on BP calculation
-        for n in range(n0+1,self.nnodes-1):
-            if isinstance(self.icoords[n],DLC):
-                if self.set_opt_type(n,quiet=True)==6:
-                    self.icoords[n].PES.lot.hasRanForCurrentCoords=False
-        
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
