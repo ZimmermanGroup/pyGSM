@@ -57,6 +57,34 @@ class PES(object):
         #    self.check_input(geom)
         return self.lot.get_energy(geom,self.multiplicity,self.ad_idx)
 
+    def get_finite_difference_hessian(self,geom):
+        hess = np.zeros((len(geom)*3,len(geom)*3))
+        I = np.eye(hess.shape[0])
+        for n,row in enumerate(I):
+            print "on hessian product ",n
+            hess[n] = np.squeeze(self.get_finite_difference_hessian_product(geom,row))
+        return hess
+
+    def get_finite_difference_hessian_product(self,geom,direction):
+        FD_STEP_LENGTH=0.001
+        direction = direction/np.linalg.norm(direction)
+        direction = direction.reshape((len(geom),3))
+        fdstep = direction*FD_STEP_LENGTH
+        coords = manage_xyz.xyz_to_np(geom)
+        fwd_coords = coords+fdstep
+        bwd_coords = coords-fdstep
+
+        fwd_geom = manage_xyz.np_to_xyz(geom,fwd_coords)
+        self.lot.hasRanForCurrentCoords=False
+        grad_fwd = self.get_gradient(fwd_geom)
+
+        bwd_geom = manage_xyz.np_to_xyz(geom,bwd_coords)
+        self.lot.hasRanForCurrentCoords=False
+        grad_bwd = self.get_gradient(bwd_geom)
+    
+        return (grad_fwd-grad_bwd)/(FD_STEP_LENGTH*2)
+    
+
     def initial_energy(self,reffile,filepath,ref_nocc,nocc,
             fomo_temp=0.3,
             flip_occ_to_act=None,
