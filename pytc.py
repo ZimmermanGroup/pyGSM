@@ -90,7 +90,7 @@ class PyTC(Lot):
             }))
         #obj.psiw = PyTCA.psiw
         obj.psiw = psiw.CASCI_LOT.from_options(
-            casci=PyTCA.casci1,
+            casci=PyTCA.psiw.casci,
             print_level=1,
             rhf_guess=True,
             rhf_mom=True,

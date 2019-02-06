@@ -67,7 +67,7 @@ def write_xyz(
 
 def write_xyzs(
     filename, 
-    gggeoms, 
+    geoms, 
     scale=(1.0/units.ANGSTROM_TO_AU),
     ):
 

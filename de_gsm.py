@@ -23,18 +23,24 @@ class GSM(Base_Method):
         self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
         print "after union"
 
-        lot1 = tmp.PES.lot.copy(
-                tmp.PES.lot, 
-                self.nnodes-1)
+        if self.growth_direction !=1:
+            lot1 = tmp.PES.lot.copy(
+                    tmp.PES.lot, 
+                    self.nnodes-1)
+        else: 
+            lot1 = self.icoords[0].PES.lot.copy(
+                    self.icoords[0].PES.lot, 
+                    self.nnodes-1)
+
         if self.icoords[0].PES.__class__.__name__=="Avg_PES":
-            PES = Avg_PES(self.icoords[0].PES.PES1,self.icoords[0].PES.PES2,lot1)
+            PES1 = Avg_PES(self.icoords[0].PES.PES1,self.icoords[0].PES.PES2,lot1)
         else:
-            PES = PES(tmp.PES.options.copy().set_values({
+            PES1 = PES(self.icoords[0].PES.options.copy().set_values({
                 "lot": lot1,
                 }))
         self.icoords[-1] = DLC(self.icoords[0].options.copy().set_values(dict(
             mol= tmp.mol,
-            PES=PES,
+            PES=PES1,
             )))
         print "print levels at beginning are ",self.icoords[0].print_level
         if self.growth_direction !=1:
