@@ -130,18 +130,19 @@ class Utils:
         frag1=[]
         frag2=[]
         for n,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-            found=False
-            if n==0:
-                frag1.append((0,n+1))
-            else:
+            if self.xyzatom_bool[n]==False:
                 found=False
-                for nbr in ob.OBAtomAtomIter(a):
-                    if (0,nbr.GetIndex()+1) in frag1:
-                        found=True
-                if found==True:
-                    frag1.append((0,a.GetIndex()+1))
-                if found==False:
-                    frag2.append((1,a.GetIndex()+1))
+                if n==0:
+                    frag1.append((0,n+1))
+                else:
+                    found=False
+                    for nbr in ob.OBAtomAtomIter(a):
+                        if (0,nbr.GetIndex()+1) in frag1:
+                            found=True
+                    if found==True:
+                        frag1.append((0,a.GetIndex()+1))
+                    if found==False:
+                        frag2.append((1,a.GetIndex()+1))
 
         if not frag2:
             nfrags=1

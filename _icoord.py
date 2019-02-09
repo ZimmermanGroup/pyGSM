@@ -17,12 +17,14 @@ class ICoords:
         nbonds=0
         for i in range(1,self.natoms+1):
             for j in range(1,i):
-                a = self.getAtomicNum(i)
-                b = self.getAtomicNum(j)
-                MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
-                d = self.distance(i,j)
-                if d<MAX_BOND_DIST:
-                    bonds.append((i,j))
+                #if True:
+                if self.xyzatom_bool[i-1]==False and self.xyzatom_bool[j-1]==False:
+                    a = self.getAtomicNum(i)
+                    b = self.getAtomicNum(j)
+                    MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
+                    d = self.distance(i,j)
+                    if d<MAX_BOND_DIST:
+                        bonds.append((i,j))
 
         for bond in self.EXTRA_BONDS:
             if bond in bonds or tuple(reversed(bond)) in bonds:
@@ -31,15 +33,6 @@ class ICoords:
                 print "adding EXTRA bond ",bond
                 bonds.append(bond)
 
-        #for bond in ob.OBMolBondIter(self.mol.OBMol):
-        #    nbonds+=1
-        #    a=bond.GetBeginAtomIdx()
-        #    b=bond.GetEndAtomIdx()
-        #    if a>b:
-        #        bonds.append((a,b))
-        #    else:
-        #        bonds.append((b,a))
-        #bonds = sorted(bonds)
         print bonds
         for bond in bonds:
             bondd.append(self.distance(bond[0],bond[1]))
