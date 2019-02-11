@@ -24,6 +24,7 @@ class GSM(Base_Method):
         print "after union"
 
         if self.growth_direction !=1:
+            print "copying lot for end node"
             lot1 = tmp.PES.lot.copy(
                     tmp.PES.lot, 
                     self.nnodes-1)
@@ -53,7 +54,7 @@ class GSM(Base_Method):
         0 turning of climbing image and TS search
         """
 
-        V0=self.set_V0()
+        self.set_V0()
         if not self.isRestarted:
             if self.growth_direction==0:
                 self.interpolate(2) 

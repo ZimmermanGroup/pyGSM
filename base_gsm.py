@@ -794,7 +794,7 @@ class Base_Method(object,Print,Analyze):
                     deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
                     if n==self.nnodes-2:
                         deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
-                    rpmove[n]
+                    rpmove[n] = -deltadq
                 for n in range(self.TSnode+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
                     if n==self.nnodes-2:

@@ -11,7 +11,8 @@ class OStep_utils:
         return gradq
 
     def check_overlap_good(self,opt_type=4):
-        if (self.path_overlap < self.HESS_TANG_TOL_TS or self.gradrms > self.OPTTHRESH*20.) and opt_type==4: 
+        #if (self.path_overlap < self.HESS_TANG_TOL_TS or self.gradrms > self.OPTTHRESH*20.) and opt_type==4: 
+        if self.path_overlap < self.HESS_TANG_TOL_TS:            
             return  False
         elif (self.path_overlap < self.HESS_TANG_TOL or self.gradrms > self.OPTTHRESH*20.) and opt_type==3: 
             return False

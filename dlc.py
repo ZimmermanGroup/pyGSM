@@ -417,7 +417,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         #self.Ut=v[redset+lowev:,:]
         #print e[:self.nicd]
         self.Ut =v[:self.nicd]
-        np.savetxt('test3.out', self.Ut, delimiter=',',fmt='%1.2e')
+        #np.savetxt('test3.out', self.Ut, delimiter=',',fmt='%1.2e')
         self.torv0 = list(self.TObj.torv)
         
     def bmat_create(self):
