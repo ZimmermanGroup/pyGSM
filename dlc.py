@@ -7,55 +7,205 @@ from units import *
 import itertools
 from copy import deepcopy
 import manage_xyz
-from _icoord import ICoords
+from _obutils import Utils
+from _opt_utils import OStep_utils
+from _icoord import *
 from _bmat import Bmat
-#from pes import *
+import elements 
+from sklearn import preprocessing
+import StringIO
+from pes import *
 from penalty_pes import *
 from avg_pes import *
-from base_dlc import *
-np.set_printoptions(precision=4)
-np.set_printoptions(suppress=True)
 
-class DLC(Base_DLC,Bmat,Utils):
+class DLC(object,Bmat,Utils,ICoords,OStep_utils):
+
+    @staticmethod
+    def default_options():
+        """ DLC default options. """
+
+        if hasattr(DLC, '_default_options'): return DLC._default_options.copy()
+        opt = options.Options() 
+        opt.add_option(
+            key='isOpt',
+            value=1,
+            required=False,
+            allowed_types=[int],
+            doc='Something to do with how coordinates are setup? Ask Paul')
+
+        opt.add_option(
+            key='print_level',
+            value=1,
+            required=False,
+            allowed_types=[int],
+            doc='0-- no printing, 1-- printing')
+
+        opt.add_option(
+            key='MAX_FRAG_DIST',
+            value=12.0,
+            required=False,
+            allowed_types=[float],
+            doc='Maximum fragment distance considered for making fragments')
+
+        opt.add_option(
+            key='resetopt',
+            value=True,
+            required=False,
+            allowed_types=[bool],
+            doc='Whether to reset geom during optimization')
+
+        opt.add_option(
+                key="mol",
+                required=False,
+                allowed_types=[pb.Molecule],
+                doc='Pybel molecule object (not OB.Mol)')
+
+        opt.add_option(
+                key="PES",
+                required=True,
+                doc='Potential energy surface object')
+
+        opt.add_option(
+                key="bonds",
+                value=None,
+                required=False,
+                )
+
+        opt.add_option(
+                key="angles",
+                value=None,
+                required=False,
+                )
+
+        opt.add_option(
+                key="torsions",
+                value=None,
+                required=False,
+                )
+
+        opt.add_option(
+                key="FZN_ATOMS",
+                value=None,
+                required=False,
+                doc='Atoms to be left unoptimized/unmoved',
+                )
+
+        opt.add_option(
+                key="FORCE",
+                value=None,
+                required=False,
+                doc='Apply a spring force between atoms in units of AU, e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',
+                )
+
+        opt.add_option(
+            key='OPTTHRESH',
+            value=0.001,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold')
+
+        opt.add_option(
+                key='EXTRA_BONDS',
+                value='',
+                required=False,
+                doc='extra bond internal coordinate for creating DLC.'
+                )
+
+        opt.add_option(
+                key='IC_region',
+                required=False,
+                doc='for hybrid dlc, what residues are to be used to form ICs'
+                )
+
+        DLC._default_options = opt
+        return DLC._default_options.copy()
 
     @staticmethod
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return DLC(DLC.default_options().set_values(kwargs))
 
-    def setup(self):
-        #if self.isOpt>0:
-        if True:
-            self.ic_create()
-            self.bmatp=self.bmatp_create()
-            self.bmatp_to_U()
-            self.bmat_create()
-            self.make_Hint()  
-            self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
-            self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
-            self.gradq = np.zeros((self.nicd,1),dtype=float)
-            self.gradrms = 1000.
-            self.SCALEQN = 1.0
-            self.MAXAD = 0.075
-            self.ixflag = 0
-            self.energy = 0.
-            self.DMAX = 0.1
-            self.nretry = 0 
-            self.DMIN0 =0.001#self.DMAX/10.
-            self.coords = np.zeros((len(self.mol.atoms),3))
-            self.isTSnode=False
-            for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-                self.coords[i,0] = a.GetX()
-                self.coords[i,1] = a.GetY()
-                self.coords[i,2] = a.GetZ()
+    def __init__(
+            self,
+            options,
+            ):
+        """ Constructor """
+        self.options = options
 
+        # Cache some useful attributes
+        self.mol = self.options['mol']
+        self.isOpt = self.options['isOpt']
+        self.MAX_FRAG_DIST = self.options['MAX_FRAG_DIST']
+        self.PES = self.options['PES']
+        self.bonds = self.options['bonds']
+        self.angles = self.options['angles']
+        self.torsions = self.options['torsions']
+        self.print_level=self.options['print_level']
+        self.resetopt=self.options['resetopt']
+        self.OPTTHRESH=self.options['OPTTHRESH']
+        self.FZN_ATOMS=self.options['FZN_ATOMS']
+        self.EXTRA_BONDS=self.options['EXTRA_BONDS']
+        self.IC_region=self.options['IC_region']
+        self.FORCE = self.options['FORCE']
+        self.madeBonds = False
+        self.isTSnode = False
+        self.update_hess=False
+        self.buf = StringIO.StringIO() 
+        self.natoms= len(self.mol.atoms)
+        self.xyzatom_bool = np.zeros(self.natoms,dtype=bool)
+        self.nxyzatoms=0
+        self.get_nxyzics()
+        if self.bonds is not None:
+            self.BObj = Bond_obj(self.bonds,None,None)
+            self.BObj.update(self.mol)
+            self.madeBonds = True
+            self.AObj = Ang_obj(self.angles,None,None)
+            self.AObj.update(self.mol)
+            self.TObj = Tor_obj(self.torsions,None,None)
+            self.TObj.update(self.mol)
+        self.setup()
+
+
+    def setup(self):
+        """ setup extra variables etc.,"""
+        print "in setup"
+        self.HESS_TANG_TOL_TS=0.5 #was 0.35
+        self.HESS_TANG_TOL=0.75
+        self.path_overlap=0.0
+        self.V0 = 0.0
+        self.coords = np.zeros((len(self.mol.atoms),3))
+        self.isTSnode=False
+        for i,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
+            self.coords[i,0] = a.GetX()
+            self.coords[i,1] = a.GetY()
+            self.coords[i,2] = a.GetZ()
+        self.ic_create()
+        self.bmatp=self.bmatp_create()
+        self.bmatp_to_U()
+        self.bmat_create()
+        self.make_Hint()  
+        self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
+        self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
+        self.gradq = np.zeros((self.nicd,1),dtype=float)
+        self.gradrms = 1000.
+        self.SCALEQN = 1.0
+        self.MAXAD = 0.075
+        self.ixflag = 0
+        self.energy = 0.
+        self.DMAX = 0.1
+        self.nretry = 0 
+        self.DMIN0 =0.001#self.DMAX/10.
         # TODO might be a Pybel way to do 
         atomic_nums = self.getAtomicNums()
         Elements = elements.ElementData()
         myelements = [ Elements.from_atomic_number(i) for i in atomic_nums]
         atomic_symbols = [ele.symbol for ele in myelements]
         self.geom=manage_xyz.combine_atom_xyz(atomic_symbols,self.coords)
-
+        if self.FZN_ATOMS is not None:
+            print "Freezing atoms",self.FZN_ATOMS
+            for a in self.FZN_ATOMS:
+                assert a>0, "Frozen atom index is 1 indexed"
+                assert a<len(atomic_nums)+1, "Frozen atom index must be in set of atoms."
 
     @staticmethod
     def union_ic(
@@ -106,10 +256,15 @@ class DLC(Base_DLC,Bmat,Utils):
         print torsionA
         icoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
         mol1=pb.readfile('xyz','tmp1.xyz').next()
+
         lot1 = icoordA.PES.lot.copy(icoordA.PES.lot,icoordA.PES.lot.node_id)
-        PES1 = PES(icoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+        if icoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(icoordA.PES.PES1,icoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(icoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
+
         return DLC(icoordA.options.copy().set_values({
             "bonds":bondA,
             "angles":angleA,
@@ -117,230 +272,15 @@ class DLC(Base_DLC,Bmat,Utils):
             'mol':mol1,
             'PES':PES1,
             }))
-        #return DLC.from_options(
-        #        bonds= bondA,
-        #        angles= angleA,
-        #        torsions= torsionA,
-        #        mol = mol1,
-        #        PES = PES1,
-        #        nicd= icoordA.nicd
-        #        )
-    @staticmethod
-    def add_node_SE(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2):
 
-        dq0 = np.zeros((ICoordA.nicd,1))
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "angles" : ICoordA.AObj.angles,
-            "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1,
-            }))
-
-        ICoordC.setup()
-        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
-        ICoordC.opt_constraint(ictan)
-        bdist = np.linalg.norm(ictan)
-        #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
-        ICoordC.bmatp=ICoordC.bmatp_create()
-        ICoordC.bmat_create()
-        dqmag_scale=1.5
-        minmax = dqmag_max - dqmag_min
-        a = bdist/dqmag_scale
-        if a>1:
-            a=1
-        dqmag = dqmag_min+minmax*a
-        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
-
-        dq0[ICoordC.nicd-1] = -dqmag
-
-        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
-        ICoordC.ic_to_xyz(dq0)
-        ICoordC.update_ics()
-        ICoordC.bmatp=ICoordC.bmatp_create()
-        ICoordC.bmatp_to_U()
-        ICoordC.bmat_create()
-        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
-        
-        # => stash bdist <= #
-        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
-        ICoordC.bdist = bdist
-        if np.all(ictan==0.0):
-            raise RuntimeError
-        #ICoordC.dqmag = dqmag
-
-        return ICoordC
-
-    @staticmethod
-    def add_node_SE_X(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2,BDISTMIN=0.05):
-
-        dq0 = np.zeros((ICoordA.nicd,1))
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
-        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
-            "lot": lot1,
-            }))
-        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
-            "lot": lot1,
-            }))
-        pes = Penalty_PES(pes1,pes2)
-
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "angles" : ICoordA.AObj.angles,
-            "torsions" : ICoordA.TObj.torsions,
-            "PES" : pes,
-            }))
-
-        ICoordC.setup()
-        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
-        if bdist<BDISTMIN:
-            print "bdist too small"
-            return 0
-        ICoordC.opt_constraint(ictan)
-        #bdist = np.linalg.norm(ictan)
-        ICoordC.bmatp=ICoordC.bmatp_create()
-        ICoordC.bmat_create()
-        dqmag_scale=1.5
-        minmax = dqmag_max - dqmag_min
-        a = bdist/dqmag_scale
-        if a>1:
-            a=1
-        dqmag = dqmag_min+minmax*a
-        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
-
-        dq0[ICoordC.nicd-1] = -dqmag
-
-        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
-        ICoordC.ic_to_xyz(dq0)
-        ICoordC.update_ics()
-        ICoordC.bmatp_create()
-        ICoordC.bmatp_to_U()
-        ICoordC.bmat_create()
-        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
-    
-        # => stash bdist <= #
-        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
-        ICoordC.bdist = bdist
-        if np.all(ictan==0.0):
-            raise RuntimeError
-        
-        #ICoordC.dqmag = dqmag
-
-        return ICoordC
-
-    @staticmethod
-    def add_node(ICoordA,ICoordB,nmax,ncurr):
-        dq0 = np.zeros((ICoordA.nicd,1))
-
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        if ICoordB.PES.lot.node_id > ICoordA.PES.lot.node_id:
-            node_id = ICoordA.PES.lot.node_id + 1
-        else:
-            node_id = ICoordA.PES.lot.node_id - 1
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,node_id)
-        PES1 = PES(ICoordA.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol" : mol1,
-            "bonds" : ICoordA.BObj.bonds,
-            "angles" : ICoordA.AObj.angles,
-            "torsions" : ICoordA.TObj.torsions,
-            "PES" : PES1,
-            }))
-
-        ICoordC.setup()
-        ictan = DLC.tangent_1(ICoordA,ICoordB)
-        ICoordC.form_constrained_DLC(ictan)
-        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
-        print " dqmag: %1.3f"%dqmag
-        if nmax-ncurr > 1:
-            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
-        else:
-            dq0[ICoordC.nicd-1] = -dqmag/2.0;
-
-        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
-        ICoordC.ic_to_xyz(dq0)
-        ICoordC.update_ics()
-        ICoordC.form_unconstrained_DLC()
-
-        #TODO can have ICoordC get Hintp matrix from A...
-
-        return ICoordC
-
-    @staticmethod
-    def copy_node(ICoordA,new_node_id,rtype=0):
-        if isinstance(ICoordA.PES,Penalty_PES):
-            ICoordC = DLC.copy_node_X(ICoordA,new_node_id,rtype)
-            return ICoordC
-        else:
-            ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-            mol1 = pb.readfile('xyz','tmp1.xyz').next()
-            lot1 = ICoordA.PES.lot.copy(
-                    ICoordA.PES.lot,
-                    new_node_id)
-            PES1 = PES(ICoordA.PES.options.copy().set_values({
-                "lot": lot1,
-                }))
-
-            ICoordC = DLC(ICoordA.options.copy().set_values({
-                "mol" : mol1,
-                "bonds" : ICoordA.BObj.bonds,
-                "angles" : ICoordA.AObj.angles,
-                "torsions" : ICoordA.TObj.torsions,
-                "PES" : PES1,
-                }))
-
-            return ICoordC
-
-    @staticmethod
-    def copy_node_X(ICoordA,new_node_id,rtype=0):
-        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
-        mol1 = pb.readfile('xyz','tmp1.xyz').next()
-        do_coupling=False
-        if rtype>=5:
-            do_coupling=True
-        else:
-            do_coupling=False
-        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id,do_coupling=do_coupling)
-        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
-            "lot": lot1,
-            }))
-        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
-            "lot": lot1,
-            }))
-        if rtype>=5:
-            pes = Avg_PES(pes1,pes2)
-        else:
-            pes = Penalty_PES(pes1,pes2)
-        ICoordC = DLC(ICoordA.options.copy().set_values({
-            "mol":mol1,
-            "bonds":ICoordA.BObj.bonds,
-            "angles":ICoordA.AObj.angles,
-            "torsions":ICoordA.TObj.torsions,
-            "PES":pes,
-            }))
-        ICoordC.setup()
-        return ICoordC
 
     def ic_create(self):
-        self.natoms= len(self.mol.atoms)
         self.coordn = self.coord_num()
 
         if self.madeBonds==False:
             print " making bonds"
             self.BObj = self.make_bonds()
-            #TODO 
+            #TODO  not sure what this isOpt thing is for 1/30/2019 CRA
             if self.isOpt>0:
                 print(" isOpt: %i" %self.isOpt)
                 self.nfrags,self.frags = self.make_frags()
@@ -356,16 +296,207 @@ class DLC(Base_DLC,Bmat,Utils):
             self.AObj.update(self.mol)
             self.TObj.update(self.mol)
 
+        self.num_ics_p = self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor
+        print "nxyzatoms=",self.nxyzatoms
+        self.num_ics = self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor + self.nxyzatoms*3
         #self.make_imptor()
         #self.make_nonbond() 
 
-    def update_ics(self):
-        self.update_xyz()
-        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords)
-        self.PES.lot.hasRanForCurrentCoords= False
+    def update_xyz(self):
+        """ Updates the mol.OBMol object coords: Important for ICs"""
+        for i,xyz in enumerate(self.coords):
+            self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
+
+    def linear_ties(self):
+        maxsize=0
+        for anglev in self.AObj.anglev:
+            if anglev>160.:
+                maxsize+=1
+        blist=[]
+        n=0
+        for anglev,angle in zip(self.AObj.anglev,self.AObj.angles):
+            if anglev>160.:
+                blist.append(angle)
+                print(" linear angle %i of %i: %s (%4.2f)" %(n+1,maxsize,angle,anglev))
+                n+=1
+
+        # atoms attached to linear atoms
+        clist=[[]]*n
+        m =[]
+        for i in range(n):
+            # b is the vertex 
+            a=self.mol.OBMol.GetAtom(blist[i][0])
+            b=self.mol.OBMol.GetAtom(blist[i][1])
+            c=self.mol.OBMol.GetAtom(blist[i][2])
+            tmp=0
+            tmplist=[]
+            for nbr in ob.OBAtomAtomIter(a):
+                if nbr.GetIndex() != b.GetIndex():
+                    tmplist.append(nbr.GetIndex()+1)
+                    print nbr.GetIndex(),
+                    tmp+=1
+            for nbr in ob.OBAtomAtomIter(c):
+                if nbr.GetIndex() != b.GetIndex():
+                    print nbr.GetIndex(),
+                    tmplist.append(nbr.GetIndex()+1)
+                    tmp+=1
+            clist[i]=tmplist
+            m.append(tmp)
+            print
+        for i in range(n):
+            a1=blist[i][0]
+            a2=blist[i][2] # not vertices
+            bond=(a1,a2)
+            if self.bond_exists(bond) == False:
+                print(" adding bond via linear ties %s" % (bond,))
+                self.BObj.bonds.append(bond)
+                self.BObj.nbonds +=1
+            for j in range(m[i]):
+                for k in range(j):
+                    b1=clist[i][j]
+                    b2=clist[i][k]
+                    found=False
+                    for angle in self.AObj.angles:
+                        if b1==angle[0] and b2==angle[2]: 
+                            found=True
+                        elif b2==angle[0] and b1==angle[2]:
+                            found=True
+                    if found==False:
+                        if self.bond_exists((b1,a1))==True:
+                            c1=b1
+                        if self.bond_exists((b2,a1))==True:
+                            c1=b2
+                        if self.bond_exists((b1,a2))==True:
+                            c2=b1
+                        if self.bond_exists((b2,a2))==True:
+                            c2=b2
+                        #Should add a try except here?
+                        torsion= (c1,a1,a2,c2)
+                        if not self.torsion_exists(torsion) and len(set(torsion))==4:
+                            print(" adding torsion via linear ties %s" %(torsion,))
+                            self.TObj.torsions.append(torsion)
+                            self.TObj.ntor +=1
         self.BObj.update(self.mol)
         self.AObj.update(self.mol)
         self.TObj.update(self.mol)
+
+    def bmatp_to_U(self):
+        G=np.matmul(self.bmatp,np.transpose(self.bmatp))
+        # Singular value decomposition
+        v_temp,e,vh  = np.linalg.svd(G)
+        v = np.transpose(v_temp)
+        lowev=0
+
+        #make function called set_nicd --> one for dlc and one for hdlc
+        self.set_nicd()
+        redset = self.num_ics - self.nicd
+
+        for eig in e[:self.nicd]:
+            if eig<0.001:
+                lowev+=1
+
+        if lowev>3:
+            print(" Error: optimization space less than 3N DOF")
+            print "lowev=",lowev
+            print "shape G=",np.shape(G)
+            print "numics=",self.num_ics
+            print "numics_p=",self.num_ics_p
+            print "3N=",self.natoms*3
+            print "nicd=",self.nicd
+            print "redset=",redset
+            print e[:self.nicd]
+            exit(-1)
+        self.nicd -= lowev
+
+        self.Ut =v[:self.nicd]
+        self.torv0 = list(self.TObj.torv)
+        
+    def bmat_create(self):
+        #print(" In bmat create")
+        self.q = self.q_create()
+        if self.print_level==2:
+            print "printing q"
+            print self.q.T
+        bmat = np.matmul(self.Ut,self.bmatp)
+        bbt = np.matmul(bmat,np.transpose(bmat))
+        bbti = np.linalg.inv(bbt)
+        self.bmatti= np.matmul(bbti,bmat)
+        if self.print_level==2:
+            print "bmatti"
+            print self.bmatti
+
+    def update_ic_eigen_ts(self,ictan):
+        """ this method follows the overlap with reaction tangent"""
+        opt_type=3
+        lambda1 = 0.
+        SCALE = self.SCALEQN
+        if self.newHess>0: SCALE = self.SCALEQN*self.newHess
+        if SCALE > 10:
+            SCALE = 10.
+        #TODO buf print SCALE
+
+        #testing
+        unit_test=False
+        if unit_test:
+            self.prepare_unit_test()
+        else:
+            norm = np.linalg.norm(ictan)
+            C = ictan/norm
+            dots = np.dot(self.Ut,C) #(nicd,numic)(numic,1)
+            Cn = np.dot(self.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
+            norm = np.linalg.norm(Cn)
+            Cn = Cn/norm
+       
+        # => get eigensolution of Hessian <= 
+        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd
+        tmph = tmph.T
+
+        #TODO nneg should be self and checked
+        nneg = 0
+        for i in range(self.nicd):
+            if eigen[i] < -0.01:
+                nneg += 1
+
+        #=> Overlap metric <= #
+        overlap = np.dot(np.dot(tmph,self.Ut),Cn) #(nicd,nicd)(nicd,num_ic)(num_ic,1) = (nicd,1)
+        #print " printing overlaps ", overlap[:4].T
+
+        # Max overlap metrics
+        self.maxol_w_Hess(overlap[0:4])
+
+        # => set lamda1 scale factor <=#
+        lambda1 = self.set_lambda1(eigen,4)
+
+        # => if overlap is small use Cn as Constraint <= #
+        if self.check_overlap_good(opt_type=4):
+            # => grad in eigenvector basis <= #
+            gqe = np.dot(tmph,self.gradq)
+            path_overlap_e_g = gqe[self.path_overlap_n]
+            if self.print_level>0:
+                print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+            self.buf.write(' gtse: {:1.4f}'.format(path_overlap_e_g[0]))
+            # => calculate eigenvector step <=#
+            dqe0 = self.eigenvector_follow_step(SCALE,lambda1,gqe,eigen,4)
+            # => Convert step back to DLC basis <= #
+            dq = self.convert_dqe0_to_dq(dqe0,tmph)
+        else:
+            self.form_constrained_DLC(ictan) 
+            self.Hint = self.Hintp_to_Hint()
+            dq,tmp = self.update_ic_eigen(1)
+            opt_type=2
+
+        return dq,opt_type
+
+    def maxol_w_Hess(self,overlap):
+        # Max overlap metrics
+        absoverlap = np.abs(overlap)
+        self.path_overlap = np.max(absoverlap)
+        self.path_overlap_n = np.argmax(absoverlap)
+        #maxols = overlap[maxoln]
+        if self.print_level>-1:
+            print " t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap)
+        self.buf.write(" t/ol %i: %3.2f" % (self.path_overlap_n,self.path_overlap))
+
 
     def bond_frags(self):
         if self.nfrags<2:
@@ -485,9 +616,238 @@ class DLC(Base_DLC,Bmat,Utils):
                     #TODO
         return isOkay
 
+    @staticmethod
+    def add_node_SE(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2):
+
+        dq0 = np.zeros((ICoordA.nicd,1))
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
+        if ICoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : PES1,
+            }))
+
+        ICoordC.setup()
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
+        ICoordC.opt_constraint(ictan)
+        bdist = np.linalg.norm(ictan)
+        #bdist = np.dot(ICoordC.Ut[-1,:],ictan)
+        ICoordC.bmatp=ICoordC.bmatp_create()
+        ICoordC.bmat_create()
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
+        if a>1:
+            a=1
+        dqmag = dqmag_min+minmax*a
+        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
+
+        dq0[ICoordC.nicd-1] = -dqmag
+
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.bmatp=ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
+        
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
+        ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
+        #ICoordC.dqmag = dqmag
+        ICoordC.Hintp = ICoordA.Hintp
+
+        return ICoordC
+
+    @staticmethod
+    def add_node_SE_X(ICoordA,driving_coordinate,dqmag_max=0.8,dqmag_min=0.2,BDISTMIN=0.05):
+
+        dq0 = np.zeros((ICoordA.nicd,1))
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,ICoordA.PES.lot.node_id+1)
+        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes = Penalty_PES(pes1,pes2,lot1)
+
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : pes,
+            }))
+
+        ICoordC.setup()
+        ictan,bdist = DLC.tangent_SE(ICoordA,driving_coordinate)
+        if bdist<BDISTMIN:
+            print "bdist too small"
+            return 0
+        ICoordC.opt_constraint(ictan)
+        #bdist = np.linalg.norm(ictan)
+        ICoordC.bmatp=ICoordC.bmatp_create()
+        ICoordC.bmat_create()
+        dqmag_scale=1.5
+        minmax = dqmag_max - dqmag_min
+        a = bdist/dqmag_scale
+        if a>1:
+            a=1
+        dqmag = dqmag_min+minmax*a
+        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
+
+        dq0[ICoordC.nicd-1] = -dqmag
+
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.bmatp_create()
+        ICoordC.bmatp_to_U()
+        ICoordC.bmat_create()
+        ICoordC.mol.write('xyz','after.xyz',overwrite=True)
+    
+        # => stash bdist <= #
+        ictan,bdist = DLC.tangent_SE(ICoordC,driving_coordinate,quiet=True)
+        ICoordC.bdist = bdist
+        if np.all(ictan==0.0):
+            raise RuntimeError
+        
+        #ICoordC.dqmag = dqmag
+        ICoordC.Hintp = ICoordA.Hintp
+
+        return ICoordC
+
+    @staticmethod
+    def add_node(ICoordA,ICoordB,nmax,ncurr):
+        dq0 = np.zeros((ICoordA.nicd,1))
+
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        if ICoordB.PES.lot.node_id > ICoordA.PES.lot.node_id:
+            node_id = ICoordA.PES.lot.node_id + 1
+        else:
+            node_id = ICoordA.PES.lot.node_id - 1
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,node_id)
+
+        #TODO can make this better, ask Josh
+        if ICoordA.PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+        else:
+            PES1 = PES(ICoordA.PES.options.copy().set_values({
+                "lot": lot1,
+                }))
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol" : mol1,
+            "bonds" : ICoordA.BObj.bonds,
+            "angles" : ICoordA.AObj.angles,
+            "torsions" : ICoordA.TObj.torsions,
+            "PES" : PES1,
+            }))
+
+        ICoordC.setup()
+        ictan = DLC.tangent_1(ICoordA,ICoordB)
+        ICoordC.form_constrained_DLC(ictan)
+        dqmag = np.dot(ICoordC.Ut[-1,:],ictan)
+        print " dqmag: %1.3f"%dqmag
+        if nmax-ncurr > 1:
+            dq0[ICoordC.nicd-1] = -dqmag/float(nmax-ncurr)
+        else:
+            dq0[ICoordC.nicd-1] = -dqmag/2.0;
+
+        print " dq0[constraint]: %1.3f" % dq0[ICoordC.nicd-1]
+        ICoordC.ic_to_xyz(dq0)
+        ICoordC.update_ics()
+        ICoordC.form_unconstrained_DLC()
+        assert ICoordC.PES.lot.hasRanForCurrentCoords==False,"WTH1"
+
+        ICoordC.Hintp = ICoordA.Hintp
+
+        return ICoordC
+
+    @staticmethod
+    def copy_node(ICoordA,new_node_id,rtype=0):
+        if isinstance(ICoordA.PES,Penalty_PES):
+            ICoordC = DLC.copy_node_X(ICoordA,new_node_id,rtype)
+            return ICoordC
+        else:
+            ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+            mol1 = pb.readfile('xyz','tmp1.xyz').next()
+            lot1 = ICoordA.PES.lot.copy(
+                    ICoordA.PES.lot,
+                    new_node_id)
+            if ICoordA.PES.__class__.__name__=="Avg_PES":
+                PES1 = Avg_PES(ICoordA.PES.PES1,ICoordA.PES.PES2,lot1)
+            else:
+                PES1 = PES(ICoordA.PES.options.copy().set_values({
+                    "lot": lot1,
+                    }))
+
+            ICoordC = DLC(ICoordA.options.copy().set_values({
+                "mol" : mol1,
+                "bonds" : ICoordA.BObj.bonds,
+                "angles" : ICoordA.AObj.angles,
+                "torsions" : ICoordA.TObj.torsions,
+                "PES" : PES1,
+                }))
+            ICoordC.Hintp = ICoordA.Hintp
+
+            return ICoordC
+
+    @staticmethod
+    def copy_node_X(ICoordA,new_node_id,rtype=0):
+        ICoordA.mol.write('xyz','tmp1.xyz',overwrite=True)
+        mol1 = pb.readfile('xyz','tmp1.xyz').next()
+        lot1 = ICoordA.PES.lot.copy(ICoordA.PES.lot,new_node_id)
+        if rtype>=5:
+            lot1.do_coupling=True
+        pes1 = PES(ICoordA.PES.PES1.options.copy().set_values({
+            "lot": lot1,
+            }))
+        pes2 = PES(ICoordA.PES.PES2.options.copy().set_values({
+            "lot": lot1,
+            }))
+        if rtype>=5:
+            pes = Avg_PES(pes1,pes2,lot1)
+        else:
+            pes = Penalty_PES(pes1,pes2,lot1)
+        ICoordC = DLC(ICoordA.options.copy().set_values({
+            "mol":mol1,
+            "bonds":ICoordA.BObj.bonds,
+            "angles":ICoordA.AObj.angles,
+            "torsions":ICoordA.TObj.torsions,
+            "PES":pes,
+            }))
+        ICoordC.setup()
+        ICoordC.Hintp = ICoordA.Hintp
+        return ICoordC
+
+    def update_ics(self):
+        self.update_xyz()
+        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords)
+        self.PES.lot.hasRanForCurrentCoords= False
+        self.BObj.update(self.mol)
+        self.AObj.update(self.mol)
+        self.TObj.update(self.mol)
+
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
-        self.update_ics()
+        assert np.shape(dq) == np.shape(self.q),"operands could not be broadcas"
         self.bmatp=self.bmatp_create()
         self.bmat_create()
         SCALEBT = 1.5
@@ -510,7 +870,10 @@ class DLC(Base_DLC,Bmat,Utils):
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
-            #TODO Frozen
+            # => Frozen <= #
+            if self.FZN_ATOMS is not None:
+                for a in [(i-1) for i in self.FZN_ATOMS]:
+                    xyzd[a,:]=0.
 
             # => Calc Mag <= #
             mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
@@ -587,7 +950,11 @@ class DLC(Base_DLC,Bmat,Utils):
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
             xyzd = np.reshape(xyzd,(self.natoms,3))
 
-            #TODO frozen
+            # => Frozen <= #
+            if self.FZN_ATOMS is not None:
+                for a in [(i-1) for i in self.FZN_ATOMS]:
+                    xyzd[a,:]=0.
+
             # => Add Change in Coords <= #
             xyz1 = self.coords + xyzd/SCALEBT 
 
@@ -689,10 +1056,6 @@ class DLC(Base_DLC,Bmat,Utils):
         else:
             return rflag
 
-    def grad_to_q(self,grad):
-        gradq = np.dot(self.bmatti,grad)
-        return gradq
-
     def make_Hint(self):
         self.newHess = 5
         Hdiagp = []
@@ -702,6 +1065,8 @@ class DLC(Base_DLC,Bmat,Utils):
             Hdiagp.append(0.2)
         for tor in self.TObj.torsions:
             Hdiagp.append(0.035)
+        for xyzic in range(self.nxyzatoms*3):
+            Hdiagp.append(1.0)
 
         self.Hintp=np.diag(Hdiagp)
         Hdiagp=np.asarray(Hdiagp)
@@ -713,7 +1078,16 @@ class DLC(Base_DLC,Bmat,Utils):
                 tmp[i,k] = self.Ut[i,k]*Hdiagp[k]
 
         self.Hint = np.matmul(tmp,np.transpose(self.Ut))
-        self.Hinv = np.linalg.inv(self.Hint)
+        try:
+            self.Hinv = np.linalg.inv(self.Hint)
+        except:
+            print "nicd=",self.nicd
+            print "numic=",self.num_ics
+            print np.shape(self.Ut)
+            print np.shape(tmp)
+            print np.shape(self.Hintp)
+            print np.shape(self.Hint)
+            exit(1)
 
         #TODO ?
         #if self.optCG==False or self.isTSnode==False:
@@ -722,11 +1096,16 @@ class DLC(Base_DLC,Bmat,Utils):
     def update_for_step(self,opt_type):
         self.energy=self.energyp=self.PES.get_energy(self.geom)
         grad = self.PES.get_gradient(self.geom)
+        if self.FORCE is not None:
+            grad,fdE = self.add_force(grad)
+            self.energy += fdE
+
         nconstraints=self.get_nconstraints(opt_type)
         if opt_type!=3 and opt_type!=4:
             self.Hint = self.Hintp_to_Hint()
         # =>grad in ics<= #
         self.gradq = self.grad_to_q(grad)
+        self.pgradq = np.copy(self.gradq)
         if self.print_level==2:
             print "gradq"
             print self.gradq.T
@@ -745,31 +1124,10 @@ class DLC(Base_DLC,Bmat,Utils):
         self.update_hess = True
 
 
-    def eigenvector_step(self,opt_type,ictan):
-        # => Take Eigenvector Step <=#
-        if opt_type in [0,1,2,5,6,7]:
-            dq,opt_type = self.update_ic_eigen(opt_type)
-        elif opt_type ==3:
-            dq,opt_type = self.update_ic_eigen_h(ictan)
-        elif opt_type==4:
-            dq,opt_type = self.update_ic_eigen_ts(ictan)
-
-        # regulate max overall step
-        #TODO should this be after adding constraint step?
-        self.smag = np.linalg.norm(dq)
-        self.buf.write(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX))
-        if self.print_level>0:
-            print(" ss: %1.5f (DMAX: %1.3f)" %(self.smag,self.DMAX)),
-        if self.smag>self.DMAX:
-            dq = np.fromiter(( xi*self.DMAX/self.smag for xi in dq), dq.dtype)
-        dq= np.asarray(dq).reshape(self.nicd,1)
-
-        return dq,opt_type
-
     def step_controller(self,opt_type):
 
         #do this if close to seam if coupling, don't do this if isTSnode or exact TS search (opt_type 4)
-        if ( self.dEstep>0.01 and not self.isTSnode and (opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<1.0))):
+        if ( self.dEstep>0.1 and not self.isTSnode and (opt_type in [0,1,2,3] or (self.PES.lot.do_coupling and self.PES.dE<0.1))):
             if self.print_level>0:
                 print("decreasing DMAX"),
             self.buf.write(" decreasing DMAX")
@@ -783,6 +1141,13 @@ class DLC(Base_DLC,Bmat,Utils):
                 self.coords = self.coorp
                 self.update_ics()
                 self.energy = self.PES.get_energy(self.geom)
+                grad = self.PES.get_gradient(self.geom)
+                if self.FORCE is not None:
+                    grad,fdE = self.add_force(grad)
+                    self.energy += fdE
+                self.gradq = self.grad_to_q(grad)
+                nconstraints=self.get_nconstraints(opt_type)
+                self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
                 self.update_hess=False
 
         elif opt_type==4 and self.ratio<0. and abs(self.dEpre)>0.05:
@@ -808,6 +1173,12 @@ class DLC(Base_DLC,Bmat,Utils):
             if self.DMAX>0.25:
                 self.DMAX=0.25
 
+        elif self.DMAX==self.DMIN0 and self.ratio>0.5 and self.dEstep<0.:
+            if self.print_level>0:
+                print("increasing DMAX"),
+            self.buf.write(" increasing DMAX")
+            self.DMAX=self.DMAX*1.1 + 0.01
+
         if self.DMAX<self.DMIN0:
             self.DMAX=self.DMIN0
 
@@ -819,7 +1190,8 @@ class DLC(Base_DLC,Bmat,Utils):
         elif opt_type==5:
             self.form_CI_DLC()
         elif opt_type in [6,7]:
-            raise NotImplementedError #TODO for seams
+            self.form_constrained_CI_DLC(constraints=ictan)
+            #raise NotImplementedError #TODO for seams
 
     def get_constraint_steps(self,opt_type):
         nconstraints=self.get_nconstraints(opt_type)
@@ -835,11 +1207,11 @@ class DLC(Base_DLC,Bmat,Utils):
             constraint_steps[1] = self.dgrad_step() #last vector is x
         # => seam opt
         elif opt_type==6:
-            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
+            constraint_steps[1] = self.dgrad_step()  #0 is dvec, 1 is dgrad, 3 is ictan
         # => seam climb
         elif opt_type==7:
-            constraint_steps[1] = self.dgrad_step()  #2nd to last is x
-            constraint_steps[2]=self.walk_up(self.nicd-1)
+            constraint_steps[1] = self.dgrad_step()  #0 is dvec, 1 is dgrad, 3 is ictan
+            constraint_steps[0]=self.walk_up(self.nicd-1)
 
         return constraint_steps
 
@@ -853,6 +1225,8 @@ class DLC(Base_DLC,Bmat,Utils):
 
         # => update DLC, grad, Hess, etc
         self.update_for_step(opt_type)
+        if self.gradrms<self.OPTTHRESH:
+            return 0.
 
         # => form eigenvector step in non-constrained space <= #
         self.dq,opt_type = self.eigenvector_step(opt_type,ictan)
@@ -884,9 +1258,10 @@ class DLC(Base_DLC,Bmat,Utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
-        self.buf.write(" E(M): %3.4f" %(self.energy - refE))
-        if self.print_level>0:
-            print " E(M): %3.5f" % (self.energy-refE),
+        grad = self.PES.get_gradient(self.geom)
+        if self.FORCE is not None:
+            grad,fdE = self.add_force(grad)
+            self.energy += fdE
 
         #form DLC at new position
         if opt_type!=3 and opt_type!=4:
@@ -902,26 +1277,29 @@ class DLC(Base_DLC,Bmat,Utils):
         # constraint contribution
         for n in range(nconstraints):
             self.dEpre +=self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
-            self.buf.write(" cg[%i] %1.3f" %(n,self.gradq[-n-1]))
 
+        # ratio  and gradmrs
         self.ratio = self.dEstep/self.dEpre
+        self.gradq = self.grad_to_q(grad)
+        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+
+        # => step controller  <= #
+        self.step_controller(opt_type)
+
+        self.buf.write(" E(M): %3.4f" %(self.energy - refE))
+        if self.print_level>0:
+            print " E(M): %3.5f" % (self.energy-refE),
         self.buf.write(" predE: %1.4f ratio: %1.4f" %(self.dEpre, self.ratio))
         if self.print_level>0:
             print " ratio is %1.4f" % self.ratio,
             print " predE: %1.4f" %self.dEpre,
             print " dEstep = %3.2f" %self.dEstep,
 
-        grad = self.PES.get_gradient(self.geom)
-        self.pgradq = np.copy(self.gradq)
-        self.gradq = self.grad_to_q(grad)
-        self.pgradrms = self.gradrms
-        self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
+        for n in range(nconstraints):
+            self.buf.write(" cg[%i] %1.3f" %(n,self.gradq[-n-1]))
         if self.print_level>0:
             print("gradrms = %1.5f" % self.gradrms),
         self.buf.write(" gRMS=%1.5f" %(self.gradrms))
-
-        # => step controller  <= #
-        self.step_controller(opt_type)
 
         return  self.smag
 
@@ -942,19 +1320,10 @@ class DLC(Base_DLC,Bmat,Utils):
         if mode==1:
             self.Hint=self.Hintp_to_Hint()
         if mode==2:
-            self.update_bofill()
+            change=self.update_bofill()
+            self.Hint+=change
+            self.Hinv=np.linalg.inv(self.Hint)
     
-
-
-    def fromDLC_to_ICbasis(self,vecq):
-        """
-        This function takes a matrix of vectors wrtiten in the basis of U.
-        The components in this basis are called q.
-        """
-        vec_U = np.zeros((self.num_ics,1),dtype=float)
-        assert np.shape(vecq) == (self.nicd,1), "vecq is not nicd long"
-        vec_U = np.dot(self.Ut.T,vecq)
-        return vec_U/np.linalg.norm(vec_U)
 
     def opt_constraint(self,C):
         """
@@ -979,6 +1348,8 @@ class DLC(Base_DLC,Bmat,Utils):
         # normalize C_U
         try:
             C_U = preprocessing.normalize(C_U.T,norm='l2')
+            C_U = self.orthogonalize(C_U) 
+            dots = np.matmul(C_U,np.transpose(C_U))
         except:
             print C
             exit(-1)
@@ -999,9 +1370,10 @@ class DLC(Base_DLC,Bmat,Utils):
         if self.print_level>1:
             print "printing Ut"
             print self.Ut
-            #print "Check if Ut is orthonormal"
-            #dots = np.matmul(self.Ut,np.transpose(self.Ut))
-            #print dots
+        #print "Check if Ut is orthonormal"
+        #print dots
+        dots = np.matmul(self.Ut,np.transpose(self.Ut))
+        assert (np.allclose(dots,np.eye(dots.shape[0],dtype=float))),"error in orthonormality"
 
     def orthogonalize(self,vecs):
         basis=np.zeros_like(vecs)
@@ -1028,32 +1400,60 @@ class DLC(Base_DLC,Bmat,Utils):
         self.bmat_create()
         #self.Hint = self.Hintp_to_Hint()
 
+    def form_constrained_CI_DLC(self,constraints):
+        self.form_unconstrained_DLC()
+        dvec = self.PES.get_coupling(self.geom)
+        dgrad = self.PES.get_dgrad(self.geom)
+        dvecq = self.grad_to_q(dvec)
+        dgradq = self.grad_to_q(dgrad)
+        dvecq_U = self.fromDLC_to_ICbasis(dvecq)
+        dgradq_U = self.fromDLC_to_ICbasis(dgradq)
+        extra_constraints = np.shape(constraints)[1]
+        new_constraints = np.zeros((len(dvecq_U),3),dtype=float) #extra constraints=1
+        new_constraints[:,0] = dvecq_U[:,0]
+        new_constraints[:,1] = dgradq_U[:,0]
+        new_constraints[:,2] = constraints[:,0]
+        self.opt_constraint(new_constraints)
+        self.bmat_create()
+
     def form_constrained_DLC(self,constraints):
         self.form_unconstrained_DLC()
         self.opt_constraint(constraints)
         self.bmat_create()
-        #self.Hint = self.Hintp_to_Hint()
 
     def form_unconstrained_DLC(self):
         self.bmatp = self.bmatp_create()
         self.bmatp_to_U()
         self.bmat_create()
-        #self.Hint = self.Hintp_to_Hint()
 
+    def get_nxyzics(self):
+        pass
+    def set_nicd(self):
+        self.nicd=(self.natoms*3)-6
 
+    def add_force(self,grad):
+        fdE = 0.
+        for i in self.FORCE:
+            atoms=[i[0],i[1]]
+            force=i[2]
+            diff = self.subtract_coords(atoms[1],atoms[0])*ANGSTROM_TO_AU
+            #d = np.sqrt(np.sum(diff))
+            d = self.distance(atoms[0],atoms[1])
+            fdE +=  force*d*KCAL_MOL_PER_AU
+            t = (force/d/2.)*ANGSTROM_TO_AU # back to hartree/Ang
+            #print
+            print diff*t
 
-if __name__ =='__main__':
-    filepath="tests/stretched_fluoroethene.xyz"
-    from pytc import *
-    nocc=11
-    nactive=2
-    lot1=PyTC.from_options(states=[(1,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    lot1.cas_from_file(filepath)
-    from pes import *
+            #print "grad before"
+            #print grad.T
+            savegrad = np.copy(grad)
+            print " d: {} t: {} fk: {} fk*d {}".format(d,t,force,fdE)
+            sign=1
+            for a in [3*(i-1) for i in atoms]:
+                grad[a:a+3] += sign*t*diff.T
+                sign*=-1
+            diffgrad = grad-savegrad
+            #print diffgrad.T
 
-    pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
-    mol1=pb.readfile("xyz",filepath).next()
-    ic1=DLC.from_options(mol=mol1,PES=pes)
-    driving_coordinate = [("ADD",1,2)]
-    ic2= DLC.add_node_SE(ic1,driving_coordinate)
-    ic2.print_xyz()
+        return grad,fdE
+

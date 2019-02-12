@@ -16,6 +16,15 @@ class Utils:
         for i,xyz in enumerate(coords):
             self.mol.OBMol.GetAtom(i+1).SetVector(xyz[0],xyz[1],xyz[2])
 
+    def align(self,ref,target):
+        # align OBMOLS
+        a = ob.OBAlign(False, False)
+        a.SetRefMol(ref)
+        a.SetTargetMol(target)
+        a.Align()
+        a.UpdateCoords(target)
+        return target
+
     @staticmethod
     def make_mol_from_coords(coords,atomic_symbols):
         mol = ob.OBMol()
@@ -36,6 +45,15 @@ class Utils:
         a2=self.mol.OBMol.GetAtom(j)
         return a1.GetDistance(a2)
 
+    def subtract_coords(self,i,j):
+        """ subtract i from j"""
+        np_coordsA = np.zeros((1,3))
+        np_coordsB = np.zeros((1,3))
+        np_coordsA[0,:] = self.getCoords(i)
+        np_coordsB[0,:] = self.getCoords(j)
+
+        return np_coordsB-np_coordsA
+
     def getIndex(self,i):
         """ be careful here I think it's 0 based"""
         return self.mol.OBMol.GetAtom(i).GetIndex()
@@ -44,9 +62,11 @@ class Utils:
         a= self.mol.OBMol.GetAtom(i+1)
         return [a.GetX(),a.GetY(),a.GetZ()]
 
-    def getAllCoords(self,i):
+    def getAllCoords(self):
+        tmpcoords = np.zeros((self.natoms,3))
         for i in range(self.natoms):
-            getCoords(i)
+            tmpcoords[i,:] = self.getCoords(i)
+        return tmpcoords
 
     def getAtomicNums(self):
         atomic_nums = [ self.getAtomicNum(i+1) for i in range(self.natoms) ]
@@ -119,18 +139,19 @@ class Utils:
         frag1=[]
         frag2=[]
         for n,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
-            found=False
-            if n==0:
-                frag1.append((0,n+1))
-            else:
+            if self.xyzatom_bool[n]==False:
                 found=False
-                for nbr in ob.OBAtomAtomIter(a):
-                    if (0,nbr.GetIndex()+1) in frag1:
-                        found=True
-                if found==True:
-                    frag1.append((0,a.GetIndex()+1))
-                if found==False:
-                    frag2.append((1,a.GetIndex()+1))
+                if n==0:
+                    frag1.append((0,n+1))
+                else:
+                    found=False
+                    for nbr in ob.OBAtomAtomIter(a):
+                        if (0,nbr.GetIndex()+1) in frag1:
+                            found=True
+                    if found==True:
+                        frag1.append((0,a.GetIndex()+1))
+                    if found==False:
+                        frag2.append((1,a.GetIndex()+1))
 
         if not frag2:
             nfrags=1

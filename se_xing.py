@@ -21,9 +21,9 @@ class SE_Cross(SE_GSM):
         assert rtype in [0,1], "rtype not defined"
         print "*********************************************************************"
         if rtype==0:
-            print "Doing MECI search"
+            print "********************** Doing MECI search ****************************"
         else:
-            print "Doing MESX search"
+            print "********************** Doing MESX search ****************************"
         print "*********************************************************************"
 
         self.icoords[0].gradrms=0.
@@ -67,7 +67,7 @@ class SE_Cross(SE_GSM):
         else:
             self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
 
-    def opt_string(self,max_iters=50,optsteps=3,rtype=0):
+    def opt_string(self,max_iters=50,optsteps=3,rtype=2):
         self.nnodes=self.nR
         print "getting energies"
         for ico in self.icoords[0:self.nR]:
@@ -131,7 +131,8 @@ class SE_Cross(SE_GSM):
         pes1dE = self.icoords[self.nR-1].PES.dE
         pes2dE = self.icoords[self.nR-2].PES.dE
         condition1 = (abs(self.icoords[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.icoords[0].bdist) and (abs(pes1dE) > abs(pes2dE)))
-        if condition1:
+        condition2= (self.icoords[self.nR-1].bdist+0.1>self.icoords[self.nR-2].bdist)
+        if condition1 or condition2:
             isDone = True
         return isDone
 

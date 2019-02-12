@@ -23,12 +23,22 @@ class GSM(Base_Method):
         self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
         print "after union"
 
-        lot1 = tmp.PES.lot.copy(
-                tmp.PES.lot, 
-                self.nnodes-1)
-        PES1 = PES(tmp.PES.options.copy().set_values({
-            "lot": lot1,
-            }))
+        if self.growth_direction !=1:
+            print "copying lot for end node"
+            lot1 = tmp.PES.lot.copy(
+                    tmp.PES.lot, 
+                    self.nnodes-1)
+        else: 
+            lot1 = self.icoords[0].PES.lot.copy(
+                    self.icoords[0].PES.lot, 
+                    self.nnodes-1)
+
+        if self.icoords[0].PES.__class__.__name__=="Avg_PES":
+            PES1 = Avg_PES(self.icoords[0].PES.PES1,self.icoords[0].PES.PES2,lot1)
+        else:
+            PES1 = PES(self.icoords[0].PES.options.copy().set_values({
+                "lot": lot1,
+                }))
         self.icoords[-1] = DLC(self.icoords[0].options.copy().set_values(dict(
             mol= tmp.mol,
             PES=PES1,
@@ -37,12 +47,14 @@ class GSM(Base_Method):
         if self.growth_direction !=1:
             print "print levels at beginning are ",self.icoords[-1].print_level
 
-    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
-        """rtype=0 Find and Climb TS,
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
+        """
+        rtype=2 Find and Climb TS,
         1 Climb with no exact find, 
-        2 turning of climbing image and TS search"""
+        0 turning of climbing image and TS search
+        """
 
-        V0=self.set_V0()
+        self.set_V0()
         if not self.isRestarted:
             if self.growth_direction==0:
                 self.interpolate(2) 
@@ -125,10 +137,15 @@ class GSM(Base_Method):
                 lot1 = self.icoords[-2].PES.lot.copy(
                         self.icoords[-2].PES.lot,
                         self.nnodes-1)
-                self.icoords[-1].PES = PES(self.icoords[-2].PES.options.copy().set_values({
-                    "lot": lot1,
-                    }))
+                if self.icoords[-2].PES.__class__.__name__=="Avg_PES":
+                    self.icoords[-1].PES = Avg_PES(self.icoords[-2].PES.PES1,self.icoords[2].PES.PES2,lot1)
+                else:
+                    self.icoords[-1].PES = PES(self.icoords[-2].PES.options.copy().set_values({
+                        "lot": lot1,
+                        }))
                 self.icoords[-1].energy = self.icoords[-1].PES.get_energy(self.icoords[-1].geom)
+                if self.icoords[-1].PES.__class__.__name__=="Avg_PES":
+                    print "final dE = ",self.icoords[-1].PES.dE
 
         return isDone
 
@@ -178,12 +195,13 @@ class GSM(Base_Method):
 
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
-        if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
-            isDone=True
-            self.tscontinue=False
-        if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
-            isDone=True
-            self.tscontinue=False
+        if rtype==self.stage:
+            if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
+                isDone=True
+                self.tscontinue=False
+            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+                isDone=True
+                self.tscontinue=False
         return isDone
 
     def set_V0(self):

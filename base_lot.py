@@ -90,10 +90,9 @@ class Lot(object):
                      )
 
         opt.add_option(
-                key="from_template",
+                key="psiw",
                 required=False,
-                value=False,
-                doc='how to do MOM,only for pytc'
+                value=None,
                 )
 
         Lot._default_options = opt
@@ -116,9 +115,7 @@ class Lot(object):
         self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
-        self.from_template =self.options['from_template']
-        self.lot = None
-        self.casci1=None
+        self.psiw = self.options['psiw']
 
         self.lot_inp_file = self.options['lot_inp_file']
 

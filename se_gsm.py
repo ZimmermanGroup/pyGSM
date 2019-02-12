@@ -43,10 +43,12 @@ class SE_GSM(Base_Method):
         self.icoords[0].madeBonds=True
         self.icoords[0].setup()
 
-    def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
-        """rtype=0 Find and Climb TS,
+    def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
+        """
+        rtype=2 Find and Climb TS,
         1 Climb with no exact find, 
-        2 turning of climbing image and TS search"""
+        0 turning of climbing image and TS search
+        """
 
         if self.isRestarted==False:
             self.icoords[0].gradrms = 0.
@@ -54,7 +56,7 @@ class SE_GSM(Base_Method):
             print " Initial energy is %1.4f" % self.icoords[0].energy
             self.interpolate(1) 
             self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
-            self.growth_iters(iters=max_iters,maxopt=max_steps)
+            self.growth_iters(iters=max_iters,maxopt=opt_steps)
             if self.tscontinue==True:
                 if self.pastts==1: #normal over the hill
                     self.interpolateR(1)
@@ -95,20 +97,21 @@ class SE_GSM(Base_Method):
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
+        noptsteps=15
         if rtype==1:
             print " copying last node, opting"
             self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
+            print " Optimizing node %i" % self.nR
+            self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
+            self.optimize(n=self.nR,nsteps=noptsteps)
+            self.active[self.nR]=True
+            if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
+                print " Opt did not produce new geometry"
+            else:
+                self.nR+=1
         elif rtype==2:
             print " already created node, opting"
-        noptsteps=15
-        print " Optimizing node %i" % self.nR
-        self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
-        self.optimize(n=self.nR,nsteps=noptsteps)
-        self.active[self.nR]=True
-        if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
-            print " Opt did not produce new geometry"
-        else:
-            self.nR+=1
+            self.optimize(n=self.nR-1,nsteps=noptsteps)
         return
 
 
