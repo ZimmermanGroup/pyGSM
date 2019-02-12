@@ -5,7 +5,7 @@ from units import *
 class OStep_utils:
     def grad_to_q(self,grad):
         if self.FZN_ATOMS is not None:
-            for a in [3*i for i in self.FZN_ATOMS]:
+            for a in [3*(i-1) for i in self.FZN_ATOMS]:
                 grad[a:a+3]=0.
         gradq = np.dot(self.bmatti,grad)
         return gradq

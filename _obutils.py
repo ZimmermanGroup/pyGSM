@@ -45,6 +45,15 @@ class Utils:
         a2=self.mol.OBMol.GetAtom(j)
         return a1.GetDistance(a2)
 
+    def subtract_coords(self,i,j):
+        """ subtract i from j"""
+        np_coordsA = np.zeros((1,3))
+        np_coordsB = np.zeros((1,3))
+        np_coordsA[0,:] = self.getCoords(i)
+        np_coordsB[0,:] = self.getCoords(j)
+
+        return np_coordsB-np_coordsA
+
     def getIndex(self,i):
         """ be careful here I think it's 0 based"""
         return self.mol.OBMol.GetAtom(i).GetIndex()

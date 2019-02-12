@@ -87,6 +87,14 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
                 key="FZN_ATOMS",
                 value=None,
                 required=False,
+                doc='Atoms to be left unoptimized/unmoved',
+                )
+
+        opt.add_option(
+                key="FORCE",
+                value=None,
+                required=False,
+                doc='Apply a spring force between atoms in units of AU, e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',
                 )
 
         opt.add_option(
@@ -138,12 +146,12 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         self.FZN_ATOMS=self.options['FZN_ATOMS']
         self.EXTRA_BONDS=self.options['EXTRA_BONDS']
         self.IC_region=self.options['IC_region']
+        self.FORCE = self.options['FORCE']
         self.madeBonds = False
         self.isTSnode = False
         self.update_hess=False
         self.buf = StringIO.StringIO() 
         self.natoms= len(self.mol.atoms)
-        #self.xyzatom_bool = np.zeros(3*self.natoms,dtype=bool)
         self.xyzatom_bool = np.zeros(self.natoms,dtype=bool)
         self.nxyzatoms=0
         self.get_nxyzics()
@@ -362,7 +370,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
                             c2=b1
                         if self.bond_exists((b2,a2))==True:
                             c2=b2
-                        #SHould add a try except here?
+                        #Should add a try except here?
                         torsion= (c1,a1,a2,c2)
                         if not self.torsion_exists(torsion) and len(set(torsion))==4:
                             print(" adding torsion via linear ties %s" %(torsion,))
@@ -387,18 +395,6 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             if eig<0.001:
                 lowev+=1
 
-        #if lowev>0:
-        #    ev=np.diag(e)
-        #    print " lowev = ",lowev
-        #    np.savetxt('test3.out', ev, delimiter=',',fmt='%1.2e')
-        #    print e
-        #    print "shape G=",np.shape(G)
-        #    print "numics=",self.num_ics
-        #    print "numics_p=",self.num_ics_p
-        #    print "3N=",self.natoms*3
-        #    print "nicd=",self.nicd
-        #    print "redset=",redset
-
         if lowev>3:
             print(" Error: optimization space less than 3N DOF")
             print "lowev=",lowev
@@ -412,12 +408,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             exit(-1)
         self.nicd -= lowev
 
-        #idx = e.argsort()[::-1]
-        #v = v[idx[::-1]]
-        #self.Ut=v[redset+lowev:,:]
-        #print e[:self.nicd]
         self.Ut =v[:self.nicd]
-        #np.savetxt('test3.out', self.Ut, delimiter=',',fmt='%1.2e')
         self.torv0 = list(self.TObj.torv)
         
     def bmat_create(self):
@@ -881,8 +872,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
             # => Frozen <= #
             if self.FZN_ATOMS is not None:
-                for a in [3*i for i in self.FZN_ATOMS]:
-                    xyzd[a:a+3]=0.
+                for a in [(i-1) for i in self.FZN_ATOMS]:
+                    xyzd[a,:]=0.
 
             # => Calc Mag <= #
             mag=np.dot(np.ndarray.flatten(xyzd),np.ndarray.flatten(xyzd))
@@ -961,8 +952,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
             # => Frozen <= #
             if self.FZN_ATOMS is not None:
-                for a in [3*i for i in self.FZN_ATOMS]:
-                    xyzd[a:a+3]=0.
+                for a in [(i-1) for i in self.FZN_ATOMS]:
+                    xyzd[a,:]=0.
 
             # => Add Change in Coords <= #
             xyz1 = self.coords + xyzd/SCALEBT 
@@ -1105,6 +1096,10 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
     def update_for_step(self,opt_type):
         self.energy=self.energyp=self.PES.get_energy(self.geom)
         grad = self.PES.get_gradient(self.geom)
+        if self.FORCE is not None:
+            grad,fdE = self.add_force(grad)
+            self.energy += fdE
+
         nconstraints=self.get_nconstraints(opt_type)
         if opt_type!=3 and opt_type!=4:
             self.Hint = self.Hintp_to_Hint()
@@ -1147,6 +1142,9 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
                 self.update_ics()
                 self.energy = self.PES.get_energy(self.geom)
                 grad = self.PES.get_gradient(self.geom)
+                if self.FORCE is not None:
+                    grad,fdE = self.add_force(grad)
+                    self.energy += fdE
                 self.gradq = self.grad_to_q(grad)
                 nconstraints=self.get_nconstraints(opt_type)
                 self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
@@ -1260,6 +1258,10 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
      
         # => calc energy at new position <= #
         self.energy = self.PES.get_energy(self.geom)
+        grad = self.PES.get_gradient(self.geom)
+        if self.FORCE is not None:
+            grad,fdE = self.add_force(grad)
+            self.energy += fdE
 
         #form DLC at new position
         if opt_type!=3 and opt_type!=4:
@@ -1276,9 +1278,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         for n in range(nconstraints):
             self.dEpre +=self.gradq[-n-1]*self.dq[-n-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
 
-        # ratio and gradrms
+        # ratio  and gradmrs
         self.ratio = self.dEstep/self.dEpre
-        grad = self.PES.get_gradient(self.geom)
         self.gradq = self.grad_to_q(grad)
         self.gradrms = np.sqrt(np.dot(self.gradq.T[0,:self.nicd-nconstraints],self.gradq[:self.nicd-nconstraints,0])/(self.nicd-nconstraints))
 
@@ -1419,17 +1420,40 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         self.form_unconstrained_DLC()
         self.opt_constraint(constraints)
         self.bmat_create()
-        #self.Hint = self.Hintp_to_Hint()
 
     def form_unconstrained_DLC(self):
         self.bmatp = self.bmatp_create()
         self.bmatp_to_U()
         self.bmat_create()
-        #self.Hint = self.Hintp_to_Hint()
 
     def get_nxyzics(self):
         pass
     def set_nicd(self):
         self.nicd=(self.natoms*3)-6
 
+    def add_force(self,grad):
+        fdE = 0.
+        for i in self.FORCE:
+            atoms=[i[0],i[1]]
+            force=i[2]
+            diff = self.subtract_coords(atoms[1],atoms[0])*ANGSTROM_TO_AU
+            #d = np.sqrt(np.sum(diff))
+            d = self.distance(atoms[0],atoms[1])
+            fdE +=  force*d*KCAL_MOL_PER_AU
+            t = (force/d/2.)*ANGSTROM_TO_AU # back to hartree/Ang
+            #print
+            print diff*t
+
+            #print "grad before"
+            #print grad.T
+            savegrad = np.copy(grad)
+            print " d: {} t: {} fk: {} fk*d {}".format(d,t,force,fdE)
+            sign=1
+            for a in [3*(i-1) for i in atoms]:
+                grad[a:a+3] += sign*t*diff.T
+                sign*=-1
+            diffgrad = grad-savegrad
+            #print diffgrad.T
+
+        return grad,fdE
 

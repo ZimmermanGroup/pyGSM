@@ -131,7 +131,7 @@ class SE_Cross(SE_GSM):
         pes1dE = self.icoords[self.nR-1].PES.dE
         pes2dE = self.icoords[self.nR-2].PES.dE
         condition1 = (abs(self.icoords[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.icoords[0].bdist) and (abs(pes1dE) > abs(pes2dE)))
-        condition2= (self.icoords[self.nR-1].bdist>self.icoords[self.nR-2].bdist)
+        condition2= (self.icoords[self.nR-1].bdist+0.1>self.icoords[self.nR-2].bdist)
         if condition1 or condition2:
             isDone = True
         return isDone

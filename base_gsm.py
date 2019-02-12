@@ -254,6 +254,9 @@ class Base_Method(object,Print,Analyze):
         opt_molecules=[]
         self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
         grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
+        if self.icoords[n].FORCE is not None:
+            grad,fdE = self.icoords[n].add_force(grad)
+            self.icoords[n].V0 += fdE
         self.icoords[n].gradq = self.icoords[n].grad_to_q(grad)
         self.icoords[n].energy=0
         grmss = []
