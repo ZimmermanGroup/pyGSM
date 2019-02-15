@@ -41,17 +41,6 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
                 for j,a in enumerate(ob.OBResidueAtomIter(res)):
                     self.xyzatom_bool[startidx+j]=True
             startidx+= res.GetNumAtoms()
-        #self.xyzics_coords = np.zeros((self.nxyzatoms,3))
-        #startidx=0
-        #resid=0
-        #for res in ob.OBResidueIter(self.mol.OBMol):
-        #    if res.GetName() not in self.IC_region:
-        #        for j,a in enumerate(ob.OBResidueAtomIter(res)):
-        #            self.xyzics_coords[startidx+j,0] = a.GetX()
-        #            self.xyzics_coords[startidx+j,1] = a.GetY()
-        #            self.xyzics_coords[startidx+j,2] = a.GetZ()
-        #        resid+=1
-        #        startidx= resid*res.GetNumAtoms()
         return self.nxyzatoms
 
     def set_nicd(self):
@@ -61,8 +50,6 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         only_ics= self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor
         bmatp=super(DLC,self).bmatp_create()
         bmatp[only_ics:,(self.natoms-self.nxyzatoms)*3:] = np.eye(self.nxyzatoms*3)
-        #print bmatp
-        #print bmatp[:only_ics,:(self.natoms-self.nxyzatoms)*3]
         return bmatp
 
     def q_create(self):
@@ -73,15 +60,15 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
             q[i]+=np.dot(self.Ut[i,self.num_ics_p:],xyzic_atom_coords)
         return q
 
-    def primitive_internal_difference(self,qprim):
-        dqprim_internals = super(DLC,self).primitive_internal_difference(qprim)
-        #print "dqprim_internals"
-        #print dqprim_internals
-        #print np.shape(dqprim_internals)
-        dqprim_xyzatoms = self.get_xyz_atom_coords()
-        #print "dqprim_xyzatoms"
-        #print dqprim_xyzatoms
-        #print np.shape(dqprim_xyzatoms)
+    def primitive_internal_values(self):
+        return np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv,self.get_xyz_atom_coords()))
+
+    def primitive_internal_difference(self,qprim1,qprim2):
+        dqprim_internals = super(DLC,self).primitive_internal_difference(qprim1,qprim2)
+        print np.shape(dqprim_internals)
+        dqprim_xyzatoms = qprim1[self.num_ics_p:] - qprim2[self.num_ics_p:]
+        dqprim_xyzatoms = np.reshape(dqprim_xyzatoms,(3*self.nxyzatoms,1))
+        print np.shape(dqprim_xyzatoms)
         dqprim = np.concatenate((dqprim_internals,dqprim_xyzatoms))
         return dqprim
 
@@ -104,7 +91,7 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         #t = time()
         bmat = np.matmul(self.Ut,self.bmatp)
         bbt = np.matmul(bmat,np.transpose(bmat))
-        ##t = time()
+        #t = time()
         bbti = np.linalg.inv(bbt)
         #delta = time() - t
         self.bmatti= np.matmul(bbti,bmat)
@@ -112,29 +99,29 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         #print "time for full inverse ",delta
 
         #t=time()
-        n3m6 = (self.natoms-self.nxyzatoms)*3-6
-        UtDLC = self.Ut[:n3m6-self.lowev,:self.num_ics_p]
-        UtC = self.Ut[n3m6:,self.num_ics_p:]
-        Bp=self.bmatp[:self.num_ics_p,:n3m6+6]
-        Bc=self.bmatp[self.num_ics_p:,n3m6+6:]
+        #n3m6 = (self.natoms-self.nxyzatoms)*3-6
+        #UtDLC = self.Ut[:n3m6-self.lowev,:self.num_ics_p]
+        #UtC = self.Ut[n3m6:,self.num_ics_p:]
+        #Bp=self.bmatp[:self.num_ics_p,:n3m6+6]
+        #Bc=self.bmatp[self.num_ics_p:,n3m6+6:]
 
-        UtDLC_Bp = np.matmul(UtDLC,Bp)
-        UtC_Bc = np.eye(3*self.nxyzatoms)
+        #UtDLC_Bp = np.matmul(UtDLC,Bp)
+        #UtC_Bc = np.eye(3*self.nxyzatoms)
 
-        bmat = np.block([
-                    [             UtDLC_Bp,                 np.zeros((UtDLC_Bp.shape[0],3*self.nxyzatoms))    ],
-                    [ np.zeros((3*self.nxyzatoms,UtDLC_Bp.shape[1])),       UtC_Bc                          ]
-                    ])
+        #bmat = np.block([
+        #            [             UtDLC_Bp,                 np.zeros((UtDLC_Bp.shape[0],3*self.nxyzatoms))    ],
+        #            [ np.zeros((3*self.nxyzatoms,UtDLC_Bp.shape[1])),       UtC_Bc                          ]
+        #            ])
 
-        UtDLC_Bp2 = np.matmul(UtDLC,np.transpose(UtDLC))
-        UtDLC_Bp2i = np.linalg.inv(UtDLC_Bp2)
-        UtC_Bc2i = np.eye(3*self.nxyzatoms)
+        #UtDLC_Bp2 = np.matmul(UtDLC,np.transpose(UtDLC))
+        #UtDLC_Bp2i = np.linalg.inv(UtDLC_Bp2)
+        #UtC_Bc2i = np.eye(3*self.nxyzatoms)
 
-        bbti = np.block([
-                [                   UtDLC_Bp2i,                       np.zeros((UtDLC_Bp2i.shape[0],3*self.nxyzatoms))],
-                [ np.zeros((3*self.nxyzatoms,UtDLC_Bp2i.shape[1])),                          UtC_Bc2i                ]
-            ])
-        self.bmatti= np.matmul(bbti,bmat)
+        #bbti = np.block([
+        #        [                   UtDLC_Bp2i,                       np.zeros((UtDLC_Bp2i.shape[0],3*self.nxyzatoms))],
+        #        [ np.zeros((3*self.nxyzatoms,UtDLC_Bp2i.shape[1])),                          UtC_Bc2i                ]
+        #    ])
+        #self.bmatti= np.matmul(bbti,bmat)
 
         #delta= time()-t
         #print "time for partial inverse ",delta
@@ -155,15 +142,11 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         #t = time()
 
         # => initialize <= #
-        #total_v = np.zeros(G.shape)
-        #total_eig = np.zeros(G.shape[0])
         total_eig = np.zeros(self.nicd)
         total_v = np.zeros((self.nicd,self.num_ics))
 
         # =>  diagonalize sublock <= #
         eig1,v1 = super(DLC,self).diagonalize_G(G[:self.num_ics_p,:self.num_ics_p])
-        #eig1,v1 = np.linalg.eigh(G[:self.num_ics_p,:self.num_ics_p])
-        #v1 = np.transpose(v1)
 
         # => take only 3N-6 sublock of eig1 <= #
         n3m6 = (self.natoms-self.nxyzatoms)*3-6
@@ -175,12 +158,6 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         eig1 = eig1[:n3m6-self.lowev]
         v1 = v1[:n3m6-self.lowev]
         #print eig1
-        #print "shape eig = ",np.shape(eig1)
-        #print "shape v1 = ",np.shape(v1)
-        #print "nicd=",self.nicd
-        #print "rn3m6=",n3m6
-        #print "num_ic=",self.num_ics
-        #print "num_ic_p=",self.num_ics_p
 
         # => append to initialzed matrices <= #
         total_v[:v1.shape[0],:v1.shape[1]] = v1
@@ -188,15 +165,8 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
 
         # => xyz sublock <= #
         d = G.diagonal()[self.num_ics_p:]
-        #print "shape d=",np.shape(d)
-        #print "3*nxyatoms = ",3*self.nxyzatoms
         np.fill_diagonal(total_v[v1.shape[0]:,v1.shape[1]:],d)
         total_eig[eig1.shape[0]:] = d
-
-        # => sort the eigenvectors <= #
-        #idx = total_eig.argsort()[::-1]
-        #e = total_eig[idx]
-        #v = total_v[:,idx]
 
         #delta = time() - t
         #print "time for partial matrix diagonalization ",delta

@@ -10,9 +10,13 @@ and it contains three slot classes which help with management of IC data
 '''
 
 class ICoords:
-    def primitive_internal_difference(self,qprim):
+    def primitive_internal_values(self):
+        return np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
+
+    def primitive_internal_difference(self,qprim1,qprim2):
+        """ subtract prim2 from prim1"""
         torsion_diff=[]
-        for i,j in zip(self.TObj.torv,qprim[self.BObj.nbonds+self.AObj.nangles:self.num_ics_p]):
+        for i,j in zip(qprim1[self.BObj.nbonds+self.AObj.nangles:self.num_ics_p],qprim2[self.BObj.nbonds+self.AObj.nangles:self.num_ics_p]):
             tordiff = i-j
             if tordiff>180.:
                 torfix=-360.
@@ -22,13 +26,12 @@ class ICoords:
                 torfix=0.
             torsion_diff.append(tordiff+torfix)
 
-        bond_diff = self.BObj.bondd - qprim[:self.BObj.nbonds]
-        angle_diff = self.AObj.anglev - qprim[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
+        bond_diff = qprim1[:self.BObj.nbonds] - qprim2[:self.BObj.nbonds]
+        angle_diff = qprim1[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds] - qprim2[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
         angle_diff=[a*np.pi/180. for a in angle_diff]
         torsion_diff=[t*np.pi/180. for t in torsion_diff]
         dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
-        #dqprim = np.reshape(self.dqprim,(self.num_ics_p,1))
-        return dqprim
+        return np.reshape(dqprim,(self.num_ics_p,1))
 
     def make_bonds(self):
         bonds=[]
@@ -155,19 +158,9 @@ class ICoords:
     @staticmethod
     def tangent_1(ICoord1,ICoord2):
         ictan = []
-
-        for bond1,bond2 in zip(ICoord1.BObj.bondd,ICoord2.BObj.bondd):
-            ictan.append(bond1 - bond2)
-        for angle1,angle2 in zip(ICoord1.AObj.anglev,ICoord2.AObj.anglev):
-            ictan.append((angle1-angle2)*np.pi/180.)
-        for torsion1,torsion2 in zip(ICoord1.TObj.torv,ICoord2.TObj.torv):
-            temptorsion = (torsion1-torsion2)*np.pi/180.0
-            if temptorsion > np.pi:
-                ictan.append(-1*((2*np.pi) - temptorsion))
-            elif temptorsion < -np.pi:
-                ictan.append((2*np.pi)+temptorsion)
-            else:
-                ictan.append(temptorsion)
+        qprim1 = ICoord1.primitive_internal_values()
+        qprim2 = ICoord2.primitive_internal_values()
+        ictan = ICoord1.primitive_internal_difference(qprim1,qprim2)
         #print " printing ictan"
         #for i in range(ICoord1.BObj.nbonds):
         #    print "%1.2f " %ictan[i],
@@ -235,7 +228,6 @@ class ICoords:
                 if ICoord1.print_level>0 and not quiet:
                     print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ICoord1.AObj.anglev[ang_idx],anglet,ang_diff))
                 ictan[ICoord1.BObj.nbonds+ang_idx] = -ang_diff
-
                 #TODO need to come up with an adist
                 #if abs(ang_diff)>0.1:
                 #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]

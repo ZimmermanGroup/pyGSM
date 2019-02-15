@@ -929,7 +929,6 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         #print qn.T
 
         #primitive internal values
-        #qprim = np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
         qprim = self.primitive_internal_values()
 
         opt_molecules=[]
@@ -1040,10 +1039,11 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             #angle_diff=[a*np.pi/180. for a in angle_diff]
             #torsion_diff=[t*np.pi/180. for t in torsion_diff]
             #self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
-            self.dqprim = self.primitive_internal_difference(qprim)
-            #print "dqprim = "
-            #print self.dqprim
-            self.dqprim = np.reshape(self.dqprim,(self.num_ics,1))
+
+            qprim_current = self.primitive_internal_values()
+            self.dqprim = self.primitive_internal_difference(qprim_current,qprim)
+            print "dqprim = "
+            print self.dqprim.T
 
         #write convergence geoms to file 
         largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
@@ -1456,7 +1456,4 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             #print diffgrad.T
 
         return grad,fdE
-
-    def primitive_internal_values(self):
-        return np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
 
