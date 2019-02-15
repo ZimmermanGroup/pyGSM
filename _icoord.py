@@ -10,6 +10,25 @@ and it contains three slot classes which help with management of IC data
 '''
 
 class ICoords:
+    def primitive_internal_difference(self,qprim):
+        torsion_diff=[]
+        for i,j in zip(self.TObj.torv,qprim[self.BObj.nbonds+self.AObj.nangles:self.num_ics_p]):
+            tordiff = i-j
+            if tordiff>180.:
+                torfix=-360.
+            elif tordiff<-180.:
+                torfix=360.
+            else:
+                torfix=0.
+            torsion_diff.append(tordiff+torfix)
+
+        bond_diff = self.BObj.bondd - qprim[:self.BObj.nbonds]
+        angle_diff = self.AObj.anglev - qprim[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
+        angle_diff=[a*np.pi/180. for a in angle_diff]
+        torsion_diff=[t*np.pi/180. for t in torsion_diff]
+        dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
+        #dqprim = np.reshape(self.dqprim,(self.num_ics_p,1))
+        return dqprim
 
     def make_bonds(self):
         bonds=[]

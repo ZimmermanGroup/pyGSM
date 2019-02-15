@@ -33,10 +33,20 @@ class QChem(Lot):
                 tempfile.write(line)
 
         tempfile.write('{} {}\n'.format(self.charge,multiplicity))
-        for coord in geom:
-            for i in coord:
-                tempfile.write(str(i)+' ')
-            tempfile.write('\n')
+        if os.path.isfile("link.txt"):
+            with open("link.txt") as link:
+                link_lines = link.readlines()
+            tmp_geom = [list(i) for i in geom]
+            for i,coord in enumerate(tmp_geom):
+                coord.append(link_lines[i].rstrip('\n'))
+                for i in coord:
+                    tempfile.write(str(i)+' ')
+                tempfile.write('\n')
+        else:
+            for coord in geom:
+                for i in coord:
+                    tempfile.write(str(i)+' ')
+                tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
 
@@ -115,20 +125,21 @@ class QChem(Lot):
     
 if __name__ == '__main__':
 
-    import dlc as ic
+    import hybrid_dlc 
     import pybel as pb    
     import manage_xyz
+    import pes
 
     cwd = os.getcwd()
-    filepath="tests/fluoroethene.xyz"
+    #filepath="examples/tests/fluoroethene.xyz"
+    filepath="firstnode.pdb"
     geom=manage_xyz.read_xyz(filepath,scale=1)   
 
-    lot=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
-    e=lot.get_energy(geom,1,0)
-    print e
-    e=lot.get_energy(geom,3,0)
-    print e
-    g=lot.get_gradient(geom,1,0)
-    print g
-    g=lot.get_gradient(geom,3,0)
-    print g
+    #lot=QChem.from_options(states=[(2,0)],charge=1,basis='6-31g(d)',functional='B3LYP')
+    lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart')
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
+    ic = Hybrid_DLC(mol=mol,pes=pes,IC_region=["UNL"])
+    #e=lot.get_energy(geom,2,0)
+    #print e
+    #g=lot.get_gradient(geom,2,0)
+    #print g

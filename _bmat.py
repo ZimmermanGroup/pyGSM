@@ -6,6 +6,19 @@ from units import *
 """ This class has functions for creating the Bmatrix"""
 
 class Bmat:
+
+    def diagonalize_G(self,G):
+        SVD=False
+        if SVD:
+            v_temp,e,vh  = np.linalg.svd(G)
+        else:
+            e,v_temp = np.linalg.eigh(G)
+            idx = e.argsort()[::-1]
+            e = e[idx]
+            v_temp = v_temp[:,idx]
+        v = np.transpose(v_temp)
+        return e,v
+
     def bmatp_dqbdx(self,i,j):
         u = np.zeros(3,dtype=float)
         a=self.mol.OBMol.GetAtom(i+1)
@@ -191,7 +204,7 @@ class Bmat:
             bmatp[i,3*a4+1] = dqtdx[10]
             bmatp[i,3*a4+2] = dqtdx[11]
             i+=1
-        if self.print_level==2:
+        if self.print_level>2:
             print "printing bmatp"
             print bmatp
             print "\n"

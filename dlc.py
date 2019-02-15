@@ -153,8 +153,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         self.buf = StringIO.StringIO() 
         self.natoms= len(self.mol.atoms)
         self.xyzatom_bool = np.zeros(self.natoms,dtype=bool)
-        self.nxyzatoms=0
-        self.get_nxyzics()
+        self.nxyzatoms=self.get_nxyzics()
         if self.bonds is not None:
             self.BObj = Bond_obj(self.bonds,None,None)
             self.BObj.update(self.mol)
@@ -381,23 +380,22 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         self.TObj.update(self.mol)
 
     def bmatp_to_U(self):
+        self.set_nicd()
         G=np.matmul(self.bmatp,np.transpose(self.bmatp))
-        # Singular value decomposition
-        v_temp,e,vh  = np.linalg.svd(G)
-        v = np.transpose(v_temp)
-        lowev=0
+        # diagonalize G
+        e,v = self.diagonalize_G(G)
+        self.lowev=0
 
         #make function called set_nicd --> one for dlc and one for hdlc
-        self.set_nicd()
         redset = self.num_ics - self.nicd
 
         for eig in e[:self.nicd]:
             if eig<0.001:
-                lowev+=1
+                self.lowev+=1
 
-        if lowev>3:
+        if self.lowev>3:
             print(" Error: optimization space less than 3N DOF")
-            print "lowev=",lowev
+            print "lowev=",self.lowev
             print "shape G=",np.shape(G)
             print "numics=",self.num_ics
             print "numics_p=",self.num_ics_p
@@ -406,7 +404,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             print "redset=",redset
             print e[:self.nicd]
             exit(-1)
-        self.nicd -= lowev
+        self.nicd -= self.lowev
 
         self.Ut =v[:self.nicd]
         self.torv0 = list(self.TObj.torv)
@@ -421,7 +419,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         bbt = np.matmul(bmat,np.transpose(bmat))
         bbti = np.linalg.inv(bbt)
         self.bmatti= np.matmul(bbti,bmat)
-        if self.print_level==2:
+        if self.print_level>2:
             print "bmatti"
             print self.bmatti
 
@@ -908,8 +906,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
         return 
 
-    def ic_to_xyz_opt(self,dq0):
-        MAX_STEPS = 8
+    def ic_to_xyz_opt(self,dq0,MAX_STEPS=8):
         rflag = 0 
         retry = False
         SCALEBT = 1.5
@@ -928,9 +925,12 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         dq = dq0
         #target IC values
         qn = self.q + dq 
+        #print "printing new q"
+        #print qn.T
 
         #primitive internal values
-        qprim = np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
+        #qprim = np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
+        qprim = self.primitive_internal_values()
 
         opt_molecules=[]
         xyzfile=os.getcwd()+"/ic_to_xyz.xyz"
@@ -941,10 +941,11 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
         # => Calc Change in Coords <= #
         for n in range(MAX_STEPS):
-            #print "ic iteration %i" % n
+            if self.print_level>1:
+                print "ic iteration %i" % n
             btit = np.transpose(self.bmatti)
             xyzd=np.dot(btit,dq)
-            if self.print_level==2:
+            if self.print_level>2:
                 print "xyzd"
                 print xyzd.T
             assert len(xyzd)==3*self.natoms,"xyzd is not N3 dimensional"
@@ -964,15 +965,14 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             xyzall.append(xyz1)
 
             # update coords
-            xyzp = np.copy(self.coords) # note that when we modify coords, xyzp will not change
+            xyzp = np.copy(self.coords) 
             self.coords = xyz1
 
             self.update_ics()
             self.bmatp=self.bmatp_create()
             self.bmat_create()
-            if self.print_level==2:
+            if self.print_level==3:
                 print self.bmatti
-
             opt_molecules.append(obconversion.WriteString(self.mol.OBMol))
 
             #calc new dq
@@ -1024,28 +1024,31 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
         if retry==False:
             self.update_ics()
-            torsion_diff=[]
-            for i,j in zip(self.TObj.torv,qprim[self.BObj.nbonds+self.AObj.nangles:]):
-                tordiff = i-j
-                if tordiff>180.:
-                    torfix=-360.
-                elif tordiff<-180.:
-                    torfix=360.
-                else:
-                    torfix=0.
-                torsion_diff.append(tordiff+torfix)
+            #torsion_diff=[]
+            #for i,j in zip(self.TObj.torv,qprim[self.BObj.nbonds+self.AObj.nangles:]):
+            #    tordiff = i-j
+            #    if tordiff>180.:
+            #        torfix=-360.
+            #    elif tordiff<-180.:
+            #        torfix=360.
+            #    else:
+            #        torfix=0.
+            #    torsion_diff.append(tordiff+torfix)
 
-            bond_diff = self.BObj.bondd - qprim[:self.BObj.nbonds]
-            angle_diff = self.AObj.anglev - qprim[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
-            angle_diff=[a*np.pi/180. for a in angle_diff]
-            torsion_diff=[t*np.pi/180. for t in torsion_diff]
-            self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
+            #bond_diff = self.BObj.bondd - qprim[:self.BObj.nbonds]
+            #angle_diff = self.AObj.anglev - qprim[self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds]
+            #angle_diff=[a*np.pi/180. for a in angle_diff]
+            #torsion_diff=[t*np.pi/180. for t in torsion_diff]
+            #self.dqprim = np.concatenate((bond_diff,angle_diff,torsion_diff))
+            self.dqprim = self.primitive_internal_difference(qprim)
+            #print "dqprim = "
+            #print self.dqprim
             self.dqprim = np.reshape(self.dqprim,(self.num_ics,1))
 
         #write convergence geoms to file 
-        #largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
-        #for mol in opt_molecules:
-        #    largeXyzFile.write(pb.readstring("xyz",mol))
+        largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
+        for mol in opt_molecules:
+            largeXyzFile.write(pb.readstring("xyz",mol))
         if self.print_level==2:
             print "dqmagall,magall"
             print dqmagall
@@ -1427,7 +1430,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         self.bmat_create()
 
     def get_nxyzics(self):
-        pass
+        return 0 
+
     def set_nicd(self):
         self.nicd=(self.natoms*3)-6
 
@@ -1441,11 +1445,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             d = self.distance(atoms[0],atoms[1])
             fdE +=  force*d*KCAL_MOL_PER_AU
             t = (force/d/2.)*ANGSTROM_TO_AU # back to hartree/Ang
-            #print
-            print diff*t
 
-            #print "grad before"
-            #print grad.T
             savegrad = np.copy(grad)
             print " d: {} t: {} fk: {} fk*d {}".format(d,t,force,fdE)
             sign=1
@@ -1456,4 +1456,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             #print diffgrad.T
 
         return grad,fdE
+
+    def primitive_internal_values(self):
+        return np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv))
 

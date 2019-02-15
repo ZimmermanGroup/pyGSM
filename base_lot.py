@@ -131,8 +131,8 @@ class Lot(object):
             else:
                 with open(self.lot_inp_file) as lot_inp:
                     lot_inp_lines = lot_inp.readlines()
-                for line in lot_inp_lines:
-                    print line.rstrip()
+                #for line in lot_inp_lines:
+                #    print line.rstrip()
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
