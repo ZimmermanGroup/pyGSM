@@ -1102,6 +1102,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         if self.FORCE is not None:
             grad,fdE = self.add_force(grad)
             self.energy += fdE
+            self.energyp += fdE
 
         nconstraints=self.get_nconstraints(opt_type)
         if opt_type!=3 and opt_type!=4:
@@ -1141,6 +1142,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             if self.dEstep > 2.0 and self.resetopt==True:
                 #if self.print_level>0:
                 print "resetting coords to coorp"
+                print "old E = ",self.energy
                 self.coords = self.coorp
                 self.update_ics()
                 self.energy = self.PES.get_energy(self.geom)
@@ -1276,8 +1278,6 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(self.dq,nconstraints)
-        if self.FORCE is not None:
-            self.dEpre += fdE
 
         # constraint contribution
         for n in range(nconstraints):
