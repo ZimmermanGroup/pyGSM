@@ -1042,8 +1042,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
             qprim_current = self.primitive_internal_values()
             self.dqprim = self.primitive_internal_difference(qprim_current,qprim)
-            print "dqprim = "
-            print self.dqprim.T
+            #print "dqprim = "
+            #print self.dqprim.T
 
         #write convergence geoms to file 
         largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
@@ -1276,6 +1276,8 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
         # check goodness of step
         self.dEstep = self.energy - self.energyp
         self.dEpre = self.compute_predE(self.dq,nconstraints)
+        if self.FORCE is not None:
+            self.dEpre += fdE
 
         # constraint contribution
         for n in range(nconstraints):

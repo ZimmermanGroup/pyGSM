@@ -65,10 +65,8 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
 
     def primitive_internal_difference(self,qprim1,qprim2):
         dqprim_internals = super(DLC,self).primitive_internal_difference(qprim1,qprim2)
-        print np.shape(dqprim_internals)
         dqprim_xyzatoms = qprim1[self.num_ics_p:] - qprim2[self.num_ics_p:]
         dqprim_xyzatoms = np.reshape(dqprim_xyzatoms,(3*self.nxyzatoms,1))
-        print np.shape(dqprim_xyzatoms)
         dqprim = np.concatenate((dqprim_internals,dqprim_xyzatoms))
         return dqprim
 
