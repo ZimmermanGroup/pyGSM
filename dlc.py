@@ -99,7 +99,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
         opt.add_option(
             key='OPTTHRESH',
-            value=0.001,
+            value=0.005,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold')
@@ -167,7 +167,6 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
 
     def setup(self):
         """ setup extra variables etc.,"""
-        print "in setup"
         self.HESS_TANG_TOL_TS=0.5 #was 0.35
         self.HESS_TANG_TOL=0.75
         self.path_overlap=0.0
@@ -296,7 +295,7 @@ class DLC(object,Bmat,Utils,ICoords,OStep_utils):
             self.TObj.update(self.mol)
 
         self.num_ics_p = self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor
-        print "nxyzatoms=",self.nxyzatoms
+        #print "nxyzatoms=",self.nxyzatoms
         self.num_ics = self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor + self.nxyzatoms*3
         #self.make_imptor()
         #self.make_nonbond() 

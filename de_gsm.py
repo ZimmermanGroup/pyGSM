@@ -20,6 +20,7 @@ class GSM(Base_Method):
         super(GSM,self).__init__(options)
 
         tmp = self.options['ICoord2']
+        tmp.PES.lot.node_id = self.nnodes-1
         self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
         print "after union"
 
@@ -89,7 +90,6 @@ class GSM(Base_Method):
             print("Adding too many nodes, cannot interpolate")
         sign = -1
         for i in range(newnodes):
-            print "Adding node",i
             sign *= -1
             if sign == 1:
                 self.interpolateR()

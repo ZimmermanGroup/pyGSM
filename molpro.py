@@ -7,6 +7,7 @@ import re
 
 class Molpro(Lot):
 
+    # designed to do multiple multiplicities at once... maybe not such a good idea, that feature is currently broken
     def run(self,geom):
         if self.has_nelectrons==False:
             for i in self.states:
@@ -16,8 +17,7 @@ class Molpro(Lot):
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
-        print self.node_id
-        tempfile.write(' file,2,mp_0000_{:03}\n').format(self.node_id)
+        tempfile.write(' file,2,mp_0000_{:03d}\n'.format(self.node_id))
         tempfile.write(' memory,800,m\n')
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
@@ -28,9 +28,10 @@ class Molpro(Lot):
             tempfile.write('\n')
         tempfile.write('}\n\n')
         singlets=self.search_tuple(self.states,1)
-        len_singlets=len(singlets) 
+        len_singlets=len(singlets)
+        len_E_singlets=singlets[-1][1] +1 #final adiabat +1 because 0 indexed
         triplets=self.search_tuple(self.states,3)
-        len_triplets=len(triplets) 
+        len_triplets=len(triplets)
 
         if self.lot_inp_file == False:
             tempfile.write(' basis={}\n\n'.format(self.basis))
@@ -85,7 +86,7 @@ class Molpro(Lot):
             with open(self.lot_inp_file) as lot_inp:
                 lot_inp_lines = lot_inp.readlines()
             for line in lot_inp_lines:
-                print line
+                #print line
                 tempfile.write(line)
 
         tempfile.close()
@@ -101,10 +102,10 @@ class Molpro(Lot):
             for match in re.finditer(pattern,line):
                 tmp.append(float(match.group(1)))
 
-        for i in range(len_singlets):
-            self.E.append((1,tmp[i]))
-        for i in range(len_triplets):
-            self.E.append((3,tmp[len_singlets+i]))
+        for i in range(len_E_singlets):
+            self.E.append((1,i,tmp[i]))
+        for i in range(len_triplets): #triplets broken here
+            self.E.append((3,i,tmp[len_singlets+i]))
 
         tmpgrada=[]
         tmpgrad=[]
@@ -112,7 +113,7 @@ class Molpro(Lot):
         self.coup=[]
         with open(tempfileout,"r") as f:
             for line in f:
-                if line.startswith("GRADIENT FOR STATE",6): #will work for SA-MC and RSPT2 HF
+                if line.startswith("GRADIENT FOR STATE",7): #will work for SA-MC and RSPT2 HF
                     for i in range(3):
                         next(f)
                     for i in range(len(geom)):
@@ -137,18 +138,18 @@ class Molpro(Lot):
                             float(mobj.group(4)),
                             ])
 
-        for i in range(len_singlets):
-            self.grada.append((1,tmpgrada[i]))
-        for i in range(len_triplets):
-            self.grada.append((3,tmpgrada[len_singlets+i]))
+        for count,i in enumerate(self.states):
+            if i[0]==1:
+                self.grada.append((1,i[1],tmpgrada[count]))
+            if i[0]==3:
+                self.grada.append((3,i[1],tmpgrada[count]))
 
         self.hasRanForCurrentCoords=True
 
         return
 
     def getE(self,state,multiplicity):
-        tmp = self.search_tuple(self.E,multiplicity)
-        return tmp[state][1]*KCAL_MOL_PER_AU
+        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*KCAL_MOL_PER_AU
 
     def get_energy(self,geom,multiplicity,state):
         if self.hasRanForCurrentCoords==False:
@@ -156,8 +157,8 @@ class Molpro(Lot):
         return self.getE(state,multiplicity)
 
     def getgrad(self,state,multiplicity):
-        tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
+        return np.asarray(tmp)*ANGSTROM_TO_AU
 
     def get_gradient(self,geom,multiplicity,state):
         if self.hasRanForCurrentCoords==False:
@@ -176,6 +177,13 @@ class Molpro(Lot):
     @staticmethod
     def copy(MolproA,node_id):
         """ create a copy of this lot object"""
+        # need to copy wavefunction file!
+        print " creating copy, new node id =",node_id
+        print " old node id = ",MolproA.node_id
+        if node_id != MolproA.node_id:
+            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(MolproA.node_id,node_id)
+            print " ",cmd
+            os.system(cmd)
         return Molpro(MolproA.options.copy().set_values({
             "node_id" :node_id,
             }))

@@ -196,6 +196,10 @@ class Lot(object):
             self.run(geom,7)
         self.hasRanForCurrentCoords=True
 
-    def search_tuple(self,tups, elem):
-        return filter(lambda tup: elem==tup[0], tups)
+    def search_PES_tuple(self,tups, multiplicity,state):
+        '''returns tuple in list of tuples that matches multiplicity and state'''
+        return filter(lambda tup: multiplicity==tup[0] and state==tup[1], tups)
+
+    def search_tuple(self,tups,multiplicity):
+        return filter(lambda tup: multiplicity==tup[0], tups)
 
