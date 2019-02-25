@@ -3,12 +3,16 @@ import numpy as np
 import os
 import openbabel as ob
 import pybel as pb
-from dlc import *
+from dlc import DLC
+from pes import PES
+from penalty_pes import Penalty_PES
+from avg_pes import Avg_PES
 from copy import deepcopy
 import StringIO
 from _print_opt import *
 from _analyze_string import *
 import sys
+from opt_parameters import parameters
 
 class Base_Method(object,Print,Analyze):
 
@@ -98,6 +102,15 @@ class Base_Method(object,Print,Analyze):
                         to be considered grown.",
                         )
 
+        opt.add_option(
+                key='optimizer',
+                required=True,
+                doc='The type of optimizer  to use e.g. eigenvector_follow, conjugate_gradient,etc.')
+
+        opt.add_option(
+                key='parameters',
+                required=True,
+                doc='parameters')
 
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
@@ -115,7 +128,6 @@ class Base_Method(object,Print,Analyze):
         self.options = options
 
         # Cache attributes
-        self.optCG = False #TODO
         self.nnodes = self.options['nnodes']
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
@@ -131,6 +143,11 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
+        self.optimizer = self.options['optimizer']
+
+        self.all_parameters=[]
+        for count in xrange(self.nnodes):
+            self.all_parameters.append(parameters(options['parameters'].options.copy()))
 
         # Set initial values
         self.nn = 2
@@ -234,85 +251,6 @@ class Base_Method(object,Print,Analyze):
         for i,ico in enumerate(self.icoords):
             if ico != 0:
                 self.energies[i] = ico.energy - self.icoords[0].energy
-
-    def optimize(self,n=0,nsteps=100,opt_type=0,ictan=None):
-        assert self.icoords[n]!=0,"icoord not set"
-        assert opt_type in range(-1,8), "opt_type {} not defined".format(opt_type)
-        if opt_type==0:
-            assert ictan==None
-        if opt_type in [5,6,7]:
-            assert self.icoords[n].PES.lot.do_coupling==True,"Turn do_coupling on."
-        elif opt_type not in [5,6,7]:
-            assert self.icoords[n].PES.lot.do_coupling==False,"Turn do_coupling off."
-        if opt_type in [1,2,6,7] and ictan.any()==None:
-            raise RuntimeError, "Need ictan"
-        if opt_type in [2,4]:
-            assert self.icoords[n].isTSnode,"only run climb and eigenvector follow on TSnode."
-            
-        obconversion = ob.OBConversion()
-        obconversion.SetOutFormat('xyz')
-        opt_molecules=[]
-        self.icoords[n].V0 = self.icoords[n].PES.get_energy(self.icoords[n].geom)
-        grad = self.icoords[n].PES.get_gradient(self.icoords[n].geom)
-        if self.icoords[n].FORCE is not None:
-            grad,fdE = self.icoords[n].add_force(grad)
-            self.icoords[n].V0 += fdE
-        self.icoords[n].gradq = self.icoords[n].grad_to_q(grad)
-        self.icoords[n].energy=0
-        grmss = []
-        steps = []
-        energies=[]
-        deltaEs=[]
-        Es =[]
-        self.icoords[n].update_hess=False # gets reset after each step
-        self.icoords[n].buf = StringIO.StringIO()
-
-        if self.icoords[n].print_level>0:
-            print " Initial energy is %1.4f" % self.icoords[n].V0
-
-        for step in range(nsteps):
-            if self.icoords[n].print_level>0:
-                print(" \n Opt step: %i" %(step+1)),
-            self.icoords[n].buf.write("\n Opt step: %d" %(step+1))
-
-            ########### => Opt step <= ############
-            smag =self.icoords[n].opt_step(opt_type=opt_type,ictan=ictan,refE=self.icoords[0].V0)
-
-            ## => modify hessian if overlap is becoming too small <= #
-            if opt_type==4:
-                if self.icoords[n].check_overlap_good()==False:
-                    self.get_eigenv_finite(n)
-
-            # convergence quantities
-            grmss.append(float(self.icoords[n].gradrms))
-            steps.append(smag)
-            energies.append(self.icoords[n].energy-self.icoords[n].V0)
-            opt_molecules.append(obconversion.WriteString(self.icoords[n].mol.OBMol))
-            if isinstance(self.icoords[n].PES,Penalty_PES) or isinstance(self.icoords[n].PES,Avg_PES):
-                deltaEs.append(self.icoords[n].PES.dE)
-    
-            #write convergence
-            self.write_node(n,opt_molecules,energies,grmss,steps,deltaEs)
-   
-            #TODO convergence 
-            sys.stdout.flush()
-            if self.converged(n,opt_type):
-                print 'TRIUMPH! Optimization converged!'
-                break
-
-        #TODO if gradrms is greater than gradrmsl than further reduce DMAX
-        #TODO change how revertopt is done is opt_step?
-
-        print(self.icoords[n].buf.getvalue())
-        if self.icoords[n].print_level>0:
-            print " Final energy is %2.5f" % (self.icoords[n].energy)
-        return smag
-
-    def converged(self,n,opt_type):
-        if self.icoords[n].gradrms<self.icoords[n].OPTTHRESH:
-            return True
-        else:
-            return False
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
         print "*********************************************************************"
@@ -640,12 +578,12 @@ class Base_Method(object,Print,Analyze):
                     print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
-                self.icoords[n].smag = self.optimize(n=n,nsteps=opt_steps*exsteps,opt_type=opt_type,ictan=self.ictan[n])
+                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],opt_steps=opt_steps*exsteps,ictan=self.ictan[n])
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 print " optimizing last node"
-                self.icoords[n].smag = self.optimize(n,opt_steps,opt_type=0) #non-constrained optimization  
-
+                self.all_parameters.options['opt_type']='UNCONSTRAINED'
+                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],opt_steps=opt_steps)
     @property
     def stage(self):
         return self._stage
@@ -704,6 +642,11 @@ class Base_Method(object,Print,Analyze):
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
             self.icoords[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nR-1)
+            if self.icoords[-self.nP-1]==0:
+                success= False
+                break
+            print " getting energy for  node ",self.nP
+            self.icoords[self.nP].energy = self.icoords[self.nP].PES.get_energy(self.icoords[self.nP].geom)
             self.nn+=1
             self.nP+=1
             print " nn=%i,nR=%i" %(self.nn,self.nR)
@@ -1099,3 +1042,30 @@ class Base_Method(object,Print,Analyze):
         else:
             print("******** Turning off climbing image and exact TS search **********")
         print "*********************************************************************"
+
+if __name__=='__main__':
+    from qchem import QChem
+    from pes import PES
+    #from hybrid_dlc import Hybrid_DLC
+    #filepath="firstnode.pdb"
+    #mol=pb.readfile("pdb",filepath).next()
+    #lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart',nproc=1)
+    #pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
+    #ic = Hybrid_DLC.from_options(mol=mol,PES=pes,IC_region=["UNL"],print_level=2)
+   
+    from dlc import DLC
+    basis="sto-3g"
+    nproc=1
+    filepath="examples/tests/bent_benzene.xyz"
+    mol=pb.readfile("xyz",filepath).next()
+    lot=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='HF',nproc=nproc)
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    
+    # => DLC constructor <= #
+    ic1=DLC.from_options(mol=mol,PES=pes,print_level=1)
+    param = parameters.from_options(opt_type='UNCONSTRAINED')
+    #gsm = Base_Method.from_options(ICoord1=ic1,param,optimize=eigenvector_follow)
+
+    #gsm.optimize(nsteps=20)
+
+

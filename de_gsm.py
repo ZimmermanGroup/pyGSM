@@ -44,6 +44,8 @@ class GSM(Base_Method):
             mol= tmp.mol,
             PES=PES1,
             )))
+        self.icoords[-1].make_Hint()
+
         print "print levels at beginning are ",self.icoords[0].print_level
         if self.growth_direction !=1:
             print "print levels at beginning are ",self.icoords[-1].print_level
@@ -216,4 +218,45 @@ class GSM(Base_Method):
             print " Energy of end points are %4.3f " % self.icoords[0].energy
             self.icoords[-1].energy = self.icoords[0].energy
             self.icoords[-1].gradrms = 0.
+
+
+if __name__=='__main__':
+    from qchem import QChem
+    from pes import PES
+    from dlc import DLC
+    from eigenvector_follow import eigenvector_follow
+    from _linesearch import backtrack
+    from opt_parameters import parameters
+
+
+    basis="sto-3g"
+    nproc=1
+    filepath1="examples/tests/butadiene_ethene.xyz"
+    filepath2="examples/tests/cyclohexene.xyz"
+
+    mol1=pb.readfile("xyz",filepath1).next()
+    mol2=pb.readfile("xyz",filepath2).next()
+    lot1=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='HF',nproc=nproc)
+    lot2=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='HF',nproc=nproc)
+    pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+    pes2 = PES.from_options(lot=lot2,ad_idx=0,multiplicity=1)
+    
+    print "\n IC1 \n"
+    ic1=DLC.from_options(mol=mol1,PES=pes1,print_level=0)
+    print "\n IC2 \n"
+    ic2=DLC.from_options(mol=mol2,PES=pes2,print_level=0)
+
+    ic1.make_Hint()
+    ic1.Hint = ic1.Hintp_to_Hint()
+
+    ic2.make_Hint()
+    ic2.Hint = ic1.Hintp_to_Hint()
+
+    
+    param = parameters.from_options(opt_type='UNCONSTRAINED')
+    gsm = GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,parameters=param,optimizer=eigenvector_follow())
+
+    gsm.tscontinue=False
+    gsm.go_gsm(rtype=0)
+
 

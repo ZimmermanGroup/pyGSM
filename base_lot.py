@@ -138,6 +138,8 @@ class Lot(object):
         if multiplicity > self.n_electrons + 1:
             raise ValueError("Spin multiplicity too high.")
         if (self.n_electrons + multiplicity + 1) % 2:
+            print self.n_electrons
+            print multiplicity
             raise ValueError("Inconsistent charge/multiplicity.")
             
     def get_nelec(self,geom,multiplicity):

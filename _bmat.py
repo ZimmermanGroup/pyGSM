@@ -7,18 +7,6 @@ from units import *
 
 class Bmat:
 
-    def diagonalize_G(self,G):
-        SVD=False
-        if SVD:
-            v_temp,e,vh  = np.linalg.svd(G)
-        else:
-            e,v_temp = np.linalg.eigh(G)
-            idx = e.argsort()[::-1]
-            e = e[idx]
-            v_temp = v_temp[:,idx]
-        v = np.transpose(v_temp)
-        return e,v
-
     def bmatp_dqbdx(self,i,j):
         u = np.zeros(3,dtype=float)
         a=self.mol.OBMol.GetAtom(i+1)
@@ -211,46 +199,5 @@ class Bmat:
         #print "shape of bmatp is %s" %(np.shape(bmatp),)
         return bmatp
 
-    def q_create(self):  
-        """Determines the scalars in delocalized internal coordinates"""
 
-        #print(" Determining q in ICs")
-        N3=3*self.natoms
-        q = np.zeros((self.nicd,1),dtype=float)
 
-        dists=[self.distance(bond[0],bond[1]) for bond in self.BObj.bonds ]
-        angles=[self.get_angle(angle[0],angle[1],angle[2])*np.pi/180. for angle in self.AObj.angles ]
-        tmp =[self.get_torsion(torsion[0],torsion[1],torsion[2],torsion[3]) for torsion in self.TObj.torsions]
-        torsions=[]
-        for i,j in zip(self.torv0,tmp):
-            tordiff = i-j
-            if tordiff>180.:
-                torfix=360.
-            elif tordiff<-180.:
-                torfix=-360.
-            else:
-                torfix=0.
-            torsions.append((j+torfix)*np.pi/180.)
-
-        for i in range(self.nicd):
-            q[i] = np.dot(self.Ut[i,0:self.BObj.nbonds],dists) + \
-                    np.dot(self.Ut[i,self.BObj.nbonds:self.AObj.nangles+self.BObj.nbonds],angles) \
-                    + np.dot(self.Ut[i,self.BObj.nbonds+self.AObj.nangles:self.num_ics_p],torsions)
-
-        #print("Printing q")
-        #print np.transpose(q)
-        return q
-
-    def Hintp_to_Hint(self):
-        tmp = np.dot(self.Ut,self.Hintp) #(nicd,numic)(num_ic,num_ic)
-        return np.matmul(tmp,np.transpose(self.Ut)) #(nicd,numic)(numic,numic)
-
-    def fromDLC_to_ICbasis(self,vecq):
-        """
-        This function takes a matrix of vectors wrtiten in the basis of U.
-        The components in this basis are called q.
-        """
-        vec_U = np.zeros((self.num_ics,1),dtype=float)
-        assert np.shape(vecq) == (self.nicd,1), "vecq is not nicd long"
-        vec_U = np.dot(self.Ut.T,vecq)
-        return vec_U/np.linalg.norm(vec_U)

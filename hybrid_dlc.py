@@ -1,23 +1,9 @@
-import numpy as np
+from base_dlc import Base_DLC
+from time import time
 import openbabel as ob
-import pybel as pb
-import options
-import elements 
-import os
-from units import *
-import itertools
-import manage_xyz
-from _icoord import ICoords
-from dlc import DLC
-#from _hbmat import HBmat
-from _obutils import Utils
+import numpy as np
 
-np.set_printoptions(precision=4)
-#np.set_printoptions(suppress=True)
-np.set_printoptions(threshold=np.inf)
-
-
-class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bmat,
+class Hybrid_DLC(Base_DLC): 
     """
     Hybrid DLC for systems containing a large amount of atoms, the coordinates are partitioned 
     into a QM-region which is simulated with ICs, and a MM-region which is modeled with Cartesians. 
@@ -26,6 +12,15 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
     def from_options(**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return Hybrid_DLC(Hybrid_DLC.default_options().set_values(kwargs))
+
+    def create_DLC(icoordA,bondA,angleA,torsionA,mol,PES):
+        return Hybrid_DLC(icoordA.options.copy().set_values({
+            "bonds":bondA,
+            "angles":angleA,
+            "torsions":torsionA,
+            'mol':mol,
+            'PES':PES,
+            }))
 
     def get_nxyzics(self):
         '''
@@ -45,15 +40,16 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
 
     def set_nicd(self):
         self.nicd=3*(self.natoms-self.nxyzatoms)-6+3*self.nxyzatoms
+        self.nicd_DLC=self.nicd
 
     def bmatp_create(self):
         only_ics= self.BObj.nbonds + self.AObj.nangles + self.TObj.ntor
-        bmatp=super(DLC,self).bmatp_create()
+        bmatp=super(Hybrid_DLC,self).bmatp_create()
         bmatp[only_ics:,(self.natoms-self.nxyzatoms)*3:] = np.eye(self.nxyzatoms*3)
         return bmatp
 
     def q_create(self):
-        q=super(DLC,self).q_create()
+        q=super(Hybrid_DLC,self).q_create()
         xyzic_atom_coords = self.get_xyz_atom_coords() 
         n3m6 = (self.natoms-self.nxyzatoms)*3-6
         for i in range(self.nicd):
@@ -64,7 +60,7 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         return np.concatenate((self.BObj.bondd,self.AObj.anglev,self.TObj.torv,self.get_xyz_atom_coords()))
 
     def primitive_internal_difference(self,qprim1,qprim2):
-        dqprim_internals = super(DLC,self).primitive_internal_difference(qprim1,qprim2)
+        dqprim_internals = super(Hybrid_DLC,self).primitive_internal_difference(qprim1,qprim2)
         dqprim_xyzatoms = qprim1[self.num_ics_p:] - qprim2[self.num_ics_p:]
         dqprim_xyzatoms = np.reshape(dqprim_xyzatoms,(3*self.nxyzatoms,1))
         dqprim = np.concatenate((dqprim_internals,dqprim_xyzatoms))
@@ -85,41 +81,50 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
             print "printing q"
             print self.q.T
 
-        #from time import time
         #t = time()
-        bmat = np.matmul(self.Ut,self.bmatp)
-        bbt = np.matmul(bmat,np.transpose(bmat))
+        #bmat = np.matmul(self.Ut,self.bmatp)
+        #bbt = np.matmul(bmat,np.transpose(bmat))
         #t = time()
-        bbti = np.linalg.inv(bbt)
+        #bbti = np.linalg.inv(bbt)
         #delta = time() - t
-        self.bmatti= np.matmul(bbti,bmat)
-        return
+        #self.bmatti= np.matmul(bbti,bmat)
+        ##return
         #print "time for full inverse ",delta
 
         #t=time()
-        #n3m6 = (self.natoms-self.nxyzatoms)*3-6
-        #UtDLC = self.Ut[:n3m6-self.lowev,:self.num_ics_p]
-        #UtC = self.Ut[n3m6:,self.num_ics_p:]
-        #Bp=self.bmatp[:self.num_ics_p,:n3m6+6]
-        #Bc=self.bmatp[self.num_ics_p:,n3m6+6:]
+        n3m6 = (self.natoms-self.nxyzatoms)*3-6
+        UtDLC = self.Ut[:n3m6-self.lowev,:self.num_ics_p] # shoud it be + lowev?
+        UtC = self.Ut[n3m6:,self.num_ics_p:]
 
-        #UtDLC_Bp = np.matmul(UtDLC,Bp)
-        #UtC_Bc = np.eye(3*self.nxyzatoms)
+        Bp=self.bmatp[:self.num_ics_p,:n3m6+6]
+        Bc=self.bmatp[self.num_ics_p:,n3m6+6:]
 
-        #bmat = np.block([
-        #            [             UtDLC_Bp,                 np.zeros((UtDLC_Bp.shape[0],3*self.nxyzatoms))    ],
-        #            [ np.zeros((3*self.nxyzatoms,UtDLC_Bp.shape[1])),       UtC_Bc                          ]
-        #            ])
+        UtDLC_Bp = np.matmul(UtDLC,Bp)
+        UtC_Bc = np.eye(3*self.nxyzatoms)
 
-        #UtDLC_Bp2 = np.matmul(UtDLC,np.transpose(UtDLC))
-        #UtDLC_Bp2i = np.linalg.inv(UtDLC_Bp2)
-        #UtC_Bc2i = np.eye(3*self.nxyzatoms)
+        print UtDLC_Bp.shape
+        print UtC_Bc.shape
 
-        #bbti = np.block([
-        #        [                   UtDLC_Bp2i,                       np.zeros((UtDLC_Bp2i.shape[0],3*self.nxyzatoms))],
-        #        [ np.zeros((3*self.nxyzatoms,UtDLC_Bp2i.shape[1])),                          UtC_Bc2i                ]
-        #    ])
+        bmat = np.block([
+                    [ UtDLC_Bp, np.zeros((UtDLC_Bp.shape[0],UtC_Bc.shape[1]))],
+                    [ np.zeros((UtC_Bc.shape[0],UtDLC_Bp.shape[1])),UtC_Bc ]
+                    ])
+
+        UtDLC_Bp2 = np.matmul(UtDLC_Bp,np.transpose(UtDLC_Bp))
+        UtDLC_Bp2i = np.linalg.inv(UtDLC_Bp2)
+        UtC_Bc2i = np.eye(3*self.nxyzatoms)
+
+        bbti = np.block([
+                [ UtDLC_Bp2i, np.zeros((UtDLC_Bp2i.shape[0],UtC_Bc2i.shape[1]))],
+                [ np.zeros((UtC_Bc2i.shape[0],UtDLC_Bp2i.shape[1])),UtC_Bc2i ]
+            ])
         #self.bmatti= np.matmul(bbti,bmat)
+        bmatti_DLC = np.matmul(UtDLC_Bp2i,UtDLC_Bp)
+        self.bmatti = np.block([ 
+                [bmatti_DLC, np.zeros((bmatti_DLC.shape[0],3*self.nxyzatoms))],
+                [ np.zeros((3*self.nxyzatoms,bmatti_DLC.shape[1])),np.eye(3*self.nxyzatoms)]
+                    ])
+
 
         #delta= time()-t
         #print "time for partial inverse ",delta
@@ -130,21 +135,20 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
 
     
     def diagonalize_G(self,G):
-
-        #from time import time
+        #print "using special diagonalize"
         #t = time()
         #total_eig,total_v = super(DLC,self).diagonalize_G(G)
-        #return total_eig,total_v
+        ##return total_eig,total_v
         #delta = time() - t
         #print "time for full matrix diagonalization ",delta
-        #t = time()
 
         # => initialize <= #
+        #t = time()
         total_eig = np.zeros(self.nicd)
         total_v = np.zeros((self.nicd,self.num_ics))
 
         # =>  diagonalize sublock <= #
-        eig1,v1 = super(DLC,self).diagonalize_G(G[:self.num_ics_p,:self.num_ics_p])
+        eig1,v1 = super(Hybrid_DLC,self).diagonalize_G(G[:self.num_ics_p,:self.num_ics_p])
 
         # => take only 3N-6 sublock of eig1 <= #
         n3m6 = (self.natoms-self.nxyzatoms)*3-6
@@ -158,6 +162,10 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         #print eig1
 
         # => append to initialzed matrices <= #
+        print "Hybrid coordinates:"
+        print ' [ Ut_DLC 0 ] ' 
+        print ' [   0  Ut_C] '
+
         total_v[:v1.shape[0],:v1.shape[1]] = v1
         total_eig[:eig1.shape[0]] = eig1
 
@@ -169,7 +177,6 @@ class Hybrid_DLC(DLC): # write new mixins _Hyb_ICoords for hybrid water,_Hyb_Bma
         #delta = time() - t
         #print "time for partial matrix diagonalization ",delta
 
-
         return total_eig,total_v
         
 
@@ -178,6 +185,7 @@ if __name__ =='__main__':
     #filepath="solvated.pdb"
     from qchem import *
     from pes import *
+    import pybel as pb
     #lot1=QChem.from_options(states=[(1,0)],basis='6-31gs')
     #pes = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
     #mol1=pb.readfile("pdb",filepath).next()
@@ -189,17 +197,12 @@ if __name__ =='__main__':
 
     lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart',nproc=1)
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
-    ic = Hybrid_DLC.from_options(mol=mol,PES=pes,IC_region=["UNL"],print_level=2)
+    #ic = Hybrid_DLC.from_options(mol=mol,PES=pes,IC_region=["UNL"],print_level=1)
 
-    dq = np.zeros((ic.nicd,1))
-    dq[0]= 0.2
-    print "dq = "
-    print dq.T
+    #dq = np.zeros((ic.nicd,1))
+    #dq[0]= 0.2
+    #print "dq = "
+    #print dq.T
+    #ic.ic_to_xyz_opt(dq)
 
-    ic.ic_to_xyz_opt(dq)
-
-    #geom = ic.geom
-    #e = ic.PES.get_energy(geom)
-    #print e
-    #g = ic.PES.get_gradient(geom)
-    #print g.T
+    
