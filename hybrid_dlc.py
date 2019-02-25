@@ -102,9 +102,6 @@ class Hybrid_DLC(Base_DLC):
         UtDLC_Bp = np.matmul(UtDLC,Bp)
         UtC_Bc = np.eye(3*self.nxyzatoms)
 
-        print UtDLC_Bp.shape
-        print UtC_Bc.shape
-
         bmat = np.block([
                     [ UtDLC_Bp, np.zeros((UtDLC_Bp.shape[0],UtC_Bc.shape[1]))],
                     [ np.zeros((UtC_Bc.shape[0],UtDLC_Bp.shape[1])),UtC_Bc ]
@@ -197,7 +194,7 @@ if __name__ =='__main__':
 
     lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart',nproc=1)
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
-    #ic = Hybrid_DLC.from_options(mol=mol,PES=pes,IC_region=["UNL"],print_level=1)
+    ic = Hybrid_DLC.from_options(mol=mol,PES=pes,IC_region=["UNL"],print_level=1)
 
     #dq = np.zeros((ic.nicd,1))
     #dq[0]= 0.2

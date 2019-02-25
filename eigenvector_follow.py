@@ -96,158 +96,154 @@ class eigenvector_follow(base_optimizer):
 
 
     def optimize(self,c_obj,params,opt_steps=3,ictan=None):
-    
-            self.disp = 1000.
-            self.Ediff = 1000.
-    
-            opt_type=params.options['opt_type']
-            self.check_inputs(c_obj,opt_type,ictan)
-            nconstraints=self.get_nconstraints(opt_type)
+        self.disp = 1000.
+        self.Ediff = 1000.
+        
+        opt_type=params.options['opt_type']
+        self.check_inputs(c_obj,opt_type,ictan)
+        nconstraints=self.get_nconstraints(opt_type)
 
-            # copy of coordinates
-            x = np.copy(c_obj.q)
-    
-            # the number of coordinates
-            if c_obj.__class__.__name__=='Cartesian':
-                n = len(x) - nconstraints
-            else:
-                # number of internal coordinate dimensions in the IC_region 
-                #-- don't do eigenvector opt in the CART_REGION
-                n =  c_obj.nicd_DLC-nconstraints 
-    
-            Linesearch=params.options['Linesearch']
-    
-            update_hess=False
-            for i in range(opt_steps):
-                print " On opt step ",i
-    
-                # update DLC  --> this changes q
-                if not c_obj.__class__.__name__=='Cartesian':
-                    if opt_type != 'TS':
-                        c_obj.update_DLC(opt_type,ictan)
-                    else:
-                        c_obj.bmatp = c_obj.bmatp_create()
-    
-                if update_hess == True:
-                    c_obj.update_Hessian('BFGS')
-                update_hess = True
-    
-                # Evaluate the function value and its gradient.
-                fx,g = c_obj.proc_evaluate(x)
-    
-                # normalize 
-                xnorm = np.sqrt(np.dot(x.T, x))
-                gnorm = np.sqrt(np.dot(g.T, g)) 
-                if xnorm < 1.0:
-                	xnorm = 1.0
-   
-                if self.converged(g,n,params):
-                    break
-    
-                # => Form eigenvector step <= #
-                if isinstance(c_obj,Cartesian):
-                    raise NotImplementedError
+        # copy of coordinates
+        x = np.copy(c_obj.q)
+        
+        # the number of coordinates
+        if c_obj.__class__.__name__=='Cartesian':
+            n = len(x) - nconstraints
+        else:
+            # number of internal coordinate dimensions in the IC_region 
+            #-- don't do eigenvector opt in the CART_REGION
+            n =  c_obj.nicd_DLC-nconstraints 
+        
+        Linesearch=params.options['Linesearch']
+        
+        update_hess=False
+        for i in range(opt_steps):
+            print " On opt step ",i
+        
+            # update DLC  --> this changes q
+            if not c_obj.__class__.__name__=='Cartesian':
+                if opt_type != 'TS':
+                    c_obj.update_DLC(opt_type,ictan)
                 else:
-                    params.options['MAXAD'] = 0.075
-                    SCALE =params.options['SCALEQN']
-                    if c_obj.newHess>0: SCALE = params.options['SCALEQN']*c_obj.newHess
-                    if params.options['SCALEQN']>10.0: SCALE=10.0
-    
-                    # convert to eigenvector basis
-                    temph = c_obj.Hint[:n,:n]
-                    e,v_temp = np.linalg.eigh(temph)
-                    v_temp = v_temp.T
-                    gqe = np.dot(v_temp,g[:n])
-    
-                    lambda1 = self.set_lambda1(opt_type,e)
-
-                    dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
-                    dqe0 = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dqe0 ]
-    
-                    # => Convert step back to DLC basis <= #
-                    dq_tmp = np.dot(v_temp.T,dqe0)
-                    #regulate max step size and shape
-                    dq_tmp = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dq_tmp ]
-                    dq = np.zeros((n,1))
-                    for i in range(n): dq[i,0] = dq_tmp[i]
-    
-                step = np.linalg.norm(dq)
-                dq = dq/step #normalize
-    
-                print "step=",step
-                if step>params.options['DMAX']:
-                    step=params.options['DMAX']
-                    print " reducing step, new step =",step
-    
-                # store
-                xp = x.copy()
-                gp = g.copy()
-                fxp = fx
-                pgradrms = np.sqrt(np.dot(g.T,g)/n)
-
-                # => calculate constraint step <= #
-                constraint_steps = self.get_constraint_steps(c_obj,opt_type,g)
-                # => add constraint_step to step <= #
-                for n in range(nconstraints):
-                    self.dq[-nconstraints+n]=constraint_steps[n]
-    
-                print " ### Starting  line search ###"
-                ls = Linesearch(n, x, fx, g, dq, step, xp, gp,constraint_steps, params,c_obj.proc_evaluate)
-                print " ## Done line search"
+                    c_obj.bmatp = c_obj.bmatp_create()
+        
+            if update_hess == True:
+                c_obj.update_Hessian('BFGS')
+            update_hess = True
+        
+            # Evaluate the function value and its gradient.
+            fx,g = c_obj.proc_evaluate(x)
+        
+            # normalize 
+            xnorm = np.sqrt(np.dot(x.T, x))
+            gnorm = np.sqrt(np.dot(g.T, g)) 
+            if xnorm < 1.0:
+            	xnorm = 1.0
    
-                # revert to the privious point
-                if ls['status'] < 0:
-                    x = xp.copy()
-                    print '[ERROR] the point return to the privious point'
-                    return ls['status']
-    
-                # calculate predicted value
-                dEtemp = np.dot(c_obj.Hint[:n,:n],dq[:n]*step)
-                dEpre = np.dot(np.transpose(dq[:n]*step),g[:n]) + 0.5*np.dot(np.transpose(dEtemp),dq[:n]*step)
-                dEpre *=KCAL_MOL_PER_AU
-                # constraint contribution
-                for nc in range(nconstraints):
-                    dEpre += g[-nc-1]*dq[-nc-1]*step*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
-    
-                # get values at new point
-                fx = ls['fx']
-                step = ls['step']
-                x = ls['x']
-                g = ls['g']
-                gradrms = np.sqrt(np.dot(g.T,g)/n)
-    
-                # check goodness of step
-                dEstep = fx - fxp
-                ratio = dEstep/dEpre
-    
-                print "ratio is =",ratio
-                print "dEpre is =",dEpre
-                print "dEstep is =",dEstep
-    
-                # => step controller controls DMAX/DMIN <= #
-                params.options['DMAX'] = step
-                if (ratio<0.25 or ratio>1.5): #can also check that dEpre >0.05?
-                    if step<params.options['DMAX']:
-                        params.options['DMAX'] = step/1.2
-                    else:
-                        params.options['DMAX'] = params.options['DMAX']/1.2
-                elif ratio>0.75 and ratio<1.25 and step > params.options['DMAX'] and gradrms<(pgradrms*1.35):
-                    #if self.print_level>0:
-                    #    print("increasing DMAX"),
-                    #self.buf.write(" increasing DMAX")
-                    params.options['DMAX']=params.options['DMAX']*1.2 + 0.01
-                    if params.options['DMAX']>0.25:
-                        params.options['DMAX']=0.25
-    
-                self.disp = np.max(x - xp)/ANGSTROM_TO_AU
-                self.Ediff = (fx -fxp) / KCAL_MOL_PER_AU
-                print "maximum displacement component (au)", self.disp
-                print " Ediff (au)", self.Ediff
-    
-                # report the progress -- important for DLC since it updates the variables better//Cartesian update should happen as well
-                c_obj.append_data(x, g, fx, xnorm, gradrms, step)
-    
-            return fx
+            if self.converged(g,n,params):
+                break
+        
+            # => Form eigenvector step <= #
+            if isinstance(c_obj,Cartesian):
+                raise NotImplementedError
+            else:
+                SCALE =params.options['SCALEQN']
+                if c_obj.newHess>0: SCALE = params.options['SCALEQN']*c_obj.newHess
+                if params.options['SCALEQN']>10.0: SCALE=10.0
+        
+                # convert to eigenvector basis
+                temph = c_obj.Hint[:n,:n]
+                e,v_temp = np.linalg.eigh(temph)
+                v_temp = v_temp.T
+                gqe = np.dot(v_temp,g[:n])
+        
+                lambda1 = self.set_lambda1(opt_type,e)
+
+                dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
+                dqe0 = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dqe0 ]
+        
+                # => Convert step back to DLC basis <= #
+                dq_tmp = np.dot(v_temp.T,dqe0)
+                #regulate max step size and shape
+                dq_tmp = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dq_tmp ]
+                dq = np.zeros((n,1))
+                for i in range(n): dq[i,0] = dq_tmp[i]
+        
+            step = np.linalg.norm(dq)
+            dq = dq/step #normalize
+        
+            print "step=",step
+            if step>params.options['DMAX']:
+                step=params.options['DMAX']
+                print " reducing step, new step =",step
+        
+            # store
+            xp = x.copy()
+            gp = g.copy()
+            fxp = fx
+            pgradrms = np.sqrt(np.dot(g.T,g)/n)
+
+            # => calculate constraint step <= #
+            constraint_steps = self.get_constraint_steps(c_obj,opt_type,g)
+            # => add constraint_step to step <= #
+            dq += constraint_steps
+        
+            print " ### Starting  line search ###"
+            ls = Linesearch(n, x, fx, g, dq, step, xp, gp,constraint_steps, params,c_obj.proc_evaluate)
+            print " ## Done line search"
+   
+            # revert to the privious point
+            if ls['status'] < 0:
+                x = xp.copy()
+                print '[ERROR] the point return to the privious point'
+                return ls['status']
+        
+            # calculate predicted value
+            dEtemp = np.dot(c_obj.Hint[:nicd_DLC,:nicd_DLC],dq[:nicd_DLC]*step)
+            dEpre = np.dot(np.transpose(dq[:nicd_DLC]*step),g[:nicd_DLC]) + 0.5*np.dot(np.transpose(dEtemp),dq[:nicd_DLC]*step)
+            dEpre *=KCAL_MOL_PER_AU
+            # constraint contribution
+            for nc in range(nconstraints):
+                dEpre += g[nicd_DLC-nc-1]*dq[nicd_DLC-nc-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq
+            # get values at new point
+            fx = ls['fx']
+            step = ls['step']
+            x = ls['x']
+            g = ls['g']
+            gradrms = np.sqrt(np.dot(g.T,g)/n)
+        
+            # check goodness of step
+            dEstep = fx - fxp
+            ratio = dEstep/dEpre
+        
+            print "ratio is =",ratio
+            print "dEpre is =",dEpre
+            print "dEstep is =",dEstep
+        
+            # => step controller controls DMAX/DMIN <= #
+            params.options['DMAX'] = step
+            if (ratio<0.25 or ratio>1.5): #can also check that dEpre >0.05?
+                if step<params.options['DMAX']:
+                    params.options['DMAX'] = step/1.2
+                else:
+                    params.options['DMAX'] = params.options['DMAX']/1.2
+            elif ratio>0.75 and ratio<1.25 and step > params.options['DMAX'] and gradrms<(pgradrms*1.35):
+                #if self.print_level>0:
+                #    print("increasing DMAX"),
+                #self.buf.write(" increasing DMAX")
+                params.options['DMAX']=params.options['DMAX']*1.2 + 0.01
+                if params.options['DMAX']>0.25:
+                    params.options['DMAX']=0.25
+        
+            self.disp = np.max(x - xp)/ANGSTROM_TO_AU
+            self.Ediff = (fx -fxp) / KCAL_MOL_PER_AU
+            print "maximum displacement component (au)", self.disp
+            print " Ediff (au)", self.Ediff
+        
+            # report the progress -- important for DLC since it updates the variables better//Cartesian update should happen as well
+            c_obj.append_data(x, g, fx, xnorm, gradrms, step)
+        
+        return fx
 
 
 
