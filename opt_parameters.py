@@ -1,6 +1,8 @@
 import options
 from _linesearch import backtrack
 
+
+# might want to combine the parameters and optimize class
 class parameters:
     """the parameters of optimizers
     	epsilon: epsilon for the convergence test
@@ -38,7 +40,8 @@ class parameters:
 
         opt.add_option(
                 key='DMAX',
-                value=0.1
+                value=0.1,
+                doc='max step in DLC',
                 )
 
         opt.add_option(
@@ -48,12 +51,23 @@ class parameters:
 
         opt.add_option(
                 key='Linesearch',
-                value=backtrack
+                value=backtrack,
                 )
 
         opt.add_option(
                 key='MAXAD',
                 value=0.075,
+                )
+
+        opt.add_option(
+                key='print_level',
+                value=1,
+                )
+
+        opt.add_option(
+                key='HESS_TANG_TOL_TS',
+                value=0.35,
+                doc='Hessian  overlap with tangent tolerance for TS node'
                 )
 
         parameters._default_options = opt
@@ -70,6 +84,7 @@ class parameters:
 
         self.options = options
         
+        # additional parameters needed by linesearch
         self.epsilon=1e-5
         self.ftol=1e-4
         self.wolfe=0.9 
@@ -77,9 +92,13 @@ class parameters:
         self.min_step=1e-20
         self.max_step=1e20
 
-        # additional parameters needed by linesearch
+        # additional convergence criterion (default parameters for Q-Chem)
         self.conv_disp = 12e-4 #max atomic displacement
         self.conv_gmax = 3e-4 #max gradient
         self.conv_Ediff = 1e-6 #E diff
         self.conv_grms = options['OPTTHRESH']
 
+        # TS node properties
+        self.nneg = 0  # number of negative eigenvalues
+
+        self.DMIN = self.options['DMAX']/10.

@@ -68,6 +68,7 @@ class GSM(Base_Method):
             oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
             print("Done Growing the String!!!")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            self.done_growing = True
             print " initial ic_reparam"
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=25)
@@ -77,7 +78,7 @@ class GSM(Base_Method):
             self.get_tangents_1()
         for i in range(self.nnodes):
             if self.icoords[i] !=0:
-                self.icoords[i].OPTTHRESH = self.CONV_TOL
+                self.all_parameters[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2
 
         if self.tscontinue==True:
             if max_iters-oi>0:
@@ -115,8 +116,7 @@ class GSM(Base_Method):
 
         for i in range(self.nnodes):
             if self.icoords[i] !=0:
-                #self.active[i] = False;
-                self.icoords[i].OPTTHRESH = self.CONV_TOL*2.;
+                self.all_parameters[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
         self.active[nR] = True
         self.active[nP] = True
         if self.growth_direction==1:
@@ -197,11 +197,13 @@ class GSM(Base_Method):
 
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
-        if rtype==self.stage:
-            if self.icoords[self.TSnode].gradrms<self.CONV_TOL and self.dE_iter<0.1: #TODO should check totalgrad
+        #if rtype==self.stage: 
+        # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
+        if True:
+            if self.icoords[self.TSnode].gradrms<self.options['CONV_TOL'] and self.dE_iter<0.1: #TODO should check totalgrad
                 isDone=True
                 self.tscontinue=False
-            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL: #TODO extra crit here
+            if totalgrad<0.1 and self.icoords[self.TSnode].gradrms<2.5*self.options['CONV_TOL']: #TODO extra crit here
                 isDone=True
                 self.tscontinue=False
         return isDone
@@ -229,8 +231,9 @@ if __name__=='__main__':
     from opt_parameters import parameters
 
 
-    basis="sto-3g"
-    nproc=1
+    #basis="sto-3g"
+    basis='6-31G'
+    nproc=8
     filepath1="examples/tests/butadiene_ethene.xyz"
     filepath2="examples/tests/cyclohexene.xyz"
 
@@ -252,11 +255,11 @@ if __name__=='__main__':
     ic2.make_Hint()
     ic2.Hint = ic1.Hintp_to_Hint()
 
-    
     param = parameters.from_options(opt_type='UNCONSTRAINED')
     gsm = GSM.from_options(ICoord1=ic1,ICoord2=ic2,nnodes=9,parameters=param,optimizer=eigenvector_follow())
+    gsm.restart_string()
 
-    gsm.tscontinue=False
-    gsm.go_gsm(rtype=0)
+    #gsm.tscontinue=False
+    gsm.go_gsm(rtype=2)
 
 

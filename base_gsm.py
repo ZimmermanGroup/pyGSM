@@ -11,6 +11,7 @@ from copy import deepcopy
 import StringIO
 from _print_opt import *
 from _analyze_string import *
+from units import *
 import sys
 from opt_parameters import parameters
 
@@ -127,17 +128,29 @@ class Base_Method(object,Print,Analyze):
         """ Constructor """
         self.options = options
 
+        hello="""
+        __        __   _                            _        
+        \ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___  
+         \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \ 
+          \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
+           \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/ 
+                                        ____ ____  __  __ 
+                           _ __  _   _ / ___/ ___||  \/  |
+                          | '_ \| | | | |  _\___ \| |\/| |
+                          | |_) | |_| | |_| |___) | |  | |
+                          | .__/ \__, |\____|____/|_|  |_|
+                          |_|    |___/                    
+               """
+
+        print hello
+
+
         # Cache attributes
         self.nnodes = self.options['nnodes']
         self.icoords = [0]*self.nnodes
         self.icoords[0] = self.options['ICoord1']
-        self.active = [False] * self.nnodes
         self.driving_coords = self.options['driving_coords']
-        self.CONV_TOL = self.options['CONV_TOL']
-        self.ADD_NODE_TOL = self.options['ADD_NODE_TOL']
         self.last_node_fixed = self.options['last_node_fixed']
-        self.climber=False  #is this string a climber?
-        self.finder=False   # is this string a finder?
         self.growth_direction=self.options['growth_direction']
         self.isRestarted=False
         self.DQMAG_MAX=self.options['DQMAG_MAX']
@@ -156,16 +169,19 @@ class Base_Method(object,Print,Analyze):
         self.energies = np.asarray([0.]*self.nnodes)
         self.emax = 0.0
         self.TSnode = 0 
-        self.climb = False #TODO
-        self.find = False  #TODO
+        self.climb = False 
+        self.find = False  
         self.n0 = 0 # something to do with added nodes? "first node along current block"
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
         self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
-        self.gaddmax = self.ADD_NODE_TOL/self.rn3m6;
+        self.gaddmax = self.options['ADD_NODE_TOL']/self.rn3m6;
         print " gaddmax:",self.gaddmax
-        self.stage=0 #growing
         self.ictan = [[]]*self.nnodes
+        self.active = [False] * self.nnodes
+        self.climber=False  #is this string a climber?
+        self.finder=False   # is this string a finder?
+        self.done_growing = False
 
     def restart_string(self,xyzbase='restart'):#,nR,nP):
         self.growth_direction=0
@@ -230,6 +246,7 @@ class Base_Method(object,Print,Analyze):
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
             self.icoords[struct].setup()
+            self.icoords[struct].make_Hint()
             self.icoords[struct].DMAX=0.05 #half of default value
             #self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
             self.icoords[struct].energy = self.icoords[struct].PES.get_energy(self.icoords[struct].geom)
@@ -238,10 +255,11 @@ class Base_Method(object,Print,Analyze):
         self.store_energies() 
         self.nnodes=self.nR=nstructs
         self.isRestarted=True
+        self.done_growing=True
         print "setting all interior nodes to active"
         for n in range(1,self.nnodes-1):
             self.active[n]=True
-            self.icoords[n].OPTTHRESH=self.CONV_TOL
+            self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
         print " V_profile: ",
         for n in range(self.nnodes):
             print " {:7.3f}".format(float(self.energies[n])),
@@ -257,11 +275,18 @@ class Base_Method(object,Print,Analyze):
         print "************************** in opt_iters *****************************"
         print "*********************************************************************"
 
-        nclimb=0
+        self.nclimb=0
+        self.nhessreset=10  # are these used??? TODO 
+        self.hessrcount=0   # are these used?!  TODO
+        self.newclimbscale=2.
+
         self.set_finder(rtype)
 
         for oi in range(max_iter):
             sys.stdout.flush()
+
+            # stash previous TSnode  
+            self.pTSnode = self.TSnode
 
             # => get TS node <=
             self.emaxp = self.emax
@@ -270,6 +295,7 @@ class Base_Method(object,Print,Analyze):
 
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
+            
             # => do opt steps <= #
             self.opt_steps(optsteps)
             self.store_energies()
@@ -278,22 +304,29 @@ class Base_Method(object,Print,Analyze):
             for n in range(self.nnodes):
                 print " {:7.3f}".format(float(self.energies[n])),
             print
-            # => calculate totalgrad <= #
-            totalgrad,gradrms = self.calc_grad()
 
-            if self.stage==1: print("c")
-            elif self.stage==2: print("x")
+            if self.climb and not self.find: print("c")
+            elif self.find: print("x")
 
             #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
             
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax))
-
-            fp = self.find_peaks(2)
-            print " fp = ",fp
 
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
+
+            # => calculate totalgrad <= #
+            totalgrad,gradrms = self.calc_grad()
+            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax))
+
+            # => set stage <= #
+            fp = self.find_peaks(2)
+            print " fp = ",fp
+            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
+            ts_gradrms=self.icoords[self.TSnode].gradrms
+            self.dE_iter=abs(self.emax-self.emaxp)
+            print " dE_iter ={:2.2f}".format(self.dE_iter)
+            self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
 
             # => Check Convergence <= #
             isDone = self.check_opt(totalgrad,fp,rtype)
@@ -302,19 +335,19 @@ class Base_Method(object,Print,Analyze):
             if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
                 break
 
-            # => set stage <= #
-            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
-            ts_gradrms=self.icoords[self.TSnode].gradrms
-            self.dE_iter=abs(self.emax-self.emaxp)
-            print " dE_iter ={:1.2}".format(self.dE_iter)
-            nclimb = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp,self.dE_iter,nclimb)
-
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
 
             # => Reparam the String <= #
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
+
+            if self.pTSnode!=self.TSnode and self.climb and not self.find:
+                print " slowing down climb optimization"
+                self.all_parameters[self.TSnode].options['DMAX'] /= self.newclimbscale
+                if self.newclimbscale<5.0:
+                    self.newclimbscale +=1.
+
 
             #also prints tgrads and jobGradCount
 
@@ -483,7 +516,7 @@ class Base_Method(object,Print,Analyze):
             if self.icoords[nlist[2*n+1]].print_level>1:
                 print "forming space for", nlist[2*n+1]
 
-            opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)
+            opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)  #TODO why is this here? 2/2019
             self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
 
             #normalize ictan
@@ -548,7 +581,7 @@ class Base_Method(object,Print,Analyze):
             if self.icoords[n]!=0:
                 self.icoords[n].isTSnode=False
         fp=0
-        if self.stage>0:
+        if self.done_growing:
             fp = self.find_peaks(2)
         if fp>0:
             self.TSnode = np.argmax(self.energies)
@@ -559,7 +592,7 @@ class Base_Method(object,Print,Analyze):
         if self.last_node_fixed==False:
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
                 optlastnode=True
-            if self.icoords[self.nnodes-1].gradrms>self.CONV_TOL:
+            if self.icoords[self.nnodes-1].gradrms>self.options['CONV_TOL']:
                 optlastnode=True
 
         for n in range(self.nnodes):
@@ -568,52 +601,61 @@ class Base_Method(object,Print,Analyze):
                 print "\n Optimizing node %i" % n
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
+                self.all_parameters[n].options['opt_type']=opt_type
 
                 exsteps=1 #multiplier for nodes near the TS node
-                if self.stage==2 and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:
+                if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  # should this be for climb too?
                     exsteps=2
                     print " multiplying steps for node %i by %i" % (n,exsteps)
-                if self.stage>0 and n==self.TSnode: #and opt_type==4:
+                if self.find and n==self.TSnode: #multiplier for TS node during
                     exsteps=2
                     print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
-                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],opt_steps=opt_steps*exsteps,ictan=self.ictan[n])
+                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],refE=self.icoords[0].V0,opt_steps=opt_steps*exsteps,ictan=self.ictan[n])
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 print " optimizing last node"
-                self.all_parameters.options['opt_type']='UNCONSTRAINED'
+                self.all_parameters[n].options['opt_type']='UNCONSTRAINED'
                 self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],opt_steps=opt_steps)
-    @property
-    def stage(self):
-        return self._stage
 
-    @stage.setter
-    def stage(self,value):
-        if value>2:
-            raise ValueError("Stage can only be 0==Growing,1==Climbing, or 2==Finding")
-        print("setting stage value to %i" %value)
-        self._stage=value
-
-    def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp,dE_iter,nclimb):
-        if (fp>0 and ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10) or
-                (totalgrad<0.3 and dE_iter<0.1 and ts_gradrms<self.CONV_TOL*2.5))):
-            if self.stage==0 and self.climber:
+    def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
+        if totalgrad < 0.3 and fp>1: # extra criterion in og-gsm for added
+            if not self.climb and self.climber:
                 print(" ** starting climb **")
-                self.stage=1
-                return nclimb
-        if (self.stage==1 and self.finder and dE_iter<4. and nclimb<1 and
-                ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or
-                (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or
-                (ts_gradrms<self.CONV_TOL*5.))
-                ):
-            print(" ** starting exact climb **")
-            print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
-            self.stage=2
-            self.get_eigenv_finite(self.TSnode)
-        if self.stage==1: #TODO this doesn't do anything
-            nclimb-=1
-        return nclimb
+                self.climb=True
+            if (self.climb and self.finder and self.dE_iter<4. and self.nclimb<1 and
+                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or
+                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or
+                    (ts_gradrms<self.options['CONV_TOL']*5.))
+                    ):
+                print(" ** starting exact climb **")
+                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+                self.find=True
+                self.get_eigenv_finite(self.TSnode)
+                self.nhessreset=10  # are these used??? TODO 
+                self.hessrcount=0   # are these used?!  TODO
+            if self.climb: 
+                self.nclimb-=1
+
+            for n in range(1,self.nnodes-1):
+                self.active[n]=True
+                self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+
+        if self.find==True and self.all_parameters[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
+            #if self.hessrcount<1 and self.pTSnode == self.TSnode:
+            if self.pTSnode == self.TSnode:
+                print " resetting TS node coords Ut (and Hessian)"
+                self.get_eigenv_finite(self.TSnode)
+                self.nhessreset=10
+                self.hessrcount=1
+            else:
+                print " Hessian consistently bad, going back to climb (for 3 iterations)"
+                self.find=0
+                self.nclimb=3
+        elif self.find and self.all_parameters[self.TSnode].nneg <= 3:
+            self.hessrcount-=1
+        self.nhessreset-=1
 
     def interpolateR(self,newnodes=1):
         print " Adding reactant node"
@@ -686,7 +728,7 @@ class Base_Method(object,Print,Analyze):
             dqavg = totaldqmag/(self.nnodes-1)
 
             #if climb:
-            if self.stage>0 or rtype==2:
+            if self.climb or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
                 if self.newic.print_level>1:
@@ -695,7 +737,7 @@ class Base_Method(object,Print,Analyze):
             # => Using average <= #
             if i==0 and rtype==0:
                 print " using average"
-                if self.stage==0:
+                if not self.climb:
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
                 else:
@@ -727,7 +769,7 @@ class Base_Method(object,Print,Analyze):
                     print " {:1.2}".format(rpart[n]),
                 print
 
-            if self.stage==0 and rtype!=2:
+            if not self.climb and rtype!=2:
                 for n in range(n0+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - totaldqmag * rpart[n]
                     if n==self.nnodes-2:
@@ -752,12 +794,12 @@ class Base_Method(object,Print,Analyze):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
             for n in range(n0+1,self.nnodes-2):
-                if n+1 != self.TSnode or self.stage==0:
+                if n+1 != self.TSnode or self.climb:
                     rpmove[n+1] += rpmove[n]
             for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
-            if self.stage>0 or rtype==2:
+            if self.climb or rtype==2:
                 rpmove[self.TSnode] = 0.
 
 
@@ -990,41 +1032,31 @@ class Base_Method(object,Print,Analyze):
         #print "shape of Hint is %s" % (np.shape(self.icoords[en].Hint),)
 
         #this can also work on non-TS nodes?
-        self.icoords[en].newHess = 5
+        self.icoords[en].newHess = 2
 
-        eigen,tmph = np.linalg.eigh(self.icoords[en].Hint) #nicd,nicd
-        #print "eigenvalues of new Hess"
-        #print eigen
+        if False:
+            eigen,tmph = np.linalg.eigh(self.icoords[en].Hint) #nicd,nicd
+            #print "eigenvalues of new Hess"
+            #print eigen
+
+        # reset pgradrms ? 
 
     def set_V0(self):
         raise NotImplementedError 
 
     def set_opt_type(self,n,quiet=False):
         #TODO
-        opts={
-        -1 : 'no optimization',
-         0 : 'non-constrained optimization',
-         1 : 'ictan constraint optimization',
-         2 : 'ictan constrained opt with climb',
-         3 : 'non-TS eigenvector follow',
-         4 : 'TS eigenvector follow',
-         5 : 'MECI optimization',
-         6 : 'constrained CI optimization',
-         7 : 'constrained CI optimization with climb',
-         }
-        opt_type=1 
-        if self.stage==1 and self.icoords[n].isTSnode==True:
-            opt_type=2 #climb
-        #if self.stage==1 and n!=self.nmax: #turning off, OG gsm does, but it's useleess
-        #    opt_type==3
-        if self.stage>1 and self.icoords[n].isTSnode==True:
-            opt_type=4 #eigenvector follow
+        opt_type='ICTAN' 
+        if self.climb and self.icoords[n].isTSnode==True:
+            opt_type='CLIMB'
+        if self.find and self.icoords[n].isTSnode==True:
+            opt_type='TS'
         if self.icoords[n].PES.lot.do_coupling==True:
-            opt_type=6
-        if self.stage==1 and self.icoords[n].isTSnode==True and opt_type==5:
-            opt_type=7
+            opt_type='SEAM'
+        if self.climb and self.icoords[n].isTSnode==True and opt_type=='SEAM':
+            opt_type='TS-SEAM'
         if not quiet:
-            print(" setting node %i opt_type to %s (%i)" %(n,opts[opt_type],opt_type))
+            print(" setting node %i opt_type to %s" %(n,opt_type))
 
         return opt_type
 

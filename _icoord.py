@@ -37,10 +37,11 @@ class ICoords:
         bonds=[]
         bondd=[]
         nbonds=0
-        for i in range(1,self.natoms+1):
+        #for i in range(1,self.natoms+1):
+        for i in range(1,self.natoms-self.nxyzatoms+1):
             for j in range(1,i):
-                #if True:
-                if self.xyzatom_bool[i-1]==False and self.xyzatom_bool[j-1]==False:
+                if True:
+                #if self.xyzatom_bool[i-1]==False and self.xyzatom_bool[j-1]==False:
                     a = self.getAtomicNum(i)
                     b = self.getAtomicNum(j)
                     MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
@@ -161,6 +162,8 @@ class ICoords:
         qprim1 = ICoord1.primitive_internal_values()
         qprim2 = ICoord2.primitive_internal_values()
         ictan = ICoord1.primitive_internal_difference(qprim1,qprim2)
+        return np.asarray(ictan).reshape((ICoord1.num_ics,1))
+
         #print " printing ictan"
         #for i in range(ICoord1.BObj.nbonds):
         #    print "%1.2f " %ictan[i],
@@ -171,8 +174,8 @@ class ICoords:
         #for i in range(ICoord1.BObj.nbonds+ICoord1.AObj.nangles,ICoord1.AObj.nangles+ICoord1.BObj.nbonds+ICoord1.TObj.ntor):
         #    print "%1.2f " %ictan[i],
         #print "\n"
-        return np.asarray(ictan).reshape((ICoord1.num_ics,1))
 
+    @staticmethod
     def tangent_SE(ICoord1,driving_coordinates,quiet=False):
         nadds = driving_coordinates.count("ADD")
         nbreaks = driving_coordinates.count("BREAK")

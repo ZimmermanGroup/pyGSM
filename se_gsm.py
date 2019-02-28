@@ -63,7 +63,7 @@ class SE_GSM(Base_Method):
                     self.add_last_node(2)
                 elif self.pastts==2 or self.pastts==3: #when cgrad is positive
                     self.add_last_node(1)
-                    if self.icoords[self.nR-1].gradrms>5.*self.CONV_TOL:
+                    if self.icoords[self.nR-1].gradrms>5.*self.options['CONV_TOL']:
                         self.add_last_node(1)
                 elif self.pastts==3: #product detected by bonding
                     self.add_last_node(1)
@@ -73,12 +73,13 @@ class SE_GSM(Base_Method):
             print " Warning last node still not optimized fully"
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
             print " SSM growth phase over"
+            self.done_growing=True
 
             print " beginning opt phase"
             print "Setting all interior nodes to active"
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                self.icoords[n].OPTTHRESH=self.CONV_TOL
+                self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']
 
         print " initial ic_reparam"
         self.ic_reparam()
@@ -102,7 +103,7 @@ class SE_GSM(Base_Method):
             print " copying last node, opting"
             self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
             print " Optimizing node %i" % self.nR
-            self.icoords[self.nR].OPTTHRESH = self.CONV_TOL
+            self.all_parameters[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
             self.optimize(n=self.nR,nsteps=noptsteps)
             self.active[self.nR]=True
             if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
@@ -118,7 +119,7 @@ class SE_GSM(Base_Method):
     def check_add_node(self):
         success=True
         #if self.icoords[self.nR-1].gradrms < self.gaddmax:
-        if self.icoords[self.nR-1].gradrms < self.ADD_NODE_TOL:
+        if self.icoords[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
                 print " Ran out of nodes, exiting GSM"
                 raise ValueError
@@ -143,8 +144,8 @@ class SE_GSM(Base_Method):
         for i in range(self.nnodes):
             if self.icoords[i] !=0:
                 self.active[i] = False
-                self.icoords[i].OPTTHRESH = self.CONV_TOL*2.
-        self.icoords[nR].OPTTHRESH = self.ADD_NODE_TOL
+                self.all_parameters[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
+        self.all_parameters[nR].options['OPTTHRESH'] = self.options['ADD_NODE_TOL']
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 
@@ -196,7 +197,7 @@ class SE_GSM(Base_Method):
         isDone=False
         added=False
         if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
-            if self.icoords[self.nR-1].gradrms>self.CONV_TOL:
+            if self.icoords[self.nR-1].gradrms>self.options['CONV_TOL']:
 
                 print "TS node is second to last node, adding one more node"
                 self.add_last_node(1)
@@ -247,11 +248,11 @@ class SE_GSM(Base_Method):
 
         # => Convergence Criteria
         if (((self.stage==1 and rtype==1) or self.stage==2) and
-                self.icoords[self.TSnode].gradrms< self.CONV_TOL):
+                self.icoords[self.TSnode].gradrms< self.options['CONV_TOL']):
             self.tscontinue=False
             isDone=True
         if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
-                self.icoords[self.TSnode].gradrms<2.5*self.CONV_TOL and self.emaxp+0.02> self.emax and 
+                self.icoords[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.emaxp+0.02> self.emax and 
                 self.emaxp-0.02< self.emax):
             self.tscontinue=False
             isDone=True

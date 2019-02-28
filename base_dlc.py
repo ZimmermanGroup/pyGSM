@@ -10,7 +10,6 @@ from _obutils import Utils
 from _icoord import *
 from _bmat import Bmat
 import elements 
-from sklearn import preprocessing
 import StringIO
 from pes import PES
 from penalty_pes import Penalty_PES
@@ -132,7 +131,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             self.madeBonds = True
             self.AObj = Ang_obj(self.options['angles'],None,None)
             self.AObj.update(self.mol)
-            self.TObj = Tor_obj(self.self.options['torsions'],None,None)
+            self.TObj = Tor_obj(self.options['torsions'],None,None)
             self.TObj.update(self.mol)
         self.setup()
         self.newHess = 5
@@ -164,6 +163,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         self.bmat_create()
         self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
         self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
+        self.qprim = np.zeros((self.num_ics,1),dtype=float)
         self.gradq = np.zeros((self.nicd,1),dtype=float)
         self.Hintp = None
         self.Hint = None
@@ -722,7 +722,6 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         self.AObj.update(self.mol)
         self.TObj.update(self.mol)
 
-
     # can combine with ic_to_xyz
     def ic_to_xyz(self,dq):
         """ Transforms ic to xyz, used by addNode"""
@@ -787,7 +786,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
 
         return 
 
-    def ic_to_xyz_opt(self,dq0,MAX_STEPS=8):
+    def ic_to_xyz_opt(self,dq0,MAX_STEPS=8,quiet=True):
         rflag = 0 
         retry = False
         SCALEBT = 1.5
@@ -804,8 +803,11 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         dqmagp=100.
 
         dq = dq0
-        #print " dq is "
-        #print dq.T 
+        
+        if not quiet:
+            print " dq is "
+            print dq.T 
+
         #target IC values
         qn = self.q + dq 
         #print "printing new q"
@@ -1041,49 +1043,71 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         self.bmatp_to_U()
         self.bmat_create()
 
-    def proc_evaluate(self,q):
-        #print "in proc_evaluate"
+    def proc_evaluate(self,q,n):
+        ''' 
+        Evaluates the energy and gradient at a point q.
+        But resets the coords back to q after updating.
+        '''
+
         if (self.q!=q).any():
+            # stash q
+            qp = self.q.copy()
             dq = q-self.q
-            #print "dq"
-            #print dq.T
             self.ic_to_xyz_opt(dq)
-            #self.update_ics()
 
         fx =self.PES.get_energy(self.geom)
         grad = self.PES.get_gradient(self.geom)
-        self.gradq = self.grad_to_q(grad)
+        gradq = self.grad_to_q(grad)
 
         # primitive values
-        qprim = self.primitive_internal_values()
-        qprim = np.reshape(qprim,(self.num_ics,1))
+        qprim1 = self.primitive_internal_values()
+        #print "qprim1"
+        #print qprim1
 
+        qprim = np.dot(np.transpose(self.Ut[:n]),q[:n])
+        #print qprim.T
+
+        qprim = np.reshape(qprim,(self.num_ics,1))
+        gradqprim = np.dot(np.transpose(self.Ut[:n]),gradq[:n])
+
+        result = { 'fx': fx, 'g':gradq, 'qprim':qprim,'gradqprim':gradqprim}
+
+        #print "resetting q"
+        # reset q
+        if (self.q!=q).any():
+            self.q = qp
+            self.update_ics()
+
+        #return fx,self.gradq
         #return fx,qprim,self.gradq,self.gradqprim
-        return fx,self.gradq
+        return result
 
     def convert_primitive_to_DLC(self,prim):
         return np.dot(self.Ut,prim) # (nicd,numic)(num_ic,1)
 
-    def append_data(self,x,g,fx,xnorm,gnorm,step):
+    def append_data(self,x,proc_results,xnorm,gnorm,step):
         self.xs.append(x)
-        self.g.append(g)
         dq = x - self.q
 
-        # this updates the geometry for the next iteration . . .
+        # => update geometry <= #
+        self.ic_to_xyz_opt(dq,quiet=True)
+
+        # store internal values for update
         self.pgradqprim = self.gradqprim.copy()
-        pqprim = self.primitive_internal_values()
+        pqprim = self.qprim.copy()
 
-        self.gradqprim = np.dot(np.transpose(self.Ut),g)
-        self.ic_to_xyz_opt(dq)
-        self.update_ics()
+        #self.gradqprim = np.dot(np.transpose(self.Ut),g)
+        #qprim = self.primitive_internal_values()
 
-        qprim = self.primitive_internal_values()
-        self.dqprim = self.primitive_internal_difference(qprim,pqprim)
-        dg = self.gradqprim - self.pgradqprim
+        self.gradqprim = proc_results['gradqprim']
+        self.qprim = proc_results['qprim']
+
+        self.dqprim = self.primitive_internal_difference(self.qprim,pqprim)
+        #dg = self.gradqprim - self.pgradqprim
 
         self.geom = manage_xyz.np_to_xyz(self.geom,self.coords)
         self.geoms.append(self.geom)
-        self.fx.append(fx)
+        self.fx.append(proc_results['fx'])
         self.xnorm.append(xnorm)
         self.gnorm.append(gnorm)
         self.step.append(step)
