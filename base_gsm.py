@@ -13,7 +13,8 @@ from _print_opt import *
 from _analyze_string import *
 from units import *
 import sys
-from opt_parameters import parameters
+import base_optimizer
+import eigenvector_follow
 
 class Base_Method(object,Print,Analyze):
 
@@ -102,16 +103,10 @@ class Base_Method(object,Print,Analyze):
                 doc="bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
                         to be considered grown.",
                         )
-
         opt.add_option(
                 key='optimizer',
                 required=True,
-                doc='The type of optimizer  to use e.g. eigenvector_follow, conjugate_gradient,etc.')
-
-        opt.add_option(
-                key='parameters',
-                required=True,
-                doc='parameters')
+                doc='Optimzer object  to use e.g. eigenvector_follow, conjugate_gradient,etc.')
 
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
@@ -156,11 +151,11 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
-        self.optimizer = self.options['optimizer']
 
-        self.all_parameters=[]
+        self.optimizer=[]
+        optimizer = options['optimizer']
         for count in xrange(self.nnodes):
-            self.all_parameters.append(parameters(options['parameters'].options.copy()))
+            self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
 
         # Set initial values
         self.nn = 2
@@ -246,10 +241,10 @@ class Base_Method(object,Print,Analyze):
             self.icoords[struct].set_xyz(coords[struct])
             self.icoords[struct].update_ics()
             self.icoords[struct].setup()
-            self.icoords[struct].make_Hint()
+            self.icoords[struct].Hintp = self.icoords[struct].make_Hint()
             self.icoords[struct].DMAX=0.05 #half of default value
-            #self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
-            self.icoords[struct].energy = self.icoords[struct].PES.get_energy(self.icoords[struct].geom)
+            self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
+            #self.icoords[struct].energy = self.icoords[struct].PES.get_energy(self.icoords[struct].geom)
             self.icoords[struct].gradrms=grmss[struct]
 
         self.store_energies() 
@@ -259,7 +254,7 @@ class Base_Method(object,Print,Analyze):
         print "setting all interior nodes to active"
         for n in range(1,self.nnodes-1):
             self.active[n]=True
-            self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+            self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
         print " V_profile: ",
         for n in range(self.nnodes):
             print " {:7.3f}".format(float(self.energies[n])),
@@ -344,7 +339,7 @@ class Base_Method(object,Print,Analyze):
 
             if self.pTSnode!=self.TSnode and self.climb and not self.find:
                 print " slowing down climb optimization"
-                self.all_parameters[self.TSnode].options['DMAX'] /= self.newclimbscale
+                self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
                 if self.newclimbscale<5.0:
                     self.newclimbscale +=1.
 
@@ -401,6 +396,7 @@ class Base_Method(object,Print,Analyze):
                 print "\n"
 
 
+    # for some reason this fxn doesn't work when called outside gsm
     def get_tangents_1e(self,n0=0):
         size_ic = self.icoords[0].num_ics
         nbonds = self.icoords[0].BObj.nbonds
@@ -601,7 +597,7 @@ class Base_Method(object,Print,Analyze):
                 print "\n Optimizing node %i" % n
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
-                self.all_parameters[n].options['opt_type']=opt_type
+                self.optimizer[n].options['opt_type']=opt_type
 
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  # should this be for climb too?
@@ -612,19 +608,29 @@ class Base_Method(object,Print,Analyze):
                     print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
-                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],refE=self.icoords[0].V0,opt_steps=opt_steps*exsteps,ictan=self.ictan[n])
+                self.icoords[n].energy = self.optimizer[n].optimize(
+                        c_obj=self.icoords[n],
+                        refE=self.icoords[0].V0,
+                        opt_steps=opt_steps*exsteps,
+                        ictan=self.ictan[n]
+                        )
 
             if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
                 print " optimizing last node"
-                self.all_parameters[n].options['opt_type']='UNCONSTRAINED'
-                self.icoords[n].energy = self.optimizer.optimize(self.icoords[n],self.all_parameters[n],opt_steps=opt_steps)
+                self.optimizer[n].options['opt_type']='UNCONSTRAINED'
+                self.icoords[n].energy = self.optimizer[n].optimize(
+                        c_obj=self.icoords[n],
+                        refE=self.icoords[0].V0,
+                        opt_steps=opt_steps
+                        )
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
-        if totalgrad < 0.3 and fp>1: # extra criterion in og-gsm for added
+        if totalgrad < 0.3 and fp>0: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
-            if (self.climb and self.finder and self.dE_iter<4. and self.nclimb<1 and
+                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+            elif (self.climb and not self.find and self.finder and self.dE_iter<4. and self.nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or
                     (ts_gradrms<self.options['CONV_TOL']*5.))
@@ -632,6 +638,7 @@ class Base_Method(object,Print,Analyze):
                 print(" ** starting exact climb **")
                 print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
                 self.find=True
+                self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
@@ -640,12 +647,13 @@ class Base_Method(object,Print,Analyze):
 
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+                self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
 
-        if self.find==True and self.all_parameters[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
+        if self.find and self.optimizer[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
             #if self.hessrcount<1 and self.pTSnode == self.TSnode:
             if self.pTSnode == self.TSnode:
                 print " resetting TS node coords Ut (and Hessian)"
+                self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10
                 self.hessrcount=1
@@ -653,7 +661,7 @@ class Base_Method(object,Print,Analyze):
                 print " Hessian consistently bad, going back to climb (for 3 iterations)"
                 self.find=0
                 self.nclimb=3
-        elif self.find and self.all_parameters[self.TSnode].nneg <= 3:
+        elif self.find and self.optimizer[self.TSnode].nneg <= 3:
             self.hessrcount-=1
         self.nhessreset-=1
 
@@ -669,7 +677,7 @@ class Base_Method(object,Print,Analyze):
                 break
             print " getting energy for  node ",self.nR
             self.icoords[self.nR].energy = self.icoords[self.nR].PES.get_energy(self.icoords[self.nR].geom)
-            print self.icoords[self.nR].energy
+            print self.icoords[self.nR].energy-self.icoords[0].energy
             self.nn+=1
             self.nR+=1
             print " nn=%i,nR=%i" %(self.nn,self.nR)
@@ -683,15 +691,20 @@ class Base_Method(object,Print,Analyze):
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            self.icoords[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nR-1)
+            #self.icoords[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
+            n1=self.nnodes-self.nP
+            n2=self.nnodes-self.nP-1
+            n3=self.nR-1
+            self.icoords[-self.nP-1] = self.add_node(n1,n2,n3)
             if self.icoords[-self.nP-1]==0:
                 success= False
                 break
-            print " getting energy for  node ",self.nP
-            self.icoords[self.nP].energy = self.icoords[self.nP].PES.get_energy(self.icoords[self.nP].geom)
+            print " getting energy for  node ",self.nnodes-self.nP-1
+            self.icoords[-self.nP-1].energy = self.icoords[-self.nP-1].PES.get_energy(self.icoords[-self.nP-1].geom)
+            print self.icoords[-self.nP-1].energy-self.icoords[0].energy
             self.nn+=1
             self.nP+=1
-            print " nn=%i,nR=%i" %(self.nn,self.nR)
+            print " nn=%i,nP=%i" %(self.nn,self.nP)
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
@@ -1025,17 +1038,19 @@ class Base_Method(object,Print,Analyze):
         #print eig
        
         self.newic.Hint += (c-tHt)*ttt
-        self.icoords[en].Hint = np.copy(self.newic.Hint)
+        #self.icoords[en].Hint = np.copy(self.newic.Hint)
+        self.optimizer[en].Hint = np.copy(self.newic.Hint)
         #print "Hint"
         #with np.printoptions(threshold=np.inf):
         #    print self.icoords[en].Hint
+        #    print self.optimizer[en].Hint
         #print "shape of Hint is %s" % (np.shape(self.icoords[en].Hint),)
 
         #this can also work on non-TS nodes?
         self.icoords[en].newHess = 2
 
         if False:
-            eigen,tmph = np.linalg.eigh(self.icoords[en].Hint) #nicd,nicd
+            eigen,tmph = np.linalg.eigh(self.optimizer[en].Hint) #nicd,nicd
             #print "eigenvalues of new Hess"
             #print eigen
 

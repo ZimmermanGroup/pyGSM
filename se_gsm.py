@@ -79,7 +79,7 @@ class SE_GSM(Base_Method):
             print "Setting all interior nodes to active"
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                self.all_parameters[n].options['OPTTHRESH']=self.options['CONV_TOL']
+                self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']
 
         print " initial ic_reparam"
         self.ic_reparam()
@@ -103,7 +103,7 @@ class SE_GSM(Base_Method):
             print " copying last node, opting"
             self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
             print " Optimizing node %i" % self.nR
-            self.all_parameters[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
+            self.optimizer[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
             self.optimize(n=self.nR,nsteps=noptsteps)
             self.active[self.nR]=True
             if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
@@ -144,8 +144,8 @@ class SE_GSM(Base_Method):
         for i in range(self.nnodes):
             if self.icoords[i] !=0:
                 self.active[i] = False
-                self.all_parameters[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
-        self.all_parameters[nR].options['OPTTHRESH'] = self.options['ADD_NODE_TOL']
+                self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
+        self.optimizer[nR].options['OPTTHRESH'] = self.options['ADD_NODE_TOL']
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 
