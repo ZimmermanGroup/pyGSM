@@ -5,7 +5,7 @@ from _linesearch import backtrack
 from opt_parameters import parameters
 from dlc import DLC
 from cartesian import Cartesian
-
+import options
 
 
 class base_optimizer(object):
@@ -13,11 +13,105 @@ class base_optimizer(object):
     e.g. walk_up, dgrad_step, what else?
     '''
 
-    def __init__(self):
-        return
+    @staticmethod
+    def default_options():
+        """ default options. """
 
-    def optimize(self,c_obj,params,opt_steps=3,ictan=None):
-        raise NotImplementedError
+        if hasattr(base_optimizer, '_default_options'): return base_optimizer._default_options.copy()
+        opt = options.Options() 
+
+
+        opt.add_option(
+                key='opt_type',
+                required=True,
+                value="UNCONSTRAINED",
+                allowed_types=[str],
+                allowed_values=["UNCONSTRAINED", "ICTAN", "CLIMB", "TS", "MECI", "SEAM", "TS-SEAM"],
+                doc='The type of unconstrained optimization'
+                )
+
+        opt.add_option(
+                key='OPTTHRESH',
+                value=0.0005,
+                required=False,
+                allowed_types=[float],
+                doc='Convergence threshold'
+                )
+
+        opt.add_option(
+                key='DMAX',
+                value=0.1,
+                doc='max step in DLC',
+                )
+
+        opt.add_option(
+                key='SCALEQN',
+                value=1,
+                )
+
+        opt.add_option(
+                key='Linesearch',
+                value=backtrack,
+                required=True,
+                doc='A function to do a linesearch e.g. bactrack,NoLineSearch, etc.'
+                )
+
+        opt.add_option(
+                key='MAXAD',
+                value=0.075,
+                )
+
+        opt.add_option(
+                key='print_level',
+                value=1,
+                doc="control the printout, 0 less, 1 more, 2 too much"
+                )
+
+        opt.add_option(
+                key='HESS_TANG_TOL_TS',
+                value=0.35,
+                doc='Hessian  overlap with tangent tolerance for TS node'
+                )
+
+        base_optimizer._default_options = opt
+        return base_optimizer._default_options.copy()
+
+    @staticmethod
+    def from_options(**kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return base_optimizer(base_optimizer.default_options().set_values(kwargs))
+
+    def __init__(self,
+            options,
+            ):
+
+        self.options = options
+        
+        # additional convergence criterion (default parameters for Q-Chem)
+        self.conv_disp = 12e-4 #max atomic displacement
+        self.conv_gmax = 3e-4 #max gradient
+        self.conv_Ediff = 1e-6 #E diff
+        self.conv_grms = options['OPTTHRESH']
+
+        # TS node properties
+        self.nneg = 0  # number of negative eigenvalues
+        self.DMIN = self.options['DMAX']/20.
+
+        # Hessian
+        self.Hint=None
+        self.dx=0.
+        self.dg=0.
+
+        # additional parameters needed by linesearch
+        self.linesearch_parameters = {
+                'epsilon':1e-5,
+                'ftol':1e-4,
+                'wolfe':0.9,
+                'max_linesearch':5,
+                'min_step':self.DMIN,
+                'max_step':0.5,
+        }
+        return
 
     def get_nconstraints(self,opt_type):
         if opt_type in ["ICTAN", "CLIMB"]:
@@ -42,7 +136,7 @@ class base_optimizer(object):
         if opt_type in ['TS','TS-SEAM']:
             assert c_obj.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
-    def converged(self,g,n,params):
+    def converged(self,g,n):
         # check if finished
         gradrms = np.sqrt(np.dot(g[:n].T,g[:n])/n)
         #print "current gradrms= %r au" % gradrms
@@ -51,11 +145,15 @@ class base_optimizer(object):
         gmax = np.max(g[:n])/ANGSTROM_TO_AU
         #print "maximum gradient component (au)", gmax
 
-        if gradrms <= params.conv_grms  or \
-            (self.disp <= params.conv_disp and self.Ediff <= params.conv_Ediff) or \
-            (gmax <= params.conv_gmax and self.Ediff <= params.conv_Ediff):
-            #print '[INFO] converged'
+        if gradrms <self.conv_grms:
+            print '[INFO] converged'
             return True
+
+        #if gradrms <= self.conv_grms  or \
+        #    (self.disp <= self.conv_disp and self.Ediff <= self.conv_Ediff) or \
+        #    (gmax <= self.conv_gmax and self.Ediff <= self.conv_Ediff):
+        #    print '[INFO] converged'
+        #    return True
         return False
 
     def set_lambda1(self,opt_type,eigen,maxoln=None):
@@ -77,18 +175,18 @@ class base_optimizer(object):
     
         return lambda1
 
-    def get_constraint_steps(self,c_obj,opt_type,g,params):
+    def get_constraint_steps(self,c_obj,opt_type,g):
         nconstraints=self.get_nconstraints(opt_type)
         n=len(g)
 
-        # Need nicd_DLC defined ... what  to do for Cartesian? TODO
+        # Need nicd_DLC defined ...TODO Raise Error for Cartesian
         end = c_obj.nicd_DLC
 
         #return constraint_steps
         constraint_steps = np.zeros((n,1))
         # => ictan climb
         if opt_type=="CLIMB": 
-            constraint_steps[end-1]=self.walk_up(g,end-1,params)
+            constraint_steps[end-1]=self.walk_up(g,end-1)
         # => MECI
         elif opt_type=='MECI': 
             constraint_steps[end-1] = self.dgrad_step(c_obj) #last vector is x
@@ -97,7 +195,7 @@ class base_optimizer(object):
         # => seam climb
         elif opt_type=='TS-SEAM':
             constraint_steps[end-2]=self.dgrad_step(c_obj)
-            constraint_steps[end-1]=self.walk_up(g,end-1,params)
+            constraint_steps[end-1]=self.walk_up(g,end-1)
 
         return constraint_steps
 
@@ -106,9 +204,9 @@ class base_optimizer(object):
         dgrad = c_obj.PES.get_dgrad(self.geom)
         dgradq = c_obj.grad_to_q(dgrad)
         norm_dg = np.linalg.norm(dgradq)
-        #if self.print_level>0:
-        #    print " norm_dg is %1.4f" % norm_dg,
-        #    print " dE is %1.4f" % self.PES.dE,
+        if self.options['print_level']>0:
+            print " norm_dg is %1.4f" % norm_dg,
+            print " dE is %1.4f" % self.PES.dE,
 
         dq = -c_obj.PES.dE/KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
@@ -116,56 +214,28 @@ class base_optimizer(object):
 
         return dq
 
-    def walk_up(self,g,n,params):
+    def walk_up(self,g,n):
         """ walk up the n'th DLC"""
         #assert isinstance(g[n],float), "gradq[n] is not float!"
         #if self.print_level>0:
         #    print(' gts: {:1.4f}'.format(self.gradq[n,0]))
         #self.buf.write(' gts: {:1.4f}'.format(self.gradq[n,0]))
         SCALEW = 1.0
-        SCALE = params.options['SCALEQN']
+        SCALE = self.options['SCALEQN']
         dq = g[n,0]/SCALE
         print " walking up the %i coordinate = %1.4f" % (n,dq)
-        if abs(dq) > params.options['MAXAD']/SCALEW:
-            dq = np.sign(dq)*params.options['MAXAD']/SCALE
+        if abs(dq) > self.options['MAXAD']/SCALEW:
+            dq = np.sign(dq)*self.options['MAXAD']/SCALE
 
         return dq
 
-    def step_controller(self,step,ratio,gradrms,pgradrms,params):
-        # => step controller controls DMAX/DMIN <= #
-        params.options['DMAX'] = step
-        if (ratio<0.25 or ratio>1.5): #can also check that dEpre >0.05?
-            if step<params.options['DMAX']:
-                params.options['DMAX'] = step/1.2
-            else:
-                params.options['DMAX'] = params.options['DMAX']/1.2
-        elif ratio>0.75 and step > params.options['DMAX'] and gradrms<(pgradrms*1.35):
-            #and ratio<1.25 and  
-            #if self.print_level>0:
-            if True:
-                print("increasing DMAX"),
-            #self.buf.write(" increasing DMAX")
-            if step > params.options['DMAX']:
-                if True:
-                    print " wolf criterion increased stepsize... ",
-                    print " setting DMAX to wolf  condition...?"
-                    params.options['DMAX']=step
-            params.options['DMAX']=params.options['DMAX']*1.2 + 0.01
-            if params.options['DMAX']>0.25:
-                params.options['DMAX']=0.25
-        
-        if params.options['DMAX']<params.DMIN:
-            params.options['DMAX']=params.DMIN
-        print " DMAX", params.options['DMAX']
-
-    def eigenvector_step(self,c_obj,params,g,n):
-
-        SCALE =params.options['SCALEQN']
-        if c_obj.newHess>0: SCALE = params.options['SCALEQN']*c_obj.newHess
-        if params.options['SCALEQN']>10.0: SCALE=10.0
+    def walk_up_DNR(self,g,n):
+        SCALE =self.options['SCALEQN']
+        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess  # what to do about newHess?
+        if self.options['SCALEQN']>10.0: SCALE=10.0
         
         # convert to eigenvector basis
-        temph = c_obj.Hint[:n,:n]
+        temph = self.Hint[:n,:n]
         e,v_temp = np.linalg.eigh(temph)
         v_temp = v_temp.T
         gqe = np.dot(v_temp,g[:n])
@@ -173,26 +243,81 @@ class base_optimizer(object):
         lambda1 = self.set_lambda1('NOT-TS',e) 
 
         dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
-        dqe0 = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dqe0 ]
+        dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
         
         # => Convert step back to DLC basis <= #
         dq_tmp = np.dot(v_temp.T,dqe0)
-        dq_tmp = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dq_tmp ]
+        dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
+        dq = np.zeros((c_obj.nicd_DLC,1))
+        for i in range(n): dq[i,0] = dq_tmp[i]
+
+        return dq
+
+
+    def step_controller(self,step,ratio,gradrms,pgradrms):
+        # => step controller controls DMAX/DMIN <= #
+        self.options['DMAX'] = step
+        if (ratio<0.25 ): #can also check that dEpre >0.05?
+            #or ratio>1.5
+            if self.options['print_level']>0:
+                print(" decreasing DMAX"),
+            if step<self.options['DMAX']:
+                self.options['DMAX'] = step/1.2
+            else:
+                self.options['DMAX'] = self.options['DMAX']/1.2
+        elif ratio>0.75 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
+            #and ratio<1.25 and  
+            if self.options['print_level']>0:
+                print(" increasing DMAX"),
+            #self.buf.write(" increasing DMAX")
+            if step > self.options['DMAX']:
+                if True:
+                    print " wolf criterion increased stepsize... ",
+                    print " setting DMAX to wolf  condition...?"
+                    self.options['DMAX']=step
+            self.options['DMAX']=self.options['DMAX']*1.2 + 0.01
+            if self.options['DMAX']>0.25:
+                self.options['DMAX']=0.25
+        
+        if self.options['DMAX']<self.DMIN:
+            self.options['DMAX']=self.DMIN
+        print " DMAX", self.options['DMAX']
+
+    def eigenvector_step(self,c_obj,g,n):
+
+        SCALE =self.options['SCALEQN']
+        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess
+        if self.options['SCALEQN']>10.0: SCALE=10.0
+        
+        # convert to eigenvector basis
+        temph = self.Hint[:n,:n]
+        e,v_temp = np.linalg.eigh(temph)
+        v_temp = v_temp.T
+        gqe = np.dot(v_temp,g[:n])
+        
+        lambda1 = self.set_lambda1('NOT-TS',e) 
+
+        dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
+        dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
+        
+        # => Convert step back to DLC basis <= #
+        dq_tmp = np.dot(v_temp.T,dqe0)
+        dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
         dq = np.zeros((c_obj.nicd_DLC,1))
         for i in range(n): dq[i,0] = dq_tmp[i]
 
         return dq
 
     # need to modify this only for the DLC region
-    def TS_eigenvector_step(self,c_obj,params,g,ictan):
+    def TS_eigenvector_step(self,c_obj,g,ictan):
         '''
         Takes an eigenvector step using the Bofill updated Hessian ~1 negative eigenvalue in the
         direction of the reaction path.
 
         '''
-        SCALE =params.options['SCALEQN']
-        if c_obj.newHess>0: SCALE = params.options['SCALEQN']*c_obj.newHess
-        if params.options['SCALEQN']>10.0: SCALE=10.0
+        SCALE =self.options['SCALEQN']
+        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess
+        if self.options['SCALEQN']>10.0: SCALE=10.0
 
         # constraint vector
         norm = np.linalg.norm(ictan)
@@ -203,19 +328,16 @@ class base_optimizer(object):
         Cn = Cn/norm
 
         # => get eigensolution of Hessian <= 
-        eigen,tmph = np.linalg.eigh(c_obj.Hint) #nicd,nicd 
+        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd 
         tmph = tmph.T
 
         #TODO nneg should be self and checked
-        params.nneg = 0
-        for i in range(c_obj.nicd_DLC):
-            if eigen[i] < -0.01:
-                params.nneg += 1
+        self.nneg = sum(1 for e in eigen if e<-0.01)
 
         #=> Overlap metric <= #
         overlap = np.dot(np.dot(tmph,c_obj.Ut),Cn) 
 
-        print "overlap", overlap[:4]
+        print "overlap", overlap[:4].T
         # Max overlap metrics
         path_overlap,maxoln = self.maxol_w_Hess(overlap[0:4])
         print " t/ol %i: %3.2f" % (maxoln,path_overlap)
@@ -224,7 +346,7 @@ class base_optimizer(object):
         lambda1 = self.set_lambda1('TS',eigen,maxoln)
 
         maxol_good=True
-        if path_overlap < params.options['HESS_TANG_TOL_TS']:
+        if path_overlap < self.options['HESS_TANG_TOL_TS']:
             maxol_good = False
 
         if maxol_good:
@@ -242,12 +364,12 @@ class base_optimizer(object):
 
             # => Convert step back to DLC basis <= #
             dq = np.dot(tmph.T,dqe0)  # should it be transposed?
-            dq = [ np.sign(i)*params.options['MAXAD'] if abs(i)>params.options['MAXAD'] else i for i in dq ]
+            dq = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq ]
         else:
             # => if overlap is small use Cn as Constraint <= #
             c_obj.form_constrained_DLC(ictan) 
-            c_obj.Hint = c_obj.Hintp_to_Hint()
-            dq = self.eigenvector_step(c_obj,params,g,c_obj.nicd_DLC-1)  #hard coded!
+            self.Hint = c_obj.Hintp_to_Hint()
+            dq = self.eigenvector_step(c_obj,g,c_obj.nicd_DLC-1)  #hard coded!
 
         return dq,maxol_good
 
@@ -257,3 +379,89 @@ class base_optimizer(object):
         path_overlap = np.max(absoverlap)
         path_overlap_n = np.argmax(absoverlap)
         return path_overlap,path_overlap_n
+
+    def update_Hessian(self,c_obj,mode='BFGS'):
+        '''
+        mode 1 is BFGS, mode 2 is BOFILL
+        '''
+        assert mode=='BFGS' or mode=='BOFILL', "no update implemented with that mode"
+        c_obj.newHess-=1
+
+        # do this even if mode==BOFILL
+        change = self.update_bfgs(c_obj)
+
+        if not c_obj.__class__.__name__=='Cartesian':
+            c_obj.Hintp += change
+            if self.options['print_level']>1:
+                print "Hintp"
+                print c_obj.Hintp
+            if mode=='BFGS':
+                self.Hint=c_obj.Hintp_to_Hint()
+            if mode=='BOFILL':
+                change=self.update_bofill()
+                self.Hint+=change
+        else:
+            self.Hint += change
+
+    def update_bfgs(self,c_obj):
+        if not c_obj.__class__.__name__=='Cartesian':
+            return self.update_bfgsp(c_obj)
+        else:
+            raise NotImplementedError
+
+    def update_bfgsp(self,c_obj):
+
+        Hdx = np.dot(c_obj.Hintp,self.dx_prim)
+        if self.options['print_level']>1:
+            print("In update bfgsp")
+            print "dg:", self.dg_prim.T
+            print "dx:", self.dx_prim.T
+            print "Hdx"
+            print Hdx.T
+        dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
+        dgdg = np.outer(self.dg_prim,self.dg_prim)
+        dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
+        change = np.zeros_like(c_obj.Hintp)
+
+        if self.options['print_level']>2:
+            print "dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx)
+            print dgdg
+
+        if dgtdx>0.:
+            if dgtdx<0.001: dgtdx=0.001
+            change += dgdg/dgtdx
+        if dxHdx>0.:
+            if dxHdx<0.001: dxHdx=0.001
+            change -= np.outer(Hdx,Hdx)/dxHdx
+        return change
+
+    def update_bofill(self):
+        print "in update bofill"
+
+        G = np.copy(self.Hint) #nicd,nicd
+        Gdx = np.dot(G,self.dx) #(nicd,nicd)(nicd,1) = (nicd,1)
+        dgmGdx = self.dg - Gdx # (nicd,1)
+
+        # MS
+        dgmGdxtdx = np.dot(dgmGdx.T,self.dx) #(1,nicd)(nicd,1)
+        Gms = np.outer(dgmGdx,dgmGdx)/dgmGdxtdx
+
+        #PSB
+        dxdx = np.outer(self.dx,self.dx)
+        dxtdx = np.dot(self.dx.T,self.dx)
+        dxtdg = np.dot(self.dx.T,self.dg)
+        dxtGdx = np.dot(self.dx.T,Gdx)
+        dxtdx2 = dxtdx*dxtdx
+        dxtdgmdxtGdx = dxtdg - dxtGdx 
+        Gpsb = np.outer(dgmGdx,self.dx)/dxtdx + np.outer(self.dx,dgmGdx)/dxtdx - dxtdgmdxtGdx*dxdx/dxtdx
+
+        # Bofill mixing 
+        dxtE = np.dot(self.dx.T,dgmGdx) #(1,nicd)(nicd,1)
+        EtE = np.dot(dgmGdx.T,dgmGdx)  #E is dgmGdx
+        phi = 1. - dxtE*dxtE/(dxtdx*EtE)
+
+        change = (1.-phi)*Gms + phi*Gpsb
+        return change
+
+    def update_constraint_bfgsp(self):
+        return change
