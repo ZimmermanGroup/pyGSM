@@ -161,13 +161,11 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         self.bmatp=self.bmatp_create()
         self.bmatp_to_U()
         self.bmat_create()
-        self.pgradqprim = np.zeros((self.num_ics,1),dtype=float)
-        self.gradqprim = np.zeros((self.num_ics,1),dtype=float)
-        self.qprim = np.zeros((self.num_ics,1),dtype=float)
         self.gradq = np.zeros((self.nicd,1),dtype=float)
-        self.Hintp = None
-        self.Hint = None
-        self.Hinv = None
+        self.Hintp = self.make_Hint()
+        self.Hintp_constraint = self.make_Hint()
+        #self.Hint = None
+        #self.Hinv = None
         self.gradrms = 1000.
         self.SCALEQN = 1.0
         self.MAXAD = 0.075
@@ -249,11 +247,10 @@ class Base_DLC(object,Bmat,Utils,ICoords):
                 }))
 
         ICoordC = cls.create_DLC(icoordA,bondA,angleA,torsionA,mol1,PES1)
-        ICoordC.make_Hint()
-        ICoordC.Hint = ICoordC.Hintp_to_Hint()
+        ICoordC.Hintp = ICoordC.make_Hint()
+        ICoordC.Hintp_constraint = ICoordC.make_Hint()
 
         return ICoordC
-
 
     def ic_create(self):
         self.coordn = self.coord_num()
@@ -569,7 +566,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             raise RuntimeError
         #ICoordC.dqmag = dqmag
         ICoordC.Hintp = ICoordA.Hintp
-        ICoordC.Hint = ICoordC.Hintp_to_Hint()
+        ICoordC.Hintp_constraint = ICoordA.Hintp_constraint
 
         return ICoordC
 
@@ -623,7 +620,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             raise RuntimeError
         
         ICoordC.Hintp = ICoordA.Hintp
-        ICoordC.Hint = ICoordC.Hintp_to_Hint()
+        ICoordC.Hintp_constraint = ICoordA.Hintp_constraint
 
         return ICoordC
 
@@ -660,11 +657,8 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         ICoordC.ic_to_xyz(dq0)
         ICoordC.update_ics()
         ICoordC.form_unconstrained_DLC()
-        assert ICoordC.PES.lot.hasRanForCurrentCoords==False,"WTH1"
-
         ICoordC.Hintp = ICoordA.Hintp
-        ICoordC.Hint = ICoordC.Hintp_to_Hint()
-
+        ICoordC.Hintp_constraint = ICoordA.Hintp_constraint
 
         return ICoordC
 
@@ -688,6 +682,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
 
             ICoordC = cls.create_DLC(ICoordA,ICoordA.BObj.bonds,ICoordA.AObj.angles,ICoordA.TObj.torsions,mol1,PES1)
             ICoordC.Hintp = ICoordA.Hintp
+            ICoordC.Hintp_constraint = ICoordA.Hintp_constraint
 
             return ICoordC
 
@@ -712,6 +707,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         
         ICoordC = cls.create_DLC(ICoordA,ICoordA.BObj.bonds,ICoordA.AObj.angles,ICoordA.TObj.torsions,mol1,PES1)
         ICoordC.Hintp = ICoordA.Hintp
+        ICoordC.Hintp_constraint = ICoordA.Hintp_constraint
         return ICoordC
 
     def update_ics(self):
@@ -910,13 +906,13 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             self.update_ics()
 
             qprim_current = self.primitive_internal_values()
-            self.dqprim = self.primitive_internal_difference(qprim_current,qprim)
+            #self.dqprim = self.primitive_internal_difference(qprim_current,qprim)
 
         #write convergence geoms to file 
         largeXyzFile =pb.Outputfile("xyz",xyzfile,overwrite=True)
         for mol in opt_molecules:
             largeXyzFile.write(pb.readstring("xyz",mol))
-        if self.print_level>1:
+        if self.print_level>0:
             print "dqmagall,magall"
             print dqmagall
             print magall
@@ -937,27 +933,16 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             Hdiagp.append(0.035)
         for xyzic in range(self.nxyzatoms*3):
             Hdiagp.append(1.0)
+        return np.diag(Hdiagp)
 
-        self.Hintp=np.diag(Hdiagp)
-        Hdiagp=np.asarray(Hdiagp)
-        Hdiagp=np.reshape(Hdiagp,(self.num_ics,1))
-
-        tmp = np.zeros((self.nicd,self.num_ics),dtype=float)
-        for i in range(self.nicd): 
-            for k in range(self.num_ics):
-                tmp[i,k] = self.Ut[i,k]*Hdiagp[k]
-
-        self.Hint = np.matmul(tmp,np.transpose(self.Ut))
-        try:
-            self.Hinv = np.linalg.inv(self.Hint)
-        except:
-            print "nicd=",self.nicd
-            print "numic=",self.num_ics
-            print np.shape(self.Ut)
-            print np.shape(tmp)
-            print np.shape(self.Hintp)
-            print np.shape(self.Hint)
-            exit(1)
+        #self.Hintp=np.diag(Hdiagp)
+        #Hdiagp=np.asarray(Hdiagp)
+        #Hdiagp=np.reshape(Hdiagp,(self.num_ics,1))
+        #tmp = np.zeros((self.nicd,self.num_ics),dtype=float)
+        #for i in range(self.nicd): 
+        #    for k in range(self.num_ics):
+        #        tmp[i,k] = self.Ut[i,k]*Hdiagp[k]
+        ##self.Hint = np.matmul(tmp,np.transpose(self.Ut))
 
 
     # TODO make  opt_type the name variable in params
@@ -971,26 +956,6 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         elif opt_type in ['SEAM','TS-SEAM']:
             self.form_constrained_CI_DLC(constraints=ictan)
 
-    def update_Hessian(self,mode='BFGS'):
-        #print("In update bfgsp")
-        ''' mode 1 is BFGS, mode 2 is Bofill'''
-        #assert mode==1 or mode==2, "no update implemented with that mode"
-        self.newHess-=1
-
-        # do this even if mode==2
-        change = self.update_bfgsp()
-        self.Hintp += change
-        if self.print_level==2:
-            print "Hintp"
-            print self.Hintp
-
-        if mode=='BFGS':
-            self.Hint=self.Hintp_to_Hint()
-        if mode=='BOFILL':
-            change=self.update_bofill()
-            self.Hint+=change
-            self.Hinv=np.linalg.inv(self.Hint)
-
     def orthogonalize(self,vecs):
         basis=np.zeros_like(vecs)
         basis[-1,:] = vecs[-1,:] # orthogonalizes with respect to the last
@@ -1000,7 +965,6 @@ class Base_DLC(object,Bmat,Utils,ICoords):
                 tmp = w/np.linalg.norm(w)
                 basis[i,:]=tmp
         return basis
-
 
     def form_CI_DLC(self,constraints=None):
         self.form_unconstrained_DLC()
@@ -1047,39 +1011,47 @@ class Base_DLC(object,Bmat,Utils,ICoords):
         ''' 
         Evaluates the energy and gradient at a point q.
         But resets the coords back to q after updating.
+        returns only the gradqprim and qprim in the 
+        non-constraint region (n).
         '''
 
         if (self.q!=q).any():
             # stash q
-            qp = self.q.copy()
+            coordp = self.coords.copy()
             dq = q-self.q
+            # this updates the geom 
             self.ic_to_xyz_opt(dq)
-
         fx =self.PES.get_energy(self.geom)
         grad = self.PES.get_gradient(self.geom)
         gradq = self.grad_to_q(grad)
 
-        # primitive values
-        qprim1 = self.primitive_internal_values()
+        # primitive values --  why doesn't this work?
+        #qprim1 = np.dot(np.transpose(self.Ut[:n]),self.q[:n])
+        #qprim1[self.BObj.nbonds:] *= 180./np.pi
         #print "qprim1"
-        #print qprim1
+        #print qprim1[:self.BObj.nbonds].T
+        #print qprim1[self.BObj.nbonds:self.AObj.nangles].T
+        #print qprim1[self.BObj.nbonds+self.AObj.nangles:].T
 
-        qprim = np.dot(np.transpose(self.Ut[:n]),q[:n])
-        #print qprim.T
-
-        qprim = np.reshape(qprim,(self.num_ics,1))
         gradqprim = np.dot(np.transpose(self.Ut[:n]),gradq[:n])
+        qprim = self.primitive_internal_values()
+        qprim = np.reshape(qprim,(self.num_ics,1))
+        #print "qprim"
+        ##print qprim.T
+        #print qprim[:self.BObj.nbonds].T
+        #print qprim[self.BObj.nbonds:self.AObj.nangles].T
+        #print qprim[self.BObj.nbonds+self.AObj.nangles:].T
 
         result = { 'fx': fx, 'g':gradq, 'qprim':qprim,'gradqprim':gradqprim}
 
-        #print "resetting q"
-        # reset q
+        # reset q 
         if (self.q!=q).any():
-            self.q = qp
+            self.coords = coordp
             self.update_ics()
+            self.bmatp=self.bmatp_create()
+            self.bmat_create()
+            self.PES.lot.hasRanForCurrentCoords=True
 
-        #return fx,self.gradq
-        #return fx,qprim,self.gradq,self.gradqprim
         return result
 
     def convert_primitive_to_DLC(self,prim):
@@ -1091,21 +1063,8 @@ class Base_DLC(object,Bmat,Utils,ICoords):
 
         # => update geometry <= #
         self.ic_to_xyz_opt(dq,quiet=True)
+        self.PES.lot.hasRanForCurrentCoords=True
 
-        # store internal values for update
-        self.pgradqprim = self.gradqprim.copy()
-        pqprim = self.qprim.copy()
-
-        #self.gradqprim = np.dot(np.transpose(self.Ut),g)
-        #qprim = self.primitive_internal_values()
-
-        self.gradqprim = proc_results['gradqprim']
-        self.qprim = proc_results['qprim']
-
-        self.dqprim = self.primitive_internal_difference(self.qprim,pqprim)
-        #dg = self.gradqprim - self.pgradqprim
-
-        self.geom = manage_xyz.np_to_xyz(self.geom,self.coords)
         self.geoms.append(self.geom)
         self.fx.append(proc_results['fx'])
         self.xnorm.append(xnorm)
@@ -1125,7 +1084,6 @@ class Base_DLC(object,Bmat,Utils,ICoords):
     def Hintp_to_Hint(self):
         tmp = np.dot(self.Ut,self.Hintp) #(nicd,numic)(num_ic,num_ic)
         return np.matmul(tmp,np.transpose(self.Ut)) #(nicd,numic)(numic,numic)
-
 
     # base
     def diagonalize_G(self,G):
