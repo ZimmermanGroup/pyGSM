@@ -67,6 +67,39 @@ class ICoords:
 
         return Bond_obj(bonds,nbonds,bondd)
 
+    def make_frags(self):
+        """ Currently only works for two fragments """
+
+        print(" making frags")
+        nfrags=0
+        frags=[]
+        frag1=[]
+        frag2=[]
+        for n,a in enumerate(ob.OBMolAtomIter(self.mol.OBMol)):
+            if self.xyzatom_bool[n]==False:
+                found=False
+                if n==0:
+                    frag1.append((0,n+1))
+                else:
+                    found=False
+                    for nbr in ob.OBAtomAtomIter(a):
+                        if (0,nbr.GetIndex()+1) in frag1:
+                            found=True
+                    if found==True:
+                        frag1.append((0,a.GetIndex()+1))
+                    if found==False:
+                        frag2.append((1,a.GetIndex()+1))
+
+        if not frag2:
+            nfrags=1
+        else:
+            nfrags=2
+        frags=frag1+frag2
+        for i in frags:
+            print(" atom[%i]: %i " % (i[1],i[0]))
+        print(" nfrags: %i" % (nfrags))
+        return nfrags,frags
+
     def make_angles(self):
         nangles=0
         angles=[]
