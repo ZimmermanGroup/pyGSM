@@ -13,12 +13,10 @@ class hybrid_ef_cg(base_optimizer):
     ''' Do eigenvector following in the IC region. Do  conjugate gradient in the 
     Cartesian region'''
 
-    def __init__(self):
-        self.initial_step = True
-        self.disp = 1000.
-        self.Ediff = 1000.
-        return
-
+    @staticmethod
+    def from_options(**kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return hybrid_ef_cg(hybrid_ef_cg.default_options().set_values(kwargs))
 
     def optimize(self,c_obj,params,opt_steps=3,micro_iterations=1,ictan=None):
         self.disp = 1000.

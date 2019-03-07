@@ -234,7 +234,6 @@ if __name__=='__main__':
     from dlc import DLC
     from eigenvector_follow import eigenvector_follow
     from _linesearch import backtrack,NoLineSearch
-    from opt_parameters import parameters
 
 
     #basis="sto-3g"

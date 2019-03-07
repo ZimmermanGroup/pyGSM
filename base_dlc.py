@@ -395,7 +395,7 @@ class Base_DLC(object,Bmat,Utils,ICoords):
             print self.q.T
         bmat = np.matmul(self.Ut,self.bmatp)
         bbt = np.matmul(bmat,np.transpose(bmat))
-        bbti = np.linalg.inv(bbt)
+        bbti = np.linalg.inv(bbt) #this is G in DLC
         self.bmatti= np.matmul(bbti,bmat)
         if self.print_level>2:
             print "bmatti"

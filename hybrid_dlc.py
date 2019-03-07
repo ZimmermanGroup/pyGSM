@@ -22,6 +22,52 @@ class Hybrid_DLC(Base_DLC):
             'PES':PES,
             }))
 
+    def opt_constraint(self,C):
+        """
+        This function takes a matrix of vectors wrtiten in the basis of ICs
+        same as U vectors, and returns a new normalized Ut with those vectors as 
+        basis vectors.
+        """
+        # normalize all constraints
+        Cn = preprocessing.normalize(C.T,norm='l2')
+
+        # orthogonalize 
+        Cn = self.orthogonalize(Cn) 
+
+        # write Cn in terms of C_U
+        dots = np.matmul(self.Ut,Cn.T)
+        C_U = np.matmul(self.Ut.T,dots)
+
+        # normalize C_U
+        try:
+            C_U = preprocessing.normalize(C_U.T,norm='l2')
+            C_U = self.orthogonalize(C_U) 
+            dots = np.matmul(C_U,np.transpose(C_U))
+        except:
+            print C
+            exit(-1)
+        #print C_U
+        #print "shape of overlaps is %s, shape of Ut is %s, shape of C_U is %s" %(np.shape(dots),np.shape(self.Ut),np.shape(C_U))
+
+        basis=np.zeros((self.nicd,self.num_ics),dtype=float)
+        for n,row in enumerate(C_U):
+            basis[self.nicd-len(C_U)+n,:] =row 
+        count=0
+        for v in self.Ut:
+            w = v - np.sum( np.dot(v,b)*b  for b in basis )
+            tmp = w/np.linalg.norm(w)
+            if (abs(w) > 1e-4).any():  
+                basis[count,:] =tmp
+                count +=1
+        self.Ut = np.array(basis)
+        if self.print_level>1:
+            print "printing Ut"
+            print self.Ut
+        #print "Check if Ut is orthonormal"
+        #print dots
+        dots = np.matmul(self.Ut,np.transpose(self.Ut))
+        assert (np.allclose(dots,np.eye(dots.shape[0],dtype=float))),"error in orthonormality"
+
     def get_nxyzics(self):
         '''
         This function gets the number of xyz ics,
@@ -175,7 +221,47 @@ class Hybrid_DLC(Base_DLC):
         #print "time for partial matrix diagonalization ",delta
 
         return total_eig,total_v
-        
+
+
+    def make_bonds(self):
+        bonds=[]
+        bondd=[]
+        nbonds=0
+        from _icoord import Bond_obj
+
+        startidx=1
+        for rescount,res in enumerate(ob.OBResidueIter(self.mol.OBMol)):
+            natoms_res = res.GetNumAtoms()
+            print "natoms_res", natoms_res
+            for i in range(startidx,startidx+natoms_res):
+                for j in range(startidx,i):
+                    a = self.getAtomicNum(i)
+                    b = self.getAtomicNum(j)
+                    MAX_BOND_DIST = (self.get_element_VDW(a) + self.get_element_VDW(b))/2.+0.2
+                    d = self.distance(i,j)
+                    if d<MAX_BOND_DIST:
+                        bonds.append((i,j))
+            startidx+= res.GetNumAtoms()
+
+        # need to specify to what residue to add bonds
+        #for bond in self.EXTRA_BONDS:
+        #    if bond in bonds or tuple(reversed(bond)) in bonds:
+        #        pass
+        #    else:
+        #        print "adding EXTRA bond ",bond
+        #        bonds.append(bond)
+
+        print bonds
+        for bond in bonds:
+            bondd.append(self.distance(bond[0],bond[1]))
+        nbonds = len(bonds)
+        print " number of bonds is %i" %nbonds
+        print " printing bonds"
+        for bond,bod in zip(bonds,bondd):
+            print "%s: %1.2f" %(bond, bod)
+
+        return Bond_obj(bonds,nbonds,bondd)
+
 
 if __name__ =='__main__':
     #filepath="r001.ttt_meh_oh_ff-solvated-dftb3-dyn1_000.pdb"

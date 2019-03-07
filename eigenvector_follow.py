@@ -37,6 +37,8 @@ class eigenvector_follow(base_optimizer):
             n =  c_obj.nicd_DLC-nconstraints 
             self.x_prim=np.zeros((c_obj.num_ics,1),dtype=float)
             self.g_prim=np.zeros((c_obj.num_ics,1),dtype=float)
+
+            self.g_prim_c=np.zeros((c_obj.num_ics,1),dtype=float)
         
         # Evaluate the function value and its gradient.
         proc_result = c_obj.proc_evaluate(x,n)
