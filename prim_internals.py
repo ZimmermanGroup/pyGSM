@@ -93,13 +93,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
                         self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
                         self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
-                        # Reference coordinates are given in Bohr.
-                        sel = coords.reshape(-1,3)[i,:] * ANGSTROM_TO_AU
+                        sel = coords.reshape(-1,3)[i,:] 
                         sel -= np.mean(sel, axis=0)
                         rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                        self.add(RotationA(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
-                        self.add(RotationB(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
-                        self.add(RotationC(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
+                        self.add(RotationA(i, coords, self.Rotators, w=rg))
+                        self.add(RotationB(i, coords, self.Rotators, w=rg))
+                        self.add(RotationC(i, coords, self.Rotators, w=rg))
                     else:
                         for j in i:
                             self.add(CartesianX(j, w=1.0))
@@ -113,13 +112,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
             self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
             self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
-            # Reference coordinates are given in Bohr.
-            sel = coords.reshape(-1,3)[i,:] * ANGSTROM_TO_AU
+            sel = coords.reshape(-1,3)[i,:] 
             sel -= np.mean(sel, axis=0)
             rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-            self.add(RotationA(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
-            self.add(RotationB(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
-            self.add(RotationC(i, coords * ANGSTROM_TO_AU, self.Rotators, w=rg))
+            self.add(RotationA(i, coords, self.Rotators, w=rg))
+            self.add(RotationB(i, coords, self.Rotators, w=rg))
+            self.add(RotationC(i, coords, self.Rotators, w=rg))
 
         # # Build a list of noncovalent distances
         # Add an internal coordinate for all interatomic distances
@@ -248,7 +246,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def makeConstraints(self, molecule, constraints, cvals=None):
         # Add the list of constraints. 
-        xyz = molecule.xyz.flatten() * ANGSTROM_TO_AU
+        xyz = molecule.xyz.flatten()
         if cvals is None:
             cvals=[]
             # If coordinates are provided instead of a constraint value, 
@@ -256,7 +254,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # If both are provided, then the coordinates are ignored.
             for c in constraints:
                 cvals.append(c.value(xyz))
-        print "Here cval",cvals
         if constraints is not None:
             if len(constraints) != len(cvals):
                 raise RuntimeError("List of constraints should be same length as constraint values")
@@ -495,7 +492,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 if np.abs(diff+2*np.pi) < np.abs(diff):
                     diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = 1./ANGSTROM_TO_AU
+                factor = 1.
             elif c.isAngular:
                 factor = 180.0/np.pi
             if np.abs(diff*factor) > maxdiff:
@@ -517,11 +514,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 if np.abs(diff+2*np.pi) < np.abs(diff):
                     diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = 1./ANGSTROM_TO_AU
+                factor = 1.
             elif c.isAngular:
                 factor = 180.0/np.pi
-            if np.abs(diff*factor) > thre:
-                out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f\n" % (str(c), current*factor, reference*factor, diff*factor))
+            #if np.abs(diff*factor) > thre:
+            out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f\n" % (str(c), current*factor, reference*factor, diff*factor))
         if len(out_lines) > 0:
             logger.info(header)
             logger.info('\n'.join(out_lines))
@@ -537,7 +534,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
             reference = self.cVals[ic]/w
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = 1./ANGSTROM_TO_AU
+                factor = 1.
             elif c.isAngular:
                 factor = 180.0/np.pi
             cNames.append(str(c))
@@ -548,7 +545,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         """
         Build a guess Hessian that roughly follows Schlegel's guidelines. 
         """
-        xyzs = coords.reshape(-1,3)*1./ANGSTROM_TO_AU
+        xyzs = coords.reshape(-1,3)
         Hdiag = []
         def covalent(a, b):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
@@ -557,7 +554,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         
         for ic in self.Internals:
             if type(ic) is Distance:
-                r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) * ANGSTROM_TO_AU
+                r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) 
                 elem1 = min(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
                 elem2 = max(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
                 A = 1.734

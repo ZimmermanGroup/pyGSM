@@ -8,6 +8,7 @@ from _math_utils import *
 import options
 from slots import *
 from molecule import Molecule 
+from nifty import click
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
@@ -28,13 +29,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.options = options
         constraints = options['constraints']
         cvals = options['cVals']
+        molecule = options['molecule']
         self.na = molecule.natoms
 
         # The DLC contains an instance of primitive internal coordinates.
         #self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
-        self.Prims = PrimitiveInternalCoordinates.from_options(options)
+        self.Prims = PrimitiveInternalCoordinates(options.copy())
 
-        xyz = molecule.xyz.flatten() * ang2bohr
+        xyz = molecule.xyz.flatten()
         self.build_dlc(xyz)
 
         # TODO
@@ -223,7 +225,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Gxc = multi_dot([Bmat.T, Gqc.T]).flatten()
         return Gxc
     
-    def build_dlc(self, xyz, vector_constraints=None):
+    def build_dlc(self, xyz, cVec=None):
         """
         Build the delocalized internal coordinates (DLCs) which are linear 
         combinations of the primitive internal coordinates. Each DLC is stored
@@ -242,11 +244,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Parameters
         ----------
         xyz     : np.ndarray
-                Flat array containing Cartesian coordinates in atomic units 
-        ictan   : np.ndarray
+                  Flat array containing Cartesian coordinates in atomic units 
+        cVec    : np.ndarray
                 Float array containing difference in primitive coordinates
         """
-        #TODO CRA (?)
 
         # Perform singular value decomposition
         click()
@@ -273,50 +274,77 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Vecs has number of rows equal to the number of primitives, and
         # number of columns equal to the number of delocalized internal coordinates.
         if self.haveConstraints():
+            assert cVec is None,"can't have vector constraint and cprim."
+            cVec=self.form_cVec_from_cPrims()
+            print cVec.T
+
+        if cVec is not None:
             click()
-            # print "Projecting out constraints...",
-            V = []
-            for ic, c in enumerate(self.Prims.cPrims):
-                # Look up the index of the primitive that is being constrained
-                iPrim = self.Prims.Internals.index(c)
-                # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
-                cVec = self.Vecs[iPrim, :]
-                cVec = np.array(cVec)
-                cVec /= np.linalg.norm(cVec)
-                # This is a "new DLC" that corresponds to the primitive that we are constraining
-                cProj = np.dot(self.Vecs,cVec.T)
-                cProj /= np.linalg.norm(cProj)
-                V.append(np.array(cProj).flatten())
-                # print c, cProj[iPrim]
             # V contains the constraint vectors on the left, and the original DLCs on the right
-
-
-            V = np.hstack((np.array(V).T, np.array(self.Vecs)))
+            V = np.hstack((cVec, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
-            # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
-            thre = 1e-6
-            while True:
-                U = []
-                for iv in range(V.shape[1]):
-                    v = V[:, iv].flatten()
-                    U.append(v.copy())
-                    for ui in U[:-1]:
-                        U[-1] -= ui * np.dot(ui, v)
-                    if np.linalg.norm(U[-1]) < thre:
-                        U = U[:-1]
-                        continue
-                    U[-1] /= np.linalg.norm(U[-1])
-                if len(U) > self.Vecs.shape[1]:
-                    thre *= 10
-                elif len(U) == self.Vecs.shape[1]:
-                    break
-                elif len(U) < self.Vecs.shape[1]:
-                    raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
+            self.Vecs = orthogonalize(V,cVec.shape[1])
             # print "Gram-Schmidt completed with thre=%.0e" % thre
-            self.Vecs = np.array(U).T
-            # Constrained DLCs are on the left of self.Vecs.
-            self.cDLC = [i for i in range(len(self.Prims.cPrims))]
 
+
+    def form_cVec_from_cPrims(self):
+        """ forms the constraint vector from self.cPrim -- not used in GSM"""
+        #CRA 3/2019 warning:
+        #I'm not sure how this works!!!
+        #multiple constraints appears to be problematic!!!
+        self.cDLC = [i for i in range(len(self.Prims.cPrims))]
+        #print "Projecting out constraints...",
+        #V=[]
+        for ic, c in enumerate(self.Prims.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Prims.Internals.index(c)
+            # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
+            cVec = self.Vecs[iPrim, :]
+            cVec = np.array(cVec)
+            cVec /= np.linalg.norm(cVec)
+            # This is a "new DLC" that corresponds to the primitive that we are constraining
+            cProj = np.dot(self.Vecs,cVec.T)
+            cProj /= np.linalg.norm(cProj)
+            #V.append(np.array(cProj).flatten())
+        V = cProj.reshape(-1,1)
+        return V
+
+    def form_Cvec_from_prim_Vecs(self,C):
+        """
+        This function takes a matrix of vectors wrtiten in the basis of primitives
+        and returns new vectors written in the DLC basis. 
+        
+        Parameters
+        ----------
+        C   :   np.ndarray
+                rectangular array containing column vectors of constraints. 
+                The constraints are orthogonalized wrt the first column. 
+        Returns
+        -------
+        cDLC:   np.ndarray
+                rectangular array containing column vectors of orthogonal 
+                constraints in DLC basis.
+        """
+
+        # normalize all constraints
+        Cn = preprocessing.normalize(C,norm='l2')
+
+        # orthogonalize
+        Cn = orthogonalize(Cn) 
+
+        # transform C into basis of DLC
+        cDLC = np.linalg.multidot([self.Vecs,self.Vecs.T,Cn])
+
+        # normalize C_U
+        try:
+            cDLC = preprocessing.normalize(cDLC,norm='l2')
+            cDLC = self.orthogonalize(cDLC) 
+            dots = np.matmul(C_U,np.transpose(cDLC))
+        except:
+            print cDLC
+            exit(-1)
+
+    
     def remove_TR(self, xyz):
         na = int(len(xyz)/3)
         alla = range(na)
@@ -438,27 +466,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Reset the reference geometries for calculating the orientational variables. """
         self.Prims.resetRotations(xyz)
 
-class CartesianCoordinates(PrimitiveInternalCoordinates):
-    """
-    Cartesian coordinate system, written as a kind of internal coordinate class.  
-    This one does not support constraints, because that requires adding some 
-    primitive internal coordinates.
-    """
-    def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
-        self.Internals = []
-        self.cPrims = []
-        self.cVals = []
-        self.elem = molecule.elem
-        for i in range(molecule.natoms):
-            self.add(CartesianX(i, w=1.0))
-            self.add(CartesianY(i, w=1.0))
-            self.add(CartesianZ(i, w=1.0))
-        if 'constraints' in kwargs and kwargs['constraints'] is not None:
-            raise RuntimeError('Do not use constraints with Cartesian coordinates')
-
-    def guess_hessian(self, xyz):
-        return 0.5*np.eye(len(xyz.flatten()))
 
 if __name__ =='__main__':
     M = Molecule('s1minima_with_h2o.pdb',fragments=True)
@@ -468,6 +475,13 @@ if __name__ =='__main__':
     print IC.cPrims
     print IC.cVals
     IC.printConstraints(M.xyz)
+    DLC = DelocalizedInternalCoordinates(IC.options.copy())
+
+    # dvec
+    #dvec = self.PES.get_coupling(self.geom)
+    #dgrad = self.PES.get_dgrad(self.geom)
+    #dvecq = self.grad_to_q(dvec)
+    #dgradq = self.grad_to_q(dgrad)
 
     #print(IC.Internals)
     ##print IC

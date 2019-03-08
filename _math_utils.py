@@ -98,3 +98,24 @@ def d_nucross(a, b):
     return np.dot(d_unit_vector(a), d_ncross(ev, b))
 ## End vector calculus functions
 
+def orthogonalize(vecs,numCvecs=0):
+    """
+    """
+    rows=vecs.shape[0]
+    cols=vecs.shape[1]
+    basis=np.zeros((rows,cols-numCvecs))
+
+    basis[:,0] = vecs[:,0] # orthogonalizes with respect to the first column
+    for i,v in enumerate(vecs.T):
+        w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
+        if (abs(w) > 1e-10).any():  
+            basis[:,i]=w/np.linalg.norm(w)
+    dots = np.matmul(basis.T,basis)
+    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
+        print "np.dot(b.T,b)"
+        print dots
+        raise RuntimeError("error in orthonormality")
+    return basis
+
+
+    # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
