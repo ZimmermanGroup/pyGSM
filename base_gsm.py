@@ -135,6 +135,13 @@ class Base_Method(object,Print,Analyze):
                           | |_) | |_| | |_| |___) | |  | |
                           | .__/ \__, |\____|____/|_|  |_|
                           |_|    |___/                    
+#==========================================================================#
+#| If this code has benefited your research, please support us by citing: |#
+#|                                                                        |# 
+#| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+#| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+#| http://dx.doi.org/10.1063/1.4952956                                    |#
+#==========================================================================#
                """
 
         print hello
