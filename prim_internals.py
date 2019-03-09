@@ -46,6 +46,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def makePrimitives(self, molecule, options):
         connect=options['connect']
         addcart=options['addcart']
+        addtr=options['addtr']
         molecule.build_topology()
         if 'resid' in molecule.Data.keys():
             frags = []
@@ -87,7 +88,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     self.add(CartesianX(i, w=1.0))
                     self.add(CartesianY(i, w=1.0))
                     self.add(CartesianZ(i, w=1.0))
-            else:
+            elif addtr:
                 for i in frags:
                     if len(i) >= 2:
                         self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
@@ -104,20 +105,24 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             self.add(CartesianX(j, w=1.0))
                             self.add(CartesianY(j, w=1.0))
                             self.add(CartesianZ(j, w=1.0))
+            else:
+                if len(frags)>1:
+                    raise RuntimeError("need someway to define the intermolecular interaction")
 
-        self.add_tr = False
-        if self.add_tr:
-            i = range(molecule.natoms)
-            print("adding translation")
-            self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
-            self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
-            self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
-            sel = coords.reshape(-1,3)[i,:] 
-            sel -= np.mean(sel, axis=0)
-            rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-            self.add(RotationA(i, coords, self.Rotators, w=rg))
-            self.add(RotationB(i, coords, self.Rotators, w=rg))
-            self.add(RotationC(i, coords, self.Rotators, w=rg))
+        # TODO CRA 3/2019 this should be removed
+        ##self.add_tr = False
+        ##if self.add_tr:
+        ##    i = range(molecule.natoms)
+        ##    print("adding translation")
+        ##    self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
+        ##    self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
+        ##    self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
+        ##    sel = coords.reshape(-1,3)[i,:] 
+        ##    sel -= np.mean(sel, axis=0)
+        ##    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+        ##    self.add(RotationA(i, coords, self.Rotators, w=rg))
+        ##    self.add(RotationB(i, coords, self.Rotators, w=rg))
+        ##    self.add(RotationC(i, coords, self.Rotators, w=rg))
 
         # # Build a list of noncovalent distances
         # Add an internal coordinate for all interatomic distances
@@ -159,6 +164,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 dots = [np.abs(np.dot(ei, nac)) for ei in np.eye(3)]
                                 # Functions for adding Cartesian coordinate
                                 # carts = [CartesianX, CartesianY, CartesianZ]
+                                print("warning, adding translation, did you mean this?")
                                 trans = [TranslationX, TranslationY, TranslationZ]
                                 w = np.array([-1.0, 2.0, -1.0])
                                 # Add two of the most perpendicular Cartesian coordinates
