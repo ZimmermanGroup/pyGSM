@@ -105,16 +105,29 @@ def orthogonalize(vecs,numCvecs=0):
     cols=vecs.shape[1]
     basis=np.zeros((rows,cols-numCvecs))
 
-    basis[:,0] = vecs[:,0] # orthogonalizes with respect to the first column
-    for i,v in enumerate(vecs.T):
+    for i in range(numCvecs):  # orthogonalize with respect to these
+        basis[:,i]= vecs[:,i]
+
+    count=0
+    for v in vecs.T:
         w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
-        if (abs(w) > 1e-10).any():  
-            basis[:,i]=w/np.linalg.norm(w)
-    dots = np.matmul(basis.T,basis)
-    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
-        print "np.dot(b.T,b)"
-        print dots
-        raise RuntimeError("error in orthonormality")
+        dots = [np.dot(v,b) for b in basis.T]
+        wnorm = np.linalg.norm(w)
+        if wnorm > 1e-6: # and (abs(w) > 1e-6).any():
+            try:
+                basis[:,count]=w/wnorm
+                count+=1
+            except:
+                print "this vector should be vanishing, exiting"
+                print "norm=",wnorm
+                print w
+                print count
+                exit(1)
+    #dots = np.matmul(basis.T,basis)
+    #if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
+    #    print "np.dot(b.T,b)"
+    #    print dots
+    #    raise RuntimeError("error in orthonormality")
     return basis
 
 
