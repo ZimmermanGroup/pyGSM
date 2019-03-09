@@ -14,7 +14,10 @@ import pybel as pb
 import os
 from pkg_resources import parse_version
 import manage_xyz
-
+import options
+from pes import PES
+from avg_pes import Avg_PES
+from penalty_pes import Penalty_PES
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,15 @@ def getAtomicSymbols(mol):
     atomic_nums = [ getAtomicNum(mol,i+1) for i in range(natoms) ]
     atomic_symbols = [ ELEMENT_TABLE.from_atomic_number(i).symbol for i in atomic_nums ] 
     return atomic_symbols
+
+def make_mol_from_coords(coords,atomic_symbols):
+    mol = ob.OBMol()
+    for s,xyz in zip(atomic_symbols,coords):
+        i = mol.NewAtom()
+        a = ELEMENT_TABLE.from_symbol(s).atomic_num
+        i.SetAtomicNum(a)
+        i.SetVector(xyz[0],xyz[1],xyz[2])
+    return pb.Molecule(mol)
 
 
 def AtomContact(xyz, pairs, box=None, displace=False):
@@ -154,64 +166,116 @@ except ImportError:
 
 """Specify a molecule by its atom composition, coordinates, charge
 and spin multiplicities.
-Also provide functionalities import and export into XYZ format"""
+"""
 class Molecule(object):
-    def __init__(self, fnm = None, ftype = None, xyz=None, atoms=None, charge=0, multiplicities=None,states=None,comment="", **kwargs):   
-        """
-        Create a Molecule object.
-        To avoid conversion, position and momentum are always stored in Bohrs ?
+    
+    @staticmethod
+    def default_options():
+        if hasattr(Molecule, '_default_options'): return Molecule._default_options.copy()
+        opt = options.Options() 
 
-        Args:
-        ----------
-        fnm :       str, optional
-                    File name to create the Molecule object from.  If provided,
-                    the file will be parsed and used to fill in the fields such as
-                    elem (elements), xyz (coordinates) and so on.  If ftype is not
-                    provided, will automatically try to determine file type from file
-                    extension.  If not provided, will create an empty object.
-        ftype :     str, optional
-                    File type, corresponding to an entry in the internal table of known
-                    file types.  Provide this if you have a nonstandard file extension
-                    or if you wish to force to invoke a particular parser.
+        opt.add_option(
+                key='fnm',
+                value=None,
+                required=False,
+                allowed_types=[str],
+                doc='File name to create the Molecule object from.  If provided,\
+                    the file will be parsed and used to fill in the fields such as \
+                    elem (elements), xyz (coordinates) and so on.  If ftype is not \
+                    provided, will automatically try to determine file type from file \
+                    extension.  If not provided, will create an empty object. ',
+                    )
+        opt.add_option(
+                key='ftype',
+                value=None,
+                required=False,
+                allowed_types=[str],
+                doc='filetype (optional) will attempt to read filetype if not given'
+                )
 
-        atoms:      Names of the atoms.
-        xyz:          2d array that stores the coordinates of each atom
-        charge:     Total charge of the molecule
-        states:     The states of the molecule 
-        multiplicities: Spin multiplicities of the molecule.  If this is None, then
-                      it will be assigned 1 or 2 depending on electron count.
-        comment:    A string that is saved on the molecule, used for
-                        descriptive purposes
-        """
+        opt.add_option(
+                key='atoms',
+                required=False,
+                allowed_types=[list],
+                doc='list of atomic symbols'
+                )
+
+        opt.add_option(
+                key='xyz',
+                required=False,
+                allowed_types=[np.ndarray],
+                doc='cartesian coordinates not including the atomic symbols'
+                )
+
+        opt.add_option(
+                key='geom',
+                doc='geometry including atomic symbols')
+
+        opt.add_option(
+                key='PES',
+                required=True,
+                allowed_types=[PES,Avg_PES,Penalty_PES],
+                doc='potential energy surface object to evaulate energies, gradients, etc.\
+                        pes is defined by charge, state, multiplicity,etc. '
+                )
+
+        opt.add_option(
+                key='Hessian',
+                value=None,
+                required=False,
+                doc='Hessian save file for doing optimization -- no particular format'
+                )
+
+        opt.add_option(
+                key='comment',
+                required=False,
+                value='',
+                doc='A string that is saved on the molecule, used for descriptive purposes'
+                )
+
+
+        Molecule._default_options = opt
+        return Molecule._default_options.copy()
+
+    @staticmethod
+    def from_options(**kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return Molecule(Molecule.default_options().set_values(kwargs))
+
+    def __init__(self,
+            options,
+            **kwargs
+            ):
 
         self.Data = {}
+        self.options=options
 
-        if fnm is not None:
-            if ftype is None:
+        if self.options['fnm'] is not None:
+            if self.options['ftype'] is None:
                 ## Try to determine from the file name using the extension.
-                ftype = os.path.splitext(fnm)[1][1:]
-            if not os.path.exists(fnm):
-                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % fnm)
+                self.options['ftype'] = os.path.splitext(self.options['fnm'])[1][1:]
+            if not os.path.exists(self.options['fnm']):
+                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.options['fnm'])
                 raise IOError
-
             # read the molecule and save info
-            mol=pb.readfile(ftype,fnm).next()
+            mol=pb.readfile(self.options['ftype'],self.options['fnm']).next()
             xyz = getAllCoords(mol)
             atoms =  getAtomicSymbols(mol)
+        elif self.options['geom'] is not None:
+            atoms=manage_xyz.get_atoms(self.options['geom'])
+            xyz=manage_xyz.xyz_to_np(self.options['geom'])
+            mol = make_mol_from_coords(xyz,atoms)
 
-            if ftype=="pdb":
-                resid=[]
-                #for res in ob.OBResidueIter(mol.OBMol):
-                for a in ob.OBMolAtomIter(mol.OBMol):
-                    res = a.GetResidue()
-                    resid.append(res.GetName())
-                self.resid = self.Data['resid'] = resid
+        resid=[]
+        for a in ob.OBMolAtomIter(mol.OBMol):
+            res = a.GetResidue()
+            resid.append(res.GetName())
+        self.resid = self.Data['resid'] = resid
 
-        # Perform all the sanity checks
+        # Perform all the sanity checks and cache some useful attributes
+        self.PES = self.options['PES']
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
-        if not isinstance(charge, int):
-            raise TypeError("Charge must be an integer")
 
         for a in atoms:
             if not isinstance(a, str):
@@ -224,49 +288,12 @@ class Molecule(object):
             raise ValueError("xyz must have shape natoms x 3")
         self.xyz = xyz.copy()
 
-        if multiplicities is None:
-            multiplicities = [1]
-            infer_multiplicity = True
-        else:
-            infer_multiplicity = False
-
-        for m in multiplicities:
-            if not isinstance(charge, int) or not isinstance(m, int):
-                raise TypeError("Charge and spin must be integers")
-            if m < 1:
-                raise ValueError("Spin multiplicity must be at least 1")
-
         self.elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
-        self.charge = charge
-        self.multiplicities = multiplicities
-        self.n_electrons = sum(self.atomic_num) - charge
 
-        if self.n_electrons < 0:
-            raise ValueError("Molecule has fewer than 0 electrons!!!")
-
-
-        for m in multiplicities:
-            if m > self.n_electrons + 1:
-                raise ValueError("Spin multiplicity too high.")
-
-            if (self.n_electrons + m + 1) % 2:
-                if infer_multiplicity:
-                    self.multiplicities = [2]
-                else:
-                    logger.info("Error constructing Molecule. "
-                                "Inconsistent charge/multiplicity")
-                    logger.info("  Charge: %d Mult: %d NEle: %d",
-                                charge, multiplicities, self.n_electrons)
-                    try:
-                        import ipdb
-                        ipdb.set_trace()
-                    except ImportError:
-                        pass
-                    raise ValueError("Inconsistent charge and multiplicity.")
-        if not isinstance(comment, basestring):
+        if not isinstance(self.options['comment'], basestring):
             raise TypeError("comment for a Molecule must be a string")
-        self.comment = comment
 
+        # build the topology for the molecule
         self.built_bonds = False
         ## Topology settings
         self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
@@ -277,6 +304,7 @@ class Molecule(object):
                              'radii' : kwargs.get('radii', {})}
 
 
+        logger.info("Molecule %s constructed.", repr(self))
         logger.debug("Molecule %s constructed.", repr(self))
 
     def copy(self, xyz=None):
@@ -704,13 +732,45 @@ class Molecule(object):
     def geometry(self):
         return manage_xyz.combine_atom_xyz(self.atoms,self.xyz)
 
-if __name__ =='__main__':
+    @property
+    def energy(self):
+        return self.PES.get_energy(self.xyz)
 
-    m = Molecule('s1minima_with_h2o.pdb',fragments=True)
+    @property
+    def gradient(self):
+        return self.PES.get_gradient(self.xyz)
+
+    @property
+    def derivative_coupling(self):
+        return self.PES.get_coupling(self.xyz)
+
+    @property
+    def difference_gradient(self):
+        return self.PES.get_dgrad(self.xyz)
+
+if __name__ =='__main__':
+    from molpro import Molpro
+
+    #m = Molecule('s1minima_with_h2o.pdb',fragments=True)
+    
+    nocc=11
+    nactive=2
+    filepath='examples/tests/fluoroethene.xyz'
+    geom=manage_xyz.read_xyz(filepath,scale=1.)
+
+    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G',do_coupling=True,nproc=4,geom=geom)
+    pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
+    pes = Avg_PES(pes1,pes2,lot=lot)
+    M = Molecule.from_options(geom=geom,PES=pes)
+
     #print m.atomic_num
     #print m.center_of_mass
     #print m.radius_of_gyration
-    m.build_bonds()
-    print(m.Data['bonds'])
-    m.build_topology()
+    M.build_bonds()
+    print(M.Data['bonds'])
+    M.build_topology()
+
+    print M.energy
+    print M.gradient
 

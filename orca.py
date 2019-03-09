@@ -88,7 +88,9 @@ class Orca(Lot):
             for i in self.states:
                 self.get_nelec(geom,i[0])
             self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False:
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         return self.getE(state,multiplicity)
 
@@ -102,7 +104,9 @@ class Orca(Lot):
             for i in self.states:
                 self.get_nelec(geom,i[0])
             self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False:
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         return self.getgrad(state,multiplicity)
 

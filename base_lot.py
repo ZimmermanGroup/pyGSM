@@ -15,7 +15,14 @@ class Lot(object):
 
         if hasattr(Lot, '_default_options'): return Lot._default_options.copy()
         opt = options.Options() 
-        
+
+        opt.add_option(
+                key='geom',
+                value=None,
+                required=True,
+                doc='geometry object required to get the atom names and initial coords'
+                )
+
         opt.add_option(
             key='states',
             value=[(1,0)],
@@ -104,6 +111,7 @@ class Lot(object):
         """ Constructor """
         self.options = options
         # Cache some useful atributes
+        self.geom=self.options['geom']
         self.states =self.options['states']
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']

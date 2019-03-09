@@ -76,7 +76,9 @@ class PyTC(Lot):
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     def get_gradient(self,geom,multiplicity,state):
-        if self.hasRanForCurrentCoords==False:
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getgrad(state,multiplicity)
 
@@ -85,7 +87,9 @@ class PyTC(Lot):
         return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
 
     def get_coupling(self,geom,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False:
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
 

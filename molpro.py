@@ -151,8 +151,10 @@ class Molpro(Lot):
     def getE(self,state,multiplicity):
         return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*KCAL_MOL_PER_AU
 
-    def get_energy(self,geom,multiplicity,state):
-        if self.hasRanForCurrentCoords==False:
+    def get_energy(self,coords,multiplicity,state):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getE(state,multiplicity)
 
@@ -160,8 +162,10 @@ class Molpro(Lot):
         tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
         return np.asarray(tmp)*ANGSTROM_TO_AU
 
-    def get_gradient(self,geom,multiplicity,state):
-        if self.hasRanForCurrentCoords==False:
+    def get_gradient(self,coords,multiplicity,state):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getgrad(state,multiplicity)
 
@@ -169,8 +173,10 @@ class Molpro(Lot):
         #TODO this could be better
         return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
 
-    def get_coupling(self,geom,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False:
+    def get_coupling(self,coords,multiplicity,state1,state2):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
 
