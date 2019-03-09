@@ -59,7 +59,7 @@ class InternalCoordinates(object):
                 value=False,
                 allowed_types=[bool],
                 doc="Add translation and rotation coordinates\
-                    use for DLC ,Don't use for TRIC.",
+                    use for TRIC.",
                 )
 
         opt.add_option(
@@ -98,6 +98,22 @@ class InternalCoordinates(object):
 
         self.options = options
         self.stored_wilsonB = OrderedDict()
+        connect=options['connect']
+        addcart=options['addcart']
+        addtr=options['addtr']
+
+        if addtr:
+            print(" Using TRIC")
+            if connect:
+                raise RuntimeError(" Intermolecular displacements are defined by translation and rotations! \
+                                    Don't add connect!")
+        elif addcart:
+            print(" Using HDLC")
+            if connect:
+                raise RuntimeError(" Intermolecular displacements are defined by cartesians! \
+                                    Don't add connect!")
+        else:
+            print(" Using DLC")
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -229,9 +245,9 @@ class InternalCoordinates(object):
         Ginv = self.GInverse(xyz)
         Bmat = self.wilsonB(xyz)
         # Internal coordinate gradient
-        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
-        Gq = multi_dot([Ginv, Bmat, gradx.T])
-        return Gq.flatten()
+        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
+        Gq = multi_dot([Ginv, Bmat, gradx])
+        return Gq
 
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
