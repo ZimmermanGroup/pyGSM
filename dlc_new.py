@@ -9,6 +9,7 @@ import options
 from slots import *
 from molecule import Molecule 
 from nifty import click
+from sklearn import preprocessing
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
@@ -35,16 +36,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # The DLC contains an instance of primitive internal coordinates.
         #self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.Prims = PrimitiveInternalCoordinates(options.copy())
-
         xyz = molecule.xyz.flatten()
-        self.build_dlc(xyz)
 
         # TODO
-        # it would be better if tr wasn't automatically added
-        # split up DLC,HDLC and TRIC functions in diff classes
-        remove_tr = False
-        if remove_tr:
-            self.remove_TR(xyz)
+        print self
+
+        self.build_dlc(xyz)
+
 
     def clearCache(self):
         super(DelocalizedInternalCoordinates, self).clearCache()
@@ -344,68 +342,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             print cDLC
             exit(-1)
 
-    
-    def remove_TR(self, xyz):
-        na = int(len(xyz)/3)
-        alla = range(na)
-        sel = xyz.reshape(-1,3)
-        TRPrims = []
-        TRPrims.append(TranslationX(alla, w=np.ones(na)/na))
-        TRPrims.append(TranslationY(alla, w=np.ones(na)/na))
-        TRPrims.append(TranslationZ(alla, w=np.ones(na)/na))
-        sel -= np.mean(sel, axis=0)
-        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-        TRPrims.append(RotationA(alla, xyz, self.Prims.Rotators, w=rg))
-        TRPrims.append(RotationB(alla, xyz, self.Prims.Rotators, w=rg))
-        TRPrims.append(RotationC(alla, xyz, self.Prims.Rotators, w=rg))
-        for prim in TRPrims:
-            if prim in self.Prims.Internals:
-                self.Prims.Internals.remove(prim)
-        self.Prims.Internals = TRPrims + self.Prims.Internals
-        self.build_dlc(xyz)
-        V = []
-        for iPrim in range(6):
-            # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
-            cVec = self.Vecs[iPrim, :]
-            cVec = np.array(cVec)
-            cVec /= np.linalg.norm(cVec)
-            # This is a "new DLC" that corresponds to the primitive that we are constraining
-            cProj = np.dot(self.Vecs,cVec.T)
-            cProj /= np.linalg.norm(cProj)
-            V.append(np.array(cProj).flatten())
-        # V contains the constraint vectors on the left, and the original DLCs on the right
-        V = np.hstack((np.array(V).T, np.array(self.Vecs)))
-        # Apply Gram-Schmidt to V, and produce U.
-        # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
-        thre = 1e-6
-        while True:
-            U = []
-            for iv in range(V.shape[1]):
-                v = V[:, iv].flatten()
-                U.append(v.copy())
-                for ui in U[:-1]:
-                    U[-1] -= ui * np.dot(ui, v)
-                if np.linalg.norm(U[-1]) < thre:
-                    U = U[:-1]
-                    continue
-                U[-1] /= np.linalg.norm(U[-1])
-            if len(U) > self.Vecs.shape[1]:
-                thre *= 10
-            elif len(U) == self.Vecs.shape[1]:
-                break
-            elif len(U) < self.Vecs.shape[1]:
-                raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
-        # print "Gram-Schmidt completed with thre=%.0e" % thre
-        self.Vecs = np.array(U).T
-        # Constrained DLCs are on the left of self.Vecs.
-        # for i, p in enumerate(self.Prims.Internals):
-        #     print "%20s" % p,
-        #     for j in range(self.Vecs.shape[1]):
-        #         print "% .1e" % self.Vecs[i,j],
-        #     print
-        self.Vecs = self.Vecs[:, 6:]
-        self.Internals = ["DLC %i" % (i+1) for i in range(self.Vecs.shape[1])]
-        # print "%i coordinates left after removing translation and rotation" % self.Vecs.shape[1]
+        return cVecs
 
     def __eq__(self, other):
         return self.Prims == other.Prims
