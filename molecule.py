@@ -277,6 +277,7 @@ class Molecule(object):
             res = a.GetResidue()
             resid.append(res.GetName())
         self.Data['resid'] = resid
+        self.resid = resid
 
         # Perform all the sanity checks and cache some useful attributes
         self.PES = self.Data['PES']
@@ -287,6 +288,7 @@ class Molecule(object):
             if not isinstance(a, str):
                 raise TypeError("atom symbols must be strings")
         self.Data['atoms'] = np.array(atoms, dtype=np.dtype('S2'))
+        self.atoms = self.Data['atoms']
 
         if type(xyz) is not np.ndarray:
             raise TypeError("xyz must be a numpy ndarray")
@@ -329,6 +331,7 @@ class Molecule(object):
             mol.xyz = xyz.reshape((-1, 3))
         else:
             mol.xyz = self.xyz.copy()
+            mol.atoms = self.atoms.copy()
 
         return mol
 

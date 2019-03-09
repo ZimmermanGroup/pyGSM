@@ -15,6 +15,8 @@ from units import *
 import sys
 import base_optimizer
 import eigenvector_follow
+from dlc_new import DelocalizedInternalCoordinates
+from molecule import Molecule
 
 class Base_Method(object,Print,Analyze):
 
@@ -29,23 +31,40 @@ class Base_Method(object,Print,Analyze):
         opt = options.Options() 
         
         opt.add_option(
-            key='ICoord1',
+            key='reactant',
             required=True,
-            allowed_types=[DLC],
-            doc='')
+            allowed_types=[Molecule],
+            doc='Molecule object as the initial reactant structure')
 
         opt.add_option(
-            key='ICoord2',
+            key='product',
             required=False,
-            allowed_types=[DLC],
-            doc='')
+            allowed_types=[Molecule],
+            doc='Molecule object for the product structure (not required for single-ended methods.')
 
         opt.add_option(
             key='nnodes',
             required=False,
             value=1,
             allowed_types=[int],
-            doc='number of string nodes')
+            #TODO I don't want nnodes to include the endpoints!
+            doc="number of string nodes"
+            )
+
+        opt.add_option(
+                key='optimizer',
+                required=True,
+                doc='Optimzer object  to use e.g. eigenvector_follow, conjugate_gradient,etc. \
+                        most of the default options are okay for here since GSM will change them anyway',
+                )
+
+        opt.add_option(
+                key='DLC',
+                required=True,
+                allowed_types=[DelocalizedInternalCoordinates],
+                doc='A DLC object to get coordinates. This is  uncoupled from molecule \
+                except when forming the primitives for double-ended strings, but this is accounted for.'
+                )
         
         opt.add_option(
             key='driving_coords',
@@ -70,7 +89,7 @@ class Base_Method(object,Print,Analyze):
             doc='Convergence threshold')
 
         opt.add_option(
-                key="last_node_fixed",
+                key="product_geom_fixed",
                 value=True,
                 required=False,
                 doc="Fix last node?"
@@ -80,14 +99,14 @@ class Base_Method(object,Print,Analyze):
                 key="growth_direction",
                 value=0,
                 required=False,
-                doc="how to grow string,0=Normal,1=from reactant,2=from product"
+                doc="how to grow string,0=Normal,1=from reactant"
                 )
 
         opt.add_option(
                 key="DQMAG_MAX",
                 value=0.8,
                 required=False,
-                doc="for SSM"
+                doc="max step along tangent direction for SSM"
                 )
         opt.add_option(
                 key="DQMAG_MIN",
@@ -100,14 +119,10 @@ class Base_Method(object,Print,Analyze):
                 key="BDIST_RATIO",
                 value=0.5,
                 required=False,
-                doc="bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
+                doc="SE-Crossing uses this \
+                        bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
                         to be considered grown.",
                         )
-        opt.add_option(
-                key='optimizer',
-                required=True,
-                doc='Optimzer object  to use e.g. eigenvector_follow, conjugate_gradient,etc.')
-
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
 
@@ -123,36 +138,14 @@ class Base_Method(object,Print,Analyze):
         """ Constructor """
         self.options = options
 
-        hello="""
-        __        __   _                            _        
-        \ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___  
-         \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \ 
-          \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
-           \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/ 
-                                        ____ ____  __  __ 
-                           _ __  _   _ / ___/ ___||  \/  |
-                          | '_ \| | | | |  _\___ \| |\/| |
-                          | |_) | |_| | |_| |___) | |  | |
-                          | .__/ \__, |\____|____/|_|  |_|
-                          |_|    |___/                    
-#==========================================================================#
-#| If this code has benefited your research, please support us by citing: |#
-#|                                                                        |# 
-#| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
-#| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
-#| http://dx.doi.org/10.1063/1.4952956                                    |#
-#==========================================================================#
-               """
-
-        print hello
-
+        self.print_msg()
 
         # Cache attributes
         self.nnodes = self.options['nnodes']
-        self.icoords = [0]*self.nnodes
-        self.icoords[0] = self.options['ICoord1']
+        self.nodes = [0]*self.nnodes
+        self.nodes[0] = self.options['reactant']
         self.driving_coords = self.options['driving_coords']
-        self.last_node_fixed = self.options['last_node_fixed']
+        self.product_geom_fixed = self.options['product_geom_fixed']
         self.growth_direction=self.options['growth_direction']
         self.isRestarted=False
         self.DQMAG_MAX=self.options['DQMAG_MAX']
@@ -161,8 +154,11 @@ class Base_Method(object,Print,Analyze):
 
         self.optimizer=[]
         optimizer = options['optimizer']
-        for count in xrange(self.nnodes):
-            self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
+        DLC = options['DLC']
+        print "############ printing primitive coordinates ########"
+        print DLC
+        #for count in xrange(self.nnodes):
+        #    self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
 
         # Set initial values
         self.nn = 2
@@ -176,7 +172,7 @@ class Base_Method(object,Print,Analyze):
         self.n0 = 0 # something to do with added nodes? "first node along current block"
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
-        self.rn3m6 = np.sqrt(3.*self.icoords[0].natoms-6.);
+        self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
         self.gaddmax = self.options['ADD_NODE_TOL']/self.rn3m6;
         print " gaddmax:",self.gaddmax
         self.ictan = [[]]*self.nnodes
@@ -229,30 +225,30 @@ class Base_Method(object,Print,Analyze):
 
         print "copying node and setting values"
         mol = DLC.make_mol_from_coords(coords[-1],atomic_symbols)
-        tmp=DLC(self.icoords[0].options.copy().set_values({
+        tmp=DLC(self.nodes[0].options.copy().set_values({
             'mol':mol,
             }))
 
         print "doing union"
-        self.icoords[0] = DLC.union_ic(self.icoords[0],tmp)
-        self.newic = DLC.copy_node(self.icoords[0],0,-1)
-        self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        self.icoords[0].gradrms=grmss[0]
+        self.nodes[0] = DLC.union_ic(self.nodes[0],tmp)
+        self.newic = DLC.copy_node(self.nodes[0],0,-1)
+        self.nodes[0].energy = self.nodes[0].V0 = self.nodes[0].PES.get_energy(self.nodes[0].geom)
+        self.nodes[0].gradrms=grmss[0]
 
-        print "initial energy is %3.4f" % self.icoords[0].energy
+        print "initial energy is %3.4f" % self.nodes[0].energy
         for struct in range(1,nstructs):
             if struct==nstructs-1:
-                self.icoords[struct] = DLC.copy_node(self.icoords[struct-1],struct,0)
+                self.nodes[struct] = DLC.copy_node(self.nodes[struct-1],struct,0)
             else:
-                self.icoords[struct] = DLC.copy_node(self.icoords[struct-1],struct,1)
-            self.icoords[struct].set_xyz(coords[struct])
-            self.icoords[struct].update_ics()
-            self.icoords[struct].setup()
-            self.icoords[struct].Hintp = self.icoords[struct].make_Hint()
-            self.icoords[struct].DMAX=0.05 #half of default value
-            self.icoords[struct].energy =self.icoords[struct].V0 = self.icoords[0].energy +energy[struct]
-            #self.icoords[struct].energy = self.icoords[struct].PES.get_energy(self.icoords[struct].geom)
-            self.icoords[struct].gradrms=grmss[struct]
+                self.nodes[struct] = DLC.copy_node(self.nodes[struct-1],struct,1)
+            self.nodes[struct].set_xyz(coords[struct])
+            self.nodes[struct].update_ics()
+            self.nodes[struct].setup()
+            self.nodes[struct].Hintp = self.nodes[struct].make_Hint()
+            self.nodes[struct].DMAX=0.05 #half of default value
+            self.nodes[struct].energy =self.nodes[struct].V0 = self.nodes[0].energy +energy[struct]
+            #self.nodes[struct].energy = self.nodes[struct].PES.get_energy(self.nodes[struct].geom)
+            self.nodes[struct].gradrms=grmss[struct]
 
         self.store_energies() 
         self.nnodes=self.nR=nstructs
@@ -268,9 +264,9 @@ class Base_Method(object,Print,Analyze):
         print
 
     def store_energies(self):
-        for i,ico in enumerate(self.icoords):
+        for i,ico in enumerate(self.nodes):
             if ico != 0:
-                self.energies[i] = ico.energy - self.icoords[0].energy
+                self.energies[i] = ico.energy - self.nodes[0].energy
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
         print "*********************************************************************"
@@ -293,7 +289,7 @@ class Base_Method(object,Print,Analyze):
             # => get TS node <=
             self.emaxp = self.emax
             self.TSnode = np.argmax(self.energies)
-            self.icoords[self.TSnode].isTSnode=True
+            self.nodes[self.TSnode].isTSnode=True
 
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
@@ -324,8 +320,8 @@ class Base_Method(object,Print,Analyze):
             # => set stage <= #
             fp = self.find_peaks(2)
             print " fp = ",fp
-            ts_cgradq=abs(self.icoords[self.TSnode].gradq[self.icoords[self.TSnode].nicd-1])
-            ts_gradrms=self.icoords[self.TSnode].gradrms
+            ts_cgradq=abs(self.nodes[self.TSnode].gradq[self.nodes[self.TSnode].nicd-1])
+            ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
             print " dE_iter ={:2.2f}".format(self.dE_iter)
             self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
@@ -359,25 +355,25 @@ class Base_Method(object,Print,Analyze):
         return
 
     def get_tangents_1(self,n0=0):
-        size_ic = self.icoords[0].num_ics
-        nbonds = self.icoords[0].BObj.nbonds
-        nangles = self.icoords[0].AObj.nangles
-        ntor = self.icoords[0].TObj.ntor
+        size_ic = self.nodes[0].num_ics
+        nbonds = self.nodes[0].BObj.nbonds
+        nangles = self.nodes[0].AObj.nangles
+        ntor = self.nodes[0].TObj.ntor
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
         ictan = [[]]*self.nnodes
         #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #print "getting tangent between %i %i" % (n,n-1)
-            assert self.icoords[n]!=0,"n is bad"
-            assert self.icoords[n-1]!=0,"n-1 is bad"
-            ictan[n] = DLC.tangent_1(self.icoords[n],self.icoords[n-1])
+            assert self.nodes[n]!=0,"n is bad"
+            assert self.nodes[n-1]!=0,"n-1 is bad"
+            ictan[n] = DLC.tangent_1(self.nodes[n],self.nodes[n-1])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
 
             ictan[n] /= np.linalg.norm(ictan[n])
 
-            self.newic.set_xyz(self.icoords[n].coords)
+            self.newic.set_xyz(self.nodes[n].coords)
             self.newic.update_ics()
             self.newic.bmatp = self.newic.bmatp_create()
             self.newic.bmatp_to_U()
@@ -405,10 +401,10 @@ class Base_Method(object,Print,Analyze):
 
     # for some reason this fxn doesn't work when called outside gsm
     def get_tangents_1e(self,n0=0):
-        size_ic = self.icoords[0].num_ics
-        nbonds = self.icoords[0].BObj.nbonds
-        nangles = self.icoords[0].AObj.nangles
-        ntor = self.icoords[0].TObj.ntor
+        size_ic = self.nodes[0].num_ics
+        nbonds = self.nodes[0].BObj.nbonds
+        nangles = self.nodes[0].AObj.nangles
+        ntor = self.nodes[0].TObj.ntor
         ictan0 = np.zeros((size_ic,1))
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes,self.nnodes))
@@ -459,14 +455,14 @@ class Base_Method(object,Print,Analyze):
                 t2 = np.zeros(size_ic)
 
                 for i in range(nbonds):
-                    t1[i] = self.icoords[intic_n].BObj.bondd[i] - self.icoords[newic_n].BObj.bondd[i]
-                    t2[i] = self.icoords[newic_n].BObj.bondd[i] - self.icoords[int2ic_n].BObj.bondd[i]
+                    t1[i] = self.nodes[intic_n].BObj.bondd[i] - self.nodes[newic_n].BObj.bondd[i]
+                    t2[i] = self.nodes[newic_n].BObj.bondd[i] - self.nodes[int2ic_n].BObj.bondd[i]
                 for i in range(nangles):
-                    t1[nbonds+i] = (self.icoords[intic_n].AObj.anglev[i] - self.icoords[newic_n].AObj.anglev[i])*np.pi/180.
-                    t2[nbonds+i] = (self.icoords[newic_n].AObj.anglev[i] - self.icoords[int2ic_n].AObj.anglev[i])*np.pi/180.
+                    t1[nbonds+i] = (self.nodes[intic_n].AObj.anglev[i] - self.nodes[newic_n].AObj.anglev[i])*np.pi/180.
+                    t2[nbonds+i] = (self.nodes[newic_n].AObj.anglev[i] - self.nodes[int2ic_n].AObj.anglev[i])*np.pi/180.
                 for i in range(ntor):
-                    tmp1 = (self.icoords[intic_n].TObj.torv[i] - self.icoords[newic_n].TObj.torv[i])*np.pi/180.
-                    tmp2 = (self.icoords[newic_n].TObj.torv[i] - self.icoords[int2ic_n].TObj.torv[i])*np.pi/180.
+                    tmp1 = (self.nodes[intic_n].TObj.torv[i] - self.nodes[newic_n].TObj.torv[i])*np.pi/180.
+                    tmp2 = (self.nodes[newic_n].TObj.torv[i] - self.nodes[int2ic_n].TObj.torv[i])*np.pi/180.
                     if tmp1 > np.pi:
                         tmp1 = -1*(2*np.pi-tmp1)
                     if tmp1 < -np.pi:
@@ -483,7 +479,7 @@ class Base_Method(object,Print,Analyze):
             
             dqmaga[n]=0.0
             ictan0 = np.reshape(np.copy(self.ictan[n]),(size_ic,1))
-            self.newic.set_xyz(self.icoords[newic_n].coords)
+            self.newic.set_xyz(self.nodes[newic_n].coords)
             self.newic.bmatp = self.newic.bmatp_create()
             self.newic.bmatp_to_U()
             self.newic.opt_constraint(ictan0)
@@ -516,16 +512,16 @@ class Base_Method(object,Print,Analyze):
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
-            if self.icoords[nlist[2*n+1]].print_level>1:
+            if self.nodes[nlist[2*n+1]].print_level>1:
                 print "forming space for", nlist[2*n+1]
 
             opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)  #TODO why is this here? 2/2019
-            self.icoords[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+            self.nodes[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
             
-            dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.icoords[nlist[2*n+1]].Ut[-1,:])
+            dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.nodes[nlist[2*n+1]].Ut[-1,:])
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
@@ -534,12 +530,12 @@ class Base_Method(object,Print,Analyze):
             for n in range(ncurrent):
                 print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
                 print "printing ictan[%i]" %nlist[2*n]       
-                for i in range(self.icoords[nlist[2*n]].BObj.nbonds):
+                for i in range(self.nodes[nlist[2*n]].BObj.nbonds):
                     print "%1.2f " % self.ictan[nlist[2*n]][i],
                 print 
-                for i in range(self.icoords[nlist[2*n]].BObj.nbonds,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds):
+                for i in range(self.nodes[nlist[2*n]].BObj.nbonds,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds):
                     print "%1.2f " % self.ictan[nlist[2*n]][i],
-                for i in range(self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].AObj.nangles,self.icoords[nlist[2*n]].AObj.nangles+self.icoords[nlist[2*n]].BObj.nbonds+self.icoords[nlist[2*n]].TObj.ntor):
+                for i in range(self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].AObj.nangles,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].TObj.ntor):
                     print "%1.2f " % self.ictan[nlist[2*n]][i],
                 print "\n"
 #           #     print np.transpose(ictan[nlist[2*n]])
@@ -573,7 +569,7 @@ class Base_Method(object,Print,Analyze):
             if self.check_if_grown(): 
                 break
             self.ic_reparam_g()
-        self.newic = DLC.copy_node(self.icoords[0],0,-1)
+        self.newic = DLC.copy_node(self.nodes[0],0,-1)
         return n
 
     def opt_steps(self,opt_steps):
@@ -581,25 +577,25 @@ class Base_Method(object,Print,Analyze):
         print "in opt_steps"
         # these can be put in a function
         for n in range(self.nnodes):
-            if self.icoords[n]!=0:
-                self.icoords[n].isTSnode=False
+            if self.nodes[n]!=0:
+                self.nodes[n].isTSnode=False
         fp=0
         if self.done_growing:
             fp = self.find_peaks(2)
         if fp>0:
             self.TSnode = np.argmax(self.energies)
-            self.icoords[self.TSnode].isTSnode=True
+            self.nodes[self.TSnode].isTSnode=True
 
         # this can be put in a function
         optlastnode=False
-        if self.last_node_fixed==False:
+        if self.product_geom_fixed==False:
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
                 optlastnode=True
-            if self.icoords[self.nnodes-1].gradrms>self.options['CONV_TOL']:
+            if self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
                 optlastnode=True
 
         for n in range(self.nnodes):
-            if self.icoords[n] != 0 and self.active[n]==True:
+            if self.nodes[n] != 0 and self.active[n]==True:
 
                 print "\n Optimizing node %i" % n
                 # => set opt type <= #
@@ -615,19 +611,19 @@ class Base_Method(object,Print,Analyze):
                     print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
-                self.icoords[n].energy = self.optimizer[n].optimize(
-                        c_obj=self.icoords[n],
-                        refE=self.icoords[0].V0,
+                self.nodes[n].energy = self.optimizer[n].optimize(
+                        c_obj=self.nodes[n],
+                        refE=self.nodes[0].V0,
                         opt_steps=opt_steps*exsteps,
                         ictan=self.ictan[n]
                         )
 
-            if optlastnode==True and n==self.nnodes-1 and not self.icoords[n].PES.lot.do_coupling:
+            if optlastnode==True and n==self.nnodes-1 and not self.nodes[n].PES.lot.do_coupling:
                 print " optimizing last node"
                 self.optimizer[n].options['opt_type']='UNCONSTRAINED'
-                self.icoords[n].energy = self.optimizer[n].optimize(
-                        c_obj=self.icoords[n],
-                        refE=self.icoords[0].V0,
+                self.nodes[n].energy = self.optimizer[n].optimize(
+                        c_obj=self.nodes[n],
+                        refE=self.nodes[0].V0,
                         opt_steps=opt_steps
                         )
 
@@ -678,13 +674,13 @@ class Base_Method(object,Print,Analyze):
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            self.icoords[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
-            if self.icoords[self.nR]==0:
+            self.nodes[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+            if self.nodes[self.nR]==0:
                 success= False
                 break
             print " getting energy for  node ",self.nR
-            self.icoords[self.nR].energy = self.icoords[self.nR].PES.get_energy(self.icoords[self.nR].geom)
-            print self.icoords[self.nR].energy-self.icoords[0].energy
+            self.nodes[self.nR].energy = self.nodes[self.nR].PES.get_energy(self.nodes[self.nR].geom)
+            print self.nodes[self.nR].energy-self.nodes[0].energy
             self.nn+=1
             self.nR+=1
             print " nn=%i,nR=%i" %(self.nn,self.nR)
@@ -698,25 +694,25 @@ class Base_Method(object,Print,Analyze):
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            #self.icoords[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
+            #self.nodes[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
             n1=self.nnodes-self.nP
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
-            self.icoords[-self.nP-1] = self.add_node(n1,n2,n3)
-            if self.icoords[-self.nP-1]==0:
+            self.nodes[-self.nP-1] = self.add_node(n1,n2,n3)
+            if self.nodes[-self.nP-1]==0:
                 success= False
                 break
             print " getting energy for  node ",self.nnodes-self.nP-1
-            self.icoords[-self.nP-1].energy = self.icoords[-self.nP-1].PES.get_energy(self.icoords[-self.nP-1].geom)
-            print self.icoords[-self.nP-1].energy-self.icoords[0].energy
+            self.nodes[-self.nP-1].energy = self.nodes[-self.nP-1].PES.get_energy(self.nodes[-self.nP-1].geom)
+            print self.nodes[-self.nP-1].energy-self.nodes[0].energy
             self.nn+=1
             self.nP+=1
             print " nn=%i,nP=%i" %(self.nn,self.nP)
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
-        num_ics = self.icoords[0].num_ics
-        len_d = self.icoords[0].nicd
+        num_ics = self.nodes[0].num_ics
+        len_d = self.nodes[0].nicd
         ictalloc = self.nnodes+1
         
         rpmove = np.zeros(ictalloc)
@@ -837,7 +833,7 @@ class Base_Method(object,Print,Analyze):
 
             for n in range(n0+1,self.nnodes-1):
                 #print "moving node %i %1.3f" % (n,rpmove[n])
-                self.newic.set_xyz(self.icoords[n].coords) 
+                self.newic.set_xyz(self.nodes[n].coords) 
                 self.newic.update_ics()
                 opt_type=self.set_opt_type(n,quiet=True)
 
@@ -851,8 +847,8 @@ class Base_Method(object,Print,Analyze):
 
                 self.newic.form_constrained_DLC(ictan[n])
                 self.newic.ic_to_xyz(dq)
-                self.icoords[n].set_xyz(self.newic.coords)
-                self.icoords[n].update_ics()
+                self.nodes[n].set_xyz(self.newic.coords)
+                self.nodes[n].update_ics()
 
                 #TODO might need to recalculate energy here for seam? 
 
@@ -863,7 +859,7 @@ class Base_Method(object,Print,Analyze):
         print "  disprms: {:1.3}\n".format(disprms)
 
     def ic_reparam_g(self,ic_reparam_steps=8,n0=0):  #see line 3863 of gstring.cpp
-        """size_ic = self.icoords[0].num_ics; len_d = self.icoords[0].nicd"""
+        """size_ic = self.nodes[0].num_ics; len_d = self.nodes[0].nicd"""
 
         #close_dist_fix(0) #done here in GString line 3427.
 
@@ -871,8 +867,8 @@ class Base_Method(object,Print,Analyze):
         #print '***************in ic_reparam_g********************'
         #print '**************************************************'
 
-        num_ics = self.icoords[0].num_ics
-        len_d = self.icoords[0].nicd
+        num_ics = self.nodes[0].num_ics
+        len_d = self.nodes[0].nicd
         
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
@@ -890,7 +886,7 @@ class Base_Method(object,Print,Analyze):
         for i in range(ic_reparam_steps):
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
-            if self.icoords[0].print_level>1:
+            if self.nodes[0].print_level>1:
                 if i==0:
                     print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
                 print " printing spacings dqmaga: "
@@ -907,7 +903,7 @@ class Base_Method(object,Print,Analyze):
                         rpart[n] = 1.0/(self.nn-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
                         rpart[n] = 1.0/(self.nn-2)
-                    if self.icoords[0].print_level>1:
+                    if self.nodes[0].print_level>1:
                         if i==0:
                             print " rpart: "
                             for n in range(1,self.nnodes):
@@ -943,7 +939,7 @@ class Base_Method(object,Print,Analyze):
 
             disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
-            if self.icoords[0].print_level>1:
+            if self.nodes[0].print_level>1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
                 print
@@ -954,16 +950,16 @@ class Base_Method(object,Print,Analyze):
 
             #TODO check how range is defined in gstring, uses n0...
             for n in range(n0+1,self.nnodes-1):
-                if isinstance(self.icoords[n],DLC):
+                if isinstance(self.nodes[n],DLC):
                     if rpmove[n] > 0:
     
-                        dq0 = np.zeros((self.icoords[n].nicd,1))
-                        self.icoords[n].form_constrained_DLC(self.ictan[n])
+                        dq0 = np.zeros((self.nodes[n].nicd,1))
+                        self.nodes[n].form_constrained_DLC(self.ictan[n])
 
-                        dq0[self.icoords[n].nicd-1] = rpmove[n]  # ictan is always last vector
-                        if self.icoords[0].print_level>1:
-                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.icoords[n].nicd-1]))
-                        self.icoords[n].ic_to_xyz(dq0)
+                        dq0[self.nodes[n].nicd-1] = rpmove[n]  # ictan is always last vector
+                        if self.nodes[0].print_level>1:
+                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.nodes[n].nicd-1]))
+                        self.nodes[n].ic_to_xyz(dq0)
                     else:
                         pass
         print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
@@ -978,10 +974,10 @@ class Base_Method(object,Print,Analyze):
         ''' Modifies Hessian using RP direction'''
 
         print "modifying Hessian with RP"
-        #self.icoords[en].form_constrained_DLC(self.ictan[en])
-        self.icoords[en].form_unconstrained_DLC()
+        #self.nodes[en].form_constrained_DLC(self.ictan[en])
+        self.nodes[en].form_unconstrained_DLC()
 
-        self.newic.set_xyz(self.icoords[en].coords)
+        self.newic.set_xyz(self.nodes[en].coords)
         self.newic.update_ics()
         self.newic.form_constrained_DLC(self.ictan[en])
         nicd = self.newic.nicd  #len
@@ -1000,14 +996,14 @@ class Base_Method(object,Print,Analyze):
         #print "tan0"
         #print tan0
 
-        self.newic.set_xyz(self.icoords[en-1].coords)
+        self.newic.set_xyz(self.nodes[en-1].coords)
         self.newic.bmatp_create()
         self.newic.bmat_create()
         qm1 = self.newic.q[nicd-1]
         #print "qm1 is %1.3f " %qm1
 
         if en+1<self.nnodes:
-            self.newic.set_xyz(self.icoords[en+1].coords)
+            self.newic.set_xyz(self.nodes[en+1].coords)
             self.newic.bmatp_create()
             self.newic.bmat_create()
             qp1 = self.newic.q[nicd-1]
@@ -1016,12 +1012,12 @@ class Base_Method(object,Print,Analyze):
 
         #print "qp1 is %1.3f" % qp1
 
-        if self.icoords[en].isTSnode:
+        if self.nodes[en].isTSnode:
             print " TS Hess init'd w/ existing Hintp"
 
-        self.newic.set_xyz(self.icoords[en].coords)
+        self.newic.set_xyz(self.nodes[en].coords)
         self.newic.form_unconstrained_DLC()
-        self.newic.Hintp=np.copy(self.icoords[en].Hintp)
+        self.newic.Hintp=np.copy(self.nodes[en].Hintp)
         self.newic.Hint = self.newic.Hintp_to_Hint()
 
         tan = np.dot(self.newic.Ut,tan0.T)  #(nicd,numic)(num_ic,1)=nicd,1 
@@ -1045,16 +1041,16 @@ class Base_Method(object,Print,Analyze):
         #print eig
        
         self.newic.Hint += (c-tHt)*ttt
-        #self.icoords[en].Hint = np.copy(self.newic.Hint)
+        #self.nodes[en].Hint = np.copy(self.newic.Hint)
         self.optimizer[en].Hint = np.copy(self.newic.Hint)
         #print "Hint"
         #with np.printoptions(threshold=np.inf):
-        #    print self.icoords[en].Hint
+        #    print self.nodes[en].Hint
         #    print self.optimizer[en].Hint
-        #print "shape of Hint is %s" % (np.shape(self.icoords[en].Hint),)
+        #print "shape of Hint is %s" % (np.shape(self.nodes[en].Hint),)
 
         #this can also work on non-TS nodes?
-        self.icoords[en].newHess = 2
+        self.nodes[en].newHess = 2
 
         if False:
             eigen,tmph = np.linalg.eigh(self.optimizer[en].Hint) #nicd,nicd
@@ -1069,13 +1065,13 @@ class Base_Method(object,Print,Analyze):
     def set_opt_type(self,n,quiet=False):
         #TODO
         opt_type='ICTAN' 
-        if self.climb and self.icoords[n].isTSnode==True:
+        if self.climb and self.nodes[n].isTSnode==True:
             opt_type='CLIMB'
-        if self.find and self.icoords[n].isTSnode==True:
+        if self.find and self.nodes[n].isTSnode==True:
             opt_type='TS'
-        if self.icoords[n].PES.lot.do_coupling==True:
+        if self.nodes[n].PES.lot.do_coupling==True:
             opt_type='SEAM'
-        if self.climb and self.icoords[n].isTSnode==True and opt_type=='SEAM':
+        if self.climb and self.nodes[n].isTSnode==True and opt_type=='SEAM':
             opt_type='TS-SEAM'
         if not quiet:
             print(" setting node %i opt_type to %s" %(n,opt_type))
@@ -1096,6 +1092,9 @@ class Base_Method(object,Print,Analyze):
         else:
             print("******** Turning off climbing image and exact TS search **********")
         print "*********************************************************************"
+   
+
+
 
 if __name__=='__main__':
     from qchem import QChem

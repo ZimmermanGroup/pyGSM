@@ -43,7 +43,7 @@ class InternalCoordinates(object):
                 value=False,
                 allowed_types=[bool],
                 doc="Connect the fragments/residues together with a minimum spanning bond,\
-                    use for DLC, Don't use for TRIC, (HDLC?).",
+                    use for DLC, Don't use for TRIC, or HDLC.",
                 )
 
         opt.add_option(
@@ -78,6 +78,13 @@ class InternalCoordinates(object):
                 )
 
         opt.add_option(
+                key='primitives',
+                value=None,
+                doc='This is a Primitive internal coordinates object -- can be used instead \
+                        of creating new primitive object'
+                )
+
+        opt.add_option(
                 key='print_level',
                 value=1,
                 required=False,
@@ -98,22 +105,6 @@ class InternalCoordinates(object):
 
         self.options = options
         self.stored_wilsonB = OrderedDict()
-        connect=options['connect']
-        addcart=options['addcart']
-        addtr=options['addtr']
-
-        if addtr:
-            print(" Using TRIC")
-            if connect:
-                raise RuntimeError(" Intermolecular displacements are defined by translation and rotations! \
-                                    Don't add connect!")
-        elif addcart:
-            print(" Using HDLC")
-            if connect:
-                raise RuntimeError(" Intermolecular displacements are defined by cartesians! \
-                                    Don't add connect!")
-        else:
-            print(" Using DLC")
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")

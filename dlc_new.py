@@ -35,14 +35,30 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # The DLC contains an instance of primitive internal coordinates.
         #self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
-        self.Prims = PrimitiveInternalCoordinates(options.copy())
-        xyz = molecule.xyz.flatten()
 
-        # TODO
-        print self
+        if self.options['primitives'] is None:
+            self.Prims = PrimitiveInternalCoordinates(options.copy())
+        else:
+            self.Prims=self.options['primitives']
+
+        xyz = molecule.xyz.flatten()
+        connect=options['connect']
+        addcart=options['addcart']
+        addtr=options['addtr']
+        if addtr:
+            print(" Using TRIC")
+            if connect:
+                raise RuntimeError(" Intermolecular displacements are defined by translation and rotations! \
+                                    Don't add connect!")
+        elif addcart:
+            print(" Using HDLC")
+            if connect:
+                raise RuntimeError(" Intermolecular displacements are defined by cartesians! \
+                                    Don't add connect!")
+        else:
+            print(" Using DLC")
 
         self.build_dlc(xyz)
-
 
     def clearCache(self):
         super(DelocalizedInternalCoordinates, self).clearCache()
@@ -56,6 +72,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         
     def join(self, other):
         return self.Prims.join(other.Prims)
+
+    @classmethod
+    def union(cls,DLC1,DLC2):
+        DLC1.Prims.join(DLC2.Prims)
+        DLC1.Prims.reorderPrimitives() # just for funsies
+        return cls(DLC1.options.copy().set_values({'primitives':DLC1.Prims}))
         
     def addConstraint(self, cPrim, cVal, xyz):
         self.Prims.addConstraint(cPrim, cVal, xyz)
@@ -274,7 +296,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if self.haveConstraints():
             assert cVec is None,"can't have vector constraint and cprim."
             cVec=self.form_cVec_from_cPrims()
-            print cVec.T
 
         if cVec is not None:
             click()
@@ -412,18 +433,45 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
 
 if __name__ =='__main__':
-    M = Molecule('s1minima_with_h2o.pdb',fragments=True)
-    objs = []
-    objs.append(Distance(0,1))
-    IC = PrimitiveInternalCoordinates.from_options(molecule=M,constraints=objs)
-    print IC.cPrims
-    print IC.cVals
-    IC.printConstraints(M.xyz)
+    from molpro import Molpro
+    from pes import PES
+    from avg_pes import Avg_PES
+
+    # molecule
+    M = Molecule('examples/tests/fluoroethene.xyz')
+    nocc=11
+    nactive=2
+    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G',do_coupling=True,nproc=4)
+    pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
+    pes = Avg_PES(pes1,pes2,lot=lot)
+
+
+    #M = Molecule('s1minima_with_h2o.pdb',fragments=True)
+    #lot = QChem.from_options(states=[(1,0)],lot_inp_file='qstart',nproc=4)
+    #pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+
+    constraints = []
+    #constraints.append(Distance(0,1))
+    IC = PrimitiveInternalCoordinates.from_options(molecule=M,constraints=constraints)
+    #IC.printConstraints(M.xyz)
     DLC = DelocalizedInternalCoordinates(IC.options.copy())
 
-    # dvec
-    #dvec = self.PES.get_coupling(self.geom)
-    #dgrad = self.PES.get_dgrad(self.geom)
+
+    # branching plane
+    dvec = pes.get_coupling(M.geometry)
+    dgrad = pes.get_dgrad(M.geometry)
+    dvec_q = DLC.calcGrad(M.xyz,dvec)
+    dgrad_q = DLC.calcGrad(M.xyz,dgrad)
+    dvec_q_U = DLC.DLC_to_primitive(dvec_q)
+    dgrad_q_U = DLC.DLC_to_primitive(dgrad_q)
+    constraints = np.hstack((dgrad_q_U,dvec_q_U))
+    cVec = DLC.form_Cvec_from_prim_Vecs(constraints)
+
+    print "building"
+    DLC.build_dlc(M.xyz,cVec=cVec)
+
+
     #dvecq = self.grad_to_q(dvec)
     #dgradq = self.grad_to_q(dgrad)
 

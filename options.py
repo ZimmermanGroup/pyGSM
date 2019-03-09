@@ -123,6 +123,12 @@ class Options(object):
         if options is None: self.options = collections.OrderedDict()
         else: self.options = options
 
+    def keys(self):
+        keys=[]
+        for opt in self.options:
+            keys.append(opt)
+        return keys
+
     def add_option(
         self,
         **kwargs

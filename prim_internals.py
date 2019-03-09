@@ -253,14 +253,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def makeConstraints(self, molecule, constraints, cvals=None):
         # Add the list of constraints. 
         xyz = molecule.xyz.flatten()
-        if cvals is None:
+        if cvals is None and constraints is not None:
             cvals=[]
             # If coordinates are provided instead of a constraint value, 
             # then calculate the constraint value from the positions.
             # If both are provided, then the coordinates are ignored.
             for c in constraints:
                 cvals.append(c.value(xyz))
-        if constraints is not None:
             if len(constraints) != len(cvals):
                 raise RuntimeError("List of constraints should be same length as constraint values")
             for cons, cval in zip(constraints, cvals):
@@ -275,7 +274,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 typedict[str(type(Internal))] = 1
             else:
                 typedict[str(type(Internal))] += 1
-        if len(lines) > 100:
+        if len(lines) > 200:
             # Print only summary if too many
             lines = []
         for k, v in typedict.items():
@@ -320,7 +319,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Changed = False
         for i in other.Internals:
             if i not in self.Internals:
-                logger.info("Adding:  ", i)
+                #logger.info("Adding:  ", i)
+                #print("Adding ",i)
                 self.Internals.append(i)
                 Changed = True
         return Changed
