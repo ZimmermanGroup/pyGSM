@@ -93,20 +93,19 @@ class PyTC(Lot):
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
 
-    @staticmethod
-    def copy(PyTCA,node_id):
+    def copy(self,node_id):
         """ create a copy of this psiw object"""
-        do_coupling = PyTCA.do_coupling
-        obj = PyTC(PyTCA.options.copy().set_values({
+        do_coupling = self.do_coupling
+        obj = PyTC(self.options.copy().set_values({
             "node_id" :node_id,
             "do_coupling":do_coupling,
             }))
 
-        if PyTCA.psiw.__class__.__name__=="CASCI_LOT":
-            obj.psiw = psiw.CASCI_LOT(PyTCA.psiw.options.copy())
+        if self.psiw.__class__.__name__=="CASCI_LOT":
+            obj.psiw = psiw.CASCI_LOT(self.psiw.options.copy())
                     
-        elif PyTCA.psiw.__class__.__name__=="RHF_LOT": 
-            obj.psiw = RHF_LOT(PyTCA.psiw.options.copy())
+        elif self.psiw.__class__.__name__=="RHF_LOT": 
+            obj.psiw = RHF_LOT(self.psiw.options.copy())
                     
         return obj
 

@@ -180,17 +180,15 @@ class Molpro(Lot):
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
 
-    @staticmethod
-    def copy(MolproA,node_id):
+    def copy(self,node_id):
         """ create a copy of this lot object"""
-        # need to copy wavefunction file!
         print " creating copy, new node id =",node_id
-        print " old node id = ",MolproA.node_id
-        if node_id != MolproA.node_id:
-            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(MolproA.node_id,node_id)
+        print " old node id = ",self.node_id
+        if node_id != self.node_id:
+            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(self.node_id,node_id)
             print " ",cmd
             os.system(cmd)
-        return Molpro(MolproA.options.copy().set_values({
+        return Molpro(self.options.copy().set_values({
             "node_id" :node_id,
             }))
 

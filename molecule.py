@@ -307,17 +307,28 @@ class Molecule(object):
         logger.info("Molecule %s constructed.", repr(self))
         logger.debug("Molecule %s constructed.", repr(self))
 
-    def copy(self, xyz=None):
+    def copy(self, xyz=None,node_id=1):
         """Create a copy of this molecule"""
-        mol = type(self)(self.atoms, self.xyz,
-                         charge=self.charge, multiplicities=self.multiplicities)
-        for key, value in self.__dict__.iteritems():
-            mol.__dict__[key] = copy.copy(value)
+
+        lot = self.PES.lot.copy(node_id)
+        if self.PES.__class__.__name__=="Avg_PES":
+            PES = Avg_PES(self.PES.PES1,self.PES.PES2,lot)
+        else:
+            PES = PES(self.PES.options.copy().set_values({
+                "lot": lot,
+                }))
+        mol = type(self)(self.options.copy().set_values({"PES":PES}))
+
+        #CRA 3/2019 I don't know what this is
+        #for key, value in self.__dict__.iteritems():
+        #    mol.__dict__[key] = copy.copy(value)
+
         if xyz is not None:
             xyz = np.array(xyz, dtype=float)
             mol.xyz = xyz.reshape((-1, 3))
+        else:
+            mol.xyz = self.xyz.copy()
         return mol
-
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
@@ -495,8 +506,7 @@ class Molecule(object):
             atom_bonds[ii].append(jj)
             atom_bonds[jj].append(ii)
         bondlist = []
-        #print self.top_settings['fragment']
-        #print self.Data.keys()
+
         for i, bi in enumerate(atom_bonds):
             for j in bi:
                 if i == j: continue
@@ -771,6 +781,8 @@ if __name__ =='__main__':
     print(M.Data['bonds'])
     M.build_topology()
 
-    print M.energy
-    print M.gradient
+    M2 = M.copy(node_id=2)
+    print "done copying"
+    #print M.energy
+    #print M.gradient
 
