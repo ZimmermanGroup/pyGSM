@@ -1,5 +1,5 @@
 import numpy as np
-from nifty import logger
+from nifty import logger,commadash
 from rotate import get_expmap, get_expmap_der, is_linear
 
 class CartesianX(object):

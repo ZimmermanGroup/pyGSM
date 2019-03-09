@@ -307,7 +307,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         V = cProj.reshape(-1,1)
         return V
 
-    def form_Cvec_from_prim_Vecs(self,C):
+    def form_cVecs_from_prim_Vecs(self,C):
         """
         This function takes a matrix of vectors wrtiten in the basis of primitives
         and returns new vectors written in the DLC basis. 
@@ -319,7 +319,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 The constraints are orthogonalized wrt the first column. 
         Returns
         -------
-        cDLC:   np.ndarray
+        cVecs:   np.ndarray
                 rectangular array containing column vectors of orthogonal 
                 constraints in DLC basis.
         """
@@ -331,15 +331,18 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Cn = orthogonalize(Cn) 
 
         # transform C into basis of DLC
-        cDLC = np.linalg.multidot([self.Vecs,self.Vecs.T,Cn])
+        # CRA 3/2019 NOT SURE WHY THIS IS DONE
+        # couldn't Cn just be used?
+        cVecs = np.linalg.multi_dot([self.Vecs,self.Vecs.T,Cn])
 
         # normalize C_U
         try:
-            cDLC = preprocessing.normalize(cDLC,norm='l2')
-            cDLC = self.orthogonalize(cDLC) 
-            dots = np.matmul(C_U,np.transpose(cDLC))
+            cVecs = preprocessing.normalize(cVecs,norm='l2')
+            cVecs = orthogonalize(cVecs) 
+            dots = np.matmul(cVecs,np.transpose(cVecs))
         except:
-            print cDLC
+            print cVecs
+            print "error forming cVec"
             exit(-1)
 
         return cVecs
@@ -364,14 +367,18 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Calculate the DLCs given the Cartesian coordinates. """
         PrimVals = self.Prims.calculate(coords)
         Answer = np.dot(PrimVals, self.Vecs)
-        # To obtain the primitive coordinates from the delocalized internal coordinates,
-        # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
-        # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
-        # are simply the rows of the Vecs matrix.
         # print np.dot(np.array(self.Vecs[0,:]).flatten(), np.array(Answer).flatten())
         # print PrimVals[0]
         # raw_input()
         return np.array(Answer).flatten()
+
+    def DLC_to_primitive(self,vecq):
+        # To obtain the primitive coordinates from the delocalized internal coordinates,
+        # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
+        # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
+        # are simply the rows of the Vecs matrix.
+
+        return np.dot(self.Vecs,vecq)
 
     def derivatives(self, coords):
         """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
