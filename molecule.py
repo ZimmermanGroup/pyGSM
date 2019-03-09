@@ -13,6 +13,7 @@ import openbabel as ob
 import pybel as pb
 import os
 from pkg_resources import parse_version
+import manage_xyz
 
 
 logger = logging.getLogger(__name__)
@@ -277,7 +278,6 @@ class Molecule(object):
 
 
         logger.debug("Molecule %s constructed.", repr(self))
-
 
     def copy(self, xyz=None):
         """Create a copy of this molecule"""
@@ -699,6 +699,10 @@ class Molecule(object):
         xyz1 = self.xyz.copy()
         xyz1 -= com
         return np.sum( self.atomic_mass[i]*np.dot(x,x) for i,x in enumerate(xyz1))/M
+
+    @property
+    def geometry(self):
+        return manage_xyz.combine_atom_xyz(self.atoms,self.xyz)
 
 if __name__ =='__main__':
 
