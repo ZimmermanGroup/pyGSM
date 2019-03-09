@@ -196,7 +196,7 @@ class Molecule(object):
         opt.add_option(
                 key='atoms',
                 required=False,
-                allowed_types=[list],
+                allowed_types=[np.ndarray],
                 doc='list of atomic symbols'
                 )
 
@@ -227,6 +227,13 @@ class Molecule(object):
                 )
 
         opt.add_option(
+                key='resid',
+                value=None,
+                required=False,
+                doc='list of residue ids'
+                )
+
+        opt.add_option(
                 key='comment',
                 required=False,
                 value='',
@@ -247,50 +254,49 @@ class Molecule(object):
             **kwargs
             ):
 
-        self.Data = {}
-        self.options=options
+        self.Data=options
 
-        if self.options['fnm'] is not None:
-            if self.options['ftype'] is None:
+        if self.Data['fnm'] is not None:
+            if self.Data['ftype'] is None:
                 ## Try to determine from the file name using the extension.
-                self.options['ftype'] = os.path.splitext(self.options['fnm'])[1][1:]
-            if not os.path.exists(self.options['fnm']):
-                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.options['fnm'])
+                self.Data['ftype'] = os.path.splitext(self.Data['fnm'])[1][1:]
+            if not os.path.exists(self.Data['fnm']):
+                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.Data['fnm'])
                 raise IOError
             # read the molecule and save info
-            mol=pb.readfile(self.options['ftype'],self.options['fnm']).next()
+            mol=pb.readfile(self.Data['ftype'],self.Data['fnm']).next()
             xyz = getAllCoords(mol)
             atoms =  getAtomicSymbols(mol)
-        elif self.options['geom'] is not None:
-            atoms=manage_xyz.get_atoms(self.options['geom'])
-            xyz=manage_xyz.xyz_to_np(self.options['geom'])
+        elif self.Data['geom'] is not None:
+            atoms=manage_xyz.get_atoms(self.Data['geom'])
+            xyz=manage_xyz.xyz_to_np(self.Data['geom'])
             mol = make_mol_from_coords(xyz,atoms)
 
         resid=[]
         for a in ob.OBMolAtomIter(mol.OBMol):
             res = a.GetResidue()
             resid.append(res.GetName())
-        self.resid = self.Data['resid'] = resid
+        self.Data['resid'] = resid
 
         # Perform all the sanity checks and cache some useful attributes
-        self.PES = self.options['PES']
+        self.PES = self.Data['PES']
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
 
         for a in atoms:
             if not isinstance(a, str):
                 raise TypeError("atom symbols must be strings")
-        self.atoms = np.array(atoms, dtype=np.dtype('S2'))
+        self.Data['atoms'] = np.array(atoms, dtype=np.dtype('S2'))
 
         if type(xyz) is not np.ndarray:
             raise TypeError("xyz must be a numpy ndarray")
-        if xyz.shape != (self.atoms.shape[0], 3):
+        if xyz.shape != (self.Data['atoms'].shape[0], 3):
             raise ValueError("xyz must have shape natoms x 3")
         self.xyz = xyz.copy()
 
         self.elements = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
 
-        if not isinstance(self.options['comment'], basestring):
+        if not isinstance(self.Data['comment'], basestring):
             raise TypeError("comment for a Molecule must be a string")
 
         # build the topology for the molecule
@@ -311,13 +317,8 @@ class Molecule(object):
         """Create a copy of this molecule"""
 
         lot = self.PES.lot.copy(node_id)
-        if self.PES.__class__.__name__=="Avg_PES":
-            PES = Avg_PES(self.PES.PES1,self.PES.PES2,lot)
-        else:
-            PES = PES(self.PES.options.copy().set_values({
-                "lot": lot,
-                }))
-        mol = type(self)(self.options.copy().set_values({"PES":PES}))
+        PES = type(self.PES).create_pes_from(self.PES,lot)
+        mol = type(self)(self.Data.copy().set_values({"PES":PES}))
 
         #CRA 3/2019 I don't know what this is
         #for key, value in self.__dict__.iteritems():
@@ -328,12 +329,12 @@ class Molecule(object):
             mol.xyz = xyz.reshape((-1, 3))
         else:
             mol.xyz = self.xyz.copy()
+
         return mol
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
         raise NotImplementedError
-
 
     def reorder(self, new_order):
         """Reorder atoms in the molecule"""
@@ -518,7 +519,7 @@ class Molecule(object):
                 else:
                     bondlist.append((j, i))
         bondlist = sorted(list(set(bondlist)))
-        self.Data['bonds'] = sorted(list(set(bondlist)))
+        self.bonds = sorted(list(set(bondlist)))
         self.built_bonds = True
 
     def build_topology(self, force_bonds=True, **kwargs):
@@ -550,7 +551,7 @@ class Molecule(object):
             self.build_bonds()
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
-        for i, a in enumerate(self.atoms):
+        for i, a in enumerate(self.Data['atoms']):
             G.add_node(i)
             if parse_version(nx.__version__) >= parse_version('2.0'):
                 nx.set_node_attributes(G,{i:a}, name='e')
@@ -558,7 +559,7 @@ class Molecule(object):
             else:
                 nx.set_node_attributes(G,'e',{i:a})
                 nx.set_node_attributes(G,'x',{i:self.xyz[i]})
-        for (i, j) in self.Data['bonds']:
+        for (i, j) in self.bonds:
             G.add_edge(i, j)
         # The Topology is simply the NetworkX graph object.
         self.topology = G
@@ -675,7 +676,7 @@ class Molecule(object):
         """ Return a series of dihedral angles, given four atom indices numbered from zero. """
         phis = []
         if 'bonds' in self.Data:
-            if any(p not in self.Data['bonds'] for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
+            if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
                 logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
                 logger.warning("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
         else:
@@ -722,7 +723,7 @@ class Molecule(object):
     @property
     def natoms(self):
         """The number of atoms in the molecule"""
-        return len(self.atoms)
+        return len(self.Data['atoms'])
 
     @property
     def center_of_mass(self):
@@ -740,7 +741,7 @@ class Molecule(object):
 
     @property
     def geometry(self):
-        return manage_xyz.combine_atom_xyz(self.atoms,self.xyz)
+        return manage_xyz.combine_atom_xyz(self.Data['atoms'],self.xyz)
 
     @property
     def energy(self):
@@ -778,11 +779,16 @@ if __name__ =='__main__':
     #print m.center_of_mass
     #print m.radius_of_gyration
     M.build_bonds()
-    print(M.Data['bonds'])
+    print(M.bonds)
     M.build_topology()
+    print M.geometry
+    M.Data['Hessian'] = 10
+    print M.Data['Hessian']
 
     M2 = M.copy(node_id=2)
     print "done copying"
+    print M2.geometry
+    print M2.Data['Hessian']
     #print M.energy
     #print M.gradient
 
