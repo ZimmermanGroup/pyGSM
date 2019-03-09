@@ -47,6 +47,12 @@ class PES(object):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return PES(PES.default_options().set_values(kwargs))
 
+    @classmethod
+    def create_pes_from(cls,PES,lot):
+        return cls(PES.options.copy().set_values({
+            "lot":lot,
+            }))
+
     def __init__(self,
             options,
             ):

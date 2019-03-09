@@ -32,6 +32,10 @@ class Penalty_PES(PES):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return Penalty_PES(Penalty_PES.default_options().set_values(kwargs))
 
+    @classmethod
+    def create_pes_from(cls,PES,lot):
+        return cls(PES.PES1,PES.PES2,lot)
+
     def get_energy(self,geom):
         E1 = self.PES1.get_energy(geom)
         E2 = self.PES2.get_energy(geom)

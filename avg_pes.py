@@ -28,6 +28,10 @@ class Avg_PES(PES):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return Avg_PES(Avg_PES.default_options().set_values(kwargs))
 
+    @classmethod
+    def create_pes_from(cls,PES,lot):
+        return cls(PES.PES1,PES.PES2,lot)
+
     def get_energy(self,geom):
         if self.PES1.multiplicity==self.PES2.multiplicity:
             assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
