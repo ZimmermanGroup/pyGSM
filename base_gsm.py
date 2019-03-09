@@ -142,8 +142,9 @@ class Base_Method(object,Print,Analyze):
 
         # Cache attributes
         self.nnodes = self.options['nnodes']
-        self.nodes = [0]*self.nnodes
+        self.nodes = [None]*self.nnodes
         self.nodes[0] = self.options['reactant']
+        self.nodes[-1] = self.options['product']
         self.driving_coords = self.options['driving_coords']
         self.product_geom_fixed = self.options['product_geom_fixed']
         self.growth_direction=self.options['growth_direction']
@@ -152,13 +153,11 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
 
-        self.optimizer=[]
-        optimizer = options['optimizer']
-        DLC = options['DLC']
+        # these are operators they operate on coordinates
+        self.optimizer = options['optimizer']
+        self.DLC = options['DLC']
         print "############ printing primitive coordinates ########"
-        print DLC
-        #for count in xrange(self.nnodes):
-        #    self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
+        print self.DLC
 
         # Set initial values
         self.nn = 2
@@ -180,6 +179,7 @@ class Base_Method(object,Print,Analyze):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
+        self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
 
     def restart_string(self,xyzbase='restart'):#,nR,nP):
         self.growth_direction=0

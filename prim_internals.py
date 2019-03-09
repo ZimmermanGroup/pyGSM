@@ -8,6 +8,7 @@ import options
 from slots import *
 from molecule import Molecule 
 from units import *
+from elements import ElementData
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
 
@@ -555,14 +556,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Hdiag = []
         def covalent(a, b):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
-            rcov = Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[b])-1]
+            rcov = self.atoms[a].covalent_radius + self.atoms[b].covalent_radius
             return r/rcov < 1.2
         
         for ic in self.Internals:
             if type(ic) is Distance:
                 r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) 
-                elem1 = min(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
-                elem2 = max(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
+                elem1 = min(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
+                elem2 = max(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
                 A = 1.734
                 if elem1 < 3:
                     if elem2 < 3:
@@ -589,9 +590,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else:
                     a = ic.a[-1]
                     c = ic.c[0]
-                if min(Elements.index(self.elem[a]),
-                       Elements.index(self.elem[ic.b]),
-                       Elements.index(self.elem[c])) < 3:
+                if min(self.atoms[a].atomic_num,
+                        self.atoms[ic.b].atomic_num,
+                        self.atoms[c].atomic_num) < 3:
                     A = 0.160
                 else:
                     A = 0.250
@@ -601,7 +602,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     Hdiag.append(0.1)
             elif type(ic) in [Dihedral, MultiDihedral]:
                 r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
-                rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
+                rcov = self.atoms[ic.b].covalent_radius + self.atoms[ic.c].covalent_radius
                 # Hdiag.append(0.1)
                 Hdiag.append(0.023)
             elif type(ic) is OutOfPlane:

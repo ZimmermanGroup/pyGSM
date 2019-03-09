@@ -20,8 +20,29 @@ from avg_pes import Avg_PES
 from penalty_pes import Penalty_PES
 
 logger = logging.getLogger(__name__)
-
 ELEMENT_TABLE = elements.ElementData()
+
+class atom_dict(object):
+    __slots__ = ["symbol", "name", "atomic_num", "mass_amu", "covalent_radius", "vdw_radius", "bond_radius", "electronegativity", "max_bonds"]
+    #__slots__ = ['data']
+
+    def __init__(self,a):
+        
+        data = ELEMENT_TABLE.from_symbol(a)
+
+        self.symbol = getattr(data,'symbol')
+        self.name = getattr(data,'name')
+        self.atomic_num = getattr(data,'atomic_num')
+        self.mass_amu = getattr(data,'mass_amu')
+        self.covalent_radius = getattr(data,'covalent_radius')
+        self.vdw_radius = getattr(data,'vdw_radius')
+        self.bond_radius = getattr(data,'bond_radius')
+        self.electronegativity = getattr(data,'electronegativity')
+        self.max_bonds = getattr(data, 'max_bonds')
+
+
+    def __repr__(self):
+        return "symbol %s" % self.symbol
 
 # Utils to get things started
 def getAllCoords(mol):
@@ -213,7 +234,7 @@ class Molecule(object):
 
         opt.add_option(
                 key='PES',
-                required=True,
+                required=False,
                 allowed_types=[PES,Avg_PES,Penalty_PES],
                 doc='potential energy surface object to evaulate energies, gradients, etc.\
                         pes is defined by charge, state, multiplicity,etc. '
@@ -288,7 +309,10 @@ class Molecule(object):
             if not isinstance(a, str):
                 raise TypeError("atom symbols must be strings")
         self.Data['atoms'] = np.array(atoms, dtype=np.dtype('S2'))
-        self.atoms = self.Data['atoms']
+        #self.atoms = self.Data['atoms']
+
+        # create atom dict
+        self.atoms = [ atom_dict(a) for a in atoms ]
 
         if type(xyz) is not np.ndarray:
             raise TypeError("xyz must be a numpy ndarray")
@@ -303,7 +327,7 @@ class Molecule(object):
 
         # build the topology for the molecule
         self.built_bonds = False
-        ## Topology settings
+        ## Topology settings  -- CRA 3/2019  A lot of this is leftovers from Lee-Ping's code
         self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
                              'topframe' : kwargs.get('topframe', 0),
                              'Fac' : kwargs.get('Fac', 1.2),

@@ -18,39 +18,8 @@ class GSM(Base_Method):
             ):
 
         super(GSM,self).__init__(options)
-        exit()
+        self.nodes[-1].Hessian = self.DLC.Prims.guess_hessian(self.nodes[-1].xyz)
 
-        tmp = self.options['product']
-        tmp.PES.lot.node_id = self.nnodes-1
-        self.nodes[0] = DLC.union_ic(self.nodes[0],tmp)
-        self.nodes[0].Hintp = self.nodes[0].make_Hint()
-        print "after union"
-
-        if self.growth_direction !=1:
-            print "copying lot for end node"
-            lot1 = tmp.PES.lot.copy(
-                    tmp.PES.lot, 
-                    self.nnodes-1)
-        else: 
-            lot1 = self.nodes[0].PES.lot.copy(
-                    self.nodes[0].PES.lot, 
-                    self.nnodes-1)
-
-        if self.nodes[0].PES.__class__.__name__=="Avg_PES":
-            PES1 = Avg_PES(self.nodes[0].PES.PES1,self.nodes[0].PES.PES2,lot1)
-        else:
-            PES1 = PES(self.nodes[0].PES.options.copy().set_values({
-                "lot": lot1,
-                }))
-        self.nodes[-1] = DLC(self.nodes[0].options.copy().set_values(dict(
-            mol= tmp.mol,
-            PES=PES1,
-            )))
-        self.nodes[-1].Hintp = self.nodes[-1].make_Hint()
-
-        print "print levels at beginning are ",self.nodes[0].print_level
-        if self.growth_direction !=1:
-            print "print levels at beginning are ",self.nodes[-1].print_level
 
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         """
