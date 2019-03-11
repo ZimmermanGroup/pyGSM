@@ -43,7 +43,7 @@ def get_atoms(
 def write_xyz(
     filename, 
     geom, 
-    charge,
+    charge=0,
     scale=(1.0/units.ANGSTROM_TO_AU),
     ):
 

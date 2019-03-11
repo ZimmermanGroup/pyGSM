@@ -4,7 +4,6 @@ import sys
 
 import numpy as np
 
-from molecule import *
 from numpy.linalg import multi_dot
 from nifty import invert_svd, logger
 

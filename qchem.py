@@ -85,11 +85,11 @@ class QChem(Lot):
 
         return 
 
-    def get_energy(self,geom,multiplicity,state):
-        if self.has_nelectrons==False:
-            for i in self.states:
-                self.get_nelec(geom,i[0])
-            self.has_nelectrons==True
+    def get_energy(self,coords,multiplicity,state):
+        #if self.has_nelectrons==False:
+        #    for i in self.states:
+        #        self.get_nelec(geom,i[0])
+        #    self.has_nelectrons==True
 
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
@@ -116,11 +116,10 @@ class QChem(Lot):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
-    @staticmethod
-    def copy(QChemA,node_id):
-        """ create a copy of this lot object"""
-        return QChem(QChemA.options.copy().set_values({
-            "node_id" :node_id,
+    #@staticmethod
+    def copy(self,node_id):
+        return type(self)(self.options.copy().set_values({
+            "node_id":node_id,
             }))
 
     @staticmethod

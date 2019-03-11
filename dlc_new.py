@@ -7,9 +7,9 @@ import networkx as nx
 from _math_utils import *
 import options
 from slots import *
-from molecule import Molecule 
 from nifty import click
 from sklearn import preprocessing
+np.set_printoptions(precision=4,suppress=True)
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
@@ -30,35 +30,39 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.options = options
         constraints = options['constraints']
         cvals = options['cVals']
-        molecule = options['molecule']
-        self.na = molecule.natoms
+        self.atoms = options['atoms']
+        self.natoms = len(self.atoms)
 
         # The DLC contains an instance of primitive internal coordinates.
-        #self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
-
         if self.options['primitives'] is None:
+            print "making primitives from options!"
             self.Prims = PrimitiveInternalCoordinates(options.copy())
         else:
+            print "setting primitives from options!"
             self.Prims=self.options['primitives']
+            self.Prims.clearCache()
+        #print "in constructor",len(self.Prims.Internals)
 
-        xyz = molecule.xyz.flatten()
+        xyz = options['xyz']
+        xyz = xyz.flatten()
         connect=options['connect']
         addcart=options['addcart']
         addtr=options['addtr']
         if addtr:
-            print(" Using TRIC")
             if connect:
                 raise RuntimeError(" Intermolecular displacements are defined by translation and rotations! \
                                     Don't add connect!")
         elif addcart:
-            print(" Using HDLC")
             if connect:
                 raise RuntimeError(" Intermolecular displacements are defined by cartesians! \
                                     Don't add connect!")
         else:
-            print(" Using DLC")
+            pass
 
+        print "building"
         self.build_dlc(xyz)
+        print "vecs after build"
+        print self.Vecs
 
     def clearCache(self):
         super(DelocalizedInternalCoordinates, self).clearCache()
@@ -73,11 +77,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def join(self, other):
         return self.Prims.join(other.Prims)
 
-    @classmethod
-    def union(cls,DLC1,DLC2):
-        DLC1.Prims.join(DLC2.Prims)
-        DLC1.Prims.reorderPrimitives() # just for funsies
-        return cls(DLC1.options.copy().set_values({'primitives':DLC1.Prims}))
+    def union(self,DLC2):
+        self.Prims.join(DLC2.Prims)
+        self.Prims.reorderPrimitives() # just for funsies
+        self.Prims.clearCache() # this is important but why? CRA 3/2019
+        print "in union",len(self.Prims.Internals)
+        return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
+
+    def copy(self,xyz):
+        return type(self)(self.options.copy().set_values({'xyz':xyz}))
+        #return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
         
     def addConstraint(self, cPrim, cVal, xyz):
         self.Prims.addConstraint(cPrim, cVal, xyz)
@@ -272,6 +281,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Perform singular value decomposition
         click()
         G = self.Prims.GMatrix(xyz)
+        #print "shape G",G.shape
         time_G = click()
 
         L, Q = np.linalg.eigh(G)
@@ -285,10 +295,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 LargeIdx.append(ival)
-        Expect = 3*self.na
-        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        Expect = 3*self.natoms
+        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.natoms, Expect, LargeVals, len(L))
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
+        #print self.Vecs.shape
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
 
         # Vecs has number of rows equal to the number of primitives, and
@@ -300,9 +311,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if cVec is not None:
             click()
             # V contains the constraint vectors on the left, and the original DLCs on the right
+
+            dots = np.matmul(self.Vecs.T,self.Vecs)
+            print "appending cVecs to set of Vecs"
             V = np.hstack((cVec, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
             self.Vecs = orthogonalize(V,cVec.shape[1])
+            self.clearCache() # this is important but why? CRA 3/2019
             # print "Gram-Schmidt completed with thre=%.0e" % thre
 
 
@@ -342,14 +357,22 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         -------
         cVecs:   np.ndarray
                 rectangular array containing column vectors of orthogonal 
-                constraints in DLC basis.
+                constraints.
         """
 
         # normalize all constraints
-        Cn = preprocessing.normalize(C,norm='l2')
+        #print "C"
+        #print C.T
+        #print C.shape
+        #Cn = preprocessing.normalize(C.T,norm='l2')
+        #print "Cn"
+        #print Cn
+        #print Cn.shape
 
         # orthogonalize
-        Cn = orthogonalize(Cn) 
+        #print "######## => orthogonalizing C <= #########"
+        #Cn = orthogonalize(Cn.T)
+        Cn = orthogonalize(C)
 
         # transform C into basis of DLC
         # CRA 3/2019 NOT SURE WHY THIS IS DONE
@@ -358,9 +381,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # normalize C_U
         try:
-            cVecs = preprocessing.normalize(cVecs,norm='l2')
+            #cVecs = preprocessing.normalize(cVecs.T,norm='l2')
             cVecs = orthogonalize(cVecs) 
-            dots = np.matmul(cVecs,np.transpose(cVecs))
         except:
             print cVecs
             print "error forming cVec"
@@ -403,6 +425,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def derivatives(self, coords):
         """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
+        print "in Bmat dlc derivative"
         PrimDers = self.Prims.derivatives(coords)
         # The following code does the same as "tensordot"
         # print PrimDers.shape
@@ -436,6 +459,7 @@ if __name__ =='__main__':
     from molpro import Molpro
     from pes import PES
     from avg_pes import Avg_PES
+    from molecule import Molecule 
 
     # molecule
     M = Molecule('examples/tests/fluoroethene.xyz')
@@ -468,7 +492,7 @@ if __name__ =='__main__':
     constraints = np.hstack((dgrad_q_U,dvec_q_U))
     cVec = DLC.form_Cvec_from_prim_Vecs(constraints)
 
-    print "building"
+    #print "building"
     DLC.build_dlc(M.xyz,cVec=cVec)
 
 

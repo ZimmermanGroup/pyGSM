@@ -9,7 +9,8 @@ from nifty import click, commadash, ang2bohr, bohr2ang, logger
 from _math_utils import *
 import options
 from slots import *
-from molecule import Molecule 
+#from molecule import Molecule 
+
 
 ELEMENT_TABLE = elements.ElementData()
 
@@ -25,10 +26,16 @@ class InternalCoordinates(object):
         opt = options.Options() 
 
         opt.add_option(
-                key="molecule",
+                key="xyz",
                 required=True,
-                allowed_types=[Molecule],
-                doc='Molecule object'
+                doc='cartesian coordinates in angstrom'
+                )
+
+        opt.add_option(
+                key='atoms',
+                required=True,
+                #allowed_types=[],
+                doc='atom element named tuples/dictionary must be of type list[elements].'
                 )
 
         opt.add_option(
@@ -76,6 +83,13 @@ class InternalCoordinates(object):
                 allowed_types=[list],
                 doc='List of Distance,Angle,Torsion constraints values'
                 )
+
+        opt.add_option(
+                key='extra_kwargs',
+                value={},
+                doc='Extra keyword arguments -- THis is leftover from LPW code but \
+                        maybe useful in the future'
+                        )
 
         opt.add_option(
                 key='primitives',
@@ -275,46 +289,52 @@ class InternalCoordinates(object):
         # Function to exit from loop
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
-            return xyzsave.flatten()
+            #return xyzsave.flatten()
+            return xyzsave.reshape((-1,3))
         fail_counter = 0
         while True:
             microiter += 1
             Bmat = self.wilsonB(xyz1)
-            Ginv = self.GInverse(xyz1)
+
+            #CRA 3/2019
+            #Ginv = self.GInverse(xyz1)
+            Ginv = np.linalg.inv(np.dot(Bmat,Bmat.T))
             # Get new Cartesian coordinates
             dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1.T])
-            xyz2 = xyz1 + np.array(dxyz).flatten()
+            xyz2 = xyz1 + dxyz.reshape((-1,3))
             if microiter == 1:
                 xyzsave = xyz2.copy()
                 xyz_iter1 = xyz2.copy()
             # Calculate the actual change in internal coordinates
             dQ_actual = self.calcDiff(xyz2, xyz1)
+            print "dQ actual" 
+            print dQ_actual.T
             rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e" % (microiter, ndq, rmsd, damp))
+                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
@@ -330,3 +350,158 @@ class InternalCoordinates(object):
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
             
+   # # CRA  3/2019 these should be utils -- not part of the class
+   # def measure_distances(self, i, j):
+   #     distances = []
+   #     for s in range(self.ns):
+   #         x1 = self.xyzs[s][i]
+   #         x2 = self.xyzs[s][j]
+   #         distance = np.linalg.norm(x1-x2)
+   #         distances.append(distance)
+   #     return distances
+
+   # def measure_angles(self, i, j, k):
+   #     angles = []
+   #     for s in range(self.ns):
+   #         x1 = self.xyzs[s][i]
+   #         x2 = self.xyzs[s][j]
+   #         x3 = self.xyzs[s][k]
+   #         v1 = x1-x2
+   #         v2 = x3-x2
+   #         n = np.dot(v1,v2)/(np.linalg.norm(v1)*np.linalg.norm(v2))
+   #         angle = np.arccos(n)
+   #         angles.append(angle * 180/ np.pi)
+   #     return angles
+
+   # def measure_dihedrals(self, i, j, k, l):
+   #     """ Return a series of dihedral angles, given four atom indices numbered from zero. """
+   #     phis = []
+   #     if 'bonds' in self.Data:
+   #         if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
+   #             logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
+   #             logger.warning("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
+   #     else:
+   #         logger.warning("This molecule object doesn't have bonds defined, sanity-checking is off.")
+   #     for s in range(self.ns):
+   #         x4 = self.xyzs[s][l]
+   #         x3 = self.xyzs[s][k]
+   #         x2 = self.xyzs[s][j]
+   #         x1 = self.xyzs[s][i]
+   #         v1 = x2-x1
+   #         v2 = x3-x2
+   #         v3 = x4-x3
+   #         t1 = np.linalg.norm(v2)*np.dot(v1,np.cross(v2,v3))
+   #         t2 = np.dot(np.cross(v1,v2),np.cross(v2,v3))
+   #         phi = np.arctan2(t1,t2)
+   #         phis.append(phi * 180 / np.pi)
+   #         #phimod = phi*180/pi % 360
+   #         #phis.append(phimod)
+   #         #print phimod
+   #     return phis
+
+
+def AtomContact(xyz, pairs, box=None, displace=False):
+    """
+    Compute distances between pairs of atoms.
+
+    Parameters
+    ----------
+    xyz : np.ndarray
+        Nx3 array of atom positions
+    pairs : list
+        List of 2-tuples of atom indices
+    box : np.ndarray, optional
+        An array of three numbers (xyz box vectors).
+
+    Returns
+    -------
+    np.ndarray
+        A Npairs-length array of minimum image convention distances
+    np.ndarray (optional)
+        if displace=True, return a Npairsx3 array of displacement vectors
+    """
+    # Obtain atom selections for atom pairs
+    parray = np.array(pairs)
+    sel1 = parray[:,0]
+    sel2 = parray[:,1]
+    xyzpbc = xyz.copy()
+    # Minimum image convention: Place all atoms in the box
+    # [-xbox/2, +xbox/2); [-ybox/2, +ybox/2); [-zbox/2, +zbox/2)
+    if box is not None:
+        xbox = box[0]
+        ybox = box[1]
+        zbox = box[2]
+        while any(xyzpbc[:,0] < -0.5*xbox):
+            xyzpbc[:,0] += (xyzpbc[:,0] < -0.5*xbox)*xbox
+        while any(xyzpbc[:,1] < -0.5*ybox):
+            xyzpbc[:,1] += (xyzpbc[:,1] < -0.5*ybox)*ybox
+        while any(xyzpbc[:,2] < -0.5*zbox):
+            xyzpbc[:,2] += (xyzpbc[:,2] < -0.5*zbox)*zbox
+        while any(xyzpbc[:,0] >= 0.5*xbox):
+            xyzpbc[:,0] -= (xyzpbc[:,0] >= 0.5*xbox)*xbox
+        while any(xyzpbc[:,1] >= 0.5*ybox):
+            xyzpbc[:,1] -= (xyzpbc[:,1] >= 0.5*ybox)*ybox
+        while any(xyzpbc[:,2] >= 0.5*zbox):
+            xyzpbc[:,2] -= (xyzpbc[:,2] >= 0.5*zbox)*zbox
+    # Obtain atom selections for the pairs to be computed
+    # These are typically longer than N but shorter than N^2.
+    xyzsel1 = xyzpbc[sel1]
+    xyzsel2 = xyzpbc[sel2]
+    # Calculate xyz displacement
+    dxyz = xyzsel2-xyzsel1
+    # Apply minimum image convention to displacements
+    if box is not None:
+        dxyz[:,0] += (dxyz[:,0] < -0.5*xbox)*xbox
+        dxyz[:,1] += (dxyz[:,1] < -0.5*ybox)*ybox
+        dxyz[:,2] += (dxyz[:,2] < -0.5*zbox)*zbox
+        dxyz[:,0] -= (dxyz[:,0] >= 0.5*xbox)*xbox
+        dxyz[:,1] -= (dxyz[:,1] >= 0.5*ybox)*ybox
+        dxyz[:,2] -= (dxyz[:,2] >= 0.5*zbox)*zbox
+    dr2 = np.sum(dxyz**2,axis=1)
+    dr = np.sqrt(dr2)
+    if displace:
+        return dr, dxyz
+    else:
+        return dr
+
+#===========================#
+#|   Connectivity graph    |#
+#|  Good for doing simple  |#
+#|     topology tricks     |#
+#===========================#
+try:
+    import networkx as nx
+    class MyG(nx.Graph):
+        def __init__(self):
+            super(MyG,self).__init__()
+            self.Alive = True
+        def __eq__(self, other):
+            # This defines whether two MyG objects are "equal" to one another.
+            if not self.Alive:
+                return False
+            if not other.Alive:
+                return False
+            return nx.is_isomorphic(self,other,node_match=nodematch)
+        def __hash__(self):
+            """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
+            return 1
+        def L(self):
+            """ Return a list of the sorted atom numbers in this graph. """
+            return sorted(list(self.nodes()))
+        def AStr(self):
+            """ Return a string of atoms, which serves as a rudimentary 'fingerprint' : '99,100,103,151' . """
+            return ','.join(['%i' % i for i in self.L()])
+        def e(self):
+            """ Return an array of the elements.  For instance ['H' 'C' 'C' 'H']. """
+            elems = nx.get_node_attributes(self,'e')
+            return [elems[i] for i in self.L()]
+        def ef(self):
+            """ Create an Empirical Formula """
+            Formula = list(self.e())
+            return ''.join([('%s%i' % (k, Formula.count(k)) if Formula.count(k) > 1 else '%s' % k) for k in sorted(set(Formula))])
+        def x(self):
+            """ Get a list of the coordinates. """
+            coors = nx.get_node_attributes(self,'x')
+            return np.array([coors[i] for i in self.L()])
+except ImportError:
+    logger.warning("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")

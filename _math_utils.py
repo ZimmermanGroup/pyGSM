@@ -108,13 +108,15 @@ def orthogonalize(vecs,numCvecs=0):
     for i in range(numCvecs):  # orthogonalize with respect to these
         basis[:,i]= vecs[:,i]
 
-    count=0
+    count=numCvecs
     for v in vecs.T:
         w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
-        dots = [np.dot(v,b) for b in basis.T]
         wnorm = np.linalg.norm(w)
-        if wnorm > 1e-6: # and (abs(w) > 1e-6).any():
+        #if wnorm > 1e-6 and (abs(w) > 1e-6).any():
+        if (abs(w) > 1e-3).any() and wnorm > 1e-6:
             try:
+                #print "adding vector ",count
+                #print wnorm
                 basis[:,count]=w/wnorm
                 count+=1
             except:
@@ -123,11 +125,11 @@ def orthogonalize(vecs,numCvecs=0):
                 print w
                 print count
                 exit(1)
-    #dots = np.matmul(basis.T,basis)
-    #if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
-    #    print "np.dot(b.T,b)"
-    #    print dots
-    #    raise RuntimeError("error in orthonormality")
+    dots = np.matmul(basis.T,basis)
+    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
+        print "np.dot(b.T,b)"
+        print dots
+        raise RuntimeError("error in orthonormality")
     return basis
 
 

@@ -129,13 +129,14 @@ class Lot(object):
 
         if self.node_id == 0:
             if self.lot_inp_file == False:
-                print ' using {} processors'.format(self.nproc)
-                print ' ************LOT parameters:************'
-                print ' Basis      :',self.basis
-                print ' Functional :',self.functional
-                print ' Charge     :',self.charge
-                print ' States     :',self.states
-                print ' do_coupling:',self.do_coupling
+                pass
+                #print ' using {} processors'.format(self.nproc)
+                #print ' ************LOT parameters:************'
+                #print ' Basis      :',self.basis
+                #print ' Functional :',self.functional
+                #print ' Charge     :',self.charge
+                #print ' States     :',self.states
+                #print ' do_coupling:',self.do_coupling
             else:
                 with open(self.lot_inp_file) as lot_inp:
                     lot_inp_lines = lot_inp.readlines()
