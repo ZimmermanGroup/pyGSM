@@ -59,14 +59,6 @@ class Base_Method(object,Print,Analyze):
                 )
 
         opt.add_option(
-                key='DLC',
-                required=True,
-                allowed_types=[DelocalizedInternalCoordinates],
-                doc='A DLC object to get coordinates. This is  uncoupled from molecule \
-                except when forming the primitives for double-ended strings, but this is accounted for.'
-                )
-        
-        opt.add_option(
             key='driving_coords',
             required=False,
             value=[],
@@ -152,12 +144,7 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
-
-        # these are operators they operate on coordinates
         self.optimizer = options['optimizer']
-        self.DLC = options['DLC']
-        print "############ printing primitive coordinates ########"
-        print self.DLC
 
         # Set initial values
         self.nn = 2
@@ -179,7 +166,8 @@ class Base_Method(object,Print,Analyze):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
-        self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
+
+        #self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
 
     def restart_string(self,xyzbase='restart'):#,nR,nP):
         self.growth_direction=0
@@ -516,7 +504,12 @@ class Base_Method(object,Print,Analyze):
                 print "forming space for", nlist[2*n+1]
 
             opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)  #TODO why is this here? 2/2019
-            self.nodes[nlist[2*n+1]].form_constrained_DLC(self.ictan[nlist[2*n]])
+            
+            cVec = self.nodes[nlist[2*n+1]].form_Cvec_from_prim_Vecs(self.ictan[nlist[2*n]])
+
+            self.nodes[nlist[2*n+1]].get_coords(constraints=cVec)
+            exit()
+            #form_constrained_DLC(self.ictan[nlist[2*n]])
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
@@ -679,7 +672,6 @@ class Base_Method(object,Print,Analyze):
                 success= False
                 break
             print " getting energy for  node ",self.nR
-            self.nodes[self.nR].energy = self.nodes[self.nR].PES.get_energy(self.nodes[self.nR].geom)
             print self.nodes[self.nR].energy-self.nodes[0].energy
             self.nn+=1
             self.nR+=1
@@ -703,7 +695,6 @@ class Base_Method(object,Print,Analyze):
                 success= False
                 break
             print " getting energy for  node ",self.nnodes-self.nP-1
-            self.nodes[-self.nP-1].energy = self.nodes[-self.nP-1].PES.get_energy(self.nodes[-self.nP-1].geom)
             print self.nodes[-self.nP-1].energy-self.nodes[0].energy
             self.nn+=1
             self.nP+=1

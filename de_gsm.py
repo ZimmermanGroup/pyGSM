@@ -18,7 +18,21 @@ class GSM(Base_Method):
             ):
 
         super(GSM,self).__init__(options)
-        self.nodes[-1].Hessian = self.DLC.Prims.guess_hessian(self.nodes[-1].xyz)
+
+        print " Forming Union of primitive coordinates"
+        self.nodes[0].coord_obj = self.nodes[0].coord_obj.union(self.nodes[-1].coord_obj)
+        print " Done forming union"
+        self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
+
+        # this tests if the primitives are the same
+        assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
+
+        print " Primitive Internal Coordinates"
+        print self.nodes[0].primitive_internal_coordinates
+        print self.nodes[0].coord_obj
+
+        #self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
+        #self.nodes[-1].Hessian = self.DLC.Prims.guess_hessian(self.nodes[-1].xyz)
 
 
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
@@ -77,9 +91,29 @@ class GSM(Base_Method):
 
     def add_node(self,n1,n2,n3):
         print " adding node: %i between %i %i" %(n2,n1,n3)
-        # calcDiff using DLC class between node1.xyz and node2.xyz
+       
+        print "copying from node ",n1
+        ictan =  self.tangent(n3,n1)
+        Vecs = self.nodes[n1].get_coordinate_basis(constraints=ictan)
 
-        return DLC.add_node(self.nodes[n1],self.nodes[n3],self.nnodes,self.nn)
+        dq0 = np.zeros((1,Vecs.shape[1]))
+        dqmag = np.dot(Vecs[:,0],ictan)
+        print " dqmag: %1.3f"%dqmag
+
+        if self.nnodes-self.nn > 1:
+            dq0[0,0] = -dqmag/float(self.nnodes-self.nn)
+        else:
+            dq0[0,0] = -dqmag/2.0;
+        print " dq0[constraint]: %1.3f" % dq0[0,0]
+
+        #exit()
+
+        old_xyz = self.nodes[n1].xyz.copy()
+        new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
+
+        new_node =  self.nodes[n1].copy(xyz=new_xyz,new_node_id=n2)
+
+        return new_node
 
     def set_active(self,nR,nP):
         #print(" Here is active:",self.active)
@@ -105,7 +139,19 @@ class GSM(Base_Method):
 
     def tangent(self,n1,n2):
         #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
-        return DLC.tangent_1(self.nodes[n2],self.nodes[n1])
+        Q1 = self.nodes[n1].primitive_internal_coordinate_values 
+        Q2 = self.nodes[n2].primitive_internal_coordinate_values 
+        PMDiff = Q2-Q1
+        #for i in range(len(PMDiff)):
+        for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
+            if prim.isPeriodic:
+                Plus2Pi = PMDiff[k] + 2*np.pi
+                Minus2Pi = PMDiff[k] - 2*np.pi
+                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
+                    PMDiff[k] = Plus2Pi
+                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
+                    PMDiff[k] = Minus2Pi
+        return np.reshape(PMDiff,(-1,1))
 
     def check_if_grown(self):
         isDone=False
@@ -188,9 +234,8 @@ class GSM(Base_Method):
 
     def set_V0(self):
         self.nodes[0].gradrms = 0.
-        self.nodes[0].energy = self.nodes[0].V0 = self.nodes[0].PES.get_energy(self.nodes[0].geom)
+        self.nodes[0].V0 = self.nodes[0].energy
         if self.growth_direction!=1:
-            self.nodes[-1].energy = self.nodes[-1].PES.get_energy(self.nodes[-1].geom)
             self.nodes[-1].gradrms = 0.
             print " Energy of the end points are %4.3f, %4.3f" %(self.nodes[0].energy,self.nodes[-1].energy)
             print " relative E %4.3f, %4.3f" %(0.0,self.nodes[-1].energy-self.nodes[0].energy)
@@ -237,10 +282,12 @@ if __name__=='__main__':
     #basis="sto-3g"
     basis='6-31G'
     nproc=8
-    #functional='HF'
-    functional='B3LYP'
-    filepath1="examples/tests/butadiene_ethene.xyz"
-    filepath2="examples/tests/cyclohexene.xyz"
+    functional='HF'
+    #functional='B3LYP'
+    #filepath1="examples/tests/butadiene_ethene.xyz"
+    #filepath2="examples/tests/cyclohexene.xyz"
+    filepath1='reactant.xyz'
+    filepath2='product.xyz'
 
     geom1 = manage_xyz.read_xyz(filepath1)
     geom2 = manage_xyz.read_xyz(filepath2)
@@ -251,26 +298,31 @@ if __name__=='__main__':
     pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
     pes2 = PES(pes1.options.copy().set_values({'lot':lot2}))
 
-    M1 = Molecule.from_options(fnm=filepath1,PES=pes1)
-    M2 = Molecule.from_options(fnm=filepath2,PES=pes2)
-   
-    DLC1 = DelocalizedInternalCoordinates.from_options(molecule=M1)
-    DLC2 = DelocalizedInternalCoordinates.from_options(molecule=M2)
-    DLC_Union = DelocalizedInternalCoordinates.union(DLC1,DLC2)
+    M1 = Molecule.from_options(fnm=filepath1,PES=pes1,coordinate_type="DLC")
+    M2 = Molecule.from_options(fnm=filepath2,PES=pes2,coordinate_type="DLC")
 
     optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
 
-    gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer,DLC=DLC_Union)
-    exit()
+    gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer)
+    gsm.interpolate(7)
+
+    xyzs = []
+    for node in gsm.nodes:
+        if node != None:
+            geom = manage_xyz.np_to_xyz(geom1,node.xyz)
+            xyzs.append(geom)
+
+    manage_xyz.write_xyzs('with_DLC.xyz',xyzs,scale=1.)
+    #gsm.go_gsm(rtype=2,opt_steps=3)
 
 
-    gsm.restart_string()
-    gsm.climb=gsm.find=True
-    print gsm.nnodes
-    gsm.TSnode=4
-    gsm.get_tangents_1()
-    gsm.get_eigenv_finite(4)
-
-    #gsm.tscontinue=False
-    gsm.go_gsm(rtype=2,opt_steps=3)
-
+#    gsm.restart_string()
+#    gsm.climb=gsm.find=True
+#    print gsm.nnodes
+#    gsm.TSnode=4
+#    gsm.get_tangents_1()
+#    gsm.get_eigenv_finite(4)
+#
+#    #gsm.tscontinue=False
+#    gsm.go_gsm(rtype=2,opt_steps=3)
+#
