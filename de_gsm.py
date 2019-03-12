@@ -29,7 +29,6 @@ class GSM(Base_Method):
 
         print " Primitive Internal Coordinates"
         print self.nodes[0].primitive_internal_coordinates
-        print self.nodes[0].coord_obj
 
         #self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
         #self.nodes[-1].Hessian = self.DLC.Prims.guess_hessian(self.nodes[-1].xyz)
@@ -94,17 +93,17 @@ class GSM(Base_Method):
        
         print "copying from node ",n1
         ictan =  self.tangent(n3,n1)
-        Vecs = self.nodes[n1].get_coordinate_basis(constraints=ictan)
+        Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
 
-        dq0 = np.zeros((1,Vecs.shape[1]))
+        dq0 = np.zeros((Vecs.shape[1],1))
         dqmag = np.dot(Vecs[:,0],ictan)
         print " dqmag: %1.3f"%dqmag
 
         if self.nnodes-self.nn > 1:
-            dq0[0,0] = -dqmag/float(self.nnodes-self.nn)
+            dq0[0] = -dqmag/float(self.nnodes-self.nn)
         else:
-            dq0[0,0] = -dqmag/2.0;
-        print " dq0[constraint]: %1.3f" % dq0[0,0]
+            dq0[0] = -dqmag/2.0;
+        print " dq0[constraint]: %1.3f" % dq0[0]
 
         #exit()
 
@@ -127,7 +126,7 @@ class GSM(Base_Method):
             print(" setting active node to %i "%nR)
 
         for i in range(self.nnodes):
-            if self.nodes[i] !=0:
+            if self.nodes[i] != None:
                 self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
         self.active[nR] = True
         self.active[nP] = True
@@ -138,9 +137,10 @@ class GSM(Base_Method):
         #print(" Here is new active:",self.active)
 
     def tangent(self,n1,n2):
-        #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
-        Q1 = self.nodes[n1].primitive_internal_coordinate_values 
-        Q2 = self.nodes[n2].primitive_internal_coordinate_values 
+        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        # this could have been done easier but it is nicer to do it this way
+        Q1 = self.nodes[n1].primitive_internal_values 
+        Q2 = self.nodes[n2].primitive_internal_values 
         PMDiff = Q2-Q1
         #for i in range(len(PMDiff)):
         for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):

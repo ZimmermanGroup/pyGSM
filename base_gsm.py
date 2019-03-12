@@ -106,6 +106,12 @@ class Base_Method(object,Print,Analyze):
                 required=False,
                 doc=""
                 )
+
+        opt.add_option(
+                key='print_level',
+                value=1,
+                required=False
+                )
     
         opt.add_option(
                 key="BDIST_RATIO",
@@ -144,7 +150,11 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
-        self.optimizer = options['optimizer']
+        self.optimizer=[]
+        optimizer = options['optimizer']
+        for count in xrange(self.nnodes):
+            self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
+        self.print_level = options['print_level']
 
         # Set initial values
         self.nn = 2
@@ -161,7 +171,7 @@ class Base_Method(object,Print,Analyze):
         self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
         self.gaddmax = self.options['ADD_NODE_TOL']/self.rn3m6;
         print " gaddmax:",self.gaddmax
-        self.ictan = [[]]*self.nnodes
+        self.ictan = [None]*self.nnodes
         self.active = [False] * self.nnodes
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
@@ -487,7 +497,8 @@ class Base_Method(object,Print,Analyze):
     def get_tangents_1g(self):
         """
         Finds the tangents during the growth phase. 
-        Tangents referenced to left or right during growing phase
+        Tangents referenced to left or right during growing phase.
+        Also updates coordinates
         """
         #ictan = [[]]*self.nnodes
         dqmaga = [0.]*self.nnodes
@@ -500,42 +511,37 @@ class Base_Method(object,Print,Analyze):
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
-            if self.nodes[nlist[2*n+1]].print_level>1:
+            if self.print_level>1:
                 print "forming space for", nlist[2*n+1]
 
-            opt_type=self.set_opt_type(nlist[2*n+1],quiet=True)  #TODO why is this here? 2/2019
-            
-            cVec = self.nodes[nlist[2*n+1]].form_Cvec_from_prim_Vecs(self.ictan[nlist[2*n]])
-
-            self.nodes[nlist[2*n+1]].get_coords(constraints=cVec)
-            exit()
-            #form_constrained_DLC(self.ictan[nlist[2*n]])
+            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
             
-            dqmaga[nlist[2*n]] = np.dot(ictan0.T,self.nodes[nlist[2*n+1]].Ut[-1,:])
+            dqmaga[nlist[2*n]] = np.dot(Vecs[:,0],ictan0)
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
        
-        if False:
-            for n in range(ncurrent):
-                print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
-                print "printing ictan[%i]" %nlist[2*n]       
-                for i in range(self.nodes[nlist[2*n]].BObj.nbonds):
-                    print "%1.2f " % self.ictan[nlist[2*n]][i],
-                print 
-                for i in range(self.nodes[nlist[2*n]].BObj.nbonds,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds):
-                    print "%1.2f " % self.ictan[nlist[2*n]][i],
-                for i in range(self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].AObj.nangles,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].TObj.ntor):
-                    print "%1.2f " % self.ictan[nlist[2*n]][i],
-                print "\n"
-#           #     print np.transpose(ictan[nlist[2*n]])
+        #if False:
+        #    for n in range(ncurrent):
+        #        print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
+        #        print "printing ictan[%i]" %nlist[2*n]       
+        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds):
+        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
+        #        print 
+        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds):
+        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
+        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].AObj.nangles,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].TObj.ntor):
+        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
+        #        print "\n"
+#       #    #     print np.transpose(ictan[nlist[2*n]])
         for i,tan in enumerate(self.ictan):
             if np.all(tan==0.0):
                 print "tan %i of the tangents is 0" %i
                 raise RuntimeError
+
 
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
@@ -588,11 +594,12 @@ class Base_Method(object,Print,Analyze):
                 optlastnode=True
 
         for n in range(self.nnodes):
-            if self.nodes[n] != 0 and self.active[n]==True:
+            if self.nodes[n] != None and self.active[n]==True:
 
                 print "\n Optimizing node %i" % n
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
+
                 self.optimizer[n].options['opt_type']=opt_type
 
                 exsteps=1 #multiplier for nodes near the TS node
@@ -604,8 +611,8 @@ class Base_Method(object,Print,Analyze):
                     print " multiplying steps for node %i by %i" % (n,exsteps)
                 
                 # => do constrained optimization
-                self.nodes[n].energy = self.optimizer[n].optimize(
-                        c_obj=self.nodes[n],
+                self.optimizer[n].optimize(
+                        molecule=self.nodes[n],
                         refE=self.nodes[0].V0,
                         opt_steps=opt_steps*exsteps,
                         ictan=self.ictan[n]
