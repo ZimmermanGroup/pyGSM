@@ -66,7 +66,7 @@ class PES(object):
         #print ' PES object parameters:'
         #print ' Multiplicity:',self.multiplicity,'ad_idx:',self.ad_idx
 
-    def get_energy(self,geom):
+    def get_energy(self,xyz):
         #if self.checked_input == False:
         #    self.check_input(geom)
         fdE=0.
@@ -74,12 +74,12 @@ class PES(object):
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
-                coords = manage_xyz.xyz_to_np(geom)
-                diff = (coords[i[0]]- coords[i[1]])*ANGSTROM_TO_AU
+                diff = (xyz[i[0]]- xyz[i[1]])*ANGSTROM_TO_AU
                 d = np.linalg.norm(diff)
                 fdE +=  force*d*KCAL_MOL_PER_AU
-        return self.lot.get_energy(geom,self.multiplicity,self.ad_idx) +fdE
+        return self.lot.get_energy(xyz,self.multiplicity,self.ad_idx) +fdE
 
+    #TODO this needs to be fixed
     def get_finite_difference_hessian(self,geom):
         hess = np.zeros((len(geom)*3,len(geom)*3))
         I = np.eye(hess.shape[0])
@@ -88,6 +88,7 @@ class PES(object):
             hess[n] = np.squeeze(self.get_finite_difference_hessian_product(geom,row))
         return hess
 
+    #TODO this needs to be fixed
     def get_finite_difference_hessian_product(self,geom,direction):
         FD_STEP_LENGTH=0.001
         direction = direction/np.linalg.norm(direction)
@@ -107,15 +108,14 @@ class PES(object):
     
         return (grad_fwd-grad_bwd)/(FD_STEP_LENGTH*2)
     
-    def get_gradient(self,geom):
-        tmp =self.lot.get_gradient(geom,self.multiplicity,self.ad_idx)
+    def get_gradient(self,xyz):
+        tmp =self.lot.get_gradient(xyz,self.multiplicity,self.ad_idx)
         grad = np.reshape(tmp,(3*len(tmp),1))
         if self.FORCE is not None:
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
-                coords = manage_xyz.xyz_to_np(geom)
-                diff = (coords[i[0]]- coords[i[1]])*ANGSTROM_TO_AU
+                diff = (xyz[i[0]]- xyz[i[1]])*ANGSTROM_TO_AU
                 t = (force/d/2.)  # Hartree/Ang
                 savegrad = np.copy(grad)
                 sign=1

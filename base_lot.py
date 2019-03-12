@@ -3,6 +3,7 @@ import manage_xyz
 import numpy as np
 from units import *
 import elements 
+import os
 ELEMENT_TABLE = elements.ElementData()
 
 
@@ -17,9 +18,17 @@ class Lot(object):
         opt = options.Options() 
 
         opt.add_option(
+                key='fnm',
+                value=None,
+                required=False,
+                allowed_types=[str],
+                doc='File name to create the LOT object from. Only used if geom is none.'
+                )
+
+        opt.add_option(
                 key='geom',
                 value=None,
-                required=True,
+                required=False,
                 doc='geometry object required to get the atom names and initial coords'
                 )
 
@@ -110,8 +119,22 @@ class Lot(object):
             ):
         """ Constructor """
         self.options = options
+
         # Cache some useful atributes
         self.geom=self.options['geom']
+        if self.geom is not None:
+            print "initializing LOT from geom"
+        elif self.options['fnm'] is not None:
+                print "initializing LOT from file"
+                if not os.path.exists(self.options['fnm']):
+                    logger.error('Tried to create LOT object from a file that does not exist: %s\n' % self.options['fnm'])
+                    raise IOError
+                self.geom = manage_xyz.read_xyz(self.options['fnm'],scale=1.)
+                self.atoms = manage_xyz.get_atoms(self.geom)
+        else:
+            raise RuntimeError, "Need to initialize LOT object"
+
+        self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
