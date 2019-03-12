@@ -257,17 +257,17 @@ class InternalCoordinates(object):
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
             return None
-        xyz = xyz.flatten()
-        dQ = dQ.flatten()
+        #xyz = xyz.flatten()
+        #dQ = dQ.flatten()
         if np.linalg.norm(self.stored_xyz - xyz) < 1e-10:
             if np.linalg.norm(self.stored_dQ - dQ) < 1e-10:
                 return self.stored_newxyz
         return None
 
     def writeCache(self, xyz, dQ, newxyz):
-        xyz = xyz.flatten()
-        dQ = dQ.flatten()
-        newxyz = newxyz.flatten()
+        #xyz = xyz.flatten()
+        #dQ = dQ.flatten()
+        #newxyz = newxyz.flatten()
         self.stored_xyz = xyz.copy()
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
@@ -275,10 +275,10 @@ class InternalCoordinates(object):
     def newCartesian(self, xyz, dQ, verbose=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
-            # print "Returning cached result"
+            print "Returning cached result"
             return cached
         xyz1 = xyz.copy()
-        dQ1 = dQ.copy()
+        dQ1 = dQ.flatten()
         # Iterate until convergence:
         microiter = 0
         ndqs = []
@@ -309,15 +309,13 @@ class InternalCoordinates(object):
             #Ginv = self.GInverse(xyz1)
             Ginv = np.linalg.inv(np.dot(Bmat,Bmat.T))
             # Get new Cartesian coordinates
-            dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1.T])
+            dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1])
             xyz2 = xyz1 + dxyz.reshape((-1,3))
             if microiter == 1:
                 xyzsave = xyz2.copy()
                 xyz_iter1 = xyz2.copy()
             # Calculate the actual change in internal coordinates
             dQ_actual = self.calcDiff(xyz2, xyz1)
-            print "dQ actual" 
-            print dQ_actual.T
             rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:

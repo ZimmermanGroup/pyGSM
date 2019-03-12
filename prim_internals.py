@@ -432,6 +432,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def add(self, dof):
         if dof not in self.Internals:
             self.Internals.append(dof)
+            self.reorderPrimitives()
+            self.clearCache()  # CRA why is this necessary?
 
     def delete(self, dof):
         for ii in range(len(self.Internals))[::-1]:

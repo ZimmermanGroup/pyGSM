@@ -9,6 +9,7 @@ import options
 from slots import *
 from nifty import click
 from sklearn import preprocessing
+from numpy.linalg import multi_dot
 np.set_printoptions(precision=4,suppress=True)
 
     
@@ -59,10 +60,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         else:
             pass
 
-        print "building"
         self.build_dlc(xyz)
-        print "vecs after build"
-        print self.Vecs
+        #print "vecs after build"
+        #print self.Vecs
 
     def clearCache(self):
         super(DelocalizedInternalCoordinates, self).clearCache()
@@ -278,6 +278,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 Float array containing difference in primitive coordinates
         """
 
+        print "building dlc"
         # Perform singular value decomposition
         click()
         G = self.Prims.GMatrix(xyz)
@@ -360,18 +361,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 constraints.
         """
 
-        # normalize all constraints
-        #print "C"
-        #print C.T
-        #print C.shape
-        #Cn = preprocessing.normalize(C.T,norm='l2')
-        #print "Cn"
-        #print Cn
-        #print Cn.shape
-
         # orthogonalize
         #print "######## => orthogonalizing C <= #########"
-        #Cn = orthogonalize(Cn.T)
+        C = C.copy()
         Cn = orthogonalize(C)
 
         # transform C into basis of DLC
@@ -425,7 +417,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def derivatives(self, coords):
         """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
-        print "in Bmat dlc derivative"
         PrimDers = self.Prims.derivatives(coords)
         # The following code does the same as "tensordot"
         # print PrimDers.shape

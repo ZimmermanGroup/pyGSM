@@ -2,9 +2,8 @@ import numpy as np
 import manage_xyz
 from units import *
 from _linesearch import backtrack
-from opt_parameters import parameters
 from dlc import DLC
-from cartesian import Cartesian
+from cartesian import CartesianCoordinates
 import options
 
 
@@ -41,7 +40,7 @@ class base_optimizer(object):
         opt.add_option(
                 key='DMAX',
                 value=0.1,
-                doc='max step in DLC',
+                doc='max step size',
                 )
 
         opt.add_option(
@@ -51,8 +50,8 @@ class base_optimizer(object):
 
         opt.add_option(
                 key='Linesearch',
-                value=backtrack,
-                required=True,
+                value=NoLineSearch,
+                required=False,
                 doc='A function to do a linesearch e.g. bactrack,NoLineSearch, etc.'
                 )
 
@@ -86,6 +85,7 @@ class base_optimizer(object):
             ):
 
         self.options = options
+        self.Linesearch=self.options['Linesearch']
         
         # additional convergence criterion (default parameters for Q-Chem)
         self.conv_disp = 12e-4 #max atomic displacement
@@ -124,17 +124,17 @@ class base_optimizer(object):
             nconstraints=0
         return nconstraints
 
-    def check_inputs(self,c_obj,opt_type,ictan):
+    def check_inputs(self,molecule,opt_type,ictan):
         if opt_type in ['MECI','SEAM','TS-SEAM']:
-            assert c_obj.PES.lot.do_coupling==True,"Turn do_coupling on."                   
+            assert molecule.PES.lot.do_coupling==True,"Turn do_coupling on."                   
         elif opt_type not in ['MECI','SEAM','TS-SEAM']: 
-            assert c_obj.PES.lot.do_coupling==False,"Turn do_coupling off."                 
+            assert molecule.PES.lot.do_coupling==False,"Turn do_coupling off."                 
         if opt_type=="UCONSTRAINED":  
             assert ictan==None
         if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
             raise RuntimeError, "Need ictan"
         if opt_type in ['TS','TS-SEAM']:
-            assert c_obj.isTSnode,"only run climb and eigenvector follow on TSnode."  
+            assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
     def converged(self,g,n):
         # check if finished
@@ -175,40 +175,55 @@ class base_optimizer(object):
     
         return lambda1
 
-    def get_constraint_steps(self,c_obj,opt_type,g):
+    def get_constraint_vectors(self,molecule,opt_type,ictan=None):
+        nconstraints=self.get_nconstraints(opt_type)
+
+        if opt_type=="UNCONSTRAINED":
+            constraints=None
+        elif opt_type=='ICTAN':
+            constraints = ictan
+        else:
+            raise NotImplementedError
+        #TODO
+        #dgrad_U = #
+        #dvec_U = 
+        #constraints = np.zeros((len(dvecq_U),nconstraints),dtype=float)
+
+        return constraints
+
+
+    def get_constraint_steps(self,molecule,opt_type,g):
         nconstraints=self.get_nconstraints(opt_type)
         n=len(g)
 
-        # Need nicd_DLC defined ...TODO Raise Error for Cartesian
-        end = c_obj.nicd_DLC
+        #TODO Raise Error for CartesianCoordinates
 
         #return constraint_steps
         constraint_steps = np.zeros((n,1))
         # => ictan climb
         if opt_type=="CLIMB": 
-            constraint_steps[end-1]=self.walk_up(g,end-1)
+            constraint_steps[0]=self.walk_up(g,end-1)
         # => MECI
         elif opt_type=='MECI': 
-            constraint_steps[end-1] = self.dgrad_step(c_obj) #last vector is x
+            constraint_steps[0] = self.dgrad_step(molecule) #first vector is x
         elif opt_type=='SEAM':
-            constraint_steps[end-2]=self.dgrad_step(c_obj)
+            constraint_steps[1]=self.dgrad_step(molecule)
         # => seam climb
         elif opt_type=='TS-SEAM':
-            constraint_steps[end-2]=self.dgrad_step(c_obj)
-            constraint_steps[end-1]=self.walk_up(g,end-1)
+            constraint_steps[0]=self.walk_up(g,end-1)
+            constraint_steps[1]=self.dgrad_step(molecule)
 
         return constraint_steps
 
-    def dgrad_step(self,c_obj):
+    def dgrad_step(self,molecule):
         """ takes a linear step along dgrad"""
-        dgrad = c_obj.PES.get_dgrad(self.geom)
-        dgradq = c_obj.grad_to_q(dgrad)
-        norm_dg = np.linalg.norm(dgradq)
+
+        norm_dg = np.linalg.norm(molecule.difference_gradient)
         if self.options['print_level']>0:
             print " norm_dg is %1.4f" % norm_dg,
             print " dE is %1.4f" % self.PES.dE,
 
-        dq = -c_obj.PES.dE/KCAL_MOL_PER_AU/norm_dg 
+        dq = -molecule.dE/KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
             dq=-0.075
 
@@ -229,29 +244,29 @@ class base_optimizer(object):
 
         return dq
 
-    def walk_up_DNR(self,g,n):
-        SCALE =self.options['SCALEQN']
-        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess  # what to do about newHess?
-        if self.options['SCALEQN']>10.0: SCALE=10.0
-        
-        # convert to eigenvector basis
-        temph = self.Hint[:n,:n]
-        e,v_temp = np.linalg.eigh(temph)
-        v_temp = v_temp.T
-        gqe = np.dot(v_temp,g[:n])
-        
-        lambda1 = self.set_lambda1('NOT-TS',e) 
+    #def walk_up_DNR(self,g,n):
+    #    SCALE =self.options['SCALEQN']
+    #    if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess  # what to do about newHess?
+    #    if self.options['SCALEQN']>10.0: SCALE=10.0
+    #    
+    #    # convert to eigenvector basis
+    #    temph = self.Hint[:n,:n]
+    #    e,v_temp = np.linalg.eigh(temph)
+    #    v_temp = v_temp.T
+    #    gqe = np.dot(v_temp,g[:n])
+    #    
+    #    lambda1 = self.set_lambda1('NOT-TS',e) 
 
-        dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
-        dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
-        
-        # => Convert step back to DLC basis <= #
-        dq_tmp = np.dot(v_temp.T,dqe0)
-        dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
-        dq = np.zeros((c_obj.nicd_DLC,1))
-        for i in range(n): dq[i,0] = dq_tmp[i]
+    #    dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
+    #    dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
+    #    
+    #    # => Convert step back to DLC basis <= #
+    #    dq_tmp = np.dot(v_temp.T,dqe0)
+    #    dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
+    #    dq = np.zeros((c_obj.nicd_DLC,1))
+    #    for i in range(n): dq[i,0] = dq_tmp[i]
 
-        return dq
+    #    return dq
 
 
     def step_controller(self,step,ratio,gradrms,pgradrms):
@@ -283,18 +298,19 @@ class base_optimizer(object):
             self.options['DMAX']=self.DMIN
         print " DMAX", self.options['DMAX']
 
-    def eigenvector_step(self,c_obj,g,n):
+    def eigenvector_step(self,molecule,g,nconstraints):
 
+        print "in eigenvector step"
         SCALE =self.options['SCALEQN']
-        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess
+        if molecule.newHess>0: SCALE = self.options['SCALEQN']*molecule.newHess
         if self.options['SCALEQN']>10.0: SCALE=10.0
         
         # convert to eigenvector basis
-        temph = self.Hint[:n,:n]
+        temph = molecule.Hessian[nconstraints:,nconstraints:]
         e,v_temp = np.linalg.eigh(temph)
         v_temp = v_temp.T
-        gqe = np.dot(v_temp,g[:n])
-        
+        gqe = np.dot(v_temp,g[nconstraints:])
+
         lambda1 = self.set_lambda1('NOT-TS',e) 
 
         dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
@@ -303,9 +319,9 @@ class base_optimizer(object):
         # => Convert step back to DLC basis <= #
         dq_tmp = np.dot(v_temp.T,dqe0)
         dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
-        dq = np.zeros((c_obj.nicd_DLC,1))
-        for i in range(n): dq[i,0] = dq_tmp[i]
-
+        dq = np.zeros_like(g)
+        for i in range(len(dq)): dq[nconstraints+i,0] = dq_tmp[i]
+        
         return dq
 
     # need to modify this only for the DLC region
@@ -380,38 +396,39 @@ class base_optimizer(object):
         path_overlap_n = np.argmax(absoverlap)
         return path_overlap,path_overlap_n
 
-    def update_Hessian(self,c_obj,mode='BFGS'):
+    def update_Hessian(self,molecule,mode='BFGS'):
         '''
         mode 1 is BFGS, mode 2 is BOFILL
         '''
         assert mode=='BFGS' or mode=='BOFILL', "no update implemented with that mode"
-        c_obj.newHess-=1
+        molecule.newHess-=1
 
         # do this even if mode==BOFILL
-        change = self.update_bfgs(c_obj)
+        change = self.update_bfgs(molecule)
 
-        if not c_obj.__class__.__name__=='Cartesian':
-            c_obj.Hintp += change
+        if molecule.coord_obj.__class__.__name__=='DelocalizedInternalCoordinates':
+            molecule.update_Primitive_Hessian(change=change)
             if self.options['print_level']>1:
-                print "Hintp"
-                print c_obj.Hintp
+                print "primitive internals Hessian"
+                print molecule.Primitive_Hessian
             if mode=='BFGS':
-                self.Hint=c_obj.Hintp_to_Hint()
+                molecule.form_Hessian_in_basis()
             if mode=='BOFILL':
                 change=self.update_bofill()
-                self.Hint+=change
+                molecule.update_Hessian(change)
         else:
             self.Hint += change
 
-    def update_bfgs(self,c_obj):
-        if not c_obj.__class__.__name__=='Cartesian':
-            return self.update_bfgsp(c_obj)
+    def update_bfgs(self,molecule):
+        if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
+            return self.update_bfgsp(molecule)
         else:
             raise NotImplementedError
 
-    def update_bfgsp(self,c_obj):
+    def update_bfgsp(self,molecule):
 
-        Hdx = np.dot(c_obj.Hintp,self.dx_prim)
+        #Hdx = np.dot(c_obj.Hintp,self.dx_prim)
+        Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         if self.options['print_level']>1:
             print("In update bfgsp")
             print "dg:", self.dg_prim.T
@@ -421,7 +438,8 @@ class base_optimizer(object):
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
         dgdg = np.outer(self.dg_prim,self.dg_prim)
         dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
-        change = np.zeros_like(c_obj.Hintp)
+        #change = np.zeros_like(c_obj.Hintp)
+        change = np.zeros_like(molecule.Primitive_Hessian)
 
         if self.options['print_level']>2:
             print "dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx)

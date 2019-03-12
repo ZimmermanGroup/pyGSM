@@ -1,23 +1,24 @@
 import numpy as np 
 
-def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,proc_evaluate):
-    x = x + d * step  + constraint_step 
-    proc_results = proc_evaluate(x,n)
-    fx=proc_results['fx']
+def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+    x = x + d * step  + constraint_step  # 
+    xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
+
+    # use these so molecule xyz doesn't change
+    fx = molecule.PES.get_energy(xyz)
+    gx = molecule.PES.get_gradient(xyz)
+    g = molecule.coord_obj.calcGrad(xyz,gx)
     print "[INFO]end line evaluate fx = %r step = %r." %(fx, step)
-    result = {'status':0, 'proc_results': proc_results, 'step':step, 'x':x}
+    result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
-def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,proc_evaluate):
+def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
 
     # n is the non-constrained
-    # need to do something if n!= len(x) e.g. because of constraints
-
     count = 0
     dec = 0.5
     inc = 2.1
-    #result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
-    result = {'status':0, 'proc_results': None, 'step':step, 'x':x}
+    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
 
     # Compute the initial gradient in the search direction.
     dginit = np.dot(g[:n].T, d[:n])
@@ -33,11 +34,13 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,proc_eval
     while True:
         x = xp
         x = x + d * step  + constraint_step # n goes up to constraint (hopefully)
+        xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
         # Evaluate the function and gradient values. 
-        proc_results = proc_evaluate(x,n)
-        fx=proc_results['fx']
-        g = proc_results['g']
+        # use these so molecule xyz doesn't change
+        fx = molecule.PES.get_energy(xyz)
+        gx = molecule.PES.get_gradient(xyz)
+        g = molecule.coord_obj.calcGrad(xyz,gx)
         print " [INFO]end line evaluate fx = %r step = %r." %(fx, step)
         count = count + 1
         # check the sufficient decrease condition (Armijo condition).
@@ -59,19 +62,19 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,proc_eval
                 	print " [INFO] not satisfy strong wolf condition."
                 	width = dec
                 else:
-                    result = {'status':0, 'proc_results': proc_results, 'step':step, 'x':x}
+                    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
                     return result
         if step < parameters['min_step']:
-            result = {'status':-1, 'proc_results': proc_results, 'step':step, 'x':x}
+            result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
             print ' [INFO] the linesearch step is too small'
             return result
         if step > parameters['max_step']:
-            result = {'status':-1, 'proc_results': proc_results, 'step':step, 'x':x}
+            result = {'status':-1,'fx':fx,'step':step,'x':x, 'g':g}
             print ' [INFO] the linesearch step is too large'
             return result
         if parameters['max_linesearch'] <= count:
             print ' [INFO] the iteration of linesearch is many'
-            result = {'status':0, 'proc_results': proc_results, 'step':step, 'x':x}
+            result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
             return result	
 
         # update the step		
