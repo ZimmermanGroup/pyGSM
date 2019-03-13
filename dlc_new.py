@@ -253,7 +253,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Gxc = multi_dot([Bmat.T, Gqc.T]).flatten()
         return Gxc
     
-    def build_dlc(self, xyz, cVec=None):
+    def build_dlc(self, xyz, C=None):
         """
         Build the delocalized internal coordinates (DLCs) which are linear 
         combinations of the primitive internal coordinates. Each DLC is stored
@@ -273,15 +273,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         ----------
         xyz     : np.ndarray
                   Flat array containing Cartesian coordinates in atomic units 
-        cVec    : np.ndarray
+        C       : np.ndarray
                 Float array containing difference in primitive coordinates
         """
 
         #print "building dlc"
-        # Perform singular value decomposition
         click()
+
         G = self.Prims.GMatrix(xyz)
-        #print "shape G",G.shape
         time_G = click()
 
         L, Q = np.linalg.eigh(G)
@@ -308,16 +307,29 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             assert cVec is None,"can't have vector constraint and cprim."
             cVec=self.form_cVec_from_cPrims()
 
-        if cVec is not None:
-            click()
-            # V contains the constraint vectors on the left, and the original DLCs on the right
+        if C is not None:
+            # orthogonalize
+            C = C.copy()
+            Cn = orthogonalize(C)
 
-            dots = np.matmul(self.Vecs.T,self.Vecs)
+            # transform C into basis of DLC
+            # CRA 3/2019 NOT SURE WHY THIS IS DONE
+            # couldn't Cn just be used?
+            cVecs = np.linalg.multi_dot([self.Vecs,self.Vecs.T,Cn])
+
+            # normalize C_U
+            try:
+                cVecs = orthogonalize(cVecs) 
+            except:
+                print cVecs
+                print "error forming cVec"
+                exit(-1)
+
+            # V contains the constraint vectors on the left, and the original DLCs on the right
             #print "appending cVecs to set of Vecs"
-            V = np.hstack((cVec, np.array(self.Vecs)))
+            V = np.hstack((cVecs, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
-            self.Vecs = orthogonalize(V,cVec.shape[1])
-            self.clearCache() # this is important but why? CRA 3/2019
+            self.Vecs = orthogonalize(V,cVecs.shape[1])
             # print "Gram-Schmidt completed with thre=%.0e" % thre
 
 
@@ -342,44 +354,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #V.append(np.array(cProj).flatten())
         V = cProj.reshape(-1,1)
         return V
-
-    def form_cVecs_from_prim_Vecs(self,C):
-        """
-        This function takes a matrix of vectors wrtiten in the basis of primitives
-        and returns new vectors written in the DLC basis. 
-        
-        Parameters
-        ----------
-        C   :   np.ndarray
-                rectangular array containing column vectors of constraints. 
-                The constraints are orthogonalized wrt the first column. 
-        Returns
-        -------
-        cVecs:   np.ndarray
-                rectangular array containing column vectors of orthogonal 
-                constraints.
-        """
-
-        # orthogonalize
-        #print "######## => orthogonalizing C <= #########"
-        C = C.copy()
-        Cn = orthogonalize(C)
-
-        # transform C into basis of DLC
-        # CRA 3/2019 NOT SURE WHY THIS IS DONE
-        # couldn't Cn just be used?
-        cVecs = np.linalg.multi_dot([self.Vecs,self.Vecs.T,Cn])
-
-        # normalize C_U
-        try:
-            #cVecs = preprocessing.normalize(cVecs.T,norm='l2')
-            cVecs = orthogonalize(cVecs) 
-        except:
-            print cVecs
-            print "error forming cVec"
-            exit(-1)
-
-        return cVecs
 
     def __eq__(self, other):
         return self.Prims == other.Prims

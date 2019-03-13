@@ -427,10 +427,10 @@ class Molecule(object):
         if newxyz is not None:
             self.Data['xyz']=newxyz
 
-    def update_xyz(self,dq=None):
+    def update_xyz(self,dq=None,verbose=True):
         #print " updating xyz"
         if dq is not None:
-            self.xyz = self.coord_obj.newCartesian(self.xyz,dq)
+            self.xyz = self.coord_obj.newCartesian(self.xyz,dq,verbose)
         return self.xyz
 
     @property
@@ -446,6 +446,14 @@ class Molecule(object):
         return len(self.primitive_internal_coordinates)
 
     @property
+    def num_bonds(self):
+        count=0
+        for ic in self.coord_obj.Prims.Internals:
+            if type(ic) == "Distance":
+                count+=1
+        return count
+
+    @property
     def primitive_internal_values(self):
         ans =self.coord_obj.Prims.calculate(self.xyz)
         return np.asarray(ans)
@@ -455,13 +463,7 @@ class Molecule(object):
         return self.coord_obj.Vecs
 
     def update_coordinate_basis(self,constraints=None):
-        cVec = None
-        self.coord_obj.clearCache()
-        self.coord_obj.build_dlc(self.xyz,cVec)  
-        if constraints is not None:
-            self.coord_obj.clearCache()
-            cVec = self.coord_obj.form_cVecs_from_prim_Vecs(constraints)
-            self.coord_obj.build_dlc(self.xyz,cVec)  #this sets the Vecs inside coord_obj
+        self.coord_obj.build_dlc(self.xyz,constraints)
         return self.coord_basis
 
     @property
