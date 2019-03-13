@@ -3,7 +3,7 @@ import numpy as np
 import os
 #import openbabel as ob
 #import pybel as pb
-from dlc import DLC
+#from dlc import DLC
 from pes import PES
 from penalty_pes import Penalty_PES
 from avg_pes import Avg_PES
@@ -274,41 +274,46 @@ class Base_Method(object,Print,Analyze):
     def get_tangents_1(self,n0=0):
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
-        ictan = []*self.nnodes
+        ictan = [[]]*self.nnodes
         #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #print "getting tangent between %i %i" % (n,n-1)
-            assert self.nodes[n]!=0,"n is bad"
-            assert self.nodes[n-1]!=0,"n-1 is bad"
-            ictan[n] = self.tangent(self.nodes[n-1],self.nodes[n])
+            assert self.nodes[n]!=None,"n is bad"
+            assert self.nodes[n-1]!=None,"n-1 is bad"
+            ictan[n] = self.tangent(n-1,n)
+                    #self.nodes[n-1],self.nodes[n])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
             ictan[n] /= np.linalg.norm(ictan[n])
 
-            self.newic.set_xyz(self.nodes[n].coords)
-            self.newic.update_ics()
-            self.newic.bmatp = self.newic.bmatp_create()
-            self.newic.bmatp_to_U()
-            self.newic.opt_constraint(ictan0)
-            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.newic.Ut[-1,:nbonds])*2.5
-            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.newic.Ut[-1,nbonds:])
+            self.newic.xyz = self.nodes[n].xyz
+            Vecs = self.newic.update_coordinate_basis(ictan0)
+            #dqmaga[n] = np.sqrt(np.dot(Vecs[:,0],ictan0))
+
+            # note: C++ gsm modifies tangent here
+            nbonds=self.nodes[0].num_bonds
+            dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
+            dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
             dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
         self.dqmaga = dqmaga
         self.ictan = ictan
 
-        if self.newic.print_level>1:
+        if self.print_level>1:
             print '------------printing ictan[:]-------------'
             for n in range(n0+1,self.nnodes):
                 print "ictan[%i]" %n
-                for i in range(self.newic.BObj.nbonds):
-                    print "%1.2f " % self.ictan[n][i],
-                print 
-                for i in range(self.newic.BObj.nbonds,self.newic.AObj.nangles+self.newic.BObj.nbonds):
-                    print "%1.2f " % self.ictan[n][i],
-                for i in range(self.newic.BObj.nbonds+self.newic.AObj.nangles,self.newic.AObj.nangles+self.newic.BObj.nbonds+self.newic.TObj.ntor):
-                    print "%1.2f " % self.ictan[n][i],
-                print "\n"
+                print ictan[n].T
+                print self.dqmaga[n]
+                #print "ictan[%i]" %n
+                #for i in range(self.newic.BObj.nbonds):
+                #    print "%1.2f " % self.ictan[n][i],
+                #print 
+                #for i in range(self.newic.BObj.nbonds,self.newic.AObj.nangles+self.newic.BObj.nbonds):
+                #    print "%1.2f " % self.ictan[n][i],
+                #for i in range(self.newic.BObj.nbonds+self.newic.AObj.nangles,self.newic.AObj.nangles+self.newic.BObj.nbonds+self.newic.TObj.ntor):
+                #    print "%1.2f " % self.ictan[n][i],
+                #print "\n"
 
 
     # for some reason this fxn doesn't work when called outside gsm
@@ -615,10 +620,7 @@ class Base_Method(object,Print,Analyze):
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
-        num_ics = self.nodes[0].num_ics
-        len_d = self.nodes[0].nicd
         ictalloc = self.nnodes+1
-        
         rpmove = np.zeros(ictalloc)
         rpart = np.zeros(ictalloc)
         totaldqmag = 0.0
@@ -636,7 +638,7 @@ class Base_Method(object,Print,Analyze):
             ictan0 = np.copy(self.ictan)
             ictan = np.copy(self.ictan)
 
-            if self.newic.print_level>1:
+            if self.print_level>1:
                 print " printing spacings dqmaga:"
                 for n in range(1,self.nnodes):
                     print " %1.2f" % self.dqmaga[n], 
@@ -651,7 +653,7 @@ class Base_Method(object,Print,Analyze):
             if self.climb or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                if self.newic.print_level>1:
+                if self.print_level>1:
                     print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
            
             # => Using average <= #
@@ -726,7 +728,7 @@ class Base_Method(object,Print,Analyze):
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
             lastdispr = disprms
 
-            if self.newic.print_level>1:
+            if self.print_level>1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2}".format(n,rpmove[n]),
                 print
@@ -737,8 +739,7 @@ class Base_Method(object,Print,Analyze):
 
             for n in range(n0+1,self.nnodes-1):
                 #print "moving node %i %1.3f" % (n,rpmove[n])
-                self.newic.set_xyz(self.nodes[n].coords) 
-                self.newic.update_ics()
+                self.newic.xyz = self.nodes[n].xyz
                 opt_type=self.set_opt_type(n,quiet=True)
 
                 if rpmove[n] < 0.:
@@ -746,17 +747,16 @@ class Base_Method(object,Print,Analyze):
                 else:
                     ictan[n] = np.copy(ictan0[n+1]) 
 
-                dq = np.zeros((self.newic.nicd,1),dtype=float)
-                dq[-1] = rpmove[n]
+                dq = np.zeros((self.newic.num_coordinates,1),dtype=float)
+                dq[0] = rpmove[n]
 
-                self.newic.form_constrained_DLC(ictan[n])
-                self.newic.ic_to_xyz(dq)
-                self.nodes[n].set_xyz(self.newic.coords)
-                self.nodes[n].update_ics()
+                self.newic.update_coordinate_basis(ictan[n])
+                self.newic.update_xyz(dq,verbose=False)
+                self.nodes[n].xyz = self.newic.xyz
 
                 #TODO might need to recalculate energy here for seam? 
 
-        print ' spacings (end ic_reparam, steps: {}:'.format(ic_reparam_steps)
+        print ' spacings (end ic_reparam, steps: {}/{}):'.format(i,ic_reparam_steps)
         for n in range(1,self.nnodes):
             print " {:1.2}".format(self.dqmaga[n]),
         print
@@ -850,7 +850,6 @@ class Base_Method(object,Print,Analyze):
             if disprms < 1e-2:
                 break
 
-            #TODO check how range is defined in gstring, uses n0...
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.nodes[n],Molecule):
                     if rpmove[n] > 0:

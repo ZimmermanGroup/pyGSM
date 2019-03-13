@@ -112,8 +112,9 @@ def orthogonalize(vecs,numCvecs=0):
     for v in vecs.T:
         w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
         wnorm = np.linalg.norm(w)
-        #if wnorm > 1e-6 and (abs(w) > 1e-6).any():
-        if (abs(w) > 1e-3).any() and wnorm > 1e-6:
+        #print count,wnorm
+        if wnorm > 1e-5 and (abs(w) > 1e-6).any():
+        #if (abs(w) > 1e-3).any() and wnorm > 1e-6:
             try:
                 #print "adding vector ",count
                 #print wnorm
@@ -123,7 +124,6 @@ def orthogonalize(vecs,numCvecs=0):
                 print "this vector should be vanishing, exiting"
                 print "norm=",wnorm
                 print w
-                print count
                 exit(1)
     dots = np.matmul(basis.T,basis)
     if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):

@@ -1,7 +1,7 @@
 import numpy as np
 import units 
 import re
-import openbabel as ob
+#import openbabel as ob
 
 # => XYZ File Utility <= #
 

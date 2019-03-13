@@ -134,7 +134,6 @@ class GSM(Base_Method):
             oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
             print("Done Growing the String!!!")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
-            exit()
             self.done_growing = True
             print " initial ic_reparam"
             self.get_tangents_1()
@@ -362,8 +361,16 @@ if __name__=='__main__':
 
     optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
 
-    gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer)
+    gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer,print_level=1)
     gsm.restart_string()
+    gsm.get_tangents_1()
+    from time import time
+    t = time()
+    gsm.ic_reparam()
+    dt = time() - t
+    print "time to form difference is ",dt
+    gsm.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+
     #gsm.go_gsm(rtype=2,opt_steps=3)
 
     #gsm.interpolate(7)

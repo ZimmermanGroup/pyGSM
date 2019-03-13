@@ -434,6 +434,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.Internals.append(dof)
             self.reorderPrimitives()
             self.clearCache()  # CRA why is this necessary?
+            # because primitives changed, Bmatrix is derivative of prims
 
     def delete(self, dof):
         for ii in range(len(self.Internals))[::-1]:
