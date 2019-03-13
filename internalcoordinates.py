@@ -275,7 +275,7 @@ class InternalCoordinates(object):
     def newCartesian(self, xyz, dQ, verbose=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
-            print "Returning cached result"
+            #print "Returning cached result"
             return cached
         xyz1 = xyz.copy()
         dQ1 = dQ.flatten()

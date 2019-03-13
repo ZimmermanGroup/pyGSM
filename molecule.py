@@ -115,7 +115,7 @@ class Molecule(object):
 
         opt.add_option(
                 key='PES',
-                required=False,
+                required=True,
                 allowed_types=[PES,Avg_PES,Penalty_PES],
                 doc='potential energy surface object to evaulate energies, gradients, etc. Pes is defined by charge, state, multiplicity,etc. '
                        
@@ -156,20 +156,20 @@ class Molecule(object):
         lines.append(self.Data.__str__())
         return'\n'.join(lines)
 
-    def copy(self, xyz=None,new_node_id=1):
-        """Create a copy of this molecule"""
-
-        lot = self.PES.lot.copy(new_node_id)
-        PES = type(self.PES).create_pes_from(self.PES,lot)
+    @classmethod
+    def copy_from_options(cls,MoleculeA,xyz=None,new_node_id=1):
+        """Create a copy of MoleculeA"""
+        lot = MoleculeA.PES.lot.copy(new_node_id)
+        PES = type(MoleculeA.PES).create_pes_from(MoleculeA.PES,lot)
 
         if xyz is not None:
-            new_geom = manage_xyz.np_to_xyz(self.geometry,xyz)
-            coord_obj = type(self.coord_obj)(self.coord_obj.options.copy().set_values({"xyz":xyz}))
+            new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
+            coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy().set_values({"xyz":xyz}))
         else:
-            new_geom = self.geometry
-            coord_obj = type(self.coord_obj)(self.coord_obj.options.copy())
+            new_geom = MoleculeA.geometry
+            coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy())
 
-        new_mol = type(self)(self.Data.copy().set_values({"PES":PES,'coord_obj':coord_obj,'geom':new_geom}))
+        new_mol = cls(MoleculeA.Data.copy().set_values({"PES":PES,'coord_obj':coord_obj,'geom':new_geom}))
 
         return new_mol
 
@@ -183,12 +183,12 @@ class Molecule(object):
         # => Read in the coordinates <= #
         # important first try to read in geom
         if self.Data['geom'] is not None:
-            print "getting cartesian coordinates from geom"
+            print " getting cartesian coordinates from geom"
             atoms=manage_xyz.get_atoms(self.Data['geom'])
             xyz=manage_xyz.xyz_to_np(self.Data['geom'])
             mol = make_mol_from_coords(xyz,atoms)
         elif self.Data['fnm'] is not None:
-            print "reading cartesian coordinates from file"
+            print " reading cartesian coordinates from file"
             if self.Data['ftype'] is None:
                 self.Data['ftype'] = os.path.splitext(self.Data['fnm'])[1][1:]
             if not os.path.exists(self.Data['fnm']):
@@ -230,12 +230,12 @@ class Molecule(object):
 
         # Create the coordinate system
         if self.Data['coord_obj'] is not None:
-            print "getting coord_object from options"
+            print " getting coord_object from options"
             self.coord_obj = self.Data['coord_obj']
         elif self.Data['coordinate_type'] == "Cartesian":
             self.coord_obj = CartesianCoordinates.from_options()
         elif self.Data['coordinate_type'] == "DLC":
-            print "building coordinate object"
+            print " building coordinate object"
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True)
         elif self.Data['coordinate_type'] == "HDLC":
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True) 
@@ -247,17 +247,15 @@ class Molecule(object):
         logger.debug("Molecule %s constructed.", repr(self))
 
         #TODO
-        self.gradrms = 100.
+        self.gradrms = 0.
         self.TSnode=False
 
         self.newHess = 0
         if self.Data['Hessian'] is None:
-            self.Data['Hessian'] = self.coord_obj.guess_hessian(self.xyz)
-            self.newHess = 5
+            self.form_Hessian()
 
         if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
-            self.Data['Primitive_Hessian'] = self.coord_obj.Prims.guess_hessian(self.xyz)
-            self.newHess = 5
+            self.form_Primitive_Hessian()
 
 
     def __add__(self,other):
@@ -353,7 +351,8 @@ class Molecule(object):
 
     @property
     def energy(self):
-        return self.PES.get_energy(self.xyz)
+        #return self.PES.get_energy(self.xyz)
+        return 0.
 
     @property
     def gradient(self):
@@ -384,9 +383,13 @@ class Molecule(object):
     
     @Primitive_Hessian.setter
     def Primitive_Hessian(self,value):
-        print "setting prim Hessian"
         self.Data['Primitive_Hessian'] = value
 
+    def form_Primitive_Hessian(self):
+        print " making primitive Hessian"
+        self.Data['Primitive_Hessian'] = self.coord_obj.Prims.guess_hessian(self.xyz)
+        self.newHess = 5
+    
     def update_Primitive_Hessian(self,change=None):
         if change is not None:
             self.Primitive_Hessian += change
@@ -400,14 +403,18 @@ class Molecule(object):
     def Hessian(self,value):
         self.Data['Hessian'] = value
 
+    def form_Hessian(self):
+        self.Data['Hessian'] = self.coord_obj.guess_hessian(self.xyz)
+        self.newHess = 5
+
     def update_Hessian(self,change=None):
-        print "in update Hessian"
+        #print " in update Hessian"
         if change is not None:
             self.Hessian += change
         return self.Hessian
 
     def form_Hessian_in_basis(self):
-        print " forming Hessian in current basis"
+        #print " forming Hessian in current basis"
         self.Hessian = np.linalg.multi_dot([self.coord_basis.T,self.Primitive_Hessian,self.coord_basis])
         return self.Hessian
 
@@ -421,6 +428,7 @@ class Molecule(object):
             self.Data['xyz']=newxyz
 
     def update_xyz(self,dq=None):
+        #print " updating xyz"
         if dq is not None:
             self.xyz = self.coord_obj.newCartesian(self.xyz,dq)
         return self.xyz
@@ -434,6 +442,10 @@ class Molecule(object):
         return self.coord_obj.Prims.Internals
 
     @property
+    def num_primitives(self):
+        return len(self.primitive_internal_coordinates)
+
+    @property
     def primitive_internal_values(self):
         ans =self.coord_obj.Prims.calculate(self.xyz)
         return np.asarray(ans)
@@ -444,14 +456,21 @@ class Molecule(object):
 
     def update_coordinate_basis(self,constraints=None):
         cVec = None
+        self.coord_obj.clearCache()
+        self.coord_obj.build_dlc(self.xyz,cVec)  
         if constraints is not None:
+            self.coord_obj.clearCache()
             cVec = self.coord_obj.form_cVecs_from_prim_Vecs(constraints)
-        self.coord_obj.build_dlc(self.xyz,cVec)  #this sets the Vecs inside coord_obj
+            self.coord_obj.build_dlc(self.xyz,cVec)  #this sets the Vecs inside coord_obj
         return self.coord_basis
 
     @property
     def coordinates(self):
         return np.reshape(self.coord_obj.calculate(self.xyz),(-1,1))
+
+    @property
+    def num_coordinates(self):
+        return len(self.coordinates)
 
 if __name__ =='__main__':
     from molpro import Molpro

@@ -214,8 +214,8 @@ class Analyze:
     def calc_grad(self):
         totalgrad = 0.0
         gradrms = 0.0
-        for i,ico in zip(range(1,self.nnodes-1),self.icoords[1:self.nnodes-1]):
-            if ico!=0:
+        for i,ico in zip(range(1,self.nnodes-1),self.nodes[1:self.nnodes-1]):
+            if ico!=None:
                 print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
                 if i%5 == 0:
                     print

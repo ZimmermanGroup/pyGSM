@@ -36,10 +36,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # The DLC contains an instance of primitive internal coordinates.
         if self.options['primitives'] is None:
-            print "making primitives from options!"
+            print " making primitives from options!"
             self.Prims = PrimitiveInternalCoordinates(options.copy())
         else:
-            print "setting primitives from options!"
+            print " setting primitives from options!"
             self.Prims=self.options['primitives']
             self.Prims.clearCache()
         #print "in constructor",len(self.Prims.Internals)
@@ -81,7 +81,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims.join(DLC2.Prims)
         self.Prims.reorderPrimitives() # just for funsies
         self.Prims.clearCache() # this is important but why? CRA 3/2019
-        print "in union",len(self.Prims.Internals)
         return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
 
     def copy(self,xyz):
@@ -278,7 +277,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 Float array containing difference in primitive coordinates
         """
 
-        print "building dlc"
+        #print "building dlc"
         # Perform singular value decomposition
         click()
         G = self.Prims.GMatrix(xyz)
@@ -293,6 +292,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         LargeIdx = []
         for ival, value in enumerate(L):
             # print ival, value
+            #if np.abs(value) > 1e-6:
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 LargeIdx.append(ival)
@@ -300,7 +300,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.natoms, Expect, LargeVals, len(L))
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
-        #print self.Vecs.shape
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
 
         # Vecs has number of rows equal to the number of primitives, and
@@ -314,7 +313,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # V contains the constraint vectors on the left, and the original DLCs on the right
 
             dots = np.matmul(self.Vecs.T,self.Vecs)
-            print "appending cVecs to set of Vecs"
+            #print "appending cVecs to set of Vecs"
             V = np.hstack((cVec, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
             self.Vecs = orthogonalize(V,cVec.shape[1])

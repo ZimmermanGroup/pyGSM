@@ -1,7 +1,7 @@
 import numpy as np
 import manage_xyz
 from units import *
-from _linesearch import backtrack
+from _linesearch import backtrack,NoLineSearch
 from dlc import DLC
 from cartesian import CartesianCoordinates
 import options
@@ -300,7 +300,6 @@ class base_optimizer(object):
 
     def eigenvector_step(self,molecule,g,nconstraints):
 
-        print "in eigenvector step"
         SCALE =self.options['SCALEQN']
         if molecule.newHess>0: SCALE = self.options['SCALEQN']*molecule.newHess
         if self.options['SCALEQN']>10.0: SCALE=10.0
@@ -320,7 +319,8 @@ class base_optimizer(object):
         dq_tmp = np.dot(v_temp.T,dqe0)
         dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
         dq = np.zeros_like(g)
-        for i in range(len(dq)): dq[nconstraints+i,0] = dq_tmp[i]
+
+        for i in range(len(dq_tmp)): dq[nconstraints+i] = dq_tmp[i]
         
         return dq
 
@@ -426,8 +426,6 @@ class base_optimizer(object):
             raise NotImplementedError
 
     def update_bfgsp(self,molecule):
-
-        #Hdx = np.dot(c_obj.Hintp,self.dx_prim)
         Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         if self.options['print_level']>1:
             print("In update bfgsp")
@@ -438,7 +436,6 @@ class base_optimizer(object):
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
         dgdg = np.outer(self.dg_prim,self.dg_prim)
         dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
-        #change = np.zeros_like(c_obj.Hintp)
         change = np.zeros_like(molecule.Primitive_Hessian)
 
         if self.options['print_level']>2:

@@ -16,7 +16,7 @@ class eigenvector_follow(base_optimizer):
 
     def optimize(self,molecule,refE=0.,opt_steps=3,ictan=None):
 
-        print "refE %5.4f" % refE
+        #print " refE %5.4f" % refE
         geoms = []
         geoms.append(molecule.geometry)
 
@@ -32,10 +32,9 @@ class eigenvector_follow(base_optimizer):
         x = np.copy(molecule.coordinates)
         xyz = np.copy(molecule.xyz)
 
-
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
-        print "opt_type ",opt_type
+        #print " opt_type ",opt_type
 
         if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
             n = len(x)  # constraints not allowed for cartesian
@@ -58,7 +57,7 @@ class eigenvector_follow(base_optimizer):
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
             print " On opt step ",ostep+1
-            print "fx %1.4f" % fx
+            print " fx %1.4f" % fx
 
             # update Hess
             if update_hess:
@@ -126,8 +125,8 @@ class eigenvector_follow(base_optimizer):
             # control step size 
             dEstep = fx - fxp
             ratio = dEstep/dEpre
-            gradrms = np.sqrt(np.dot(g.T,g)/n)
-            self.step_controller(step,ratio,gradrms,pgradrms)
+            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+            self.step_controller(step,ratio,molecule.gradrms,pgradrms)
         
             # report the progress 
             #TODO make these lists and check last element for convergence
@@ -158,7 +157,7 @@ class eigenvector_follow(base_optimizer):
             else:
                 raise NotImplementedError
 
-            self.buf.write(' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,gradrms,step,self.options['DMAX']))
+            self.buf.write(' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
             if self.converged(g,n):
                 break
@@ -167,7 +166,7 @@ class eigenvector_follow(base_optimizer):
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 if opt_type != 'TS':
                     constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-                    print "updating coordinate basis"
+                    #print "updating coordinate basis"
                     molecule.update_coordinate_basis(constraints=constraints)
                     x = np.copy(molecule.coordinates)
                     g = molecule.gradient.copy()
@@ -198,7 +197,7 @@ if __name__=='__main__':
     print distance
    
     ef = eigenvector_follow.from_options() #Linesearch=NoLineSearch)
-    geoms = ef.optimize(molecule=M,refE=M.energy,opt_steps=20)
+    geoms = ef.optimize(molecule=M,refE=M.energy,opt_steps=5)
     #geoms = ef.optimize(molecule=M,refE=M.energy,opt_steps=1)
     print M.primitive_internal_coordinates
 

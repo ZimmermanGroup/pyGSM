@@ -123,9 +123,9 @@ class Lot(object):
         # Cache some useful atributes
         self.geom=self.options['geom']
         if self.geom is not None:
-            print "initializing LOT from geom"
+            print " initializing LOT from geom"
         elif self.options['fnm'] is not None:
-                print "initializing LOT from file"
+                print " initializing LOT from file"
                 if not os.path.exists(self.options['fnm']):
                     logger.error('Tried to create LOT object from a file that does not exist: %s\n' % self.options['fnm'])
                     raise IOError
