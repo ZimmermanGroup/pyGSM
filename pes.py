@@ -63,6 +63,7 @@ class PES(object):
         self.ad_idx = self.options['ad_idx']
         self.multiplicity = self.options['multiplicity']
         self.FORCE = self.options['FORCE']
+        self.dE=1000.
         #print ' PES object parameters:'
         #print ' Multiplicity:',self.multiplicity,'ad_idx:',self.ad_idx
 

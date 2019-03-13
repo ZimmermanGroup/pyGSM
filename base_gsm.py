@@ -1,8 +1,8 @@
 import options
 import numpy as np
 import os
-import openbabel as ob
-import pybel as pb
+#import openbabel as ob
+#import pybel as pb
 from dlc import DLC
 from pes import PES
 from penalty_pes import Penalty_PES
@@ -17,6 +17,7 @@ import base_optimizer
 import eigenvector_follow
 from dlc_new import DelocalizedInternalCoordinates
 from molecule import Molecule
+import manage_xyz
 
 class Base_Method(object,Print,Analyze):
 
@@ -176,94 +177,12 @@ class Base_Method(object,Print,Analyze):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
+        self.nodes[0].form_Primitive_Hessian()
 
-        #self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
-
-    def restart_string(self,xyzbase='restart'):#,nR,nP):
-        self.growth_direction=0
-        xyzfile=xyzbase+".xyz"
-        with open(xyzfile) as f:
-            nlines = sum(1 for _ in f)
-        print "number of lines is ", nlines
-        with open(xyzfile) as f:
-            natoms = int(f.readlines()[2])
-
-        print "number of atoms is ",natoms
-        nstructs = (nlines-5)/ (natoms+4) #this is for two blocks after GEOCON
-        
-        print "number of structures in restart file is %i" % nstructs
-        coords=[]
-        energy = []
-        grmss = []
-        atomic_symbols=[]
-        with open(xyzfile) as f:
-            f.readline()
-            f.readline() #header lines
-            for struct in range(nstructs):
-                tmpcoords=np.zeros((natoms,3))
-                f.readline() #natoms
-                f.readline() #space
-                for a in range(natoms):
-                    line=f.readline()
-                    tmp = line.split()
-                    #coords.append([float(i) for i in tmp[1:]])
-                    tmpcoords[a,:] = [float(i) for i in tmp[1:]]
-                    if struct==0:
-                        atomic_symbols.append(tmp[0])
-                coords.append(tmpcoords)
-            
-            # Get energies
-            f.readline() # line
-            f.readline() #energy
-            for struct in range(nstructs):
-                energy.append(float(f.readline()))
-            f.readline() # max-force
-            for struct in range(nstructs):
-                grmss.append(float(f.readline()))
-
-        print "copying node and setting values"
-        mol = DLC.make_mol_from_coords(coords[-1],atomic_symbols)
-        tmp=DLC(self.nodes[0].options.copy().set_values({
-            'mol':mol,
-            }))
-
-        print "doing union"
-        self.nodes[0] = DLC.union_ic(self.nodes[0],tmp)
-        self.newic = DLC.copy_node(self.nodes[0],0,-1)
-        self.nodes[0].energy = self.nodes[0].V0 = self.nodes[0].PES.get_energy(self.nodes[0].geom)
-        self.nodes[0].gradrms=grmss[0]
-
-        print "initial energy is %3.4f" % self.nodes[0].energy
-        for struct in range(1,nstructs):
-            if struct==nstructs-1:
-                self.nodes[struct] = DLC.copy_node(self.nodes[struct-1],struct,0)
-            else:
-                self.nodes[struct] = DLC.copy_node(self.nodes[struct-1],struct,1)
-            self.nodes[struct].set_xyz(coords[struct])
-            self.nodes[struct].update_ics()
-            self.nodes[struct].setup()
-            self.nodes[struct].Hintp = self.nodes[struct].make_Hint()
-            self.nodes[struct].DMAX=0.05 #half of default value
-            self.nodes[struct].energy =self.nodes[struct].V0 = self.nodes[0].energy +energy[struct]
-            #self.nodes[struct].energy = self.nodes[struct].PES.get_energy(self.nodes[struct].geom)
-            self.nodes[struct].gradrms=grmss[struct]
-
-        self.store_energies() 
-        self.nnodes=self.nR=nstructs
-        self.isRestarted=True
-        self.done_growing=True
-        print "setting all interior nodes to active"
-        for n in range(1,self.nnodes-1):
-            self.active[n]=True
-            self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
-        print " V_profile: ",
-        for n in range(self.nnodes):
-            print " {:7.3f}".format(float(self.energies[n])),
-        print
 
     def store_energies(self):
         for i,ico in enumerate(self.nodes):
-            if ico != 0:
+            if ico != None:
                 self.energies[i] = ico.energy - self.nodes[0].energy
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
@@ -353,22 +272,17 @@ class Base_Method(object,Print,Analyze):
         return
 
     def get_tangents_1(self,n0=0):
-        size_ic = self.nodes[0].num_ics
-        nbonds = self.nodes[0].BObj.nbonds
-        nangles = self.nodes[0].AObj.nangles
-        ntor = self.nodes[0].TObj.ntor
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
-        ictan = [[]]*self.nnodes
+        ictan = []*self.nnodes
         #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #print "getting tangent between %i %i" % (n,n-1)
             assert self.nodes[n]!=0,"n is bad"
             assert self.nodes[n-1]!=0,"n-1 is bad"
-            ictan[n] = DLC.tangent_1(self.nodes[n],self.nodes[n-1])
+            ictan[n] = self.tangent(self.nodes[n-1],self.nodes[n])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
-
             ictan[n] /= np.linalg.norm(ictan[n])
 
             self.newic.set_xyz(self.nodes[n].coords)
@@ -524,25 +438,15 @@ class Base_Method(object,Print,Analyze):
 
         self.dqmaga = dqmaga
        
-        #if False:
-        #    for n in range(ncurrent):
-        #        print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
-        #        print "printing ictan[%i]" %nlist[2*n]       
-        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds):
-        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
-        #        print 
-        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds):
-        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
-        #        for i in range(self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].AObj.nangles,self.nodes[nlist[2*n]].AObj.nangles+self.nodes[nlist[2*n]].BObj.nbonds+self.nodes[nlist[2*n]].TObj.ntor):
-        #            print "%1.2f " % self.ictan[nlist[2*n]][i],
-        #        print "\n"
-#       #    #     print np.transpose(ictan[nlist[2*n]])
+        if False:
+            for n in range(ncurrent):
+                print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
+                print "printing ictan[%i]" %nlist[2*n]       
+                print self.ictan[nlist[2*n]].T
         for i,tan in enumerate(self.ictan):
             if np.all(tan==0.0):
                 print "tan %i of the tangents is 0" %i
                 raise RuntimeError
-
-
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
         print ''
@@ -568,7 +472,9 @@ class Base_Method(object,Print,Analyze):
             if self.check_if_grown(): 
                 break
             self.ic_reparam_g()
-        self.newic = DLC.copy_node(self.nodes[0],0,-1)
+
+        # create newic object
+        self.newic  = Molecule.copy_from_options(self.nodes[0])
         return n
 
     def opt_steps(self,opt_steps):
@@ -576,7 +482,7 @@ class Base_Method(object,Print,Analyze):
         print "in opt_steps"
         # these can be put in a function
         for n in range(self.nnodes):
-            if self.nodes[n]!=0:
+            if self.nodes[n]!=None:
                 self.nodes[n].isTSnode=False
         fp=0
         if self.done_growing:
@@ -857,7 +763,9 @@ class Base_Method(object,Print,Analyze):
         print "  disprms: {:1.3}\n".format(disprms)
 
     def ic_reparam_g(self,ic_reparam_steps=8,n0=0):  #see line 3863 of gstring.cpp
-        """size_ic = self.nodes[0].num_ics; len_d = self.nodes[0].nicd"""
+        """
+        
+        """
 
         #close_dist_fix(0) #done here in GString line 3427.
 
@@ -865,9 +773,6 @@ class Base_Method(object,Print,Analyze):
         #print '***************in ic_reparam_g********************'
         #print '**************************************************'
 
-        num_ics = self.nodes[0].num_ics
-        len_d = self.nodes[0].nicd
-        
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
 
@@ -877,14 +782,13 @@ class Base_Method(object,Print,Analyze):
         h2dqmag = 0.0
         dE = np.zeros(self.nnodes)
         edist = np.zeros(self.nnodes)
-        
-        self.TSnode = -1 
+        #self.TSnode = -1 
         emax = -1000 # And this?
 
         for i in range(ic_reparam_steps):
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
-            if self.nodes[0].print_level>1:
+            if self.print_level>1:
                 if i==0:
                     print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
                 print " printing spacings dqmaga: "
@@ -901,7 +805,7 @@ class Base_Method(object,Print,Analyze):
                         rpart[n] = 1.0/(self.nn-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
                         rpart[n] = 1.0/(self.nn-2)
-                    if self.nodes[0].print_level>1:
+                    if self.print_level>1:
                         if i==0:
                             print " rpart: "
                             for n in range(1,self.nnodes):
@@ -915,6 +819,7 @@ class Base_Method(object,Print,Analyze):
             nR0 = self.nR
             nP0 = self.nP
 
+            # TODO CRA 3/2019 why is this here?
             if False:
                 if self.nnodes-self.nn > 2:
                     nR0 -= 1
@@ -934,10 +839,9 @@ class Base_Method(object,Print,Analyze):
                 if abs(rpmove[n]) > MAXRE:
                     rpmove[n] = float(np.sign(rpmove[n])*MAXRE)
 
-
             disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
-            if self.nodes[0].print_level>1:
+            if self.print_level>1:
                 for n in range(n0+1,self.nnodes-1):
                     print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
                 print
@@ -948,16 +852,14 @@ class Base_Method(object,Print,Analyze):
 
             #TODO check how range is defined in gstring, uses n0...
             for n in range(n0+1,self.nnodes-1):
-                if isinstance(self.nodes[n],DLC):
+                if isinstance(self.nodes[n],Molecule):
                     if rpmove[n] > 0:
-    
-                        dq0 = np.zeros((self.nodes[n].nicd,1))
-                        self.nodes[n].form_constrained_DLC(self.ictan[n])
-
-                        dq0[self.nodes[n].nicd-1] = rpmove[n]  # ictan is always last vector
-                        if self.nodes[0].print_level>1:
-                            print " dq0[constraint]: {:1.3}".format(float(dq0[self.nodes[n].nicd-1]))
-                        self.nodes[n].ic_to_xyz(dq0)
+                        dq0 = np.zeros((self.nodes[n].num_coordinates,1))
+                        self.nodes[n].update_coordinate_basis(constraints=self.ictan[n])
+                        dq0[0] = rpmove[n]  # ictan is first
+                        if self.print_level>1:
+                            print " dq0[constraint]: {:1.3}".format(float(dq0[0]))
+                        self.nodes[n].update_xyz(dq0)
                     else:
                         pass
         print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
@@ -965,6 +867,7 @@ class Base_Method(object,Print,Analyze):
             print " {:1.2}".format(self.dqmaga[n]),
         print "  disprms: {:1.3}".format(disprms)
 
+        #TODO old GSM does this here
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 

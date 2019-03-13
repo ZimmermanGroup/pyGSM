@@ -21,18 +21,100 @@ class GSM(Base_Method):
 
         print " Forming Union of primitive coordinates"
         self.nodes[0].coord_obj = self.nodes[0].coord_obj.union(self.nodes[-1].coord_obj)
+        self.nodes[0].form_Primitive_Hessian()
         print " Done forming union"
         self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
+        self.nodes[-1].form_Primitive_Hessian()
 
         # this tests if the primitives are the same
         assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
 
         print " Primitive Internal Coordinates"
         print self.nodes[0].primitive_internal_coordinates
+        print " number of primitives is", self.nodes[0].num_primitives
 
-        #self.nodes[0].Hessian = self.DLC.Prims.guess_hessian(self.nodes[0].xyz)
-        #self.nodes[-1].Hessian = self.DLC.Prims.guess_hessian(self.nodes[-1].xyz)
+    def restart_string(self,xyzbase='restart'):
+        self.growth_direction=0
+        xyzfile=xyzbase+".xyz"
+        with open(xyzfile) as f:
+            nlines = sum(1 for _ in f)
+        #print "number of lines is ", nlines
+        with open(xyzfile) as f:
+            natoms = int(f.readlines()[2])
 
+        #print "number of atoms is ",natoms
+        nstructs = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
+        
+        #print "number of structures in restart file is %i" % nstructs
+        coords=[]
+        grmss = []
+        atomic_symbols=[]
+        dE = []
+        with open(xyzfile) as f:
+            f.readline()
+            f.readline() #header lines
+            # get coords
+            for struct in range(nstructs):
+                tmpcoords=np.zeros((natoms,3))
+                f.readline() #natoms
+                f.readline() #space
+                for a in range(natoms):
+                    line=f.readline()
+                    tmp = line.split()
+                    tmpcoords[a,:] = [float(i) for i in tmp[1:]]
+                    if struct==0:
+                        atomic_symbols.append(tmp[0])
+                coords.append(tmpcoords)
+            # Get energies
+            f.readline() # line
+            f.readline() #energy
+            for struct in range(nstructs):
+                self.energies[struct] = float(f.readline())
+            # Get grms
+            f.readline() # max-force
+            for struct in range(nstructs):
+                grmss.append(float(f.readline()))
+            # Get dE
+            f.readline()
+            for struct in range(nstructs):
+                dE.append(float(f.readline()))
+
+        # create newic object
+        self.newic  = Molecule.copy_from_options(self.nodes[0])
+
+        # initial energy
+        self.nodes[0].V0 = self.nodes[0].energy 
+        self.nodes[0].gradrms=grmss[0]
+        self.nodes[0].PES.dE = dE[0]
+        self.nodes[-1].gradrms=grmss[-1]
+        self.nodes[-1].PES.dE = dE[-1]
+        print " initial energy is %3.4f" % self.nodes[0].energy
+
+        for struct in range(1,nstructs-1):
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[0],coords[struct],struct)
+            self.nodes[struct].gradrms=grmss[struct]
+            self.nodes[struct].PES.dE = dE[struct]
+
+        self.nnodes=self.nR=nstructs
+        self.isRestarted=True
+        self.done_growing=True
+        print " setting all interior nodes to active"
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+            self.optimizer[n].options['DMAX'] = 0.05
+        print " V_profile: ",
+        for n in range(self.nnodes):
+            print " {:7.3f}".format(float(self.energies[n])),
+        print
+        print " grms_profile: ",
+        for n in range(self.nnodes):
+            print " {:7.3f}".format(float(self.nodes[n].gradrms)),
+        print
+        print " dE_profile: ",
+        for n in range(self.nnodes):
+            print " {:7.3f}".format(float(self.nodes[n].difference_energy)),
+        print
 
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         """
@@ -52,16 +134,13 @@ class GSM(Base_Method):
             oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
             print("Done Growing the String!!!")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            exit()
             self.done_growing = True
             print " initial ic_reparam"
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=25)
             self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
-    
-            # reset hessians :(
-            print "resetting Hessians"
-            for i in range(self.nnodes):
-                self.nodes[0].Hintp = self.nodes[i].make_Hint()
+            exit()
         else:
             oi=0
             self.get_tangents_1()
@@ -89,9 +168,7 @@ class GSM(Base_Method):
                 self.interpolateP()
 
     def add_node(self,n1,n2,n3):
-        print " adding node: %i between %i %i" %(n2,n1,n3)
-       
-        print "copying from node ",n1
+        print " adding node: %i between %i %i from %i" %(n2,n1,n3,n1)
         ictan =  self.tangent(n3,n1)
         Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
 
@@ -104,14 +181,9 @@ class GSM(Base_Method):
         else:
             dq0[0] = -dqmag/2.0;
         print " dq0[constraint]: %1.3f" % dq0[0]
-
-        #exit()
-
         old_xyz = self.nodes[n1].xyz.copy()
         new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
-
-        new_node =  self.nodes[n1].copy(xyz=new_xyz,new_node_id=n2)
-
+        new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)
         return new_node
 
     def set_active(self,nR,nP):
@@ -137,7 +209,7 @@ class GSM(Base_Method):
         #print(" Here is new active:",self.active)
 
     def tangent(self,n1,n2):
-        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
         # this could have been done easier but it is nicer to do it this way
         Q1 = self.nodes[n1].primitive_internal_values 
         Q2 = self.nodes[n2].primitive_internal_values 
@@ -158,32 +230,19 @@ class GSM(Base_Method):
         if self.nn==self.nnodes:
             isDone=True
             if self.growth_direction==1:
-                self.nodes[-1].update_ics()
-                # copy previous node PES and calculate E
-                lot1 = self.nodes[-2].PES.lot.copy(
-                        self.nodes[-2].PES.lot,
-                        self.nnodes-1)
-                if self.nodes[-2].PES.__class__.__name__=="Avg_PES":
-                    self.nodes[-1].PES = Avg_PES(self.nodes[-2].PES.PES1,self.nodes[2].PES.PES2,lot1)
-                else:
-                    self.nodes[-1].PES = PES(self.nodes[-2].PES.options.copy().set_values({
-                        "lot": lot1,
-                        }))
-                self.nodes[-1].energy = self.nodes[-1].PES.get_energy(self.nodes[-1].geom)
-                if self.nodes[-1].PES.__class__.__name__=="Avg_PES":
-                    print "final dE = ",self.nodes[-1].PES.dE
+                print "need to add last node"
+                raise NotImplementedError
+                #TODO
 
         return isDone
 
     def check_add_node(self):
         success=True 
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
-            #self.active[self.nR-1] = False
-            if self.nodes[self.nR] == 0:
+            if self.nodes[self.nR] == None:
                 self.interpolateR()
         if self.nodes[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
-            #self.active[self.nnodes-self.nP] = False
-            if self.nodes[-self.nP-1] == 0:
+            if self.nodes[-self.nP-1] == None:
                 self.interpolateP()
         return success
 
@@ -284,10 +343,10 @@ if __name__=='__main__':
     nproc=8
     functional='HF'
     #functional='B3LYP'
-    #filepath1="examples/tests/butadiene_ethene.xyz"
-    #filepath2="examples/tests/cyclohexene.xyz"
-    filepath1='reactant.xyz'
-    filepath2='product.xyz'
+    filepath1="examples/tests/butadiene_ethene.xyz"
+    filepath2="examples/tests/cyclohexene.xyz"
+    #filepath1='reactant.xyz'
+    #filepath2='product.xyz'
 
     geom1 = manage_xyz.read_xyz(filepath1)
     geom2 = manage_xyz.read_xyz(filepath2)
@@ -304,16 +363,17 @@ if __name__=='__main__':
     optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
 
     gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer)
-    gsm.interpolate(7)
-
-    xyzs = []
-    for node in gsm.nodes:
-        if node != None:
-            geom = manage_xyz.np_to_xyz(geom1,node.xyz)
-            xyzs.append(geom)
-
-    manage_xyz.write_xyzs('with_DLC.xyz',xyzs,scale=1.)
+    gsm.restart_string()
     #gsm.go_gsm(rtype=2,opt_steps=3)
+
+    #gsm.interpolate(7)
+    #xyzs = []
+    #for node in gsm.nodes:
+    #    if node != None:
+    #        geom = manage_xyz.np_to_xyz(geom1,node.xyz)
+    #        xyzs.append(geom)
+
+    #manage_xyz.write_xyzs('check.xyz',xyzs,scale=1.)
 
 
 #    gsm.restart_string()
