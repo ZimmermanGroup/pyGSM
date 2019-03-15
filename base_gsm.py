@@ -237,7 +237,7 @@ class Base_Method(object,Print,Analyze):
             # => set stage <= #
             fp = self.find_peaks(2)
             print " fp = ",fp
-            ts_cgradq=abs(self.nodes[self.TSnode].gradq[self.nodes[self.TSnode].nicd-1])
+            ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
             print " dE_iter ={:2.2f}".format(self.dE_iter)
@@ -305,27 +305,12 @@ class Base_Method(object,Print,Analyze):
                 print "ictan[%i]" %n
                 print ictan[n].T
                 print self.dqmaga[n]
-                #print "ictan[%i]" %n
-                #for i in range(self.newic.BObj.nbonds):
-                #    print "%1.2f " % self.ictan[n][i],
-                #print 
-                #for i in range(self.newic.BObj.nbonds,self.newic.AObj.nangles+self.newic.BObj.nbonds):
-                #    print "%1.2f " % self.ictan[n][i],
-                #for i in range(self.newic.BObj.nbonds+self.newic.AObj.nangles,self.newic.AObj.nangles+self.newic.BObj.nbonds+self.newic.TObj.ntor):
-                #    print "%1.2f " % self.ictan[n][i],
-                #print "\n"
 
 
     # for some reason this fxn doesn't work when called outside gsm
     def get_tangents_1e(self,n0=0):
-        size_ic = self.nodes[0].num_ics
-        nbonds = self.nodes[0].BObj.nbonds
-        nangles = self.nodes[0].AObj.nangles
-        ntor = self.nodes[0].TObj.ntor
-        ictan0 = np.zeros((size_ic,1))
+        ictan0 = np.zeros((self.newic.num_primitives,1))
         dqmaga = [0.]*self.nnodes
-        dqa = np.zeros((self.nnodes,self.nnodes))
-        self.store_energies()
 
         for n in range(n0+1,self.nnodes-1):
             do3 = False
@@ -368,47 +353,25 @@ class Base_Method(object,Print,Analyze):
 
                 print ' 3 way tangent ({}): f1:{:3.2}'.format(n,f1)
 
-                t1 = np.zeros(size_ic)
-                t2 = np.zeros(size_ic)
-
-                for i in range(nbonds):
-                    t1[i] = self.nodes[intic_n].BObj.bondd[i] - self.nodes[newic_n].BObj.bondd[i]
-                    t2[i] = self.nodes[newic_n].BObj.bondd[i] - self.nodes[int2ic_n].BObj.bondd[i]
-                for i in range(nangles):
-                    t1[nbonds+i] = (self.nodes[intic_n].AObj.anglev[i] - self.nodes[newic_n].AObj.anglev[i])*np.pi/180.
-                    t2[nbonds+i] = (self.nodes[newic_n].AObj.anglev[i] - self.nodes[int2ic_n].AObj.anglev[i])*np.pi/180.
-                for i in range(ntor):
-                    tmp1 = (self.nodes[intic_n].TObj.torv[i] - self.nodes[newic_n].TObj.torv[i])*np.pi/180.
-                    tmp2 = (self.nodes[newic_n].TObj.torv[i] - self.nodes[int2ic_n].TObj.torv[i])*np.pi/180.
-                    if tmp1 > np.pi:
-                        tmp1 = -1*(2*np.pi-tmp1)
-                    if tmp1 < -np.pi:
-                        tmp1 = 2*np.pi + tmp1
-                    if tmp2 > np.pi:
-                        tmp2 = -1*(2*np.pi - tmp2)
-                    if tmp2 < -np.pi:
-                        tmp2 = 2*np.pi + tmp2
-                    t1[nbonds+nangles+i] = tmp1
-                    t2[nbonds+nangles+i] = tmp2
-                ictan0 = f1*t1 +(1-f1)*t2
-                ictan0 = ictan0.reshape((size_ic,1))
+                t1 = self.tangent(intic_n,newic_n)
+                t2 = self.tangent(newic_n,int2ic_n)
+                ictan0 = f1*t1 +(1.-f1)*t2
                 self.ictan[n]=ictan0
             
             dqmaga[n]=0.0
-            ictan0 = np.reshape(np.copy(self.ictan[n]),(size_ic,1))
-            self.newic.set_xyz(self.nodes[newic_n].coords)
-            self.newic.bmatp = self.newic.bmatp_create()
-            self.newic.bmatp_to_U()
-            self.newic.opt_constraint(ictan0)
-            dqmaga[n] += np.dot(ictan0[:nbonds].T,self.newic.Ut[-1,:nbonds])*2.5
-            dqmaga[n] += np.dot(ictan0[nbonds:].T,self.newic.Ut[-1,nbonds:])
-            dqmaga[n] = float(dqmaga[n])
+            ictan0 = np.copy(self.ictan[n])
+            self.newic.xyz = self.nodes[newic_n].xyz
+            Vecs = self.newic.update_coordinate_basis(ictan0)
+            nbonds=self.nodes[0].num_bonds
+            dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
+            dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
+            dqmaga[n] = float(np.sqrt(dqmaga[n]))
         
 
-        #print '------------printing ictan[:]-------------'
-        #for row in ictan:
-        #    print row
-        if self.newic.print_level>0:
+        if self.print_level>1:
+            print '------------printing ictan[:]-------------'
+            for n in range(n0+1,self.nnodes):
+                print self.ictan[n].T
             print '------------printing dqmaga---------------'
             print dqmaga
         self.dqmaga = dqmaga
@@ -421,7 +384,7 @@ class Base_Method(object,Print,Analyze):
         """
         #ictan = [[]]*self.nnodes
         dqmaga = [0.]*self.nnodes
-        dqa = [[],]*self.nnodes
+        #dqa = [[],]*self.nnodes
 
         ncurrent,nlist = self.make_nlist()
 
@@ -484,7 +447,6 @@ class Base_Method(object,Print,Analyze):
 
     def opt_steps(self,opt_steps):
 
-        print "in opt_steps"
         # these can be put in a function
         for n in range(self.nnodes):
             if self.nodes[n]!=None:
@@ -506,8 +468,7 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(self.nnodes):
             if self.nodes[n] != None and self.active[n]==True:
-
-                print "\n Optimizing node %i" % n
+                print " Optimizing node %i" % n
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
 
@@ -595,9 +556,25 @@ class Base_Method(object,Print,Analyze):
             self.nR+=1
             print " nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[self.nR-1] = True
-
-
         return success
+
+    def tangent(self,n1,n2):
+        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        # this could have been done easier but it is nicer to do it this way
+        Q1 = self.nodes[n1].primitive_internal_values 
+        Q2 = self.nodes[n2].primitive_internal_values 
+        PMDiff = Q2-Q1
+        #for i in range(len(PMDiff)):
+        for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
+            if prim.isPeriodic:
+                Plus2Pi = PMDiff[k] + 2*np.pi
+                Minus2Pi = PMDiff[k] - 2*np.pi
+                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
+                    PMDiff[k] = Plus2Pi
+                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
+                    PMDiff[k] = Minus2Pi
+        return np.reshape(PMDiff,(-1,1))
+
 
     def interpolateP(self,newnodes=1):
         print " Adding product node"
@@ -766,16 +743,9 @@ class Base_Method(object,Print,Analyze):
         """
         
         """
-
         #close_dist_fix(0) #done here in GString line 3427.
-
-        #print '**************************************************'
-        #print '***************in ic_reparam_g********************'
-        #print '**************************************************'
-
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
-
         dqavg = 0.0
         disprms = 0.0
         h1dqmag = 0.0
@@ -872,16 +842,14 @@ class Base_Method(object,Print,Analyze):
 
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
-
         print "modifying Hessian with RP"
-        #self.nodes[en].form_constrained_DLC(self.ictan[en])
-        self.nodes[en].form_unconstrained_DLC()
 
-        self.newic.set_xyz(self.nodes[en].coords)
-        self.newic.update_ics()
-        self.newic.form_constrained_DLC(self.ictan[en])
-        nicd = self.newic.nicd  #len
-        num_ics = self.newic.num_ics #size_ic
+        self.nodes[en].update_coordinate_basis()
+
+        self.newic.xyz = self.nodes[en].xyz
+        self.newic.update_coordinate_basis(self.ictan[en])
+        nicd = self.newic.num_coordinates
+        num_ics = self.newic.num_primitives 
 
         E0 = self.energies[en]/KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/KCAL_MOL_PER_AU
@@ -890,23 +858,19 @@ class Base_Method(object,Print,Analyze):
         else:
             Ep1 = Em1
 
-        q0 =  self.newic.q[nicd-1]
+        q0 = self.newic.coordinates[0]
         #print "q0 is %1.3f" % q0
-        tan0 = self.newic.Ut[nicd-1,:]
+        tan0 = self.newic.coord_basis[:,0]
         #print "tan0"
         #print tan0
 
-        self.newic.set_xyz(self.nodes[en-1].coords)
-        self.newic.bmatp_create()
-        self.newic.bmat_create()
-        qm1 = self.newic.q[nicd-1]
+        self.newic.xyz = self.nodes[en-1].xyz
+        qm1 = self.newic.coordinates[0]
         #print "qm1 is %1.3f " %qm1
 
         if en+1<self.nnodes:
-            self.newic.set_xyz(self.nodes[en+1].coords)
-            self.newic.bmatp_create()
-            self.newic.bmat_create()
-            qp1 = self.newic.q[nicd-1]
+            self.newic.xyz = self.nodes[en+1].xyz
+            qp1 = self.newic.coordinates[0]
         else:
             qp1 = qm1
 
@@ -915,16 +879,17 @@ class Base_Method(object,Print,Analyze):
         if self.nodes[en].isTSnode:
             print " TS Hess init'd w/ existing Hintp"
 
-        self.newic.set_xyz(self.nodes[en].coords)
-        self.newic.form_unconstrained_DLC()
-        self.newic.Hintp=np.copy(self.nodes[en].Hintp)
-        self.newic.Hint = self.newic.Hintp_to_Hint()
+        self.newic.xyz = self.nodes[en].xyz
+        Vecs =self.newic.update_coordinate_basis()
 
-        tan = np.dot(self.newic.Ut,tan0.T)  #(nicd,numic)(num_ic,1)=nicd,1 
+        self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian
+        self.newic.form_Hessian_in_basis()
+
+        tan = np.dot(Vecs.T,tan0)   #nicd,1
         #print "tan"
         #print tan
 
-        Ht = np.dot(self.newic.Hint,tan) #nicd,1
+        Ht = np.dot(self.newic.Hessian,tan) #(nicd,nicd)(nicd,1) = nicd,1
         tHt = np.dot(tan.T,Ht) 
 
         a = abs(q0-qm1)
@@ -935,25 +900,21 @@ class Base_Method(object,Print,Analyze):
         ttt = np.outer(tan,tan)
         #print "Hint before"
         #with np.printoptions(threshold=np.inf):
-        #    print self.newic.Hint
-        eig,tmph = np.linalg.eigh(self.newic.Hint)
+        #    print self.newic.Hessian
+        #eig,tmph = np.linalg.eigh(self.newic.Hessian)
         #print "initial eigenvalues"
         #print eig
        
-        self.newic.Hint += (c-tHt)*ttt
-        #self.nodes[en].Hint = np.copy(self.newic.Hint)
-        self.optimizer[en].Hint = np.copy(self.newic.Hint)
-        #print "Hint"
+        self.newic.Hessian += (c-tHt)*ttt
+        self.nodes[en].Hessian = self.newic.Hessian
         #with np.printoptions(threshold=np.inf):
-        #    print self.nodes[en].Hint
-        #    print self.optimizer[en].Hint
-        #print "shape of Hint is %s" % (np.shape(self.nodes[en].Hint),)
+        #    print self.nodes[en].Hessian
+        #print "shape of Hessian is %s" % (np.shape(self.nodes[en].Hessian),)
 
-        #this can also work on non-TS nodes?
         self.nodes[en].newHess = 2
 
         if False:
-            eigen,tmph = np.linalg.eigh(self.optimizer[en].Hint) #nicd,nicd
+            eigen,tmph = np.linalg.eigh(self.nodes[en].Hessian) #nicd,nicd
             #print "eigenvalues of new Hess"
             #print eigen
 
@@ -993,6 +954,30 @@ class Base_Method(object,Print,Analyze):
             print("******** Turning off climbing image and exact TS search **********")
         print "*********************************************************************"
    
+    def print_msg(self):
+        msg="""
+        __        __   _                            _        
+        \ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___  
+         \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \ 
+          \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
+           \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/ 
+                                        ____ ____  __  __ 
+                           _ __  _   _ / ___/ ___||  \/  |
+                          | '_ \| | | | |  _\___ \| |\/| |
+                          | |_) | |_| | |_| |___) | |  | |
+                          | .__/ \__, |\____|____/|_|  |_|
+                          |_|    |___/                    
+#==========================================================================#
+#| If this code has benefited your research, please support us by citing: |#
+#|                                                                        |# 
+#| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+#| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+#| http://dx.doi.org/10.1063/1.4952956                                    |#
+#==========================================================================#
+               """
+
+        print msg
+
 
 
 

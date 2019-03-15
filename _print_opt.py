@@ -25,9 +25,10 @@ class Print:
             f.write("[GEOCONV]\n")
             f.write('energy\n')
             V0=self.nodes[0].energy
-            for ico in self.nodes:
+            for n,ico in enumerate(self.nodes):
                 if ico!=None:
                     f.write('{}\n'.format(ico.energy-V0))
+                    #f.write('{}\n'.format(self.energies[n]))
             f.write("max-force\n")
             for ico in self.nodes:
                 if ico != None:

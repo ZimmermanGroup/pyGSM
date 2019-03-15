@@ -38,6 +38,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if self.options['primitives'] is None:
             print " making primitives from options!"
             self.Prims = PrimitiveInternalCoordinates(options.copy())
+            self.options['primitives'] = self.Prims
         else:
             print " setting primitives from options!"
             self.Prims=self.options['primitives']
@@ -277,10 +278,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 Float array containing difference in primitive coordinates
         """
 
-        #print "building dlc"
         click()
 
-        G = self.Prims.GMatrix(xyz)
+        G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = click()
 
         L, Q = np.linalg.eigh(G)

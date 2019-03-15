@@ -2,7 +2,6 @@ import numpy as np
 import manage_xyz
 from units import *
 from _linesearch import backtrack,NoLineSearch
-from dlc import DLC
 from cartesian import CartesianCoordinates
 import options
 
@@ -19,7 +18,7 @@ class base_optimizer(object):
         if hasattr(base_optimizer, '_default_options'): return base_optimizer._default_options.copy()
         opt = options.Options() 
 
-
+        #remove this as an option
         opt.add_option(
                 key='opt_type',
                 required=True,
@@ -180,7 +179,7 @@ class base_optimizer(object):
 
         if opt_type=="UNCONSTRAINED":
             constraints=None
-        elif opt_type=='ICTAN':
+        elif opt_type=='ICTAN' or opt_type=="CLIMB":
             constraints = ictan
         else:
             raise NotImplementedError
@@ -202,7 +201,7 @@ class base_optimizer(object):
         constraint_steps = np.zeros((n,1))
         # => ictan climb
         if opt_type=="CLIMB": 
-            constraint_steps[0]=self.walk_up(g,end-1)
+            constraint_steps[0]=self.walk_up(g,0)
         # => MECI
         elif opt_type=='MECI': 
             constraint_steps[0] = self.dgrad_step(molecule) #first vector is x
@@ -210,7 +209,7 @@ class base_optimizer(object):
             constraint_steps[1]=self.dgrad_step(molecule)
         # => seam climb
         elif opt_type=='TS-SEAM':
-            constraint_steps[0]=self.walk_up(g,end-1)
+            constraint_steps[0]=self.walk_up(g,0)
             constraint_steps[1]=self.dgrad_step(molecule)
 
         return constraint_steps
@@ -269,34 +268,37 @@ class base_optimizer(object):
     #    return dq
 
 
-    def step_controller(self,step,ratio,gradrms,pgradrms):
+    def step_controller(self,step,ratio,gradrms,pgradrms,dEpre,opt_type,dE_iter):
         # => step controller controls DMAX/DMIN <= #
-        self.options['DMAX'] = step
-        if (ratio<0.25 ): #can also check that dEpre >0.05?
-            #or ratio>1.5
+        if dE_iter > 0.01 and opt_type in ['UNCONSTRAINED','ICTAN']:
+            if step<self.options['DMAX']:
+                self.options['DMAX'] = step/1.5
+            else:
+                self.options['DMAX'] = self.options['DMAX']/1.5
+        if (ratio<0.25) and abs(dEpre)>0.05:
+            #or ratio >1.5
             if self.options['print_level']>0:
                 print(" decreasing DMAX"),
             if step<self.options['DMAX']:
                 self.options['DMAX'] = step/1.2
             else:
                 self.options['DMAX'] = self.options['DMAX']/1.2
-        elif ratio>0.75 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
-            #and ratio<1.25 and  
+        elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
             if self.options['print_level']>0:
                 print(" increasing DMAX"),
             #self.buf.write(" increasing DMAX")
-            if step > self.options['DMAX']:
-                if True:
-                    print " wolf criterion increased stepsize... ",
-                    print " setting DMAX to wolf  condition...?"
-                    self.options['DMAX']=step
+            #if step > self.options['DMAX']:
+            #    if True:
+            #        print " wolf criterion increased stepsize... ",
+            #        print " setting DMAX to wolf  condition...?"
+            #        self.options['DMAX']=step
             self.options['DMAX']=self.options['DMAX']*1.2 + 0.01
             if self.options['DMAX']>0.25:
                 self.options['DMAX']=0.25
         
         if self.options['DMAX']<self.DMIN:
             self.options['DMAX']=self.DMIN
-        print " DMAX", self.options['DMAX']
+        print " DMAX %1.2f" % self.options['DMAX']
 
     def eigenvector_step(self,molecule,g,nconstraints):
 
@@ -305,10 +307,9 @@ class base_optimizer(object):
         if self.options['SCALEQN']>10.0: SCALE=10.0
         
         # convert to eigenvector basis
-        temph = molecule.Hessian[nconstraints:,nconstraints:]
+        temph = molecule.Hessian[nconstraints:,nconstraints:].copy()
         e,v_temp = np.linalg.eigh(temph)
-        v_temp = v_temp.T
-        gqe = np.dot(v_temp,g[nconstraints:])
+        gqe = np.dot(v_temp.T,g[nconstraints:])
 
         lambda1 = self.set_lambda1('NOT-TS',e) 
 
@@ -316,7 +317,7 @@ class base_optimizer(object):
         dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
         
         # => Convert step back to DLC basis <= #
-        dq_tmp = np.dot(v_temp.T,dqe0)
+        dq_tmp = np.dot(v_temp,dqe0)
         dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
         dq = np.zeros_like(g)
 
@@ -325,33 +326,33 @@ class base_optimizer(object):
         return dq
 
     # need to modify this only for the DLC region
-    def TS_eigenvector_step(self,c_obj,g,ictan):
+    def TS_eigenvector_step(self,molecule,g,ictan):
         '''
         Takes an eigenvector step using the Bofill updated Hessian ~1 negative eigenvalue in the
         direction of the reaction path.
 
         '''
         SCALE =self.options['SCALEQN']
-        if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess
+        if molecule.newHess>0: SCALE = self.options['SCALEQN']*molecule.newHess
         if self.options['SCALEQN']>10.0: SCALE=10.0
 
         # constraint vector
         norm = np.linalg.norm(ictan)
         C = ictan/norm
-        dots = np.dot(c_obj.Ut,C) #(nicd,numic)(numic,1)
-        Cn = np.dot(c_obj.Ut.T,dots) #(numic,nicd)(nicd,1) = numic,1
+        Vecs = molecule.coord_basis
+        Cn = np.linalg.multi_dot([Vecs,Vecs.T,C])
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
 
         # => get eigensolution of Hessian <= 
-        eigen,tmph = np.linalg.eigh(self.Hint) #nicd,nicd 
+        eigen,tmph = np.linalg.eigh(molecule.Hessian) #nicd,nicd 
         tmph = tmph.T
 
         #TODO nneg should be self and checked
         self.nneg = sum(1 for e in eigen if e<-0.01)
 
         #=> Overlap metric <= #
-        overlap = np.dot(np.dot(tmph,c_obj.Ut),Cn) 
+        overlap = np.dot(np.dot(tmph,Vecs.T),Cn) 
 
         print "overlap", overlap[:4].T
         # Max overlap metrics
@@ -371,8 +372,8 @@ class base_optimizer(object):
             path_overlap_e_g = gqe[maxoln]
             print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
             # => calculate eigenvector step <=#
-            dqe0 = np.zeros((c_obj.nicd_DLC,1))
-            for i in range(c_obj.nicd_DLC):
+            dqe0 = np.zeros((molecule.num_coordinates,1))
+            for i in range(molecule.num_coordinates):
                 if i != maxoln:
                     dqe0[i] = -gqe[i] / (abs(eigen[i])+lambda1) / SCALE
             lambda0 = 0.0025
@@ -383,9 +384,9 @@ class base_optimizer(object):
             dq = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq ]
         else:
             # => if overlap is small use Cn as Constraint <= #
-            c_obj.form_constrained_DLC(ictan) 
-            self.Hint = c_obj.Hintp_to_Hint()
-            dq = self.eigenvector_step(c_obj,g,c_obj.nicd_DLC-1)  #hard coded!
+            molecule.update_coordinate_basis(ictan)
+            molecule.form_Hessian_in_basis()
+            dq = self.eigenvector_step(molecule,g,1)  #hard coded!
 
         return dq,maxol_good
 
@@ -414,7 +415,7 @@ class base_optimizer(object):
             if mode=='BFGS':
                 molecule.form_Hessian_in_basis()
             if mode=='BOFILL':
-                change=self.update_bofill()
+                change=self.update_bofill(molecule)
                 molecule.update_Hessian(change)
         else:
             self.Hint += change
@@ -450,10 +451,10 @@ class base_optimizer(object):
             change -= np.outer(Hdx,Hdx)/dxHdx
         return change
 
-    def update_bofill(self):
+    def update_bofill(self,molecule):
         print "in update bofill"
 
-        G = np.copy(self.Hint) #nicd,nicd
+        G = np.copy(molecule.Hessian) #nicd,nicd
         Gdx = np.dot(G,self.dx) #(nicd,nicd)(nicd,1) = (nicd,1)
         dgmGdx = self.dg - Gdx # (nicd,1)
 

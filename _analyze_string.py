@@ -77,7 +77,7 @@ class Analyze:
                 found=n
                 npeaks2+=1
         npeaks = npeaks2
-        print "found %i significant peak(s) TOL %3.2f" %(npeaks,ediff)
+        print " found %i significant peak(s) TOL %3.2f" %(npeaks,ediff)
 
         #handle dissociative case
         if rtype==3 and npeaks==1:

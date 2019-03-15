@@ -28,6 +28,7 @@ from select import select
 
 import numpy as np
 from numpy.linalg import multi_dot
+from contextlib import contextmanager
 
 # For Python 3 compatibility
 try:
@@ -43,6 +44,16 @@ import math
 import six # For six.string_types
 from subprocess import PIPE
 from collections import OrderedDict, defaultdict
+
+
+@contextmanager
+def custom_redirection(fileobj):
+    old = sys.stdout
+    sys.stdout = fileobj
+    try:
+        yield fileobj
+    finally:
+        sys.stdout = old
 
 #================================#
 #       Set up the logger        #

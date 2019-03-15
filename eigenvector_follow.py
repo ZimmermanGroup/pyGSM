@@ -2,7 +2,6 @@ import numpy as np
 import manage_xyz
 from units import *
 from _linesearch import backtrack,NoLineSearch
-from dlc import DLC
 from cartesian import CartesianCoordinates
 from base_optimizer import base_optimizer
 import StringIO
@@ -17,8 +16,11 @@ class eigenvector_follow(base_optimizer):
     def optimize(self,molecule,refE=0.,opt_steps=3,ictan=None):
 
         #print " refE %5.4f" % refE
+        print "initial E %5.4f" % (molecule.energy - refE)
         geoms = []
+        energies=[]
         geoms.append(molecule.geometry)
+        energies.append(molecule.energy-refE)
 
         # stash/initialize some useful attributes
         self.disp = 1000.
@@ -34,16 +36,14 @@ class eigenvector_follow(base_optimizer):
 
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
-        #print " opt_type ",opt_type
 
         if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
-            n = len(x)  # constraints not allowed for cartesian
+            n = molecule.num_coordinates
         else:
-            n_actual = len(x)
-            n =  len(x) - nconstraints 
-            self.x_prim=np.zeros((len(molecule.primitive_internal_coordinates),1),dtype=float)
-            self.g_prim=np.zeros((len(molecule.primitive_internal_coordinates),1),dtype=float)
-            #self.g_prim_c=np.zeros((n_actual,1),dtype=float)
+            n_actual = molecule.num_coordinates
+            n =  n_actual - nconstraints 
+            self.x_prim=np.zeros((molecule.num_primitives,1),dtype=float)
+            self.g_prim=np.zeros((molecule.num_primitives,1),dtype=float)
         
         # Evaluate the function value and its gradient.
         fx = molecule.energy
@@ -57,7 +57,6 @@ class eigenvector_follow(base_optimizer):
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
             print " On opt step ",ostep+1
-            print " fx %1.4f" % fx
 
             # update Hess
             if update_hess:
@@ -74,17 +73,18 @@ class eigenvector_follow(base_optimizer):
                 if self.options['opt_type']!='TS':
                     dq = self.eigenvector_step(molecule,g,nconstraints)
                 else:
-                    pass
-                    #TODO
-                    #dq,maxol_good = self.TS_eigenvector_step(c_obj,g,ictan)
+                    dq,maxol_good = self.TS_eigenvector_step(molecule,g,ictan)
                     if not maxol_good:
                         nconstraints=1
                         opt_type='CLIMB'
-            step = np.linalg.norm(dq)
-            dq = dq/step #normalize
-            if step>self.options['DMAX']:
+            actual_step = np.linalg.norm(dq)
+            print "actual_step=",actual_step
+            dq = dq/actual_step #normalize
+            if actual_step>self.options['DMAX']:
                 step=self.options['DMAX']
-                print " reducing step, new step =",step
+                print " reducing step, new step = %1.2f" %step
+            else:
+                step=actual_step
         
             # store values
             xp = x.copy()
@@ -92,6 +92,7 @@ class eigenvector_follow(base_optimizer):
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = np.sqrt(np.dot(g.T,g)/n)
+            print "pgradrms ",pgradrms
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 xp_prim = self.x_prim.copy()
                 gp_prim = self.g_prim.copy()
@@ -120,13 +121,13 @@ class eigenvector_follow(base_optimizer):
             dEpre = np.dot(np.transpose(dq_actual[nconstraints:]),gp[nconstraints:]) + 0.5*np.dot(np.transpose(dEtemp),dq_actual[nconstraints:])
             dEpre *=KCAL_MOL_PER_AU
             for nc in range(nconstraints):
-                dEpre += gp[-nc-1]*constraint_steps[-nc-1]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq WARNING THIS IS ONLY GOOD FOR DLC
+                dEpre += gp[nc]*constraint_steps[nc]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq WARNING THIS IS ONLY GOOD FOR DLC
 
             # control step size 
             dEstep = fx - fxp
             ratio = dEstep/dEpre
             molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
-            self.step_controller(step,ratio,molecule.gradrms,pgradrms)
+            self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
         
             # report the progress 
             #TODO make these lists and check last element for convergence
@@ -140,11 +141,13 @@ class eigenvector_follow(base_optimizer):
             # update molecule xyz
             xyz = molecule.update_xyz(dq_actual)
             geoms.append(molecule.geometry)
+            energies.append(molecule.energy-refE)
 
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
-
-                self.g_prim = np.dot(molecule.coord_basis,g)
+            
+                # only form g_prim for non-constrained 
+                self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
                 #self.x_prim = molecule.primitive_internal_values
                 self.dx = x-xp
                 self.dg = g - gp
@@ -157,6 +160,8 @@ class eigenvector_follow(base_optimizer):
             else:
                 raise NotImplementedError
 
+            if self.options['print_level']>0:
+                print "Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX'])
             self.buf.write(' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
             if self.converged(g,n):
@@ -175,7 +180,7 @@ class eigenvector_follow(base_optimizer):
                 #    c_obj.bmatp = c_obj.bmatp_create()
         
         print(self.buf.getvalue())
-        return geoms
+        return geoms,energies
 
 
 

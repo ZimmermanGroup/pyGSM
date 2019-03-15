@@ -246,7 +246,7 @@ class InternalCoordinates(object):
         logger.info("Finite-difference Finished")
 
     def calcGrad(self, xyz, gradx):
-        q0 = self.calculate(xyz)
+        #q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
         Bmat = self.wilsonB(xyz)
         # Internal coordinate gradient
@@ -306,8 +306,8 @@ class InternalCoordinates(object):
             Bmat = self.wilsonB(xyz1)
 
             #CRA 3/2019
-            #Ginv = self.GInverse(xyz1)
-            Ginv = np.linalg.inv(np.dot(Bmat,Bmat.T))
+            Ginv = self.GInverse(xyz1)
+            #Ginv = np.linalg.inv(np.dot(Bmat,Bmat.T))
             # Get new Cartesian coordinates
             dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1])
             xyz2 = xyz1 + dxyz.reshape((-1,3))

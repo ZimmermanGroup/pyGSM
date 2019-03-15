@@ -49,12 +49,13 @@ class QChem(Lot):
                 tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
+        
+        cmd = "qchem -nt {} -save {} {}.qchem.out {}.{}".format(self.nproc,tempfilename,tempfilename,self.node_id,multiplicity)
 
-        cmd = "qchem -nt {} -save {} {}.qchem.out {}".format(self.nproc,tempfilename,tempfilename,multiplicity)
         os.system(cmd)
         
         efilepath = os.environ['QCSCRATCH']
-        efilepath += '/{}/GRAD'.format(multiplicity)
+        efilepath += '/{}.{}/GRAD'.format(self.node_id,multiplicity)
         with open(efilepath) as efile:
             elines = efile.readlines()
         
@@ -67,7 +68,7 @@ class QChem(Lot):
                 temp += 1
 
         gradfilepath = os.environ['QCSCRATCH']
-        gradfilepath += '/{}/GRAD'.format(multiplicity)
+        gradfilepath += '/{}.{}/GRAD'.format(self.node_id,multiplicity)
 
         with open(gradfilepath) as gradfile:
             gradlines = gradfile.readlines()
@@ -114,10 +115,17 @@ class QChem(Lot):
 
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
+        test = np.asarray(tmp[state][1])
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     #@staticmethod
     def copy(self,node_id):
+        base = os.environ['QCSCRATCH']
+        for state in self.states:
+            multiplicity = state[0]
+            efilepath_old=base+ '/{}.{}'.format(self.node_id,multiplicity)
+            efilepath_new =base+ '/{}.{}'.format(node_id,multiplicity)
+            os.system('cp -r ' + efilepath_old +' ' + efilepath_new)
         return type(self)(self.options.copy().set_values({
             "node_id":node_id,
             }))

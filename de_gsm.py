@@ -88,16 +88,20 @@ class GSM(Base_Method):
         self.nodes[0].PES.dE = dE[0]
         self.nodes[-1].gradrms=grmss[-1]
         self.nodes[-1].PES.dE = dE[-1]
+        self.emax = float(max(self.energies[1:-1]))
+        self.TSnode = np.argmax(self.energies)
         print " initial energy is %3.4f" % self.nodes[0].energy
 
         for struct in range(1,nstructs-1):
             self.nodes[struct] = Molecule.copy_from_options(self.nodes[0],coords[struct],struct)
             self.nodes[struct].gradrms=grmss[struct]
             self.nodes[struct].PES.dE = dE[struct]
+            self.nodes[struct].newHess=5
 
         self.nnodes=self.nR=nstructs
         self.isRestarted=True
         self.done_growing=True
+        self.nodes[self.TSnode].isTSnode=True
         print " setting all interior nodes to active"
         for n in range(1,self.nnodes-1):
             self.active[n]=True
@@ -139,12 +143,11 @@ class GSM(Base_Method):
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=25)
             self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
-            exit()
         else:
             oi=0
             self.get_tangents_1()
         for i in range(self.nnodes):
-            if self.nodes[i] !=0:
+            if self.nodes[i] !=None:
                 self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2
 
         if self.tscontinue==True:
@@ -206,23 +209,6 @@ class GSM(Base_Method):
         if self.growth_direction==2:
             self.active[nR]=False
         #print(" Here is new active:",self.active)
-
-    def tangent(self,n1,n2):
-        #print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
-        # this could have been done easier but it is nicer to do it this way
-        Q1 = self.nodes[n1].primitive_internal_values 
-        Q2 = self.nodes[n2].primitive_internal_values 
-        PMDiff = Q2-Q1
-        #for i in range(len(PMDiff)):
-        for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
-            if prim.isPeriodic:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
-        return np.reshape(PMDiff,(-1,1))
 
     def check_if_grown(self):
         isDone=False
@@ -291,8 +277,10 @@ class GSM(Base_Method):
         return isDone
 
     def set_V0(self):
-        self.nodes[0].gradrms = 0.
         self.nodes[0].V0 = self.nodes[0].energy
+
+        #TODO should be actual gradient
+        self.nodes[0].gradrms = 0.
         if self.growth_direction!=1:
             self.nodes[-1].gradrms = 0.
             print " Energy of the end points are %4.3f, %4.3f" %(self.nodes[0].energy,self.nodes[-1].energy)
@@ -302,35 +290,10 @@ class GSM(Base_Method):
             self.nodes[-1].energy = self.nodes[0].energy
             self.nodes[-1].gradrms = 0.
 
-    def print_msg(self):
-        msg="""
-        __        __   _                            _        
-        \ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___  
-         \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \ 
-          \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
-           \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/ 
-                                        ____ ____  __  __ 
-                           _ __  _   _ / ___/ ___||  \/  |
-                          | '_ \| | | | |  _\___ \| |\/| |
-                          | |_) | |_| | |_| |___) | |  | |
-                          | .__/ \__, |\____|____/|_|  |_|
-                          |_|    |___/                    
-#==========================================================================#
-#| If this code has benefited your research, please support us by citing: |#
-#|                                                                        |# 
-#| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
-#| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
-#| http://dx.doi.org/10.1063/1.4952956                                    |#
-#==========================================================================#
-               """
-
-        print msg
-
 
 if __name__=='__main__':
     from qchem import QChem
     from pes import PES
-    #from dlc import DLC
     from dlc_new import DelocalizedInternalCoordinates
     from eigenvector_follow import eigenvector_follow
     from _linesearch import backtrack,NoLineSearch
@@ -340,18 +303,15 @@ if __name__=='__main__':
     #basis="sto-3g"
     basis='6-31G'
     nproc=8
-    functional='HF'
-    #functional='B3LYP'
+    #functional='HF'
+    functional='B3LYP'
     filepath1="examples/tests/butadiene_ethene.xyz"
     filepath2="examples/tests/cyclohexene.xyz"
     #filepath1='reactant.xyz'
     #filepath2='product.xyz'
 
-    geom1 = manage_xyz.read_xyz(filepath1)
-    geom2 = manage_xyz.read_xyz(filepath2)
-
-    lot1=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional=functional,nproc=nproc,geom=geom1)
-    lot2 = QChem(lot1.options.copy().set_values({'geom':geom2}))
+    lot1=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional=functional,nproc=nproc,fnm=filepath1)
+    lot2 = QChem(lot1.options.copy().set_values({'fnm':filepath2}))
 
     pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
     pes2 = PES(pes1.options.copy().set_values({'lot':lot2}))
@@ -363,15 +323,15 @@ if __name__=='__main__':
 
     gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer,print_level=1)
     gsm.restart_string()
-    gsm.get_tangents_1()
-    from time import time
-    t = time()
-    gsm.ic_reparam()
-    dt = time() - t
-    print "time to form difference is ",dt
-    gsm.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+    #gsm.get_tangents_1()
+    #from time import time
+    #t = time()
+    #gsm.ic_reparam()
+    #dt = time() - t
+    #print "time to form reparam is ",dt
+    #gsm.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
 
-    #gsm.go_gsm(rtype=2,opt_steps=3)
+    gsm.go_gsm(rtype=2,opt_steps=3)
 
     #gsm.interpolate(7)
     #xyzs = []

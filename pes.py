@@ -111,7 +111,7 @@ class PES(object):
     
     def get_gradient(self,xyz):
         tmp =self.lot.get_gradient(xyz,self.multiplicity,self.ad_idx)
-        grad = np.reshape(tmp,(3*len(tmp),1))
+        grad = np.reshape(tmp,(-1,1))
         if self.FORCE is not None:
             for i in self.FORCE:
                 atoms=[i[0],i[1]]

@@ -429,12 +429,17 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
-    def add(self, dof):
+    def add(self, dof,verbose=False):
         if dof not in self.Internals:
+            if verbose:
+                print(" adding ",dof)
             self.Internals.append(dof)
             self.reorderPrimitives()
             self.clearCache()  # CRA why is this necessary?
             # because primitives changed, Bmatrix is derivative of prims
+    
+    def dof_index(self,dof):
+        return self.Internals.index(dof)
 
     def delete(self, dof):
         for ii in range(len(self.Internals))[::-1]:
@@ -561,25 +566,26 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) 
                 elem1 = min(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
                 elem2 = max(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
-                A = 1.734
-                if elem1 < 3:
-                    if elem2 < 3:
-                        B = -0.244
-                    elif elem2 < 11:
-                        B = 0.352
-                    else:
-                        B = 0.660
-                elif elem1 < 11:
-                    if elem2 < 11:
-                        B = 1.085
-                    else:
-                        B = 1.522
-                else:
-                    B = 2.068
-                if covalent(ic.a, ic.b):
-                    Hdiag.append(A/(r-B)**3)
-                else:
-                    Hdiag.append(0.1)
+                Hdiag.append(0.35)
+                #A = 1.734
+                #if elem1 < 3:
+                #    if elem2 < 3:
+                #        B = -0.244
+                #    elif elem2 < 11:
+                #        B = 0.352
+                #    else:
+                #        B = 0.660
+                #elif elem1 < 11:
+                #    if elem2 < 11:
+                #        B = 1.085
+                #    else:
+                #        B = 1.522
+                #else:
+                #    B = 2.068
+                #if covalent(ic.a, ic.b):
+                #    Hdiag.append(A/(r-B)**3)
+                #else:
+                #    Hdiag.append(0.1)
             elif type(ic) in [Angle, LinearAngle, MultiAngle]:
                 if type(ic) in [Angle, LinearAngle]:
                     a = ic.a
@@ -620,6 +626,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 Hdiag.append(0.05)
             else:
                 raise RuntimeError('Failed to build guess Hessian matrix. Make sure all IC types are supported')
+            
+        print "printing diagonals"
+        print Hdiag
         return np.diag(Hdiag)
 
     def build_topology(self, xyz, force_bonds=True, **kwargs):

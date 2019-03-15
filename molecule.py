@@ -251,12 +251,15 @@ class Molecule(object):
         self.TSnode=False
 
         self.newHess = 0
-        if self.Data['Hessian'] is None:
-            self.form_Hessian()
-
         if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
             self.form_Primitive_Hessian()
 
+        if self.Data['Hessian'] is None:
+            if self.Data['Primitive_Hessian'] is not None:
+                print "forming Hessian in basis"
+                self.form_Hessian_in_basis()
+            else:
+                self.form_Hessian()
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
@@ -351,8 +354,8 @@ class Molecule(object):
 
     @property
     def energy(self):
-        #return self.PES.get_energy(self.xyz)
-        return 0.
+        return self.PES.get_energy(self.xyz)
+        #return 0.
 
     @property
     def gradient(self):
@@ -464,6 +467,7 @@ class Molecule(object):
 
     def update_coordinate_basis(self,constraints=None):
         self.coord_obj.build_dlc(self.xyz,constraints)
+        self.coord_obj.clearCache()
         return self.coord_basis
 
     @property
