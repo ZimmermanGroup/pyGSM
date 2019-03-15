@@ -231,6 +231,24 @@ class GSM(Base_Method):
                 self.interpolateP()
         return success
 
+    def tangent(self,n1,n2):
+        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+        # this could have been done easier but it is nicer to do it this way
+        Q1 = self.nodes[n1].primitive_internal_values 
+        Q2 = self.nodes[n2].primitive_internal_values 
+        PMDiff = Q2-Q1
+        #for i in range(len(PMDiff)):
+        for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
+            if prim.isPeriodic:
+                Plus2Pi = PMDiff[k] + 2*np.pi
+                Minus2Pi = PMDiff[k] - 2*np.pi
+                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
+                    PMDiff[k] = Plus2Pi
+                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
+                    PMDiff[k] = Minus2Pi
+        return np.reshape(PMDiff,(-1,1)),None
+
+
     def make_nlist(self):
         ncurrent = 0
         nlist = [0]*(2*self.nnodes)
@@ -322,34 +340,5 @@ if __name__=='__main__':
     optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
 
     gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer,print_level=1)
-    gsm.restart_string()
-    #gsm.get_tangents_1()
-    #from time import time
-    #t = time()
-    #gsm.ic_reparam()
-    #dt = time() - t
-    #print "time to form reparam is ",dt
-    #gsm.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
-
     gsm.go_gsm(rtype=2,opt_steps=3)
 
-    #gsm.interpolate(7)
-    #xyzs = []
-    #for node in gsm.nodes:
-    #    if node != None:
-    #        geom = manage_xyz.np_to_xyz(geom1,node.xyz)
-    #        xyzs.append(geom)
-
-    #manage_xyz.write_xyzs('check.xyz',xyzs,scale=1.)
-
-
-#    gsm.restart_string()
-#    gsm.climb=gsm.find=True
-#    print gsm.nnodes
-#    gsm.TSnode=4
-#    gsm.get_tangents_1()
-#    gsm.get_eigenv_finite(4)
-#
-#    #gsm.tscontinue=False
-#    gsm.go_gsm(rtype=2,opt_steps=3)
-#

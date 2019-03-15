@@ -280,7 +280,7 @@ class Base_Method(object,Print,Analyze):
             #print "getting tangent between %i %i" % (n,n-1)
             assert self.nodes[n]!=None,"n is bad"
             assert self.nodes[n-1]!=None,"n-1 is bad"
-            ictan[n] = self.tangent(n-1,n)
+            ictan[n],_ = self.tangent(n-1,n)
                     #self.nodes[n-1],self.nodes[n])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
@@ -339,7 +339,7 @@ class Base_Method(object,Print,Analyze):
                     intic_n = n+1
                     int2ic_n = n-1
             if not do3:
-                ictan0 = self.tangent(newic_n,intic_n)
+                ictan0,_ = self.tangent(newic_n,intic_n)
             else:
                 f1 = 0.
                 dE1 = abs(self.energies[n+1]-self.energies[n])
@@ -353,8 +353,8 @@ class Base_Method(object,Print,Analyze):
 
                 print ' 3 way tangent ({}): f1:{:3.2}'.format(n,f1)
 
-                t1 = self.tangent(intic_n,newic_n)
-                t2 = self.tangent(newic_n,int2ic_n)
+                t1,_ = self.tangent(intic_n,newic_n)
+                t2,_ = self.tangent(newic_n,int2ic_n)
                 ictan0 = f1*t1 +(1.-f1)*t2
                 self.ictan[n]=ictan0
             
@@ -389,7 +389,7 @@ class Base_Method(object,Print,Analyze):
         ncurrent,nlist = self.make_nlist()
 
         for n in range(ncurrent):
-            self.ictan[nlist[2*n]] = self.tangent(nlist[2*n],nlist[2*n+1])
+            self.ictan[nlist[2*n]],_ = self.tangent(nlist[2*n],nlist[2*n+1])
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
@@ -557,23 +557,6 @@ class Base_Method(object,Print,Analyze):
             print " nn=%i,nR=%i" %(self.nn,self.nR)
             self.active[self.nR-1] = True
         return success
-
-    def tangent(self,n1,n2):
-        print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
-        # this could have been done easier but it is nicer to do it this way
-        Q1 = self.nodes[n1].primitive_internal_values 
-        Q2 = self.nodes[n2].primitive_internal_values 
-        PMDiff = Q2-Q1
-        #for i in range(len(PMDiff)):
-        for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
-            if prim.isPeriodic:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
-        return np.reshape(PMDiff,(-1,1))
 
 
     def interpolateP(self,newnodes=1):

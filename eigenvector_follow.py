@@ -176,8 +176,6 @@ class eigenvector_follow(base_optimizer):
                     x = np.copy(molecule.coordinates)
                     g = molecule.gradient.copy()
                     molecule.form_Hessian_in_basis()
-                #else:
-                #    c_obj.bmatp = c_obj.bmatp_create()
         
         print(self.buf.getvalue())
         return geoms,energies

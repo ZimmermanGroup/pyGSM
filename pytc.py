@@ -6,18 +6,7 @@ import manage_xyz as mx
 from units import *
 from collections import Counter
 from rhf_lot import *
-from contextlib import contextmanager
 import sys
-
-@contextmanager
-def custom_redirection(fileobj):
-    old = sys.stdout
-    sys.stdout = fileobj
-    try:
-        yield fileobj
-    finally:
-        sys.stdout = old
-
 
 class PyTC(Lot):
     """

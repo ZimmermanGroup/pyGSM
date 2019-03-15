@@ -2,9 +2,10 @@ import numpy as np
 import options
 import os
 from base_gsm import *
-from dlc import *
+from dlc_new import *
 from pes import *
-import pybel as pb
+#import pybel as pb
+from slots import Distance,Angle,Dihedral,OutOfPlane
 
 
 class SE_GSM(Base_Method):
@@ -21,29 +22,28 @@ class SE_GSM(Base_Method):
         self.nn=1
         self.isomer_init()
 
+        print(" Done initializing isomer")
+        self.nodes[0].form_Primitive_Hessian()
+        print " Primitive Internal Coordinates"
+        print self.nodes[0].primitive_internal_coordinates
+        print " number of primitives is", self.nodes[0].num_primitives
+
     def isomer_init(self):
         for i in self.driving_coords:
             if "ADD" or "BREAK" in i:
-                bond=(i[1],i[2])
-                if not self.icoords[0].bond_exists(bond):
-                    print " adding bond ",bond
-                    self.icoords[0].mol.OBMol.AddBond(bond[0],bond[1],1)
-                    self.icoords[0].BObj.bonds.append(bond)
+                bond = Distance(i[1]-1,i[2]-1)
+                self.nodes[0].coord_obj.Prims.add(bond,verbose=True)
             if "ANGLE" in i:
-                angle=(i[1],i[2],i[3])
-                if not self.icoords[0].angle_exists(angle):
-                    self.icoords[0].AObj.angles.append(bond)
-                    print " adding angle ",angle
+                angle = Angle(i[1]-1,i[2]-1,i[3]-1)
+                self.nodes[0].coord_obj.Prims.add(angle,verbose=True)
             if "TORSION" in i:
-                torsion=(i[1],i[2],i[3],i[4])
-                if not self.icoords[0].torsion_exists(torsion):
-                    print " adding torsion ",torsion
-                    self.icoords[0].TObj.torsions.append(torsion)
+                torsion = Dihedral(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                self.nodes[0].coord_obj.Prims.add(Dihedral,verbose=True)
+            if "OOP" in i:
+                oop = OutOfPlane(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                self.nodes[0].coord_obj.Prims.add(oop,verbose=True)
 
-        self.icoords[0].madeBonds=True
-        self.icoords[0].setup()
-
-    def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
+    def go_gsm(self,max_iters=50,opt_steps=10,rtype=2):
         """
         rtype=2 Find and Climb TS,
         1 Climb with no exact find, 
@@ -51,11 +51,10 @@ class SE_GSM(Base_Method):
         """
 
         if self.isRestarted==False:
-            self.icoords[0].gradrms = 0.
-            self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-            print " Initial energy is %1.4f" % self.icoords[0].energy
+            self.nodes[0].gradrms = 0.
+            self.nodes[0].V0 = self.nodes[0].energy
+            print " Initial energy is %1.4f" % self.nodes[0].energy
             self.interpolate(1) 
-            self.icoords[1].energy = self.icoords[1].PES.get_energy(self.icoords[1].geom)
             self.growth_iters(iters=max_iters,maxopt=opt_steps)
             if self.tscontinue==True:
                 if self.pastts==1: #normal over the hill
@@ -63,7 +62,7 @@ class SE_GSM(Base_Method):
                     self.add_last_node(2)
                 elif self.pastts==2 or self.pastts==3: #when cgrad is positive
                     self.add_last_node(1)
-                    if self.icoords[self.nR-1].gradrms>5.*self.options['CONV_TOL']:
+                    if self.nodes[self.nR-1].gradrms>5.*self.options['CONV_TOL']:
                         self.add_last_node(1)
                 elif self.pastts==3: #product detected by bonding
                     self.add_last_node(1)
@@ -92,8 +91,34 @@ class SE_GSM(Base_Method):
 
 
     def add_node(self,n1,n2,n3=None):
+        # n3 is not used!
+        BDISTMIN=0.05
         print " adding node: %i from node %i" %(n2,n1)
-        return DLC.add_node_SE(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
+        ictan,bdist =  self.tangent(n1,None)
+
+        if bdist<BDISTMIN:
+            print "bdist too small"
+            return 0
+        Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
+
+        dqmag_scale=1.5
+        minmax = self.DQMAG_MAX - self.DQMAG_MIN
+        a = bdist/dqmag_scale
+        if a>1.:
+            a=1.
+        dqmag = self.DQMAG_MIN+minmax*a
+        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
+
+        dq0 = np.zeros((Vecs.shape[1],1))
+
+        dq0[0] = -dqmag
+        print " dq0[constraint]: %1.3f" % dq0[0]
+
+        old_xyz = self.nodes[n1].xyz.copy()
+        new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
+        new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)
+        return new_node
+
 
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
@@ -101,30 +126,39 @@ class SE_GSM(Base_Method):
         noptsteps=15
         if rtype==1:
             print " copying last node, opting"
-            self.icoords[self.nR] = DLC.copy_node(self.icoords[self.nR-1],self.nR)
+            #self.nodes[self.nR] = DLC.copy_node(self.nodes[self.nR-1],self.nR)
+            self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             print " Optimizing node %i" % self.nR
             self.optimizer[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
-            self.optimize(n=self.nR,nsteps=noptsteps)
+            self.optimizer[self.nR].optimize(
+                        molecule=self.nodes[self.nR],
+                        refE=self.nodes[0].V0,
+                        opt_steps=noptsteps,
+                        )
             self.active[self.nR]=True
-            if (self.icoords[self.nR].coords == self.icoords[self.nR-1].coords).all():
+            if (self.nodes[self.nR].xyz == self.nodes[self.nR-1].xyz).all():
                 print " Opt did not produce new geometry"
             else:
                 self.nR+=1
         elif rtype==2:
             print " already created node, opting"
-            self.optimize(n=self.nR-1,nsteps=noptsteps)
+            self.optimizer[self.nR-1].optimize(
+                        molecule=self.nodes[self.nR-1],
+                        refE=self.nodes[0].V0,
+                        opt_steps=noptsteps,
+                        )
         return
 
 
     def check_add_node(self):
         success=True
-        #if self.icoords[self.nR-1].gradrms < self.gaddmax:
-        if self.icoords[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
+        #if self.nodes[self.nR-1].gradrms < self.gaddmax:
+        if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
                 print " Ran out of nodes, exiting GSM"
                 raise ValueError
             self.active[self.nR-1] = False
-            if self.icoords[self.nR] == 0:
+            if self.nodes[self.nR] == None:
                 success=self.interpolateR()
         return success
 
@@ -142,7 +176,7 @@ class SE_GSM(Base_Method):
         print(" setting active node to %i "%nR)
 
         for i in range(self.nnodes):
-            if self.icoords[i] !=0:
+            if self.nodes[i] != None:
                 self.active[i] = False
                 self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
         self.optimizer[nR].options['OPTTHRESH'] = self.options['ADD_NODE_TOL']
@@ -162,14 +196,112 @@ class SE_GSM(Base_Method):
         return ncurrent,nlist
 
     def tangent(self,n1,n2):
-        if n2 ==self.nR-1:
-            print" getting tangent from node ",n2
-            return DLC.tangent_SE(self.icoords[n2],self.driving_coords,quiet=True)[0]
-        elif self.icoords[n2]!=0 and self.icoords[n1]!=0: 
-            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
-            return DLC.tangent_1(self.icoords[n2],self.icoords[n1])
+        print "n1=",n1
+        print "n2=",n2
+        if n2 ==None or n2==n1:
+            print "getting tangent from node ",n1
+            nadds = self.driving_coords.count("ADD")
+            nbreaks = self.driving_coords.count("BREAK")
+            nangles = self.driving_coords.count("ANGLE")
+            ntorsions = self.driving_coords.count("TORSION")
+            ictan = np.zeros((self.nodes[n1].num_primitives,1),dtype=float)
+            breakdq = 0.3
+            bdist=0.0
+            atoms = self.nodes[n1].atoms
+            xyz = self.nodes[n1].xyz
+
+            for i in self.driving_coords:
+                if "ADD" in i:
+                    index = [i[1]-1, i[2]-1]
+                    bond = Distance(index[0],index[1])
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(bond)
+                    if len(i)==3:
+                        #TODO why not just use the covalent radii?
+                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
+                    elif len(i)==4:
+                        d0=i[3]
+                    current_d =  bond.value(xyz)
+                    ictan[prim_idx] = -1*(d0-current_d)
+                    #if nbreaks>0:
+                    #    ictan[prim_idx] *= 2
+                    # => calc bdist <=
+                    if current_d>d0:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if self.print_level>0:
+                        print " bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx])
+
+                if "BREAK" in i:
+                    index = [i[1]-1, i[2]-1]
+                    bond = Distance(index[0],index[1])
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(bond)
+                    if len(i)==3:
+                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
+                    elif len(i)==4:
+                        d0=i[3]
+
+                    current_d =  bond.value(xyz)
+                    ictan[prim_idx] = -1*(d0-current_d) 
+
+                    # => calc bdist <=
+                    if current_d<d0:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+
+                    if self.print_level>0 and not quiet:
+                        print " bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx])
+                if "ANGLE" in i:
+
+                    index = [i[1]-1, i[2]-1,i[3]-1]
+                    angle = Angle(index[0],index[1],index[3])
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(angle)
+                    anglet = i[4]
+                    ang_value = angle.value(xyz)
+                    ang_diff = anglet*np.pi/180. - ang_value
+                    #print(" angle: %s is index %i " %(angle,ang_idx))
+                    if self.print_level>0:
+                        print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff))
+                    ictan[prim_idx] = -ang_diff
+                    #TODO need to come up with an adist
+                    #if abs(ang_diff)>0.1:
+                    #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
+                if "TORSION" in i:
+                    #torsion=(i[1],i[2],i[3],i[4])
+                    index = [i[1]-1, i[2]-1,i[3]-1,i[4]-1]
+                    torsion = Dihedral(index[0],index[1],index[2],index[3])
+                    prim_idx = self.nodex[n1].coord_obj.Prims.dof_index(torsion)
+                    tort = i[5]
+                    torv = torsion.value(xyz)
+                    tor_diff = tort - torv*180./np.pi
+                    if tor_diff>180.:
+                        tor_diff-=360.
+                    elif tor_diff<-180.:
+                        tor_diff+=360.
+                    ictan[prim_idx] = -tor_diff*np.pi/180.
+
+                    if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if self.print_level>0:
+                        print(" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv,tort,tor_diff))
+
+            bdist = np.sqrt(bdist)
+            if np.all(ictan==0.0):
+                raise RuntimeError, " All elements are zero"
+            return ictan,bdist
         else:
-            raise ValueError("can't make tan")
+            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            Q1 = self.nodes[n1].primitive_internal_values 
+            Q2 = self.nodes[n2].primitive_internal_values 
+            PMDiff = Q2-Q1
+            #for i in range(len(PMDiff)):
+            for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
+                if prim.isPeriodic:
+                    Plus2Pi = PMDiff[k] + 2*np.pi
+                    Minus2Pi = PMDiff[k] - 2*np.pi
+                    if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
+                        PMDiff[k] = Plus2Pi
+                    if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
+                        PMDiff[k] = Minus2Pi
+            return np.reshape(PMDiff,(-1,1)),None
+
 
     def check_if_grown(self):
         self.pastts = self.past_ts()
@@ -196,9 +328,9 @@ class SE_GSM(Base_Method):
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
         added=False
-        if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
-            if self.icoords[self.nR-1].gradrms>self.options['CONV_TOL']:
-
+        #if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
+        if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
+            if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
                 print "TS node is second to last node, adding one more node"
                 self.add_last_node(1)
                 self.nnodes=self.nR
@@ -238,24 +370,47 @@ class SE_GSM(Base_Method):
             isDone=True
 
         # check for intermediates
-        if self.stage==1 and fp>0:
+        #if self.stage==1 and fp>0:
+        if self.climb and fp>0:
             fp=self.find_peaks(3)
             if fp>1:
                 rxnocc,wint = self.check_for_reaction()
             if fp >1 and rxnocc==True and wint<self.nnodes-1:
                 print "Need to trim string"
-                isDone=True
+                self.tscontinue=False
+                return isDone=True
 
         # => Convergence Criteria
-        if (((self.stage==1 and rtype==1) or self.stage==2) and
-                self.icoords[self.TSnode].gradrms< self.options['CONV_TOL']):
+        #if (((self.stage==1 and rtype==1) or self.stage==2) and
+        if (((self.climb and rtype==1) or self.find) and
+                self.nodes[self.TSnode].gradrms< self.options['CONV_TOL']):
             self.tscontinue=False
             isDone=True
-        if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
-                self.icoords[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.emaxp+0.02> self.emax and 
+            return isDone
+        #if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
+        if (((self.climb and rtype==1) or self.find) and totalgrad<0.1 and
+                self.nodes[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.emaxp+0.02> self.emax and 
                 self.emaxp-0.02< self.emax):
             self.tscontinue=False
             isDone=True
+            return isDone
 
-        return isDone
+if __name__=='__main__':
+    from qchem import QChem
+    from pes import PES
+    from dlc_new import DelocalizedInternalCoordinates
+    from eigenvector_follow import eigenvector_follow
+    from _linesearch import backtrack,NoLineSearch
+    from molecule import Molecule
 
+    basis='6-31G'
+    nproc=8
+    functional='B3LYP'
+    filepath1="examples/tests/butadiene_ethene.xyz"
+    lot1=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional=functional,nproc=nproc,fnm=filepath1)
+    pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
+    M1 = Molecule.from_options(fnm=filepath1,PES=pes1,coordinate_type="DLC")
+    optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
+
+    gsm = SE_GSM.from_options(reactant=M1,nnodes=20,driving_coords=[("ADD",6,4),("ADD",5,1)],optimizer=optimizer,print_level=1)
+    gsm.go_gsm()

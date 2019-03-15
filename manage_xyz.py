@@ -92,6 +92,35 @@ def write_xyzs(
                 scale*atom[3],
                 ))
 
+def write_xyzs_w_comments(
+    filename, 
+    geoms,
+    comments,
+    scale=(1.0/units.ANGSTROM_TO_AU),
+    ):
+
+    """ Writes xyz trajectory file with multiple frames
+
+    Params:
+        filename (str) - name of xyz file to write
+        geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)
+
+    Returns:
+
+    """
+
+    fh = open(filename,'w')
+    for geom,comment in zip(geoms,comments):
+        fh.write('%d\n' % len(geom))
+        fh.write('%s\n' % comment)
+        for atom in geom:
+            fh.write('%-2s %14.6f %14.6f %14.6f\n' % (
+                atom[0],
+                scale*atom[1],
+                scale*atom[2],
+                scale*atom[3],
+                ))
+
 def xyz_to_np(
     geom,
     ):

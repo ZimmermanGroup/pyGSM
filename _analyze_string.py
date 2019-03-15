@@ -133,7 +133,7 @@ class Analyze:
         print "ispast2",ispast2
         print "ispast3",ispast3
 
-        cgrad = self.icoords[self.nR-1].gradq[self.icoords[self.nR-1].nicd-1]
+        cgrad = self.nodes[self.nR-1].gradient[0]
         print(" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR))
 
         if cgrad>CTHRESH:
@@ -164,20 +164,24 @@ class Analyze:
         if (nadds+nbreaks) <1:
             return False
         nadded=0
-        nbroken=0
+        nbroken=0 
+        nnR = self.nR
+        xyz = self.nodes[nnR-1].xyz
+        atoms = self.nodes[nnR].atoms
+
         for i in self.driving_coords:
             if "ADD" in i:
-                bond=(i[1],i[2])
-                d= self.icoords[nnR-1].distance(bond[0],bond[1])
-                d0 = (self.icoords[nnR-1].get_element_VDW(bond[0]) +
-                        ICoord1.get_element_VDW(bond[1]))/2.
+                index = [i[1]-1, i[2]-1]
+                bond = Distance(index[0],index[1])
+                d = bond.value(xyz)
+                d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2
                 if d<d0:
                     nadded+=1
             if "BREAK" in i:
-                bond=(i[1],i[2])
-                d= self.icoords[nnR-1].distance(bond[0],bond[1])
-                d0 = (self.icoords[nnR-1].get_element_VDW(bond[0]) +
-                        ICoord1.get_element_VDW(bond[1]))/2.
+                index = [i[1]-1, i[2]-1]
+                bond = Distance(index[0],index[1])
+                d = bond.value(xyz)
+                d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2
                 if d>d0:
                     nbroken+=1
         if rtype==1:
