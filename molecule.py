@@ -18,6 +18,7 @@ from avg_pes import Avg_PES
 from penalty_pes import Penalty_PES
 from dlc_new import DelocalizedInternalCoordinates
 from cartesian import CartesianCoordinates
+from nifty import printcool_dictionary,pvec1d,pmat2d
 
 logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
@@ -183,18 +184,18 @@ class Molecule(object):
         # => Read in the coordinates <= #
         # important first try to read in geom
         if self.Data['geom'] is not None:
-            print " getting cartesian coordinates from geom"
+            print(" getting cartesian coordinates from geom")
             atoms=manage_xyz.get_atoms(self.Data['geom'])
             xyz=manage_xyz.xyz_to_np(self.Data['geom'])
             mol = make_mol_from_coords(xyz,atoms)
         elif self.Data['fnm'] is not None:
-            print " reading cartesian coordinates from file"
+            print(" reading cartesian coordinates from file")
             if self.Data['ftype'] is None:
                 self.Data['ftype'] = os.path.splitext(self.Data['fnm'])[1][1:]
             if not os.path.exists(self.Data['fnm']):
                 logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.Data['fnm'])
                 raise IOError
-            mol=pb.readfile(self.Data['ftype'],self.Data['fnm']).next()
+            mol=next(pb.readfile(self.Data['ftype'],self.Data['fnm']))
             xyz = getAllCoords(mol)
             atoms =  getAtomicSymbols(mol)
         else:
@@ -225,17 +226,17 @@ class Molecule(object):
         # atoms contain info you need to know about the atoms
         self.atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
 
-        if not isinstance(self.Data['comment'], basestring):
+        if not isinstance(self.Data['comment'], str):
             raise TypeError("comment for a Molecule must be a string")
 
         # Create the coordinate system
         if self.Data['coord_obj'] is not None:
-            print " getting coord_object from options"
+            print(" getting coord_object from options")
             self.coord_obj = self.Data['coord_obj']
         elif self.Data['coordinate_type'] == "Cartesian":
             self.coord_obj = CartesianCoordinates.from_options()
         elif self.Data['coordinate_type'] == "DLC":
-            print " building coordinate object"
+            print(" building coordinate object")
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True)
         elif self.Data['coordinate_type'] == "HDLC":
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True) 
@@ -256,7 +257,7 @@ class Molecule(object):
 
         if self.Data['Hessian'] is None:
             if self.Data['Primitive_Hessian'] is not None:
-                print "forming Hessian in basis"
+                print("forming Hessian in basis")
                 self.form_Hessian_in_basis()
             else:
                 self.form_Hessian()
@@ -333,6 +334,11 @@ class Molecule(object):
         """The number of atoms in the molecule"""
         return len(self.atoms)
 
+    def atom_data(self):
+        uniques = list(set(M.atoms))
+        for a in uniques:
+            printcool_dictionary(a._asdict())
+
     @property
     def center_of_mass(self):
         M = self.total_mass_au
@@ -389,7 +395,7 @@ class Molecule(object):
         self.Data['Primitive_Hessian'] = value
 
     def form_Primitive_Hessian(self):
-        print " making primitive Hessian"
+        print(" making primitive Hessian")
         self.Data['Primitive_Hessian'] = self.coord_obj.Prims.guess_hessian(self.xyz)
         self.newHess = 5
     
@@ -494,7 +500,7 @@ if __name__ =='__main__':
     pes = Avg_PES(pes1,pes2,lot=lot)
 
     M = Molecule.from_options(fnm=filepath,PES=pes,coordinate_type="DLC")
-    print "done constructing"
+    print("done constructing")
     #print M
     #print M.primitive_internal_coordinates
     #coords = M.coordinates
@@ -507,8 +513,8 @@ if __name__ =='__main__':
 
     #print M.update_Primitive_Hessian(change=np.ones((M.Primitive_Hessian.shape),dtype=float))
     Hess =M.Hessian
-    print Hess
-    print M.update_Hessian(np.eye(Hess.shape[0]))
+    print(Hess)
+    print(M.update_Hessian(np.eye(Hess.shape[0])))
 
     #dq = np.zeros_like(M.coordinates)
     #dq[0] = 0.5
@@ -527,16 +533,16 @@ if __name__ =='__main__':
     #print m.center_of_mass
     #print m.radius_of_gyration
     M.build_bonds()
-    print(M.bonds)
+    print((M.bonds))
     M.build_topology()
-    print M.geometry
+    print(M.geometry)
     M.Data['Hessian'] = 10
-    print M.Data['Hessian']
+    print(M.Data['Hessian'])
 
     M2 = M.copy(node_id=2)
-    print "done copying"
-    print M2.geometry
-    print M2.Data['Hessian']
+    print("done copying")
+    print(M2.geometry)
+    print(M2.Data['Hessian'])
     #print M.energy
     #print M.gradient
 

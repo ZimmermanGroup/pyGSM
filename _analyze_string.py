@@ -28,12 +28,12 @@ class Analyze:
                 if (abs(self.energies[nnodes-1]-self.energies[nnodes-2])<alluptol2 and
                 abs(self.energies[nnodes-2]-self.energies[nnodes-3])<alluptol2 and
                 abs(self.energies[nnodes-3]-self.energies[nnodes-4])<alluptol2):
-                    print "possible dissociative profile"
+                    print("possible dissociative profile")
                     diss=True
 
-        print " nnodes ",nnodes  
-        print " allup? ",allup
-        print " diss? ",diss
+        print(" nnodes ",nnodes)  
+        print(" allup? ",allup)
+        print(" diss? ",diss)
         npeaks1=0
         npeaks2=0
         minnodes=[]
@@ -50,8 +50,8 @@ class Analyze:
                 if self.energies[n]>self.energies[n-1]:
                     maxnodes.append(n)
 
-        print " min nodes ",minnodes
-        print " max nodes ", maxnodes
+        print(" min nodes ",minnodes)
+        print(" max nodes ", maxnodes)
         npeaks1 = len(maxnodes)
         #print "number of peaks is ",npeaks1
         ediff=0.5
@@ -68,7 +68,7 @@ class Analyze:
             emax = float(max(self.energies))
             nmax = np.argmax(self.energies)
 
-        print " emax and nmax in find peaks %3.4f,%i " % (emax,nmax)
+        print(" emax and nmax in find peaks %3.4f,%i " % (emax,nmax))
 
         #check if any node after peak is less than 2 kcal below
         for n in maxnodes:
@@ -77,7 +77,7 @@ class Analyze:
                 found=n
                 npeaks2+=1
         npeaks = npeaks2
-        print " found %i significant peak(s) TOL %3.2f" %(npeaks,ediff)
+        print(" found %i significant peak(s) TOL %3.2f" %(npeaks,ediff))
 
         #handle dissociative case
         if rtype==3 and npeaks==1:
@@ -112,13 +112,13 @@ class Analyze:
         ns = self.n0-1
         if ns<nodemax: ns=nodemax
 
-        print "Energies"
+        print("Energies")
         for n in range(ns,self.nR):
-            print(" %4.3f" % self.energies[n])
+            print((" %4.3f" % self.energies[n]))
             if self.energies[n]>emax:
                 nodemax=n
                 emax=self.energies[n]
-        print "nodemax ",nodemax
+        print("nodemax ",nodemax)
 
         for n in range(nodemax,self.nR):
             if self.energies[n]<emax-THRESH1:
@@ -129,21 +129,21 @@ class Analyze:
                 ispast3+=1
             if ispast1>1:
                 break
-        print "ispast1",ispast1
-        print "ispast2",ispast2
-        print "ispast3",ispast3
+        print("ispast1",ispast1)
+        print("ispast2",ispast2)
+        print("ispast3",ispast3)
 
         cgrad = self.nodes[self.nR-1].gradient[0]
-        print(" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR))
+        print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
 
         if cgrad>CTHRESH:
-            print "constraint gradient positive"
+            print("constraint gradient positive")
             ispast=2
         elif ispast1>0 and cgrad>OTHRESH:
-            print "over the hill(1)"
+            print("over the hill(1)")
             ispast=1
         elif ispast2>1:
-            print "over the hill(2)"
+            print("over the hill(2)")
             ispast=1
         else:
             ispast=0
@@ -151,9 +151,9 @@ class Analyze:
         if ispast==0:
             bch=self.check_for_reaction_g(1)
             if ispast3>1 and bch:
-                print "over the hill(3) connection changed " %bch
+                print("over the hill(3) connection changed " %bch)
                 ispast=3
-        print "ispast=",ispast
+        print("ispast=",ispast)
         return ispast
 
     def check_for_reaction_g(self,rtype):
@@ -191,7 +191,7 @@ class Analyze:
         else:
             isrxn=True
             #isrxn=nadded+nbroken
-        print "check_for_reaction_g isrxn: %i nadd+nbrk: %i" %(isrxn,nadds+nbreaks)
+        print("check_for_reaction_g isrxn: %i nadd+nbrk: %i" %(isrxn,nadds+nbreaks))
         return isrxn
 
     def check_for_reaction(self):
@@ -210,7 +210,7 @@ class Analyze:
                     maxnodes.append(n)
         if len(minnodes)>2 and len(maxnodes)>1:
             wint=minnodes[1] # the real reaction ends at first minimum
-            print " wint ", wint
+            print(" wint ", wint)
 
         return isrxn,wint
 
@@ -218,14 +218,14 @@ class Analyze:
     def calc_grad(self):
         totalgrad = 0.0
         gradrms = 0.0
-        for i,ico in zip(range(1,self.nnodes-1),self.nodes[1:self.nnodes-1]):
+        for i,ico in zip(list(range(1,self.nnodes-1)),self.nodes[1:self.nnodes-1]):
             if ico!=None:
-                print " node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),
+                print(" node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)), end=' ')
                 if i%5 == 0:
-                    print
+                    print()
                 totalgrad += ico.gradrms*self.rn3m6
                 gradrms += ico.gradrms*ico.gradrms
-        print
+        print()
         #TODO wrong for growth
         gradrms = np.sqrt(gradrms/(self.nnodes-2))
         return totalgrad,gradrms

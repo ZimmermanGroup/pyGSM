@@ -18,6 +18,7 @@ import eigenvector_follow
 from dlc_new import DelocalizedInternalCoordinates
 from molecule import Molecule
 import manage_xyz
+from nifty import printcool
 
 class Base_Method(object,Print,Analyze):
 
@@ -153,7 +154,7 @@ class Base_Method(object,Print,Analyze):
         self.BDIST_RATIO=self.options['BDIST_RATIO']
         self.optimizer=[]
         optimizer = options['optimizer']
-        for count in xrange(self.nnodes):
+        for count in range(self.nnodes):
             self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
         self.print_level = options['print_level']
 
@@ -171,7 +172,7 @@ class Base_Method(object,Print,Analyze):
         self.tscontinue=True # whether to continue with TS opt or not
         self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
         self.gaddmax = self.options['ADD_NODE_TOL']/self.rn3m6;
-        print " gaddmax:",self.gaddmax
+        print(" gaddmax:",self.gaddmax)
         self.ictan = [None]*self.nnodes
         self.active = [False] * self.nnodes
         self.climber=False  #is this string a climber?
@@ -186,9 +187,10 @@ class Base_Method(object,Print,Analyze):
                 self.energies[i] = ico.energy - self.nodes[0].energy
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
-        print "*********************************************************************"
-        print "************************** in opt_iters *****************************"
-        print "*********************************************************************"
+        #print("*********************************************************************")
+        #print("************************** in opt_iters *****************************")
+        #print("*********************************************************************")
+        printcool("In opt_iters")
 
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
@@ -215,10 +217,10 @@ class Base_Method(object,Print,Analyze):
             self.opt_steps(optsteps)
             self.store_energies()
             self.emax = float(max(self.energies[1:-1]))
-            print " V_profile: ",
+            print(" V_profile: ", end=' ')
             for n in range(self.nnodes):
-                print " {:7.3f}".format(float(self.energies[n])),
-            print
+                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+            print()
 
             if self.climb and not self.find: print("c")
             elif self.find: print("x")
@@ -232,15 +234,15 @@ class Base_Method(object,Print,Analyze):
 
             # => calculate totalgrad <= #
             totalgrad,gradrms = self.calc_grad()
-            print " opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax))
+            print(" opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
 
             # => set stage <= #
             fp = self.find_peaks(2)
-            print " fp = ",fp
+            print(" fp = ",fp)
             ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
-            print " dE_iter ={:2.2f}".format(self.dE_iter)
+            print(" dE_iter ={:2.2f}".format(self.dE_iter))
             self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
 
             # => Check Convergence <= #
@@ -258,7 +260,7 @@ class Base_Method(object,Print,Analyze):
                 self.ic_reparam(nconstraints=nconstraints)
 
             if self.pTSnode!=self.TSnode and self.climb and not self.find:
-                print " slowing down climb optimization"
+                print(" slowing down climb optimization")
                 self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
                 if self.newclimbscale<5.0:
                     self.newclimbscale +=1.
@@ -266,7 +268,7 @@ class Base_Method(object,Print,Analyze):
 
             #also prints tgrads and jobGradCount
 
-        print " Printing string to opt_converged_000.xyz"
+        print(" Printing string to opt_converged_000.xyz")
         self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
         sys.stdout.flush()
         return
@@ -300,11 +302,11 @@ class Base_Method(object,Print,Analyze):
         self.ictan = ictan
 
         if self.print_level>1:
-            print '------------printing ictan[:]-------------'
+            print('------------printing ictan[:]-------------')
             for n in range(n0+1,self.nnodes):
-                print "ictan[%i]" %n
-                print ictan[n].T
-                print self.dqmaga[n]
+                print("ictan[%i]" %n)
+                print(ictan[n].T)
+                print(self.dqmaga[n])
 
 
     # for some reason this fxn doesn't work when called outside gsm
@@ -351,7 +353,7 @@ class Base_Method(object,Print,Analyze):
                 else:
                     f1 = 1 - dEmax/(dEmax+dEmin+0.00000001)
 
-                print ' 3 way tangent ({}): f1:{:3.2}'.format(n,f1)
+                print(' 3 way tangent ({}): f1:{:3.2}'.format(n,f1))
 
                 t1,_ = self.tangent(intic_n,newic_n)
                 t2,_ = self.tangent(newic_n,int2ic_n)
@@ -369,11 +371,11 @@ class Base_Method(object,Print,Analyze):
         
 
         if self.print_level>1:
-            print '------------printing ictan[:]-------------'
+            print('------------printing ictan[:]-------------')
             for n in range(n0+1,self.nnodes):
-                print self.ictan[n].T
-            print '------------printing dqmaga---------------'
-            print dqmaga
+                print(self.ictan[n].T)
+            print('------------printing dqmaga---------------')
+            print(dqmaga)
         self.dqmaga = dqmaga
 
     def get_tangents_1g(self):
@@ -394,7 +396,7 @@ class Base_Method(object,Print,Analyze):
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
             if self.print_level>1:
-                print "forming space for", nlist[2*n+1]
+                print("forming space for", nlist[2*n+1])
 
             Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
 
@@ -408,25 +410,22 @@ class Base_Method(object,Print,Analyze):
        
         if False:
             for n in range(ncurrent):
-                print "dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]])
-                print "printing ictan[%i]" %nlist[2*n]       
-                print self.ictan[nlist[2*n]].T
+                print("dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]]))
+                print("printing ictan[%i]" %nlist[2*n])       
+                print(self.ictan[nlist[2*n]].T)
         for i,tan in enumerate(self.ictan):
             if np.all(tan==0.0):
-                print "tan %i of the tangents is 0" %i
+                print("tan %i of the tangents is 0" %i)
                 raise RuntimeError
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
-        print ''
-        print "*********************************************************************"
-        print "************************ in growth_iters ****************************"
-        print "*********************************************************************"
+        printcool("In growth_iters")
 
         for n in range(iters):
             sys.stdout.flush()
             success = self.check_add_node()
             if not success:
-                print "can't add anymore nodes, bdist too small"
+                print("can't add anymore nodes, bdist too small")
                 break
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
@@ -435,7 +434,7 @@ class Base_Method(object,Print,Analyze):
             totalgrad,gradrms = self.calc_grad()
             self.emax = float(max(self.energies[1:-1]))
             self.TSnode = np.where(self.energies==self.emax)[0][0]
-            print " gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax))
+            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
                 break
@@ -468,7 +467,7 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(self.nnodes):
             if self.nodes[n] != None and self.active[n]==True:
-                print " Optimizing node %i" % n
+                print(" Optimizing node %i" % n)
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
 
@@ -477,10 +476,10 @@ class Base_Method(object,Print,Analyze):
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  # should this be for climb too?
                     exsteps=2
-                    print " multiplying steps for node %i by %i" % (n,exsteps)
+                    print(" multiplying steps for node %i by %i" % (n,exsteps))
                 if self.find and n==self.TSnode: #multiplier for TS node during
                     exsteps=2
-                    print " multiplying steps for node %i by %i" % (n,exsteps)
+                    print(" multiplying steps for node %i by %i" % (n,exsteps))
                 
                 # => do constrained optimization
                 self.optimizer[n].optimize(
@@ -491,7 +490,7 @@ class Base_Method(object,Print,Analyze):
                         )
 
             if optlastnode==True and n==self.nnodes-1 and not self.nodes[n].PES.lot.do_coupling:
-                print " optimizing last node"
+                print(" optimizing last node")
                 self.optimizer[n].options['opt_type']='UNCONSTRAINED'
                 self.nodes[n].energy = self.optimizer[n].optimize(
                         c_obj=self.nodes[n],
@@ -504,14 +503,14 @@ class Base_Method(object,Print,Analyze):
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
-                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+                print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
             elif (self.climb and not self.find and self.finder and self.dE_iter<4. and self.nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or
                     (ts_gradrms<self.options['CONV_TOL']*5.))
                     ):
                 print(" ** starting exact climb **")
-                print " totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq)
+                print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
@@ -527,13 +526,13 @@ class Base_Method(object,Print,Analyze):
         if self.find and self.optimizer[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
             #if self.hessrcount<1 and self.pTSnode == self.TSnode:
             if self.pTSnode == self.TSnode:
-                print " resetting TS node coords Ut (and Hessian)"
+                print(" resetting TS node coords Ut (and Hessian)")
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10
                 self.hessrcount=1
             else:
-                print " Hessian consistently bad, going back to climb (for 3 iterations)"
+                print(" Hessian consistently bad, going back to climb (for 3 iterations)")
                 self.find=0
                 self.nclimb=3
         elif self.find and self.optimizer[self.TSnode].nneg <= 3:
@@ -541,7 +540,7 @@ class Base_Method(object,Print,Analyze):
         self.nhessreset-=1
 
     def interpolateR(self,newnodes=1):
-        print " Adding reactant node"
+        print(" Adding reactant node")
         success= True
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
@@ -550,17 +549,17 @@ class Base_Method(object,Print,Analyze):
             if self.nodes[self.nR]==0:
                 success= False
                 break
-            print " getting energy for  node ",self.nR
-            print self.nodes[self.nR].energy-self.nodes[0].energy
+            print(" getting energy for  node ",self.nR)
+            print(self.nodes[self.nR].energy-self.nodes[0].energy)
             self.nn+=1
             self.nR+=1
-            print " nn=%i,nR=%i" %(self.nn,self.nR)
+            print(" nn=%i,nR=%i" %(self.nn,self.nR))
             self.active[self.nR-1] = True
         return success
 
 
     def interpolateP(self,newnodes=1):
-        print " Adding product node"
+        print(" Adding product node")
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
@@ -572,11 +571,11 @@ class Base_Method(object,Print,Analyze):
             if self.nodes[-self.nP-1]==0:
                 success= False
                 break
-            print " getting energy for  node ",self.nnodes-self.nP-1
-            print self.nodes[-self.nP-1].energy-self.nodes[0].energy
+            print(" getting energy for  node ",self.nnodes-self.nP-1)
+            print(self.nodes[-self.nP-1].energy-self.nodes[0].energy)
             self.nn+=1
             self.nP+=1
-            print " nn=%i,nP=%i" %(self.nn,self.nP)
+            print(" nn=%i,nP=%i" %(self.nn,self.nP))
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
@@ -599,10 +598,10 @@ class Base_Method(object,Print,Analyze):
             ictan = np.copy(self.ictan)
 
             if self.print_level>1:
-                print " printing spacings dqmaga:"
+                print(" printing spacings dqmaga:")
                 for n in range(1,self.nnodes):
-                    print " %1.2f" % self.dqmaga[n], 
-                print 
+                    print(" %1.2f" % self.dqmaga[n], end=' ') 
+                print() 
 
             totaldqmag = 0.
             totaldqmag = np.sum(self.dqmaga[n0+1:self.nnodes])
@@ -614,11 +613,11 @@ class Base_Method(object,Print,Analyze):
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
                 if self.print_level>1:
-                    print " h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag)
+                    print(" h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag))
            
             # => Using average <= #
             if i==0 and rtype==0:
-                print " using average"
+                print(" using average")
                 if not self.climb:
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
@@ -637,19 +636,19 @@ class Base_Method(object,Print,Analyze):
                 for n in range(n0+1,self.nnodes):
                     edist[n] = dE[n]*self.dqmaga[n]
 
-                print " edist: ",
+                print(" edist: ", end=' ')
                 for n in range(n0+1,self.nnodes):
-                    print " {:1.1}".format(edist[n]),
-                print 
+                    print(" {:1.1}".format(edist[n]), end=' ')
+                print() 
                 
                 totaledq = np.sum(edist[n0+1:self.nnodes])
                 edqavg = totaledq/(self.nnodes-1)
 
             if i==0:
-                print " rpart: ",
+                print(" rpart: ", end=' ')
                 for n in range(1,self.nnodes):
-                    print " {:1.2}".format(rpart[n]),
-                print
+                    print(" {:1.2}".format(rpart[n]), end=' ')
+                print()
 
             if not self.climb and rtype!=2:
                 for n in range(n0+1,self.nnodes-1):
@@ -690,9 +689,9 @@ class Base_Method(object,Print,Analyze):
 
             if self.print_level>1:
                 for n in range(n0+1,self.nnodes-1):
-                    print " disp[{}]: {:1.2}".format(n,rpmove[n]),
-                print
-                print " disprms: {:1.3}\n".format(disprms)
+                    print(" disp[{}]: {:1.2}".format(n,rpmove[n]), end=' ')
+                print()
+                print(" disprms: {:1.3}\n".format(disprms))
 
             if disprms < 0.02:
                 break
@@ -716,11 +715,11 @@ class Base_Method(object,Print,Analyze):
 
                 #TODO might need to recalculate energy here for seam? 
 
-        print ' spacings (end ic_reparam, steps: {}/{}):'.format(i,ic_reparam_steps)
+        print(' spacings (end ic_reparam, steps: {}/{}):'.format(i,ic_reparam_steps))
         for n in range(1,self.nnodes):
-            print " {:1.2}".format(self.dqmaga[n]),
-        print
-        print "  disprms: {:1.3}\n".format(disprms)
+            print(" {:1.2}".format(self.dqmaga[n]), end=' ')
+        print()
+        print("  disprms: {:1.3}\n".format(disprms))
 
     def ic_reparam_g(self,ic_reparam_steps=8,n0=0):  #see line 3863 of gstring.cpp
         """
@@ -743,13 +742,13 @@ class Base_Method(object,Print,Analyze):
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.print_level>1:
                 if i==0:
-                    print " totaldqmag (without inner): {:1.2}\n".format(totaldqmag)
-                print " printing spacings dqmaga: "
+                    print(" totaldqmag (without inner): {:1.2}\n".format(totaldqmag))
+                print(" printing spacings dqmaga: ")
                 for n in range(self.nnodes):
-                    print " {:1.2}".format(self.dqmaga[n]),
+                    print(" {:1.2}".format(self.dqmaga[n]), end=' ')
                     if (n+1)%5==0:
-                        print
-                print 
+                        print()
+                print() 
             
             if i == 0:
                 if self.nn!=self.nnodes:
@@ -760,12 +759,12 @@ class Base_Method(object,Print,Analyze):
                         rpart[n] = 1.0/(self.nn-2)
                     if self.print_level>1:
                         if i==0:
-                            print " rpart: "
+                            print(" rpart: ")
                             for n in range(1,self.nnodes):
-                                print " {:1.2}".format(rpart[n]),
+                                print(" {:1.2}".format(rpart[n]), end=' ')
                                 if (n)%5==0:
-                                    print
-                            print
+                                    print()
+                            print()
                 else:
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
@@ -796,9 +795,9 @@ class Base_Method(object,Print,Analyze):
             lastdispr = disprms
             if self.print_level>1:
                 for n in range(n0+1,self.nnodes-1):
-                    print " disp[{}]: {:1.2f}".format(n,rpmove[n]),
-                print
-                print " disprms: {:1.3}\n".format(disprms)
+                    print(" disp[{}]: {:1.2f}".format(n,rpmove[n]), end=' ')
+                print()
+                print(" disprms: {:1.3}\n".format(disprms))
 
             if disprms < 1e-2:
                 break
@@ -810,14 +809,14 @@ class Base_Method(object,Print,Analyze):
                         self.nodes[n].update_coordinate_basis(constraints=self.ictan[n])
                         dq0[0] = rpmove[n]  # ictan is first
                         if self.print_level>1:
-                            print " dq0[constraint]: {:1.3}".format(float(dq0[0]))
+                            print(" dq0[constraint]: {:1.3}".format(float(dq0[0])))
                         self.nodes[n].update_xyz(dq0)
                     else:
                         pass
-        print " spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps),
+        print(" spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps), end=' ')
         for n in range(self.nnodes):
-            print " {:1.2}".format(self.dqmaga[n]),
-        print "  disprms: {:1.3}".format(disprms)
+            print(" {:1.2}".format(self.dqmaga[n]), end=' ')
+        print("  disprms: {:1.3}".format(disprms))
 
         #TODO old GSM does this here
         #Failed = check_array(self.nnodes,self.dqmaga)
@@ -825,7 +824,7 @@ class Base_Method(object,Print,Analyze):
 
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
-        print "modifying Hessian with RP"
+        print("modifying Hessian with RP")
 
         self.nodes[en].update_coordinate_basis()
 
@@ -860,7 +859,7 @@ class Base_Method(object,Print,Analyze):
         #print "qp1 is %1.3f" % qp1
 
         if self.nodes[en].isTSnode:
-            print " TS Hess init'd w/ existing Hintp"
+            print(" TS Hess init'd w/ existing Hintp")
 
         self.newic.xyz = self.nodes[en].xyz
         Vecs =self.newic.update_coordinate_basis()
@@ -878,7 +877,7 @@ class Base_Method(object,Print,Analyze):
         a = abs(q0-qm1)
         b = abs(qp1-q0)
         c = 2*(Em1/a/(a+b) - E0/a/b + Ep1/b/(a+b))
-        print " tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0])
+        print(" tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0]))
 
         ttt = np.outer(tan,tan)
         #print "Hint before"
@@ -918,16 +917,16 @@ class Base_Method(object,Print,Analyze):
         if self.climb and self.nodes[n].isTSnode==True and opt_type=='SEAM':
             opt_type='TS-SEAM'
         if not quiet:
-            print(" setting node %i opt_type to %s" %(n,opt_type))
+            print((" setting node %i opt_type to %s" %(n,opt_type)))
 
         return opt_type
 
     def set_finder(self,rtype):
         assert rtype in [0,1,2], "rtype not defined"
-        print ''
-        print "*********************************************************************"
+        print('')
+        print("*********************************************************************")
         if rtype==2:
-            print "****************** set climber and finder to True*****************"
+            print("****************** set climber and finder to True*****************")
             self.climber=True
             self.finder=True
         elif rtype==1:
@@ -935,7 +934,7 @@ class Base_Method(object,Print,Analyze):
             self.climber=True
         else:
             print("******** Turning off climbing image and exact TS search **********")
-        print "*********************************************************************"
+        print("*********************************************************************")
    
     def print_msg(self):
         msg="""
@@ -978,7 +977,7 @@ if __name__=='__main__':
     basis="sto-3g"
     nproc=1
     filepath="examples/tests/bent_benzene.xyz"
-    mol=pb.readfile("xyz",filepath).next()
+    mol=next(pb.readfile("xyz",filepath))
     lot=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional='HF',nproc=nproc)
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     

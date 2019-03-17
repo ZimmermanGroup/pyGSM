@@ -422,7 +422,7 @@ class ElementData(object):
             >>> print fluorine.atomic_num
             9
         """
-        if not isinstance(symbol, basestring):
+        if not isinstance(symbol, str):
             raise TypeError("Element symbol must be a string")
         symbol = symbol.strip().capitalize()
         if symbol not in self.symbol_lookup:
@@ -440,13 +440,13 @@ class ElementData(object):
         return [element.symbol for element in cls.data]
  
 if __name__ == '__main__':
-    import manage_xyz
+    from . import manage_xyz
 
     filepath="tests/fluoroethene.xyz"
     geom=manage_xyz.read_xyz(filepath,scale=1)
     E = ElementData()
     #geom[0]
     C =E.from_symbol(geom[0][0])
-    print C.vdw_radius
+    print(C.vdw_radius)
 
 

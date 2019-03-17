@@ -56,7 +56,7 @@ class PyTC(Lot):
                     self.coup = tmp[...]
 
         self.hasRanForCurrentCoords=True
-        print "setting has Ran to true"
+        print("setting has Ran to true")
 
         return
 
@@ -106,8 +106,8 @@ class PyTC(Lot):
 
 if __name__ == '__main__':
 
-    from pytc import *
-    import manage_xyz
+    from .pytc import *
+    from . import manage_xyz
 
     if 1:
         nocc=11
@@ -120,10 +120,10 @@ if __name__ == '__main__':
 
         geom=manage_xyz.read_xyz(x,scale=1)   
         e=lot.get_energy(geom,1,0)
-        print e
+        print(e)
         g=lot.get_gradient(geom,1,0)
-        print g
+        print(g)
         g=lot.get_gradient(geom,1,1)
-        print g
+        print(g)
         c=lot.get_coupling(geom,1,0,1)
-        print c
+        print(c)

@@ -9,6 +9,8 @@ from slots import *
 from units import *
 from elements import ElementData
 from pkg_resources import parse_version
+from nifty import pvec1d
+
 np.set_printoptions(precision=4,suppress=True)
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
@@ -58,7 +60,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # Reorder primitives for checking with cc's code in TC.
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
-        self.reorderPrimitives()
+        #self.reorderPrimitives()
 
     def makePrimitives(self, xyz, options):
         connect=options['connect']
@@ -80,7 +82,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         dgraph = nx.Graph()
         for i in range(self.natoms):
             dgraph.add_node(i)
-        for k, v in D.items():
+        for k, v in list(D.items()):
             dgraph.add_edge(k[0], k[1], weight=v)
         mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
         # Build a list of noncovalent distances
@@ -89,7 +91,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for edge in mst:
             if edge not in list(self.topology.edges()):
                 if connect:
-                    print "Adding %s from minimum spanning tree" % str(edge)
+                    print("Adding %s from minimum spanning tree" % str(edge))
                     self.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
         if not connect:
@@ -272,7 +274,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if len(lines) > 200:
             # Print only summary if too many
             lines = []
-        for k, v in typedict.items():
+        for k, v in list(typedict.items()):
             lines.append("%s : %i" % (k, v))
         return '\n'.join(lines)
 
@@ -315,7 +317,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for i in other.Internals:
             if i not in self.Internals:
                 #logger.info("Adding:  ", i)
-                print("Adding ",i)
+                print(("Adding ",i))
                 self.Internals.append(i)
                 Changed = True
         return Changed
@@ -340,7 +342,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for Internal in self.Internals:
             if type(Internal) is LinearAngle:
                 Internal.reset(xyz)
-        for rot in self.Rotators.values():
+        for rot in list(self.Rotators.values()):
             rot.reset(xyz)
 
     def largeRots(self):
@@ -432,9 +434,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def add(self, dof,verbose=False):
         if dof not in self.Internals:
             if verbose:
-                print(" adding ",dof)
+                print((" adding ",dof))
             self.Internals.append(dof)
-            self.reorderPrimitives()
+            #self.reorderPrimitives()
             self.clearCache()  # CRA why is this necessary?
             # because primitives changed, Bmatrix is derivative of prims
     
@@ -454,7 +456,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # then calculate the constraint value from the positions.
             # If both are provided, then the coordinates are ignored.
             cVal = cPrim.value(xyz)
-            print cVal
+            print(cVal)
         if cPrim in self.cPrims:
             iPrim = self.cPrims.index(cPrim)
             if np.abs(cVal - self.cVals[iPrim]) > 1e-6:
@@ -627,8 +629,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             else:
                 raise RuntimeError('Failed to build guess Hessian matrix. Make sure all IC types are supported')
             
-        print "printing diagonals"
-        print Hdiag
+        print("printing diagonals")
+        #print(Hdiag)
+        pvec1d(Hdiag,2,format='f')
         return np.diag(Hdiag)
 
     def build_topology(self, xyz, force_bonds=True, **kwargs):
@@ -748,7 +751,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             ygrd = np.arange(ymin, ymax-gszy, gszy)
             zgrd = np.arange(zmin, zmax-gszz, gszz)
             # 2) Grid cells are denoted by a three-index tuple.
-            gidx = list(itertools.product(range(len(xgrd)), range(len(ygrd)), range(len(zgrd))))
+            gidx = list(itertools.product(list(range(len(xgrd))), list(range(len(ygrd))), list(range(len(zgrd)))))
             # 3) Build a dictionary which maps a grid cell to itself plus its neighboring grid cells.
             # Two grid cells are defined to be neighbors if the differences between their x, y, z indices are at most 1.
             gngh = OrderedDict()
@@ -806,7 +809,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         else:
             # Create a list of 2-tuples corresponding to combinations of atomic indices.
             # This is much faster than using itertools.combinations.
-            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.natoms) for i in range(self.natoms)]),dtype=np.int32))).T)
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,self.natoms)) for i in range(self.natoms)]),dtype=np.int32))).T)
 
         # Create a list of thresholds for determining whether a certain interatomic distance is considered to be a bond.
         BT0 = R[AtomIterator[:,0]]
@@ -850,7 +853,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def distance_matrix(self,xyz, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.natoms) for i in range(self.natoms)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,self.natoms)) for i in range(self.natoms)]),dtype=np.int32))).T)
         drij = []
         if hasattr(self, 'boxes') and pbc:
             drij.append(AtomContact(xyz,AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c])))
@@ -860,7 +863,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def distance_displacement(xyz,self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.natoms) for i in range(self.natoms)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,self.natoms)) for i in range(self.natoms)]),dtype=np.int32))).T)
         drij = []
         dxij = []
         if hasattr(self, 'boxes') and pbc:
@@ -934,5 +937,5 @@ if __name__ =='__main__':
 
     p = PrimitiveInternalCoordinates.from_options(xyz=M.xyz,atoms=M.atoms) 
     idx = p.find_dihedrals()
-    print idx
+    print(idx)
 

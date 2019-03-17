@@ -214,7 +214,7 @@ class Options(object):
             - Option values are updated if valid.
         """
         
-        for k, v in options.iteritems():
+        for k, v in options.items():
             self[k] = v
         return self
 
@@ -226,15 +226,14 @@ class Options(object):
         """
 
         options2 = collections.OrderedDict()
-        for k, v in self.options.iteritems():
+        for k, v in self.options.items():
             options2[k] = Option(**v.__dict__)
         return Options(options=options2)
 
     def __str__(self):
 
         """ Return the string representations of all Option objects in this Options, in insertion order. """
-    
-        s = ''.join(str(v) for v in self.options.values())
+        s = ''.join(str(v) for v in list(self.options.values()))
         return s
         
 if __name__ == '__main__':
@@ -252,7 +251,7 @@ if __name__ == '__main__':
             ) 
     start = time.time()
     options2 = options1.copy()
-    print '%11.3E' % (time.time() - start)
+    print('%11.3E' % (time.time() - start))
 
     start = time.time()
     options3 = Options()        
@@ -263,7 +262,7 @@ if __name__ == '__main__':
         allowed_values=[0,1],
         ) 
     options4 = options3.copy()
-    print '%11.3E' % (time.time() - start)
+    print('%11.3E' % (time.time() - start))
 
     start = time.time()
     options3 = Options()        
@@ -274,7 +273,7 @@ if __name__ == '__main__':
         allowed_values=[0,1],
         ) 
     options4 = options3.copy()
-    print '%11.3E' % (time.time() - start)
+    print('%11.3E' % (time.time() - start))
 
     start = time.time()
     options3 = Options()        
@@ -285,7 +284,7 @@ if __name__ == '__main__':
         allowed_values=[0,1],
         ) 
     options4 = options3.copy()
-    print '%11.3E' % (time.time() - start)
+    print('%11.3E' % (time.time() - start))
 
     options4.set_values({ 'size' : 1 })
-    print options4
+    print(options4)

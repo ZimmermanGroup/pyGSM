@@ -131,7 +131,7 @@ class base_optimizer(object):
         if opt_type=="UCONSTRAINED":  
             assert ictan==None
         if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
-            raise RuntimeError, "Need ictan"
+            raise RuntimeError("Need ictan")
         if opt_type in ['TS','TS-SEAM']:
             assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
@@ -145,7 +145,7 @@ class base_optimizer(object):
         #print "maximum gradient component (au)", gmax
 
         if gradrms <self.conv_grms:
-            print '[INFO] converged'
+            print('[INFO] converged')
             return True
 
         #if gradrms <= self.conv_grms  or \
@@ -219,8 +219,8 @@ class base_optimizer(object):
 
         norm_dg = np.linalg.norm(molecule.difference_gradient)
         if self.options['print_level']>0:
-            print " norm_dg is %1.4f" % norm_dg,
-            print " dE is %1.4f" % self.PES.dE,
+            print(" norm_dg is %1.4f" % norm_dg, end=' ')
+            print(" dE is %1.4f" % self.PES.dE, end=' ')
 
         dq = -molecule.dE/KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
@@ -237,7 +237,7 @@ class base_optimizer(object):
         SCALEW = 1.0
         SCALE = self.options['SCALEQN']
         dq = g[n,0]/SCALE
-        print " walking up the %i coordinate = %1.4f" % (n,dq)
+        print(" walking up the %i coordinate = %1.4f" % (n,dq))
         if abs(dq) > self.options['MAXAD']/SCALEW:
             dq = np.sign(dq)*self.options['MAXAD']/SCALE
 
@@ -278,14 +278,14 @@ class base_optimizer(object):
         if (ratio<0.25) and abs(dEpre)>0.05:
             #or ratio >1.5
             if self.options['print_level']>0:
-                print(" decreasing DMAX"),
+                print((" decreasing DMAX"), end=' ')
             if step<self.options['DMAX']:
                 self.options['DMAX'] = step/1.2
             else:
                 self.options['DMAX'] = self.options['DMAX']/1.2
         elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
             if self.options['print_level']>0:
-                print(" increasing DMAX"),
+                print((" increasing DMAX"), end=' ')
             #self.buf.write(" increasing DMAX")
             #if step > self.options['DMAX']:
             #    if True:
@@ -298,7 +298,7 @@ class base_optimizer(object):
         
         if self.options['DMAX']<self.DMIN:
             self.options['DMAX']=self.DMIN
-        print " DMAX %1.2f" % self.options['DMAX']
+        print(" DMAX %1.2f" % self.options['DMAX'])
 
     def eigenvector_step(self,molecule,g,nconstraints):
 
@@ -354,10 +354,10 @@ class base_optimizer(object):
         #=> Overlap metric <= #
         overlap = np.dot(np.dot(tmph,Vecs.T),Cn) 
 
-        print "overlap", overlap[:4].T
+        print("overlap", overlap[:4].T)
         # Max overlap metrics
         path_overlap,maxoln = self.maxol_w_Hess(overlap[0:4])
-        print " t/ol %i: %3.2f" % (maxoln,path_overlap)
+        print(" t/ol %i: %3.2f" % (maxoln,path_overlap))
 
         # => set lamda1 scale factor <=#
         lambda1 = self.set_lambda1('TS',eigen,maxoln)
@@ -370,7 +370,7 @@ class base_optimizer(object):
             # => grad in eigenvector basis <= #
             gqe = np.dot(tmph,g)
             path_overlap_e_g = gqe[maxoln]
-            print ' gtse: {:1.4f} '.format(path_overlap_e_g[0])
+            print(' gtse: {:1.4f} '.format(path_overlap_e_g[0]))
             # => calculate eigenvector step <=#
             dqe0 = np.zeros((molecule.num_coordinates,1))
             for i in range(molecule.num_coordinates):
@@ -410,8 +410,8 @@ class base_optimizer(object):
         if molecule.coord_obj.__class__.__name__=='DelocalizedInternalCoordinates':
             molecule.update_Primitive_Hessian(change=change)
             if self.options['print_level']>1:
-                print "primitive internals Hessian"
-                print molecule.Primitive_Hessian
+                print("primitive internals Hessian")
+                print(molecule.Primitive_Hessian)
             if mode=='BFGS':
                 molecule.form_Hessian_in_basis()
             if mode=='BOFILL':
@@ -430,18 +430,18 @@ class base_optimizer(object):
         Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         if self.options['print_level']>1:
             print("In update bfgsp")
-            print "dg:", self.dg_prim.T
-            print "dx:", self.dx_prim.T
-            print "Hdx"
-            print Hdx.T
+            print("dg:", self.dg_prim.T)
+            print("dx:", self.dx_prim.T)
+            print("Hdx")
+            print(Hdx.T)
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
         dgdg = np.outer(self.dg_prim,self.dg_prim)
         dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
         change = np.zeros_like(molecule.Primitive_Hessian)
 
         if self.options['print_level']>2:
-            print "dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx)
-            print dgdg
+            print("dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx))
+            print(dgdg)
 
         if dgtdx>0.:
             if dgtdx<0.001: dgtdx=0.001
@@ -452,7 +452,7 @@ class base_optimizer(object):
         return change
 
     def update_bofill(self,molecule):
-        print "in update bofill"
+        print("in update bofill")
 
         G = np.copy(molecule.Hessian) #nicd,nicd
         Gdx = np.dot(G,self.dx) #(nicd,nicd)(nicd,1) = (nicd,1)

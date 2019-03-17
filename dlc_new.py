@@ -36,11 +36,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # The DLC contains an instance of primitive internal coordinates.
         if self.options['primitives'] is None:
-            print " making primitives from options!"
+            print(" making primitives from options!")
             self.Prims = PrimitiveInternalCoordinates(options.copy())
             self.options['primitives'] = self.Prims
         else:
-            print " setting primitives from options!"
+            print(" setting primitives from options!")
             self.Prims=self.options['primitives']
             self.Prims.clearCache()
         #print "in constructor",len(self.Prims.Internals)
@@ -321,8 +321,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             try:
                 cVecs = orthogonalize(cVecs) 
             except:
-                print cVecs
-                print "error forming cVec"
+                print(cVecs)
+                print("error forming cVec")
                 exit(-1)
 
             # V contains the constraint vectors on the left, and the original DLCs on the right

@@ -1147,12 +1147,12 @@ def logArray(mat, precision=3, fmt="f"):
     if len(mat.shape) == 1:
         for i in range(mat.shape[0]):
             logger.info(fmt % mat[i]),
-        print
+        print()
     elif len(mat.shape) == 2:
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
                 logger.info(fmt % mat[i,j]),
-            print
+            print()
     else:
         raise RuntimeError("One or two dimensional arrays only")
 

@@ -4,7 +4,7 @@ from units import *
 from _linesearch import backtrack,NoLineSearch
 from cartesian import CartesianCoordinates
 from base_optimizer import base_optimizer
-import StringIO
+import io
 
 class eigenvector_follow(base_optimizer):
 
@@ -16,7 +16,7 @@ class eigenvector_follow(base_optimizer):
     def optimize(self,molecule,refE=0.,opt_steps=3,ictan=None):
 
         #print " refE %5.4f" % refE
-        print "initial E %5.4f" % (molecule.energy - refE)
+        print("initial E %5.4f" % (molecule.energy - refE))
         geoms = []
         energies=[]
         geoms.append(molecule.geometry)
@@ -28,7 +28,7 @@ class eigenvector_follow(base_optimizer):
         opt_type=self.options['opt_type']
         self.check_inputs(molecule,opt_type,ictan)
         nconstraints=self.get_nconstraints(opt_type)
-        self.buf = StringIO.StringIO()
+        self.buf = io.StringIO()
 
         # for cartesian these are the same
         x = np.copy(molecule.coordinates)
@@ -51,12 +51,12 @@ class eigenvector_follow(base_optimizer):
 
         update_hess=False
         if self.converged(g,n):
-            print " already at min"
+            print(" already at min")
             return fx
 
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
-            print " On opt step ",ostep+1
+            print(" On opt step ",ostep+1)
 
             # update Hess
             if update_hess:
@@ -78,11 +78,11 @@ class eigenvector_follow(base_optimizer):
                         nconstraints=1
                         opt_type='CLIMB'
             actual_step = np.linalg.norm(dq)
-            print "actual_step=",actual_step
+            print("actual_step=",actual_step)
             dq = dq/actual_step #normalize
             if actual_step>self.options['DMAX']:
                 step=self.options['DMAX']
-                print " reducing step, new step = %1.2f" %step
+                print(" reducing step, new step = %1.2f" %step)
             else:
                 step=actual_step
         
@@ -92,7 +92,7 @@ class eigenvector_follow(base_optimizer):
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = np.sqrt(np.dot(g.T,g)/n)
-            print "pgradrms ",pgradrms
+            print("pgradrms ",pgradrms)
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 xp_prim = self.x_prim.copy()
                 gp_prim = self.g_prim.copy()
@@ -100,13 +100,13 @@ class eigenvector_follow(base_optimizer):
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
-            print " ### Starting  line search ###"
+            print(" ### Starting  line search ###")
             ls = self.Linesearch(n, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
             if ls['status'] ==-2:
                 x = xp.copy()
-                print '[ERROR] the point return to the privious point'
+                print('[ERROR] the point return to the privious point')
                 return ls['status']
-            print " ## Done line search"
+            print(" ## Done line search")
         
             # get values from linesearch
             step = ls['step']
@@ -161,7 +161,7 @@ class eigenvector_follow(base_optimizer):
                 raise NotImplementedError
 
             if self.options['print_level']>0:
-                print "Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX'])
+                print("Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
             if self.converged(g,n):
@@ -197,12 +197,12 @@ if __name__=='__main__':
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
     M = Molecule.from_options(fnm=filepath,PES=pes,coordinate_type="DLC")
     distance = Distance(5,8)  #Not 1 based!!
-    print distance
+    print(distance)
    
     ef = eigenvector_follow.from_options() #Linesearch=NoLineSearch)
     geoms = ef.optimize(molecule=M,refE=M.energy,opt_steps=5)
     #geoms = ef.optimize(molecule=M,refE=M.energy,opt_steps=1)
-    print M.primitive_internal_coordinates
+    print(M.primitive_internal_coordinates)
 
     manage_xyz.write_xyzs('opt.xyz',geoms,scale=1.) 
 

@@ -123,16 +123,16 @@ class Lot(object):
         # Cache some useful atributes
         self.geom=self.options['geom']
         if self.geom is not None:
-            print " initializing LOT from geom"
+            print(" initializing LOT from geom")
         elif self.options['fnm'] is not None:
-                print " initializing LOT from file"
+                print(" initializing LOT from file")
                 if not os.path.exists(self.options['fnm']):
                     logger.error('Tried to create LOT object from a file that does not exist: %s\n' % self.options['fnm'])
                     raise IOError
                 self.geom = manage_xyz.read_xyz(self.options['fnm'],scale=1.)
                 self.atoms = manage_xyz.get_atoms(self.geom)
         else:
-            raise RuntimeError, "Need to initialize LOT object"
+            raise RuntimeError("Need to initialize LOT object")
 
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
@@ -170,8 +170,8 @@ class Lot(object):
         if multiplicity > self.n_electrons + 1:
             raise ValueError("Spin multiplicity too high.")
         if (self.n_electrons + multiplicity + 1) % 2:
-            print self.n_electrons
-            print multiplicity
+            print(self.n_electrons)
+            print(multiplicity)
             raise ValueError("Inconsistent charge/multiplicity.")
             
     def get_nelec(self,geom,multiplicity):
@@ -232,8 +232,8 @@ class Lot(object):
 
     def search_PES_tuple(self,tups, multiplicity,state):
         '''returns tuple in list of tuples that matches multiplicity and state'''
-        return filter(lambda tup: multiplicity==tup[0] and state==tup[1], tups)
+        return [tup for tup in tups if multiplicity==tup[0] and state==tup[1]]
 
     def search_tuple(self,tups,multiplicity):
-        return filter(lambda tup: multiplicity==tup[0], tups)
+        return [tup for tup in tups if multiplicity==tup[0]]
 

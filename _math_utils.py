@@ -121,14 +121,14 @@ def orthogonalize(vecs,numCvecs=0):
                 basis[:,count]=w/wnorm
                 count+=1
             except:
-                print "this vector should be vanishing, exiting"
-                print "norm=",wnorm
-                print w
+                print("this vector should be vanishing, exiting")
+                print("norm=",wnorm)
+                print(w)
                 exit(1)
     dots = np.matmul(basis.T,basis)
     if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
-        print "np.dot(b.T,b)"
-        print dots
+        print("np.dot(b.T,b)")
+        print(dots)
         raise RuntimeError("error in orthonormality")
     return basis
 

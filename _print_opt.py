@@ -33,7 +33,7 @@ class Print:
             for ico in self.nodes:
                 if ico != None:
                     f.write('{}\n'.format(float(ico.gradrms)))
-            print " WARNING: Printing dE as max-step in molden output "
+            print(" WARNING: Printing dE as max-step in molden output ")
             f.write("max-step\n")
             for ico,act in zip(self.nodes,self.active):
                 if ico!=None:

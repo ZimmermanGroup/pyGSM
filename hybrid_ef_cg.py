@@ -39,7 +39,7 @@ class hybrid_ef_cg(base_optimizer):
 
         update_hess=False
         for i in range(opt_steps):
-            print " On opt step ",i
+            print(" On opt step ",i)
         
             # update DLC  --> this changes q in DLC only
             if not c_obj.__class__.__name__=='Cartesian':
@@ -64,7 +64,7 @@ class hybrid_ef_cg(base_optimizer):
             ###### ====> Conjugate Gradient <===== ##########
             ################################################# 
 
-            for i in xrange(microiterations):
+            for i in range(microiterations):
                 SCALE =params.options['SCALEQN']
                 if c_obj.newHess>0: SCALE = params.options['SCALEQN']*c_obj.newHess
                 if params.options['SCALEQN']>10.0: SCALE=10.0
@@ -91,14 +91,14 @@ class hybrid_ef_cg(base_optimizer):
                 gp_mm = g_mm.copy()
                 fxp_mm = fx_mm
 
-                print " ### Starting  line search for MM region ###"
+                print(" ### Starting  line search for MM region ###")
                 ls = Linesearch(nicd_CART, x[CSTART:], fx_mm, g_mm, d, self.mm_step, xp[CSTART], gp_mm,0, params,MM_eNg_evaluate)
-                print "done line search"
+                print("done line search")
 
                 # revert to the privious point
                 if ls['status'] < 0:
                     self.x = xp.copy()
-                    print '[ERROR] the point return to the privious point'
+                    print('[ERROR] the point return to the privious point')
                     return ls['status']
                 fx_mm = ls['fx']
                 self.mm_step = ls['step']
@@ -131,10 +131,10 @@ class hybrid_ef_cg(base_optimizer):
             dq = np.zeros((CSTART,1))
             for i in range(CSTART): dq[i,0] = dq_tmp[i]
 
-            print "step=",step
+            print("step=",step)
             if step>params.options['DMAX']:
                 step=params.options['DMAX']
-                print " reducing step, new step =",step
+                print(" reducing step, new step =",step)
 
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(c_obj,opt_type,g)
@@ -154,14 +154,14 @@ class hybrid_ef_cg(base_optimizer):
             gp_qm = g_qm.copy()
             fxp_qm = fx_qm
 
-            print " ### Starting  line search for QM / IC_REGION###"
+            print(" ### Starting  line search for QM / IC_REGION###")
             ls = Linesearch(nicd_DLC, x[:nicd_DLC], fx_qm, g_qm, dq, step, xp[:nicd_DLC], gp_qm,constraint_steps, params,c_obj.QMM_eNg_evaulate)
-            print " ## Done line search"
+            print(" ## Done line search")
    
             # revert to the privious point
             if ls['status'] < 0:
                 x = xp.copy()
-                print '[ERROR] the point return to the privious point'
+                print('[ERROR] the point return to the privious point')
                 return ls['status']
 
             # get values at new point
@@ -175,9 +175,9 @@ class hybrid_ef_cg(base_optimizer):
             dEstep = fx_qmm - fxp_qmm
             ratio = dEstep/dEpre
         
-            print "ratio is =",ratio
-            print "dEpre is =",dEpre
-            print "dEstep is =",dEstep
+            print("ratio is =",ratio)
+            print("dEpre is =",dEpre)
+            print("dEstep is =",dEstep)
         
             # => step controller controls DMAX/DMIN <= #
             params.options['DMAX'] = step
@@ -196,6 +196,6 @@ class hybrid_ef_cg(base_optimizer):
         
             self.disp = np.max(x - xp)/ANGSTROM_TO_AU
             self.Ediff = (fx_qmm -fxp_qmm) / KCAL_MOL_PER_AU
-            print "maximum displacement component (au)", self.disp
-            print " Ediff (au)", self.Ediff
+            print("maximum displacement component (au)", self.disp)
+            print(" Ediff (au)", self.Ediff)
 

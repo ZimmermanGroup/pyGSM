@@ -1,11 +1,10 @@
 import numpy as np
-import options
+from . import options
 import os
-from base_gsm import *
-from dlc_new import *
-from pes import *
-#import pybel as pb
-from slots import Distance,Angle,Dihedral,OutOfPlane
+from .base_gsm import *
+from .dlc_new import *
+from .pes import *
+from .slots import Distance,Angle,Dihedral,OutOfPlane
 
 
 class SE_GSM(Base_Method):
@@ -24,9 +23,9 @@ class SE_GSM(Base_Method):
 
         print(" Done initializing isomer")
         self.nodes[0].form_Primitive_Hessian()
-        print " Primitive Internal Coordinates"
-        print self.nodes[0].primitive_internal_coordinates
-        print " number of primitives is", self.nodes[0].num_primitives
+        print(" Primitive Internal Coordinates")
+        print(self.nodes[0].primitive_internal_coordinates)
+        print(" number of primitives is", self.nodes[0].num_primitives)
 
     def isomer_init(self):
         for i in self.driving_coords:
@@ -53,7 +52,7 @@ class SE_GSM(Base_Method):
         if self.isRestarted==False:
             self.nodes[0].gradrms = 0.
             self.nodes[0].V0 = self.nodes[0].energy
-            print " Initial energy is %1.4f" % self.nodes[0].energy
+            print(" Initial energy is %1.4f" % self.nodes[0].energy)
             self.interpolate(1) 
             self.growth_iters(iters=max_iters,maxopt=opt_steps)
             if self.tscontinue==True:
@@ -68,36 +67,36 @@ class SE_GSM(Base_Method):
                     self.add_last_node(1)
 
             self.nnodes=self.nR
-            print " Number of nodes is ",self.nnodes
-            print " Warning last node still not optimized fully"
+            print(" Number of nodes is ",self.nnodes)
+            print(" Warning last node still not optimized fully")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
-            print " SSM growth phase over"
+            print(" SSM growth phase over")
             self.done_growing=True
 
-            print " beginning opt phase"
-            print "Setting all interior nodes to active"
+            print(" beginning opt phase")
+            print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
                 self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']
 
-        print " initial ic_reparam"
+        print(" initial ic_reparam")
         self.ic_reparam()
         if self.tscontinue==True:
             self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
         else:
-            print "Exiting early"
+            print("Exiting early")
 
-        print "Finished GSM!"  
+        print("Finished GSM!")  
 
 
     def add_node(self,n1,n2,n3=None):
         # n3 is not used!
         BDISTMIN=0.05
-        print " adding node: %i from node %i" %(n2,n1)
+        print(" adding node: %i from node %i" %(n2,n1))
         ictan,bdist =  self.tangent(n1,None)
 
         if bdist<BDISTMIN:
-            print "bdist too small"
+            print("bdist too small")
             return 0
         Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
 
@@ -107,12 +106,12 @@ class SE_GSM(Base_Method):
         if a>1.:
             a=1.
         dqmag = self.DQMAG_MIN+minmax*a
-        print " dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist)
+        print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
 
         dq0 = np.zeros((Vecs.shape[1],1))
 
         dq0[0] = -dqmag
-        print " dq0[constraint]: %1.3f" % dq0[0]
+        print(" dq0[constraint]: %1.3f" % dq0[0])
 
         old_xyz = self.nodes[n1].xyz.copy()
         new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
@@ -125,10 +124,10 @@ class SE_GSM(Base_Method):
         samegeom=False
         noptsteps=15
         if rtype==1:
-            print " copying last node, opting"
+            print(" copying last node, opting")
             #self.nodes[self.nR] = DLC.copy_node(self.nodes[self.nR-1],self.nR)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
-            print " Optimizing node %i" % self.nR
+            print(" Optimizing node %i" % self.nR)
             self.optimizer[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
             self.optimizer[self.nR].optimize(
                         molecule=self.nodes[self.nR],
@@ -137,11 +136,11 @@ class SE_GSM(Base_Method):
                         )
             self.active[self.nR]=True
             if (self.nodes[self.nR].xyz == self.nodes[self.nR-1].xyz).all():
-                print " Opt did not produce new geometry"
+                print(" Opt did not produce new geometry")
             else:
                 self.nR+=1
         elif rtype==2:
-            print " already created node, opting"
+            print(" already created node, opting")
             self.optimizer[self.nR-1].optimize(
                         molecule=self.nodes[self.nR-1],
                         refE=self.nodes[0].V0,
@@ -155,7 +154,7 @@ class SE_GSM(Base_Method):
         #if self.nodes[self.nR-1].gradrms < self.gaddmax:
         if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
-                print " Ran out of nodes, exiting GSM"
+                print(" Ran out of nodes, exiting GSM")
                 raise ValueError
             self.active[self.nR-1] = False
             if self.nodes[self.nR] == None:
@@ -173,7 +172,7 @@ class SE_GSM(Base_Method):
 
     def set_active(self,nR,nP=None):
         #print(" Here is active:",self.active)
-        print(" setting active node to %i "%nR)
+        print((" setting active node to %i "%nR))
 
         for i in range(self.nnodes):
             if self.nodes[i] != None:
@@ -196,10 +195,10 @@ class SE_GSM(Base_Method):
         return ncurrent,nlist
 
     def tangent(self,n1,n2):
-        print "n1=",n1
-        print "n2=",n2
+        print("n1=",n1)
+        print("n2=",n2)
         if n2 ==None or n2==n1:
-            print "getting tangent from node ",n1
+            print("getting tangent from node ",n1)
             nadds = self.driving_coords.count("ADD")
             nbreaks = self.driving_coords.count("BREAK")
             nangles = self.driving_coords.count("ANGLE")
@@ -228,7 +227,7 @@ class SE_GSM(Base_Method):
                     if current_d>d0:
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
                     if self.print_level>0:
-                        print " bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx])
+                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx]))
 
                 if "BREAK" in i:
                     index = [i[1]-1, i[2]-1]
@@ -247,7 +246,7 @@ class SE_GSM(Base_Method):
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
 
                     if self.print_level>0 and not quiet:
-                        print " bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx])
+                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx]))
                 if "ANGLE" in i:
 
                     index = [i[1]-1, i[2]-1,i[3]-1]
@@ -258,7 +257,7 @@ class SE_GSM(Base_Method):
                     ang_diff = anglet*np.pi/180. - ang_value
                     #print(" angle: %s is index %i " %(angle,ang_idx))
                     if self.print_level>0:
-                        print(" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff))
+                        print((" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff)))
                     ictan[prim_idx] = -ang_diff
                     #TODO need to come up with an adist
                     #if abs(ang_diff)>0.1:
@@ -280,19 +279,19 @@ class SE_GSM(Base_Method):
                     if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
                     if self.print_level>0:
-                        print(" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv,tort,tor_diff))
+                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv,tort,tor_diff)))
 
             bdist = np.sqrt(bdist)
             if np.all(ictan==0.0):
-                raise RuntimeError, " All elements are zero"
+                raise RuntimeError(" All elements are zero")
             return ictan,bdist
         else:
-            print" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2)
+            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
             Q1 = self.nodes[n1].primitive_internal_values 
             Q2 = self.nodes[n2].primitive_internal_values 
             PMDiff = Q2-Q1
             #for i in range(len(PMDiff)):
-            for k,prim in zip(range(len(PMDiff)),self.nodes[n1].primitive_internal_coordinates):
+            for k,prim in zip(list(range(len(PMDiff))),self.nodes[n1].primitive_internal_coordinates):
                 if prim.isPeriodic:
                     Plus2Pi = PMDiff[k] + 2*np.pi
                     Minus2Pi = PMDiff[k] - 2*np.pi
@@ -308,17 +307,17 @@ class SE_GSM(Base_Method):
         isDone=False
         #TODO break planes
         if self.pastts and self.nn>3: #TODO extra criterion here
-            print "pastts is ",self.pastts
+            print("pastts is ",self.pastts)
             isDone=True
         fp = self.find_peaks(1)
         if fp==-1 and self.energies[self.nR-1]>200.:
-            print "growth_iters over: all uphill and high energy"
+            print("growth_iters over: all uphill and high energy")
             self.end_early=2
             self.tscontinue=False
             self.nnodes=self.nR
             isDone=True
         if fp==-2:
-            print "growth_iters over: all uphill and flattening out"
+            print("growth_iters over: all uphill and flattening out")
             self.end_early=2
             self.tscontinue=False
             self.nnodes=self.nR
@@ -331,20 +330,20 @@ class SE_GSM(Base_Method):
         #if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
         if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
             if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
-                print "TS node is second to last node, adding one more node"
+                print("TS node is second to last node, adding one more node")
                 self.add_last_node(1)
                 self.nnodes=self.nR
                 self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
                 self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
                 added=True
-                print "done adding node"
-                print "nnodes = ",self.nnodes
+                print("done adding node")
+                print("nnodes = ",self.nnodes)
                 self.get_tangents_1()
             return isDone
 
         # => check string profile <= #
         if fp==-1: #total string is uphill
-            print "fp == -1, check V_profile"
+            print("fp == -1, check V_profile")
 
             #if self.tstype==2:
             #    print "check for total dissociation"
@@ -355,12 +354,12 @@ class SE_GSM(Base_Method):
             #    print "flatland? set new start node to endpoint"
             #    self.tscontinue=0
             #    isDone=True
-            print "total dissociation"
+            print("total dissociation")
             self.tscontinue
             isDone=True
 
         if fp==-2:
-            print "termination due to dissociation"
+            print("termination due to dissociation")
             self.tscontinue=False
             self.endearly=True #bools
             isDone=True
@@ -376,9 +375,10 @@ class SE_GSM(Base_Method):
             if fp>1:
                 rxnocc,wint = self.check_for_reaction()
             if fp >1 and rxnocc==True and wint<self.nnodes-1:
-                print "Need to trim string"
+                print("Need to trim string")
                 self.tscontinue=False
-                return isDone=True
+                isDone=True
+                return isDone
 
         # => Convergence Criteria
         #if (((self.stage==1 and rtype==1) or self.stage==2) and
@@ -396,12 +396,12 @@ class SE_GSM(Base_Method):
             return isDone
 
 if __name__=='__main__':
-    from qchem import QChem
-    from pes import PES
-    from dlc_new import DelocalizedInternalCoordinates
-    from eigenvector_follow import eigenvector_follow
-    from _linesearch import backtrack,NoLineSearch
-    from molecule import Molecule
+    from .qchem import QChem
+    from .pes import PES
+    from .dlc_new import DelocalizedInternalCoordinates
+    from .eigenvector_follow import eigenvector_follow
+    from ._linesearch import backtrack,NoLineSearch
+    from .molecule import Molecule
 
     basis='6-31G'
     nproc=8

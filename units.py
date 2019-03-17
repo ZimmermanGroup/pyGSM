@@ -69,9 +69,9 @@ AMBERCHARGE_TO_AU = 1.0/18.2223
 # Print all unit conversions
 if __name__ == '__main__':
     conversions = dict(locals())
-    for key, val in conversions.iteritems():
+    for key, val in conversions.items():
         if key[0] != '_':
-            print(" Conversion: % 22s, Value: %11.11E" % (key, val))
+            print((" Conversion: % 22s, Value: %11.11E" % (key, val)))
 
 
 units = {
@@ -81,7 +81,7 @@ units = {
     'au_per_K'     : 1.0 / 3.1577464E5,             # temperature
     'au_per_fs'    : 1.0 / 2.418884326505E-2,       # time
 }
-for k in units.keys():
+for k in list(units.keys()):
     v = units[k]
     mobj = re.match('(\S+)_per_(\S+)',k)
     units['%s_per_%s' % (mobj.group(2),mobj.group(1))] = 1.0 / v

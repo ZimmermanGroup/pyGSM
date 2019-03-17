@@ -85,7 +85,7 @@ class PES(object):
         hess = np.zeros((len(geom)*3,len(geom)*3))
         I = np.eye(hess.shape[0])
         for n,row in enumerate(I):
-            print "on hessian product ",n
+            print("on hessian product ",n)
             hess[n] = np.squeeze(self.get_finite_difference_hessian_product(geom,row))
         return hess
 
@@ -136,9 +136,9 @@ if __name__ == '__main__':
     QCHEM=True
     PYTC=False
     if QCHEM:
-        from qchem import *
+        from .qchem import *
     elif PYTC:
-        from pytc import *
+        from .pytc import *
 
     #filepath="tests/fluoroethene.xyz"
     #nocc=11
@@ -160,6 +160,6 @@ if __name__ == '__main__':
     #lot=QChem.from_options(states=[(2,0)],charge=1,basis='6-31g(d)',functional='B3LYP')
     lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart',nproc=4)
     pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
-    print pes.get_energy(geom)
-    print pes.get_gradient(geom)
+    print(pes.get_energy(geom))
+    print(pes.get_gradient(geom))
     #ic = Hybrid_DLC(mol=mol,pes=pes,IC_region=["UNL"])

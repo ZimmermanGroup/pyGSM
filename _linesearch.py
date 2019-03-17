@@ -8,7 +8,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     fx = molecule.PES.get_energy(xyz)
     gx = molecule.PES.get_gradient(xyz)
     g = molecule.coord_obj.calcGrad(xyz,gx)
-    print " [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step)
+    print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
@@ -24,7 +24,7 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule)
     dginit = np.dot(g[:n].T, d[:n])
     # Make sure that s points to a descent direction.
     if 0 < dginit:
-    	print '[ERROR] not descent direction'
+    	print('[ERROR] not descent direction')
     	result['status'] = -2
     	return result
     # The initial value of the objective function. 
@@ -41,39 +41,39 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule)
         fx = molecule.PES.get_energy(xyz)
         gx = molecule.PES.get_gradient(xyz)
         g = molecule.coord_obj.calcGrad(xyz,gx)
-        print " [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step)
+        print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
         count = count + 1
         # check the sufficient decrease condition (Armijo condition).
         if fx > finit + (step * dgtest) and np.all(constraint_step==0):  #+ np.dot(g.T,constraint_step): # doesn't work with constraint :(
-            print " [INFO] not satisfy sufficient decrease condition."
+            print(" [INFO] not satisfy sufficient decrease condition.")
             width = dec
-            print "step",step*width
+            print("step",step*width)
         else:
             # check the wolfe condition
             # now g is the gradient of f(xk + step * d)
             dg = np.dot(g[:n].T, d[:n])
             if dg < parameters['wolfe'] * dginit:
-                print " [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit)
-                print " [INFO] not satisfy wolf condition."
+                print(" [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit))
+                print(" [INFO] not satisfy wolf condition.")
                 width = inc
             else:
                 # check the strong wolfe condition
                 if dg > -parameters['wolfe'] * dginit:
-                	print " [INFO] not satisfy strong wolf condition."
+                	print(" [INFO] not satisfy strong wolf condition.")
                 	width = dec
                 else:
                     result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
                     return result
         if step < parameters['min_step']:
             result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
-            print ' [INFO] the linesearch step is too small'
+            print(' [INFO] the linesearch step is too small')
             return result
         if step > parameters['max_step']:
             result = {'status':-1,'fx':fx,'step':step,'x':x, 'g':g}
-            print ' [INFO] the linesearch step is too large'
+            print(' [INFO] the linesearch step is too large')
             return result
         if parameters['max_linesearch'] <= count:
-            print ' [INFO] the iteration of linesearch is many'
+            print(' [INFO] the iteration of linesearch is many')
             result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
             return result	
 

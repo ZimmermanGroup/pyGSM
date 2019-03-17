@@ -19,29 +19,29 @@ class SE_Cross(SE_GSM):
            rtype=1 MESX search
         """
         assert rtype in [0,1], "rtype not defined"
-        print "*********************************************************************"
+        print("*********************************************************************")
         if rtype==0:
-            print "********************** Doing MECI search ****************************"
+            print("********************** Doing MECI search ****************************")
         else:
-            print "********************** Doing MESX search ****************************"
-        print "*********************************************************************"
+            print("********************** Doing MESX search ****************************")
+        print("*********************************************************************")
 
         self.icoords[0].gradrms=0.
         self.icoords[0].energy = self.icoords[0].V0 = self.icoords[0].PES.get_energy(self.icoords[0].geom)
-        print ' Initial energy is {:1.4f}'.format(self.icoords[0].energy)
+        print(' Initial energy is {:1.4f}'.format(self.icoords[0].energy))
         sys.stdout.flush()
 
         # stash bdist for node 0
         _,self.icoords[0].bdist = DLC.tangent_SE(self.icoords[0],self.driving_coords,quiet=True)
-        print " Initial bdist is %1.3f" %self.icoords[0].bdist
+        print(" Initial bdist is %1.3f" %self.icoords[0].bdist)
 
         # interpolate first node
         self.interpolate(1)
 
         # grow string
         self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=1)
-        print ' SE_Cross growth phase over'
-        print ' Warning last node still not fully optimized'
+        print(' SE_Cross growth phase over')
+        print(' Warning last node still not fully optimized')
 
         if rtype==0:
             # doing extra constrained penalty optimization for MECI
@@ -69,7 +69,7 @@ class SE_Cross(SE_GSM):
 
     def opt_string(self,max_iters=50,optsteps=3,rtype=2):
         self.nnodes=self.nR
-        print "getting energies"
+        print("getting energies")
         for ico in self.icoords[0:self.nR]:
             if ico!=0:
                 lot = ico.PES.lot.copy(ico.PES.lot,ico.PES.lot.node_id)
@@ -79,14 +79,14 @@ class SE_Cross(SE_GSM):
                 ico.PES = pes
                 ico.energy = ico.PES.get_energy(ico.geom)
         self.icoords[0].V0 = self.icoords[0].energy 
-        print "initial energy is %4.3f" % self.icoords[0].V0
+        print("initial energy is %4.3f" % self.icoords[0].V0)
 
         self.store_energies()
-        print " V_profile: ",
+        print(" V_profile: ", end=' ')
         for n in range(self.nnodes):
-            print " {:7.3f}".format(float(self.energies[n])),
-        print
-        print "Setting all interior nodes to active"
+            print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+        print()
+        print("Setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
             self.icoords[n].OPTTHRESH=self.CONV_TOL
@@ -96,7 +96,7 @@ class SE_Cross(SE_GSM):
         self.icoords[self.TSnode].mol.write('xyz','TS.xyz',overwrite=True)
 
     def add_node(self,n1,n2,n3=None):
-        print " adding node: %i from node %i"%(n2,n1)
+        print(" adding node: %i from node %i"%(n2,n1))
         return DLC.add_node_SE_X(self.icoords[n1],self.driving_coords,dqmag_max=self.DQMAG_MAX,dqmag_min=self.DQMAG_MIN)
     
     def converged(self,n,opt_type):
@@ -104,11 +104,11 @@ class SE_Cross(SE_GSM):
         if opt_type==0:
             tmp1 = np.copy(self.icoords[n].PES.grad1)
             tmp2 = np.copy(self.icoords[n].PES.grad2)
-            print 'norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)),
-            print 'ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2))
+            print('norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)), end=' ')
+            print('ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2)))
             tmp1 = tmp1/np.linalg.norm(tmp1)
             tmp2 = tmp2/np.linalg.norm(tmp2)
-            print 'normalized gradient dot product:',float(np.dot(tmp1.T,tmp2))
+            print('normalized gradient dot product:',float(np.dot(tmp1.T,tmp2)))
             sys.stdout.flush()
             if self.icoords[n].gradrms<self.CONV_TOL and 1.-abs(float(np.dot(tmp1.T,tmp2))) <= 0.02 and abs(self.icoords[n].PES.dE) <= 1.25:
                 return True

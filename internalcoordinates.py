@@ -5,7 +5,7 @@ from collections import OrderedDict, defaultdict
 import numpy as np
 from numpy.linalg import multi_dot
 import elements
-from nifty import click, commadash, ang2bohr, bohr2ang, logger
+from nifty import click, commadash, logger
 from _math_utils import *
 import options
 from slots import *
