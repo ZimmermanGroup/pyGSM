@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 
 class Analyze:
@@ -112,13 +113,13 @@ class Analyze:
         ns = self.n0-1
         if ns<nodemax: ns=nodemax
 
-        print("Energies")
+        print(" Energies",end=' ')
         for n in range(ns,self.nR):
-            print((" %4.3f" % self.energies[n]))
+            print(" {:4.3f}".format(self.energies[n]),end=' ')
             if self.energies[n]>emax:
                 nodemax=n
                 emax=self.energies[n]
-        print("nodemax ",nodemax)
+        print("\n nodemax ",nodemax)
 
         for n in range(nodemax,self.nR):
             if self.energies[n]<emax-THRESH1:
@@ -220,12 +221,12 @@ class Analyze:
         gradrms = 0.0
         for i,ico in zip(list(range(1,self.nnodes-1)),self.nodes[1:self.nnodes-1]):
             if ico!=None:
-                print(" node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)), end=' ')
+                print(" node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)))
                 if i%5 == 0:
                     print()
                 totalgrad += ico.gradrms*self.rn3m6
                 gradrms += ico.gradrms*ico.gradrms
-        print()
+        print('')
         #TODO wrong for growth
         gradrms = np.sqrt(gradrms/(self.nnodes-2))
         return totalgrad,gradrms
