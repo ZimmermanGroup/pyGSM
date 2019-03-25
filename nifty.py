@@ -44,6 +44,7 @@ import math
 import six # For six.string_types
 from subprocess import PIPE
 from collections import OrderedDict, defaultdict
+import pybel as pb
 
 
 @contextmanager
@@ -1498,3 +1499,42 @@ def concurrent_map(func, data):
         t.join()
 
     return result
+
+
+# ob utils
+import elements
+ELEMENT_TABLE = elements.ElementData()
+def getAllCoords(mol):
+    natoms = mol.OBMol.NumAtoms()
+    tmpcoords = np.zeros((natoms,3))
+    for i in range(natoms):
+        a= mol.OBMol.GetAtom(i+1)
+        tmpcoords[i,:] = [a.GetX(),a.GetY(),a.GetZ()]
+    return tmpcoords
+
+def getAtomicNum(mol,i):
+    a = mol.OBMol.GetAtom(i)
+    return a.GetAtomicNum()
+
+def getAtomicSymbols(mol):
+    natoms = mol.OBMol.NumAtoms()
+    atomic_nums = [ getAtomicNum(mol,i+1) for i in range(natoms) ]
+    atomic_symbols = [ ELEMENT_TABLE.from_atomic_number(i).symbol for i in atomic_nums ] 
+    return atomic_symbols
+
+def make_mol_from_coords(coords,atomic_symbols):
+    mol = ob.OBMol()
+    for s,xyz in zip(atomic_symbols,coords):
+        i = mol.NewAtom()
+        a = ELEMENT_TABLE.from_symbol(s).atomic_num
+        i.SetAtomicNum(a)
+        i.SetVector(xyz[0],xyz[1],xyz[2])
+    return pb.Molecule(mol)
+
+def cartesian_product2(arrays):
+    """ Form a Cartesian product of two NumPy arrays. """
+    la = len(arrays)
+    arr = np.empty([len(a) for a in arrays] + [la], dtype=np.int32)
+    for i, a in enumerate(np.ix_(*arrays)):
+        arr[...,i] = a
+    return arr.reshape(-1, la)
