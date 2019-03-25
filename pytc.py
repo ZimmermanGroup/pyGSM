@@ -1,12 +1,14 @@
 import lightspeed as ls
 import psiw
-from base_lot import * 
+from base_lot import Lot 
 import numpy as np
-import manage_xyz as mx
+import manage_xyz
 from units import *
 from collections import Counter
-from rhf_lot import *
+from rhf_lot import RHF_LOT
+from casci_lot_svd import CASCI_LOT_SVD
 import sys
+from nifty import custom_redirection
 
 class PyTC(Lot):
     """
@@ -14,8 +16,10 @@ class PyTC(Lot):
     Inherits from Lot. Requires a PSIW object
     """
 
-    def get_energy(self,geom,multiplicity,state):
-        if self.hasRanForCurrentCoords==False:
+    def get_energy(self,coords,multiplicity,state):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getE(state,multiplicity)
 
@@ -23,49 +27,69 @@ class PyTC(Lot):
         tmp = self.search_tuple(self.E,multiplicity)
         return tmp[state][1]*KCAL_MOL_PER_AU
 
-    def run(self,geom):
-        assert self.hasRanForCurrentCoords==False,"don't run"
+    def get_mm_energy(self,coords):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
+            self.currentCoords = coords.copy()
+            self.psiw.update_qmmm(coords*ANGSTROM_TO_AU)
+        if self.psiw.__class__.__name__=="CASCI_LOT" or self.psiw.__class__.__name__=="CASCI_LOT_SVD":
+            return self.psiw.casci.ref.geometry.qmmm.mm_energy
+        else:
+            return self.psiw.rhf.geometry.qmmm.mm_energy
+
+    def get_mm_gradient(self,coords):
+        #TODO need diff variable for hasRan MM energy
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
+            self.currentCoords = coords.copy()
+            self.psiw.update_qmmm(coords*ANGSTROM_TO_AU)
+        if self.psiw.__class__.__name__=="CASCI_LOT" or self.psiw.__class__.__name__=="CASCI_LOT_SVD":
+            return self.psiw.casci.ref.geometry.qmmm.mm_gradient
+        else:
+            return self.psiw.rhf.geometry.qmmm.mm_gradient
+
+    def run(self,geom,verbose=False):
         self.E=[]
         self.grada=[]
         #normal update
-        coords = mx.xyz_to_np(geom)
+        coords = manage_xyz.xyz_to_np(geom)
         T = ls.Tensor.array(coords*ANGSTROM_TO_AU)
+        def run_code(T):
+            self.psiw = self.psiw.update_xyz(T)
+            for state in self.states:
+                multiplicity=state[0]
+                ad_idx=state[1]
+                S=multiplicity-1
+                if self.psiw.__class__.__name__=="CASCI_LOT" or self.psiw.__class__.__name__=="CASCI_LOT_SVD":
+                    self.E.append((multiplicity,self.psiw.compute_energy(S=S,index=ad_idx)))
+                    tmp = self.psiw.compute_gradient(S=S,index=ad_idx)
+                elif self.psiw.__class__.__name__=="RHF_LOT": 
+                    self.E.append((multiplicity,self.psiw.compute_energy()))
+                    tmp = self.psiw.compute_gradient()
+                self.grada.append((multiplicity,tmp[...]))
+            if self.do_coupling==True:
+                state1=self.states[0][1]
+                state2=self.states[1][1]
+                tmp = self.psiw.compute_coupling(S=S,indexA=state1,indexB=state2)
+                self.coup = tmp[...]
 
-        with open('psiw_jobs.txt','a') as out:
-            with custom_redirection(out):
-                self.psiw = self.psiw.update_xyz(T)
+        if not verbose:
+            with open('psiw_jobs.txt','a') as out:
+                with custom_redirection(out):
+                    run_code(T)
+        else:
+            run_code(T)
 
                 #filename="{}_rhf_update.molden".format(self.node_id)
                 #self.psiw.casci.reference.save_molden_file(filename)
 
-                for state in self.states:
-                    multiplicity=state[0]
-                    ad_idx=state[1]
-                    S=multiplicity-1
-                    if self.psiw.__class__.__name__=="CASCI_LOT":
-                        self.E.append((multiplicity,self.psiw.compute_energy(S=S,index=ad_idx)))
-                        tmp = self.psiw.compute_gradient(S=S,index=ad_idx)
-                    elif self.psiw.__class__.__name__=="RHF_LOT": 
-                        self.E.append((multiplicity,self.psiw.compute_energy()))
-                        tmp = self.psiw.compute_gradient()
-                    self.grada.append((multiplicity,tmp[...]))
-                if self.do_coupling==True:
-                    state1=self.states[0][1]
-                    state2=self.states[1][1]
-                    tmp = self.psiw.compute_coupling(S=S,indexA=state1,indexB=state2)
-                    self.coup = tmp[...]
-
         self.hasRanForCurrentCoords=True
-        print("setting has Ran to true")
-
         return
 
     def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
-    def get_gradient(self,geom,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+    def get_gradient(self,coords,multiplicity,state):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
@@ -75,8 +99,8 @@ class PyTC(Lot):
         #TODO this could be better
         return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
 
-    def get_coupling(self,geom,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+    def get_coupling(self,coords,multiplicity,state1,state2):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
@@ -90,11 +114,12 @@ class PyTC(Lot):
             "do_coupling":do_coupling,
             }))
 
-        if self.psiw.__class__.__name__=="CASCI_LOT":
-            obj.psiw = psiw.CASCI_LOT(self.psiw.options.copy())
-                    
-        elif self.psiw.__class__.__name__=="RHF_LOT": 
-            obj.psiw = RHF_LOT(self.psiw.options.copy())
+        #if self.psiw.__class__.__name__=="CASCI_LOT":
+        #    obj.psiw = psiw.CASCI_LOT(self.psiw.options.copy())
+        #            
+        #elif self.psiw.__class__.__name__=="RHF_LOT": 
+        #    obj.psiw = RHF_LOT(self.psiw.options.copy())
+        obj.psiw = type(obj.psiw)(self.psiw.options.copy())
                     
         return obj
 
@@ -104,26 +129,3 @@ class PyTC(Lot):
         return PyTC(PyTC.default_options().set_values(kwargs))
 
 
-if __name__ == '__main__':
-
-    from .pytc import *
-    from . import manage_xyz
-
-    if 1:
-        nocc=11
-        nactive=2
-
-        psiw=PyTC.from_options(states=[(1,0),(1,1)],nocc=nocc,nactive=nactive,basis='6-31gs',do_coupling=True)
-        x="tests/fluoroethene.xyz"
-        #psiw.cas_from_file(x)
-        #lot.casci_from_file_from_template(x,x,nocc,nocc) # hack to get it to work,need casci1
-
-        geom=manage_xyz.read_xyz(x,scale=1)   
-        e=lot.get_energy(geom,1,0)
-        print(e)
-        g=lot.get_gradient(geom,1,0)
-        print(g)
-        g=lot.get_gradient(geom,1,1)
-        print(g)
-        c=lot.get_coupling(geom,1,0,1)
-        print(c)
