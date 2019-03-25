@@ -1,3 +1,4 @@
+from __future__ import print_function
 import options
 import numpy as np
 import os
@@ -115,6 +116,8 @@ class Base_Method(object,Print,Analyze):
                 required=False
                 )
     
+#BDIST_RATIO controls when string will terminate, good when know exactly what you want
+#DQMAG_MAX controls max step size for adding node
         opt.add_option(
                 key="BDIST_RATIO",
                 value=0.5,
@@ -423,11 +426,6 @@ class Base_Method(object,Print,Analyze):
 
         for n in range(iters):
             sys.stdout.flush()
-            success = self.check_add_node()
-            if not success:
-                print("can't add anymore nodes, bdist too small")
-                break
-            self.set_active(self.nR-1, self.nnodes-self.nP)
             self.get_tangents_1g()
             self.opt_steps(maxopt)
             self.store_energies()
@@ -438,6 +436,12 @@ class Base_Method(object,Print,Analyze):
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
                 break
+
+            success = self.check_add_node()
+            if not success:
+                print("can't add anymore nodes, bdist too small")
+                break
+            self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
 
         # create newic object
@@ -471,8 +475,6 @@ class Base_Method(object,Print,Analyze):
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
 
-                self.optimizer[n].options['opt_type']=opt_type
-
                 exsteps=1 #multiplier for nodes near the TS node
                 if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  # should this be for climb too?
                     exsteps=2
@@ -485,16 +487,17 @@ class Base_Method(object,Print,Analyze):
                 self.optimizer[n].optimize(
                         molecule=self.nodes[n],
                         refE=self.nodes[0].V0,
+                        opt_type=opt_type,
                         opt_steps=opt_steps*exsteps,
                         ictan=self.ictan[n]
                         )
 
             if optlastnode==True and n==self.nnodes-1 and not self.nodes[n].PES.lot.do_coupling:
                 print(" optimizing last node")
-                self.optimizer[n].options['opt_type']='UNCONSTRAINED'
                 self.nodes[n].energy = self.optimizer[n].optimize(
                         c_obj=self.nodes[n],
                         refE=self.nodes[0].V0,
+                        opt_type=opt_type,
                         opt_steps=opt_steps
                         )
 
@@ -549,8 +552,7 @@ class Base_Method(object,Print,Analyze):
             if self.nodes[self.nR]==0:
                 success= False
                 break
-            print(" getting energy for  node ",self.nR)
-            print(self.nodes[self.nR].energy-self.nodes[0].energy)
+            print(" getting energy for node %d: %5.4f" %(self.nR,self.nodes[self.nR].energy - self.nodes[0].V0))
             self.nn+=1
             self.nR+=1
             print(" nn=%i,nR=%i" %(self.nn,self.nR))
@@ -571,8 +573,7 @@ class Base_Method(object,Print,Analyze):
             if self.nodes[-self.nP-1]==0:
                 success= False
                 break
-            print(" getting energy for  node ",self.nnodes-self.nP-1)
-            print(self.nodes[-self.nP-1].energy-self.nodes[0].energy)
+            print(" getting energy for node %d: %5.4f" %(self.nR,self.nodes[-self.nP-1].energy - self.nodes[0].V0))
             self.nn+=1
             self.nP+=1
             print(" nn=%i,nP=%i" %(self.nn,self.nP))
@@ -715,7 +716,7 @@ class Base_Method(object,Print,Analyze):
 
                 #TODO might need to recalculate energy here for seam? 
 
-        print(' spacings (end ic_reparam, steps: {}/{}):'.format(i,ic_reparam_steps))
+        print(' spacings (end ic_reparam, steps: {}/{}):'.format(i+1,ic_reparam_steps))
         for n in range(1,self.nnodes):
             print(" {:1.2}".format(self.dqmaga[n]), end=' ')
         print()
@@ -810,7 +811,7 @@ class Base_Method(object,Print,Analyze):
                         dq0[0] = rpmove[n]  # ictan is first
                         if self.print_level>1:
                             print(" dq0[constraint]: {:1.3}".format(float(dq0[0])))
-                        self.nodes[n].update_xyz(dq0)
+                        self.nodes[n].update_xyz(dq0,verbose=False)
                     else:
                         pass
         print(" spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps), end=' ')
@@ -910,11 +911,11 @@ class Base_Method(object,Print,Analyze):
         opt_type='ICTAN' 
         if self.climb and self.nodes[n].isTSnode==True:
             opt_type='CLIMB'
-        if self.find and self.nodes[n].isTSnode==True:
+        elif self.find and self.nodes[n].isTSnode==True:
             opt_type='TS'
-        if self.nodes[n].PES.lot.do_coupling==True:
+        elif self.nodes[n].PES.lot.do_coupling==True:
             opt_type='SEAM'
-        if self.climb and self.nodes[n].isTSnode==True and opt_type=='SEAM':
+        elif self.climb and self.nodes[n].isTSnode==True and opt_type=='SEAM':
             opt_type='TS-SEAM'
         if not quiet:
             print((" setting node %i opt_type to %s" %(n,opt_type)))
@@ -952,13 +953,19 @@ class Base_Method(object,Print,Analyze):
 #==========================================================================#
 #| If this code has benefited your research, please support us by citing: |#
 #|                                                                        |# 
+#| Aldaz, C.; Kammeraad J. A.; Zimmerman P. M. "Discovery of conical      |#
+#| intersection mediated photochemistry with growing string methods",     |#
+#| Phys. Chem. Chem. Phys., 2018, 20, 27394                               |#
+#| http://dx.doi.org/10.1039/c8cp04703k                                   |#
+#|                                                                        |# 
 #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
 #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
 #| http://dx.doi.org/10.1063/1.4952956                                    |#
 #==========================================================================#
-               """
 
-        print msg
+
+               """
+        print(msg)
 
 
 

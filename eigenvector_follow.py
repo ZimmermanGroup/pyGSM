@@ -1,10 +1,16 @@
+from __future__ import print_function
 import numpy as np
 import manage_xyz
 from units import *
 from _linesearch import backtrack,NoLineSearch
 from cartesian import CartesianCoordinates
 from base_optimizer import base_optimizer
-import io
+from nifty import pmat2d,pvec1d
+
+try:
+    from io import StringIO
+except:
+    from StringIO import StringIO
 
 class eigenvector_follow(base_optimizer):
 
@@ -13,10 +19,10 @@ class eigenvector_follow(base_optimizer):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return eigenvector_follow(eigenvector_follow.default_options().set_values(kwargs))
 
-    def optimize(self,molecule,refE=0.,opt_steps=3,ictan=None):
+    def optimize(self,molecule,refE=0.,opt_type='UNCONSTRAINED',opt_steps=3,ictan=None):
 
         #print " refE %5.4f" % refE
-        print("initial E %5.4f" % (molecule.energy - refE))
+        print(" \ninitial E %5.4f" % (molecule.energy - refE))
         geoms = []
         energies=[]
         geoms.append(molecule.geometry)
@@ -25,10 +31,13 @@ class eigenvector_follow(base_optimizer):
         # stash/initialize some useful attributes
         self.disp = 1000.
         self.Ediff = 1000.
-        opt_type=self.options['opt_type']
         self.check_inputs(molecule,opt_type,ictan)
         nconstraints=self.get_nconstraints(opt_type)
-        self.buf = io.StringIO()
+        self.buf = StringIO()
+
+        #form initial coord basis
+        constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
+        molecule.update_coordinate_basis(constraints=constraints)
 
         # for cartesian these are the same
         x = np.copy(molecule.coordinates)
@@ -70,15 +79,19 @@ class eigenvector_follow(base_optimizer):
             if isinstance(molecule.coord_obj,CartesianCoordinates):
                 raise NotImplementedError
             else:
-                if self.options['opt_type']!='TS':
+                if opt_type !='TS':
                     dq = self.eigenvector_step(molecule,g,nconstraints)
+                    #print "dq"
+                    #pmat2d(dq.T,4,format='f')
                 else:
                     dq,maxol_good = self.TS_eigenvector_step(molecule,g,ictan)
                     if not maxol_good:
                         nconstraints=1
                         opt_type='CLIMB'
+
+            # this should only be over the non-constrained region
             actual_step = np.linalg.norm(dq)
-            print("actual_step=",actual_step)
+            print(" actual_step= %1.2f"% actual_step)
             dq = dq/actual_step #normalize
             if actual_step>self.options['DMAX']:
                 step=self.options['DMAX']
@@ -100,13 +113,13 @@ class eigenvector_follow(base_optimizer):
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
-            print(" ### Starting  line search ###")
+            #print(" ### Starting  line search ###")
             ls = self.Linesearch(n, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
             if ls['status'] ==-2:
                 x = xp.copy()
                 print('[ERROR] the point return to the privious point')
                 return ls['status']
-            print(" ## Done line search")
+            #print(" ## Done line search")
         
             # get values from linesearch
             step = ls['step']

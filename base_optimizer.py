@@ -4,6 +4,7 @@ from units import *
 from _linesearch import backtrack,NoLineSearch
 from cartesian import CartesianCoordinates
 import options
+from nifty import pmat2d,pvec1d
 
 
 class base_optimizer(object):
@@ -18,15 +19,6 @@ class base_optimizer(object):
         if hasattr(base_optimizer, '_default_options'): return base_optimizer._default_options.copy()
         opt = options.Options() 
 
-        #remove this as an option
-        opt.add_option(
-                key='opt_type',
-                required=True,
-                value="UNCONSTRAINED",
-                allowed_types=[str],
-                allowed_values=["UNCONSTRAINED", "ICTAN", "CLIMB", "TS", "MECI", "SEAM", "TS-SEAM"],
-                doc='The type of unconstrained optimization'
-                )
 
         opt.add_option(
                 key='OPTTHRESH',
