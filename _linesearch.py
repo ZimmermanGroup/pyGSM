@@ -8,7 +8,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     fx = molecule.PES.get_energy(xyz)
     gx = molecule.PES.get_gradient(xyz)
     g = molecule.coord_obj.calcGrad(xyz,gx)
-    print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
+    #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
