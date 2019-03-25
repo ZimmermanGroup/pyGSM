@@ -127,13 +127,13 @@ class base_optimizer(object):
         if opt_type in ['TS','TS-SEAM']:
             assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
-    def converged(self,g,n):
+    def converged(self,g,nconstraints):
         # check if finished
-        gradrms = np.sqrt(np.dot(g[:n].T,g[:n])/n)
+        gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
         #print "current gradrms= %r au" % gradrms
         #print "gnorm =",gnorm
         
-        gmax = np.max(g[:n])/ANGSTROM_TO_AU
+        gmax = np.max(g[nconstraints:])/ANGSTROM_TO_AU
         #print "maximum gradient component (au)", gmax
 
         if gradrms <self.conv_grms:
@@ -394,23 +394,25 @@ class base_optimizer(object):
         mode 1 is BFGS, mode 2 is BOFILL
         '''
         assert mode=='BFGS' or mode=='BOFILL', "no update implemented with that mode"
-        molecule.newHess-=1
-
         # do this even if mode==BOFILL
         change = self.update_bfgs(molecule)
 
         if molecule.coord_obj.__class__.__name__=='DelocalizedInternalCoordinates':
             molecule.update_Primitive_Hessian(change=change)
             if self.options['print_level']>1:
-                print("primitive internals Hessian")
-                print(molecule.Primitive_Hessian)
+                print("change")
+                pmat2d(change,4,format='f')
+                print(" updated primitive internals Hessian")
+                pmat2d(molecule.Primitive_Hessian,4,format='f')
             if mode=='BFGS':
                 molecule.form_Hessian_in_basis()
             if mode=='BOFILL':
                 change=self.update_bofill(molecule)
                 molecule.update_Hessian(change)
         else:
-            self.Hint += change
+            self.Hessian += change
+        molecule.newHess-=1
+
 
     def update_bfgs(self,molecule):
         if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
@@ -419,20 +421,20 @@ class base_optimizer(object):
             raise NotImplementedError
 
     def update_bfgsp(self,molecule):
-        Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         if self.options['print_level']>1:
             print("In update bfgsp")
-            print("dg:", self.dg_prim.T)
-            print("dx:", self.dx_prim.T)
-            print("Hdx")
-            print(Hdx.T)
+        Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
+        #dxHdx = np.linalg.multi_dot([self.dx_prim.T,molecule.Primitive_Hessian,self.dx_prim])
         dgdg = np.outer(self.dg_prim,self.dg_prim)
         dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
         change = np.zeros_like(molecule.Primitive_Hessian)
 
-        if self.options['print_level']>2:
-            print("dgtdx: %1.3f dxHdx: %1.3f dgdg" % (dgtdx,dxHdx))
+        if self.options['print_level']>1:
+            print("Hdx")
+            print(Hdx.T)
+            print("dgtdx: %1.8f dxHdx: %1.8f dgdg" % (dgtdx,dxHdx))
+            print("dgdg")
             print(dgdg)
 
         if dgtdx>0.:

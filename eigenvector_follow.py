@@ -58,14 +58,15 @@ class eigenvector_follow(base_optimizer):
         fx = molecule.energy
         g = molecule.gradient.copy()
 
-        update_hess=False
-        if self.converged(g,n):
+        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
+        if molecule.gradrms < self.conv_grms:
             print(" already at min")
-            return fx
+            return geoms,energies
 
+        update_hess=False
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
-            print(" On opt step ",ostep+1)
+            print(" On opt step {} ".format(ostep+1))
 
             # update Hess
             if update_hess:
@@ -105,7 +106,7 @@ class eigenvector_follow(base_optimizer):
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = np.sqrt(np.dot(g.T,g)/n)
-            print("pgradrms ",pgradrms)
+            print(" pgradrms {:4}".format(pgradrms))
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 xp_prim = self.x_prim.copy()
                 gp_prim = self.g_prim.copy()
@@ -129,9 +130,9 @@ class eigenvector_follow(base_optimizer):
 
             # calculate predicted value from Hessian
             #TODO change limits since constraints are now at beginning
-            dq_actual = x-xp
-            dEtemp = np.dot(molecule.Hessian[nconstraints:,nconstraints:],dq_actual[nconstraints:])
-            dEpre = np.dot(np.transpose(dq_actual[nconstraints:]),gp[nconstraints:]) + 0.5*np.dot(np.transpose(dEtemp),dq_actual[nconstraints:])
+            scaled_dq = dq*step
+            dEtemp = np.dot(molecule.Hessian[nconstraints:,nconstraints:],scaled_dq[nconstraints:])
+            dEpre = np.dot(np.transpose(scaled_dq[nconstraints:]),gp[nconstraints:]) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq[nconstraints:])
             dEpre *=KCAL_MOL_PER_AU
             for nc in range(nconstraints):
                 dEpre += gp[nc]*constraint_steps[nc]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq WARNING THIS IS ONLY GOOD FOR DLC
@@ -139,9 +140,8 @@ class eigenvector_follow(base_optimizer):
             # control step size 
             dEstep = fx - fxp
             ratio = dEstep/dEpre
-            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
             self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
-        
             # report the progress 
             #TODO make these lists and check last element for convergence
             self.disp = np.max(x - xp)/ANGSTROM_TO_AU
@@ -152,7 +152,7 @@ class eigenvector_follow(base_optimizer):
             	xnorm = 1.0
 
             # update molecule xyz
-            xyz = molecule.update_xyz(dq_actual)
+            xyz = molecule.update_xyz(x-xp)
             geoms.append(molecule.geometry)
             energies.append(molecule.energy-refE)
 
@@ -161,32 +161,33 @@ class eigenvector_follow(base_optimizer):
             
                 # only form g_prim for non-constrained 
                 self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
-                #self.x_prim = molecule.primitive_internal_values
+                #test_gp_prim = np.dot(molecule.coord_basis[:,nconstraints:],gp[nconstraints:])
                 self.dx = x-xp
                 self.dg = g - gp
 
-                self.dx_prim = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
-                #self.dx_prim = np.dot(molecule.coord_basis,dq_actual)  #why is this not working anymore?
-                #print (self.dx_prim_actual - self.dx_prim).T
+                self.dx_prim_actual = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
+                self.dx_prim_actual = np.reshape(self.dx_prim_actual,(-1,1))
+                self.dx_prim = np.dot(molecule.coord_basis[:,nconstraints:],scaled_dq[nconstraints:]) 
                 self.dg_prim = self.g_prim - gp_prim
 
             else:
-                raise NotImplementedError
+                raise NotImplementedError(" ef not implemented for CART")
 
             if self.options['print_level']>0:
-                print("Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
-            self.buf.write(' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+            self.buf.write(u' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
-            if self.converged(g,n):
+            if molecule.gradrms < self.conv_grms:
                 break
 
             #update DLC  --> this changes q, g, Hint
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 if opt_type != 'TS':
                     constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-                    #print "updating coordinate basis"
                     molecule.update_coordinate_basis(constraints=constraints)
                     x = np.copy(molecule.coordinates)
+                    fx = molecule.energy
+                    dE = molecule.difference_energy
                     g = molecule.gradient.copy()
                     molecule.form_Hessian_in_basis()
         
