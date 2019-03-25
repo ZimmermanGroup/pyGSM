@@ -1,3 +1,4 @@
+from __future__ import print_function
 from internalcoordinates import InternalCoordinates,AtomContact,MyG
 from collections import OrderedDict, defaultdict
 import itertools
@@ -9,7 +10,7 @@ from slots import *
 from units import *
 from elements import ElementData
 from pkg_resources import parse_version
-from nifty import pvec1d
+from nifty import pvec1d,cartesian_product2,click
 
 np.set_printoptions(precision=4,suppress=True)
 
@@ -41,7 +42,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.natoms = len(self.atoms)
         self.built_bonds = False
 
-        ## Topology settings  -- CRA 3/2019  A lot of this is leftovers from Lee-Ping's code
+        ## Topology settings  -- CRA 3/2019 leftovers from Lee-Ping's code
         # but maybe useful in the future
         self.top_settings = {'toppbc' : extra_kwargs.get('toppbc', False),
                              'topframe' : extra_kwargs.get('topframe', 0),
@@ -53,14 +54,17 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         xyz = options['xyz']
 
         # setup
+        click()
         self.makePrimitives(xyz,options)
+        time_build = click()
+        #print "make prim %.3f" % time_build
 
         #exit()
         #self.makeConstraints(xyz, constraints, cvals)
 
         # Reorder primitives for checking with cc's code in TC.
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
-        #self.reorderPrimitives()
+        self.reorderPrimitives()
 
     def makePrimitives(self, xyz, options):
         connect=options['connect']
@@ -70,31 +74,32 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # LPW also uses resid from molecule . . . 
         frags = [m.nodes() for m in self.fragments]
-
+        
         # coordinates in Angstrom
         coords = xyz.flatten()
-        # Make a distance matrix mapping atom pairs to interatomic distances
-        AtomIterator, dxij = self.distance_matrix(xyz,pbc=False)
-        D = {}
-        for i, j in zip(AtomIterator, dxij[0]):
-            assert i[0] < i[1]
-            D[tuple(i)] = j
-        dgraph = nx.Graph()
-        for i in range(self.natoms):
-            dgraph.add_node(i)
-        for k, v in list(D.items()):
-            dgraph.add_edge(k[0], k[1], weight=v)
-        mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
+
         # Build a list of noncovalent distances
         noncov = []
         # Connect all non-bonded fragments together
-        for edge in mst:
-            if edge not in list(self.topology.edges()):
-                if connect:
+        if connect:
+            # Make a distance matrix mapping atom pairs to interatomic distances
+            AtomIterator, dxij = self.distance_matrix(xyz,pbc=False)
+            D = {}
+            for i, j in zip(AtomIterator, dxij[0]):
+                assert i[0] < i[1]
+                D[tuple(i)] = j
+            dgraph = nx.Graph()
+            for i in range(self.natoms):
+                dgraph.add_node(i)
+            for k, v in list(D.items()):
+                dgraph.add_edge(k[0], k[1], weight=v)
+            mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
+            for edge in mst:
+                if edge not in list(self.topology.edges()):
                     print("Adding %s from minimum spanning tree" % str(edge))
                     self.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
-        if not connect:
+        else:
             if addcart:
                 for i in range(self.natoms):
                     self.add(CartesianX(i, w=1.0))
@@ -161,7 +166,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 dots = [np.abs(np.dot(ei, nac)) for ei in np.eye(3)]
                                 # Functions for adding Cartesian coordinate
                                 # carts = [CartesianX, CartesianY, CartesianZ]
-                                print("warning, adding translation, did you mean this?")
+                                #print("warning, adding translation, did you mean this?")
                                 trans = [TranslationX, TranslationY, TranslationZ]
                                 w = np.array([-1.0, 2.0, -1.0])
                                 # Add two of the most perpendicular Cartesian coordinates
@@ -245,7 +250,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
-            
+
 
     def makeConstraints(self, xyz, constraints, cvals=None):
         # Add the list of constraints. 
@@ -436,9 +441,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if verbose:
                 print((" adding ",dof))
             self.Internals.append(dof)
-            #self.reorderPrimitives()
-            self.clearCache()  # CRA why is this necessary?
-            # because primitives changed, Bmatrix is derivative of prims
     
     def dof_index(self,dof):
         return self.Internals.index(dof)
@@ -480,6 +482,34 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if len(newPrims) != len(self.Internals):
             raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
+
+        if not self.options['connect']:
+            self.reorderPrimsByFrag()
+        else:
+            self.nprims_frag=[len(newPrims)]
+
+    def reorderPrimsByFrag(self):
+        # these are the subgraphs
+        frags = [m for m in self.fragments]
+        newPrims = []
+        self.nprims_frag=[]
+        self.natoms_frags=[]
+        for frag in frags:
+            count=0
+            self.natoms_frags.append(len(frag))
+            for p in self.Internals:
+                atoms = p.atoms
+                if all([atom in frag for atom in atoms]):
+                    newPrims.append(p)
+                    count+=1
+            self.nprims_frag.append(count)
+
+        if len(newPrims) != len(self.Internals):
+            print(np.setdiff1d(self.Internals,newPrims))
+            raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
+        self.Internals = newPrims
+        self.clearCache()
+        return
 
     def getConstraints_from(self, other):
         if other.haveConstraints():
@@ -568,7 +598,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) 
                 elem1 = min(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
                 elem2 = max(self.atoms[ic.a].atomic_num,self.atoms[ic.b].atomic_num)
-                Hdiag.append(0.35)
                 #A = 1.734
                 #if elem1 < 3:
                 #    if elem2 < 3:
@@ -584,10 +613,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 #        B = 1.522
                 #else:
                 #    B = 2.068
-                #if covalent(ic.a, ic.b):
-                #    Hdiag.append(A/(r-B)**3)
-                #else:
-                #    Hdiag.append(0.1)
+                if covalent(ic.a, ic.b):
+                    Hdiag.append(0.35)
+                    #Hdiag.append(A/(r-B)**3)
+                else:
+                    Hdiag.append(0.1)
             elif type(ic) in [Angle, LinearAngle, MultiAngle]:
                 if type(ic) in [Angle, LinearAngle]:
                     a = ic.a
@@ -629,10 +659,36 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             else:
                 raise RuntimeError('Failed to build guess Hessian matrix. Make sure all IC types are supported')
             
-        print("printing diagonals")
+        #print("printing diagonals")
         #print(Hdiag)
-        pvec1d(Hdiag,2,format='f')
+        #pvec1d(Hdiag,2,format='f')
         return np.diag(Hdiag)
+
+    def rebuild_topology_from_prim_bonds(self,xyz):
+        bonds = []
+        for p in self.Internals:
+            if type(p)==Distance:
+                bonds.append(p)
+
+        # Create a NetworkX graph object to hold the bonds.
+        G = MyG()
+        for i, a_dict in enumerate(self.atoms):
+            a = a_dict.name
+            G.add_node(i)
+            if parse_version(nx.__version__) >= parse_version('2.0'):
+                nx.set_node_attributes(G,{i:a}, name='e')
+                nx.set_node_attributes(G,{i:xyz[i]}, name='x')
+            else:
+                nx.set_node_attributes(G,'e',{i:a})
+                nx.set_node_attributes(G,'x',{i:xyz[i]})
+        for bond in bonds:
+            atoms = bond.atoms
+            G.add_edge(atoms[0],atoms[1])
+        
+        # The Topology is simply the NetworkX graph object.
+        self.topology = G
+        self.fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        for g in self.fragments: g.__class__ = MyG
 
     def build_topology(self, xyz, force_bonds=True, **kwargs):
         """
@@ -873,7 +929,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         drij.append(drij_i)
         dxij.append(dxij_i)
         return AtomIterator, drij, dxij
-
 
     # these aren't used 
     def find_angles(self):

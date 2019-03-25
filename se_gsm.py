@@ -1,10 +1,12 @@
+from __future__ import print_function
 import numpy as np
-from . import options
+import options
 import os
-from .base_gsm import *
-from .dlc_new import *
-from .pes import *
-from .slots import Distance,Angle,Dihedral,OutOfPlane
+from base_gsm import *
+from dlc_new import *
+from pes import *
+from slots import Distance,Angle,Dihedral,OutOfPlane
+from molecule import Molecule
 
 
 class SE_GSM(Base_Method):
@@ -28,19 +30,26 @@ class SE_GSM(Base_Method):
         print(" number of primitives is", self.nodes[0].num_primitives)
 
     def isomer_init(self):
+        changed_top = False
         for i in self.driving_coords:
             if "ADD" or "BREAK" in i:
                 bond = Distance(i[1]-1,i[2]-1)
                 self.nodes[0].coord_obj.Prims.add(bond,verbose=True)
+                changed_top =True
             if "ANGLE" in i:
                 angle = Angle(i[1]-1,i[2]-1,i[3]-1)
                 self.nodes[0].coord_obj.Prims.add(angle,verbose=True)
             if "TORSION" in i:
                 torsion = Dihedral(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
-                self.nodes[0].coord_obj.Prims.add(Dihedral,verbose=True)
+                self.nodes[0].coord_obj.Prims.add(torsion,verbose=True)
             if "OOP" in i:
                 oop = OutOfPlane(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
                 self.nodes[0].coord_obj.Prims.add(oop,verbose=True)
+        self.nodes[0].coord_obj.Prims.clearCache()
+        if changed_top:
+            self.nodes[0].coord_obj.Prims.rebuild_topology_from_prim_bonds(self.nodes[0].xyz)
+            self.nodes[0].coord_obj.Prims.reorderPrimitives()
+            self.nodes[0].update_coordinate_basis()
 
     def go_gsm(self,max_iters=50,opt_steps=10,rtype=2):
         """
@@ -116,6 +125,7 @@ class SE_GSM(Base_Method):
         old_xyz = self.nodes[n1].xyz.copy()
         new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
         new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)
+        new_node.bdist = bdist
         return new_node
 
 
@@ -195,10 +205,8 @@ class SE_GSM(Base_Method):
         return ncurrent,nlist
 
     def tangent(self,n1,n2):
-        print("n1=",n1)
-        print("n2=",n2)
         if n2 ==None or n2==n1:
-            print("getting tangent from node ",n1)
+            #print(" getting tangent from node ",n1)
             nadds = self.driving_coords.count("ADD")
             nbreaks = self.driving_coords.count("BREAK")
             nangles = self.driving_coords.count("ANGLE")
@@ -245,7 +253,7 @@ class SE_GSM(Base_Method):
                     if current_d<d0:
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
 
-                    if self.print_level>0 and not quiet:
+                    if self.print_level>0:
                         print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx]))
                 if "ANGLE" in i:
 
@@ -266,7 +274,7 @@ class SE_GSM(Base_Method):
                     #torsion=(i[1],i[2],i[3],i[4])
                     index = [i[1]-1, i[2]-1,i[3]-1,i[4]-1]
                     torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = self.nodex[n1].coord_obj.Prims.dof_index(torsion)
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(torsion)
                     tort = i[5]
                     torv = torsion.value(xyz)
                     tor_diff = tort - torv*180./np.pi
@@ -286,7 +294,7 @@ class SE_GSM(Base_Method):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
         else:
-            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+            #print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
             Q1 = self.nodes[n1].primitive_internal_values 
             Q2 = self.nodes[n2].primitive_internal_values 
             PMDiff = Q2-Q1

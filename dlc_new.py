@@ -8,8 +8,9 @@ from _math_utils import *
 import options
 from slots import *
 from nifty import click
-from sklearn import preprocessing
+import scipy
 from numpy.linalg import multi_dot
+from sys import exit
 np.set_printoptions(precision=4,suppress=True)
 
     
@@ -78,10 +79,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def join(self, other):
         return self.Prims.join(other.Prims)
 
-    def union(self,DLC2):
+    def union(self,DLC2,xyz):  #xyz is DLC1 xyz
         self.Prims.join(DLC2.Prims)
-        self.Prims.reorderPrimitives() # just for funsies
-        self.Prims.clearCache() # this is important but why? CRA 3/2019
+        self.Prims.rebuild_topology_from_prim_bonds(xyz)
+        self.Prims.reorderPrimitives() 
+        self.Prims.clearCache() 
         return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
 
     def copy(self,xyz):
@@ -282,23 +284,23 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = click()
-
-        L, Q = np.linalg.eigh(G)
+        start=0
+        tmpvecs=[]
+        for nprim in self.Prims.nprims_frag:
+            L, Q = np.linalg.eigh(G[start:nprim+start,start:nprim+start])
+            start=nprim
+            LargeVals = 0
+            LargeIdx = []
+            for ival, value in enumerate(L):
+                if np.abs(value) > 1e-6:
+                    LargeVals += 1
+                    LargeIdx.append(ival)
+            tmpvecs.append(Q[:,LargeIdx])
+        self.Vecs = scipy.linalg.block_diag(*tmpvecs)
+        
         time_eig = click()
-        # print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
+        print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
 
-        LargeVals = 0
-        LargeIdx = []
-        for ival, value in enumerate(L):
-            # print ival, value
-            #if np.abs(value) > 1e-6:
-            if np.abs(value) > 1e-6:
-                LargeVals += 1
-                LargeIdx.append(ival)
-        Expect = 3*self.natoms
-        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.natoms, Expect, LargeVals, len(L))
-        # if LargeVals <= Expect:
-        self.Vecs = Q[:, LargeIdx]
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
 
         # Vecs has number of rows equal to the number of primitives, and
