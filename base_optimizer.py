@@ -173,20 +173,22 @@ class base_optimizer(object):
             constraints=None
         elif opt_type=='ICTAN' or opt_type=="CLIMB":
             constraints = ictan
+        elif opt_type=='MECI':
+            print("MECI")
+            dgrad_U = np.dot(molecule.coord_basis,molecule.difference_gradient)
+            dvec_U = np.dot(molecule.coord_basis,molecule.derivative_coupling)
+            constraints = np.hstack((dgrad_U,dvec_U))
+        elif opt_type=="SEAM" or opt_type=="TS-SEAM":
+            dgrad_U = np.dot(molecule.coord_basis,molecule.difference_gradient)
+            dvec_U = np.dot(molecule.coord_basis,molecule.derivative_coupling)
+            constraints = np.hstack((ictan,dgrad_U,dvec_U))
         else:
             raise NotImplementedError
-        #TODO
-        #dgrad_U = #
-        #dvec_U = 
-        #constraints = np.zeros((len(dvecq_U),nconstraints),dtype=float)
-
         return constraints
-
 
     def get_constraint_steps(self,molecule,opt_type,g):
         nconstraints=self.get_nconstraints(opt_type)
         n=len(g)
-
         #TODO Raise Error for CartesianCoordinates
 
         #return constraint_steps
@@ -203,7 +205,6 @@ class base_optimizer(object):
         elif opt_type=='TS-SEAM':
             constraint_steps[0]=self.walk_up(g,0)
             constraint_steps[1]=self.dgrad_step(molecule)
-
         return constraint_steps
 
     def dgrad_step(self,molecule):
@@ -211,10 +212,10 @@ class base_optimizer(object):
 
         norm_dg = np.linalg.norm(molecule.difference_gradient)
         if self.options['print_level']>0:
-            print(" norm_dg is %1.4f" % norm_dg, end=' ')
-            print(" dE is %1.4f" % self.PES.dE, end=' ')
+            print(" norm_dg is %1.4f" % norm_dg)
+            print(" dE is %1.4f" % molecule.difference_energy)
 
-        dq = -molecule.dE/KCAL_MOL_PER_AU/norm_dg 
+        dq = -molecule.difference_energy/KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
             dq=-0.075
 
@@ -267,17 +268,17 @@ class base_optimizer(object):
                 self.options['DMAX'] = step/1.5
             else:
                 self.options['DMAX'] = self.options['DMAX']/1.5
-        if (ratio<0.25) and abs(dEpre)>0.05:
+        if (ratio<0.25 or ratio>2.0):  #and abs(dEpre)>0.05:
             #or ratio >1.5
             if self.options['print_level']>0:
-                print((" decreasing DMAX"), end=' ')
+                print(" decreasing DMAX")
             if step<self.options['DMAX']:
                 self.options['DMAX'] = step/1.2
             else:
                 self.options['DMAX'] = self.options['DMAX']/1.2
         elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
             if self.options['print_level']>0:
-                print((" increasing DMAX"), end=' ')
+                print(" increasing DMAX")
             #self.buf.write(" increasing DMAX")
             #if step > self.options['DMAX']:
             #    if True:
