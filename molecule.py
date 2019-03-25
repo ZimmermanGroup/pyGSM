@@ -228,7 +228,7 @@ class Molecule(object):
 
         if self.Data['Hessian'] is None:
             if self.Data['Primitive_Hessian'] is not None:
-                print("forming Hessian in basis")
+                print(" forming Hessian in basis")
                 self.form_Hessian_in_basis()
             else:
                 self.form_Hessian()
@@ -346,11 +346,12 @@ class Molecule(object):
 
     @property
     def difference_gradient(self):
-        dgradx = self.PES.get_coupling(self.xyz) 
+        dgradx = self.PES.get_dgrad(self.xyz) 
         return self.coord_obj.calcGrad(self.xyz,dgradx)
     
     @property
     def difference_energy(self):
+        self.energy
         return self.PES.dE
 
     @property
@@ -368,7 +369,7 @@ class Molecule(object):
     def form_Primitive_Hessian(self):
         print(" making primitive Hessian")
         self.Data['Primitive_Hessian'] = self.coord_obj.Prims.guess_hessian(self.xyz)
-        self.newHess = 5
+        self.newHess = 10
     
     def update_Primitive_Hessian(self,change=None):
         if change is not None:
@@ -454,66 +455,4 @@ class Molecule(object):
     @property
     def num_coordinates(self):
         return len(self.coordinates)
-
-if __name__ =='__main__':
-    from molpro import Molpro
-
-    #m = Molecule('s1minima_with_h2o.pdb',fragments=True)
-    
-    nocc=11
-    nactive=2
-    filepath='examples/tests/fluoroethene.xyz'
-    geom=manage_xyz.read_xyz(filepath,scale=1.)
-
-    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G',do_coupling=True,nproc=4,fnm=filepath)
-    pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-    pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
-    pes = Avg_PES(pes1,pes2,lot=lot)
-
-    M = Molecule.from_options(fnm=filepath,PES=pes,coordinate_type="DLC")
-    print("done constructing")
-    #print M
-    #print M.primitive_internal_coordinates
-    #coords = M.coordinates
-    #print coords
-
-    #print M.Primitive_Hessian
-    #print M.Hessian
-    #print M.coord_basis
-    #print M.update_coordinate_basis()
-
-    #print M.update_Primitive_Hessian(change=np.ones((M.Primitive_Hessian.shape),dtype=float))
-    Hess =M.Hessian
-    print(Hess)
-    print(M.update_Hessian(np.eye(Hess.shape[0])))
-
-    #dq = np.zeros_like(M.coordinates)
-    #dq[0] = 0.5
-    #print M.update_xyz(dq)
-
-    #print M.primitive_internal_values
-
-    #hess= M.form_Hessian_in_basis()
-    #print hess
-    #print M.coordinate_basis
-
-
-    exit()
-
-    #print m.atomic_num
-    #print m.center_of_mass
-    #print m.radius_of_gyration
-    M.build_bonds()
-    print((M.bonds))
-    M.build_topology()
-    print(M.geometry)
-    M.Data['Hessian'] = 10
-    print(M.Data['Hessian'])
-
-    M2 = M.copy(node_id=2)
-    print("done copying")
-    print(M2.geometry)
-    print(M2.Data['Hessian'])
-    #print M.energy
-    #print M.gradient
 
