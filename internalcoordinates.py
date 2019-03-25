@@ -163,8 +163,15 @@ class InternalCoordinates(object):
         Given Cartesian coordinates xyz, return the G-matrix
         given by G = BuBt where u is an arbitrary matrix (default to identity)
         """
+        #t0 = time.time()
         Bmat = self.wilsonB(xyz)
+        #t1 = time.time()
         BuBt = np.dot(Bmat,Bmat.T)
+        #t2 = time.time()
+        #t10 = t1-t0
+        #t21 = t2-t1
+        #print("time to form B-matrix %.3f" % t10)
+        #print("time to mat-mult B %.3f" % t21)
         return BuBt
 
     def GInverse_SVD(self, xyz):
@@ -289,16 +296,15 @@ class InternalCoordinates(object):
         # Function to exit from loop
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info(" Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
-                return xyz_iter1.flatten()
+                return xyzsave.reshape((-1,3))
             elif ndqt > 1e-3:
-                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info(" Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info(" Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
-            #return xyzsave.flatten()
             return xyzsave.reshape((-1,3))
         fail_counter = 0
         while True:
@@ -320,19 +326,19 @@ class InternalCoordinates(object):
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
+                if verbose: logger.info(" Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
