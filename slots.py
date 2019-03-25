@@ -1,6 +1,7 @@
 import numpy as np
 from nifty import logger,commadash
 from rotate import get_expmap, get_expmap_der, is_linear
+from _math_utils import d_cross,d_ncross,d_unit_vector
 
 class CartesianX(object):
     __slots__ = ['a','w','isAngular','isPeriodic']
@@ -113,6 +114,10 @@ class TranslationX(object):
         # return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-X %s" % (commadash(self.a))
         
+    @property
+    def atoms(self):
+        return list(self.a)
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -148,6 +153,10 @@ class TranslationY(object):
     def __repr__(self):
         # return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-Y %s" % (commadash(self.a))
+
+    @property
+    def atoms(self):
+        return list(self.a)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -184,6 +193,10 @@ class TranslationZ(object):
     def __repr__(self):
         # return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-Z %s" % (commadash(self.a))
+
+    @property
+    def atoms(self):
+        return list(self.a)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -383,6 +396,10 @@ class RotationA(object):
         # return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
         return "Rotation-A %s" % (commadash(self.a))
 
+    @property
+    def atoms(self):
+        return list(self.a)
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -418,6 +435,10 @@ class RotationB(object):
     def __repr__(self):
         # return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
         return "Rotation-B %s" % (commadash(self.a))
+
+    @property
+    def atoms(self):
+        return list(self.a)
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -455,6 +476,10 @@ class RotationC(object):
         # return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
         return "Rotation-C %s" % (commadash(self.a))
 
+    @property
+    def atoms(self):
+        return list(self.a)
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -487,7 +512,11 @@ class Distance(object):
 
     def __repr__(self):
         return "Distance %i-%i" % (self.a+1, self.b+1)
-        
+
+    @property
+    def atoms(self):
+        return [self.a,self.b]
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         if self.a == other.a:
@@ -530,6 +559,10 @@ class Angle(object):
 
     def __repr__(self):
         return "Angle %i-%i-%i" % (self.a+1, self.b+1, self.c+1)
+
+    @property
+    def atoms(self):
+        return [self.a,self.b,self.c]
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -878,6 +911,10 @@ class Dihedral(object):
     def __repr__(self):
         return "Dihedral %i-%i-%i-%i" % (self.a+1, self.b+1, self.c+1, self.d+1)
 
+    @property
+    def atoms(self):
+        return [self.a,self.b,self.c,self.d]
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         if self.a == other.a:
@@ -1065,6 +1102,10 @@ class OutOfPlane(object):
 
     def __repr__(self):
         return "Out-of-Plane %i-%i-%i-%i" % (self.a+1, self.b+1, self.c+1, self.d+1)
+
+    @property
+    def atoms(self):
+        return [self.a,self.b,self.c,self.d]
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
