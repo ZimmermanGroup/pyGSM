@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 import options
 import os
@@ -171,7 +172,7 @@ class GSM(Base_Method):
 
     def add_node(self,n1,n2,n3):
         print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
-        ictan =  self.tangent(n3,n1)
+        ictan,_ =  self.tangent(n3,n1)
         Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
 
         dq0 = np.zeros((Vecs.shape[1],1))
@@ -232,7 +233,7 @@ class GSM(Base_Method):
         return success
 
     def tangent(self,n1,n2):
-        print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+        #print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
         # this could have been done easier but it is nicer to do it this way
         Q1 = self.nodes[n1].primitive_internal_values 
         Q2 = self.nodes[n2].primitive_internal_values 
@@ -303,8 +304,6 @@ class GSM(Base_Method):
             self.nodes[-1].gradrms = 0.
             print(" Energy of the end points are %4.3f, %4.3f" %(self.nodes[0].energy,self.nodes[-1].energy))
             print(" relative E %4.3f, %4.3f" %(0.0,self.nodes[-1].energy-self.nodes[0].energy))
-        else:
-+            print(" Energy of end points are %4.3f " % self.nodes[0].energy)
         else:
             print(" Energy of end points are %4.3f " % self.nodes[0].energy)
             self.nodes[-1].energy = self.nodes[0].energy
