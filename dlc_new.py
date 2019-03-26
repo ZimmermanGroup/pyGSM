@@ -8,7 +8,7 @@ from _math_utils import *
 import options
 from slots import *
 from nifty import click
-import scipy
+from scipy.linalg import block_diag
 from numpy.linalg import multi_dot
 from sys import exit
 np.set_printoptions(precision=4,suppress=True)
@@ -296,7 +296,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     LargeVals += 1
                     LargeIdx.append(ival)
             tmpvecs.append(Q[:,LargeIdx])
-        self.Vecs = scipy.linalg.block_diag(*tmpvecs)
+        self.Vecs = block_diag(*tmpvecs)
         
         time_eig = click()
         print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)

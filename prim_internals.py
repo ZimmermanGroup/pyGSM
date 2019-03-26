@@ -10,6 +10,9 @@ from units import *
 from elements import ElementData
 from nifty import pvec1d,cartesian_product2,click
 import itertools
+from scipy.linalg import block_diag
+import numpy as np
+import time
 
 np.set_printoptions(precision=4,suppress=True)
 
@@ -250,6 +253,28 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
 
+    def GMatrix(self,xyz):
+        t0 = time.time()
+        Bmat = self.wilsonB(xyz)
+        #t1 = time.time()
+        scoord=0
+        sprim=0
+        BBt_list = []
+        for nprim,na in zip(self.nprims_frag,self.natoms_frag):
+            nc=3*na
+            eprim = nprim+sprim
+            ecoord = nc+scoord
+            BBt_frag = np.dot(Bmat[sprim:eprim,scoord:ecoord],np.transpose(Bmat[sprim:eprim,scoord:ecoord]))
+            scoord=nc
+            sprim=nprim
+            BBt_list.append(BBt_frag)
+        BBt = block_diag(*BBt_list)
+        #t2 = time.time()
+        #t10 = t1-t0
+        #t21 = t2-t1
+        #print("time to form B-matrix %.3f" % t10)
+        #print("time to mat-mult B %.3f" % t21)
+        return BBt
 
     def makeConstraints(self, xyz, constraints, cvals=None):
         # Add the list of constraints. 
@@ -486,16 +511,21 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.reorderPrimsByFrag()
         else:
             self.nprims_frag=[len(newPrims)]
+            frags = [m for m in self.fragments]
+            natoms_frag=0
+            for frag in frags:
+                natoms_frag += len(frag)
+            self.natoms_frag=[natoms_frag]
 
     def reorderPrimsByFrag(self):
         # these are the subgraphs
         frags = [m for m in self.fragments]
         newPrims = []
         self.nprims_frag=[]
-        self.natoms_frags=[]
+        self.natoms_frag=[]
         for frag in frags:
             count=0
-            self.natoms_frags.append(len(frag))
+            self.natoms_frag.append(len(frag))
             for p in self.Internals:
                 atoms = p.atoms
                 if all([atom in frag for atom in atoms]):
