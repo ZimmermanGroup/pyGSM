@@ -6,7 +6,7 @@ import elements
 import os
 ELEMENT_TABLE = elements.ElementData()
 
-
+#TODO take out all job-specific data -- encourage external files since those are most customizable
 class Lot(object):
     """ Lot object for level of theory calculators """
 
@@ -96,7 +96,7 @@ class Lot(object):
         opt.add_option(
                 key="lot_inp_file",
                 required=False,
-                value=False,
+                value=None,
                 doc='file name storing LOT input section. Used for custom basis sets,\
                      custom convergence criteria, etc. Will override nproc, basis and\
                      functional. Do not specify charge or spin in this file. Charge \
@@ -106,9 +106,11 @@ class Lot(object):
                      )
 
         opt.add_option(
-                key="psiw",
-                required=False,
-                value=None,
+                key='job_data',
+                value={},
+                allowed_types=[dict],
+                doc='extra key-word arguments to define level of theory object. e.g.\
+                     TeraChem Cloud requires a TeraChem client and options dictionary.'
                 )
 
         Lot._default_options = opt
@@ -120,7 +122,6 @@ class Lot(object):
         """ Constructor """
         self.options = options
 
-        # Cache some useful atributes
         self.geom=self.options['geom']
         if self.geom is not None:
             print(" initializing LOT from geom")
@@ -134,8 +135,11 @@ class Lot(object):
         else:
             raise RuntimeError("Need to initialize LOT object")
 
+        # Cache some useful atributes
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
+
+        #TODO remove some of these options 
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
@@ -146,25 +150,14 @@ class Lot(object):
         self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
-        self.psiw = self.options['psiw']
-
         self.lot_inp_file = self.options['lot_inp_file']
 
-        if self.node_id == 0:
-            if self.lot_inp_file == False:
-                pass
-                #print ' using {} processors'.format(self.nproc)
-                #print ' ************LOT parameters:************'
-                #print ' Basis      :',self.basis
-                #print ' Functional :',self.functional
-                #print ' Charge     :',self.charge
-                #print ' States     :',self.states
-                #print ' do_coupling:',self.do_coupling
-            else:
-                with open(self.lot_inp_file) as lot_inp:
-                    lot_inp_lines = lot_inp.readlines()
-                #for line in lot_inp_lines:
-                #    print line.rstrip()
+        #package  specific implementation
+        self.options['job_data']['tcc_options'] = self.options['job_data'].get('tcc_options',{})
+        self.options['job_data']['TC'] = self.options['job_data'].get('TC',None)
+        self.options['job_data']['orbfile'] = self.options['job_data'].get('orbfile','')
+        self.options['job_data']['psiw'] = self.options['job_data'].get('psiw',None)
+
     @classmethod
     def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
@@ -191,19 +184,6 @@ class Lot(object):
             raise ValueError("Molecule has fewer than 0 electrons!!!")
         self.check_multiplicity(multiplicity)
         return 
-
-    def get_energy(self,geom,mulitplicity,state):
-        raise NotImplementedError()
-
-    def get_gradient(self,geom,multiplicity,state):
-        raise NotImplementedError()
-
-    def get_coupling(self,geom,multiplicity,state1,state2):
-        raise NotImplementedError()
-
-    def finite_difference(self):
-        print("Not yet implemented")
-        return 0
 
     def runall(self,geom):
         self.E=[]

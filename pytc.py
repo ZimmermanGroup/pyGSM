@@ -4,17 +4,25 @@ from base_lot import Lot
 import numpy as np
 import manage_xyz
 from units import *
-from collections import Counter
 from rhf_lot import RHF_LOT
 from casci_lot_svd import CASCI_LOT_SVD
 import sys
 from nifty import custom_redirection
 
+#TODO get rid of get_energy, get_gradient
 class PyTC(Lot):
     """
     Level of theory is a wrapper object to do DFT and CASCI calculations 
     Inherits from Lot. Requires a PSIW object
     """
+
+    @property
+    def psiw(self):
+        return self.options['job_data']['psiw']
+
+    @psiw.setter
+    def psiw(self,value):
+        self.options['job_data']['psiw']=value
 
     def get_energy(self,coords,multiplicity,state):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
