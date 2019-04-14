@@ -108,8 +108,16 @@ class SE_Cross(SE_GSM):
         pes1dE = self.nodes[self.nR-1].PES.dE
         pes2dE = self.nodes[self.nR-2].PES.dE
         condition1 = (abs(self.nodes[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.nodes[0].bdist) and (abs(pes1dE) > abs(pes2dE)))
-        condition2= (self.nodes[self.nR-1].bdist+0.1>self.nodes[self.nR-2].bdist)
-        if condition1 or condition2:
-            isDone = True
+        condition2= ((self.nodes[self.nR-1].bdist+0.1>self.nodes[self.nR-2].bdist) and (1-self.BDIST_RATIO)*abs(self.nodes[0].bdist))
+        if condition1:
+            print(" Condition 1 satisfied")
+            print(" bdist current %1.3f" % abs(self.nodes[self.nR-1].bdist))
+            print(" bdist target %1.3f" % abs(self.nodes[0].bdist)*(1-self.BDIST_RATIO))
+            print(" Growth-phase over")
+            isDone=True
+        #elif condition2:
+        #    print(" Condition 2 satisfied")
+        #    print(" Growth-phase over")
+        #    isDone = True
         return isDone
 

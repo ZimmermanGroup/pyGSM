@@ -231,7 +231,7 @@ class SE_GSM(Base_Method):
                     if current_d>d0:
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
                     if self.print_level>0:
-                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx]))
+                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
 
                 if "BREAK" in i:
                     index = [i[1]-1, i[2]-1]
@@ -250,7 +250,7 @@ class SE_GSM(Base_Method):
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
 
                     if self.print_level>0:
-                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % (i[1],d0,current_d,ictan[prim_idx]))
+                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
                 if "ANGLE" in i:
 
                     index = [i[1]-1, i[2]-1,i[3]-1]

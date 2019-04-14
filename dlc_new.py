@@ -293,7 +293,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Vecs = block_diag(*tmpvecs)
         
         time_eig = click()
-        print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
+        print " Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig)
 
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
 
@@ -415,63 +415,3 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims.resetRotations(xyz)
 
 
-if __name__ =='__main__':
-    from molpro import Molpro
-    from pes import PES
-    from avg_pes import Avg_PES
-    from molecule import Molecule 
-
-    # molecule
-    M = Molecule('examples/tests/fluoroethene.xyz')
-    nocc=11
-    nactive=2
-    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G',do_coupling=True,nproc=4)
-    pes1 = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-    pes2 = PES.from_options(lot=lot,ad_idx=1,multiplicity=1)
-    pes = Avg_PES(pes1,pes2,lot=lot)
-
-
-    #M = Molecule('s1minima_with_h2o.pdb',fragments=True)
-    #lot = QChem.from_options(states=[(1,0)],lot_inp_file='qstart',nproc=4)
-    #pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-
-    constraints = []
-    #constraints.append(Distance(0,1))
-    IC = PrimitiveInternalCoordinates.from_options(molecule=M,constraints=constraints)
-    #IC.printConstraints(M.xyz)
-    DLC = DelocalizedInternalCoordinates(IC.options.copy())
-
-
-    # branching plane
-    dvec = pes.get_coupling(M.geometry)
-    dgrad = pes.get_dgrad(M.geometry)
-    dvec_q = DLC.calcGrad(M.xyz,dvec)
-    dgrad_q = DLC.calcGrad(M.xyz,dgrad)
-    dvec_q_U = DLC.DLC_to_primitive(dvec_q)
-    dgrad_q_U = DLC.DLC_to_primitive(dgrad_q)
-    constraints = np.hstack((dgrad_q_U,dvec_q_U))
-    cVec = DLC.form_Cvec_from_prim_Vecs(constraints)
-
-    #print "building"
-    DLC.build_dlc(M.xyz,cVec=cVec)
-
-
-    #dvecq = self.grad_to_q(dvec)
-    #dgradq = self.grad_to_q(dgrad)
-
-    #print(IC.Internals)
-    ##print IC
-    #print IC.derivatives(M.xyz)
-    #print IC.Internals[0].a
-    #print IC.Internals[0].b
-    #print IC.Internals[0].value(M.xyz)
-
-     
-    #print IC.Internals[0].derivative(M.xyz)
-    #print IC.wilsonB(M.xyz)
-
-    #DLC = DelocalizedInternalCoordinates(M,build=True,remove_tr=True,connect=True)
-    #q=DLC.calculate(M.xyz)
-    #print q.shape
-
-    #DLC.
