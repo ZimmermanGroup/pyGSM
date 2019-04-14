@@ -1,28 +1,29 @@
-
-from pes import PES
 import numpy as np
-#from lbfgs import *
-from conjugate_gradient import *
+from internalcoordinates import InternalCoordinates
 from prim_internals import PrimitiveInternalCoordinates
+from slots import *
 
-class CartesianCoordinates(PrimitiveInternalCoordinates):
+class CartesianCoordinates(InternalCoordinates):
     """
     Cartesian coordinate system, written as a kind of internal coordinate class.  
     This one does not support constraints, because that requires adding some 
     primitive internal coordinates.
     """
-    def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
+    def __init__(self, options):
+        super(CartesianCoordinates, self).__init__(options)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
-        self.elem = molecule.elem
-        for i in range(molecule.natoms):
-            self.add(CartesianX(i, w=1.0))
-            self.add(CartesianY(i, w=1.0))
-            self.add(CartesianZ(i, w=1.0))
-        if 'constraints' in kwargs and kwargs['constraints'] is not None:
-            raise RuntimeError('Do not use constraints with Cartesian coordinates')
+        self.atoms = options['atoms']
+        self.natoms = len(self.atoms)
+        self.Prims = PrimitiveInternalCoordinates(options.copy())
+
+        for i in range(self.natoms):
+            self.Prims.add(CartesianX(i, w=1.0))
+            self.Prims.add(CartesianY(i, w=1.0))
+            self.Prims.add(CartesianZ(i, w=1.0))
+        #if 'constraints' in kwargs and kwargs['constraints'] is not None:
+        #    raise RuntimeError('Do not use constraints with Cartesian coordinates')
 
         self.Vecs = np.eye(3*self.natoms)
 
@@ -33,7 +34,10 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
         return gradx
 
     def newCartesian(self,xyz,dq,verbose=True):
-        return xyz+dq
+        return xyz+np.reshape(dq,(-1,3))
+    
+    def calculate(self,coords):
+        return coords
 
 #class Cartesian:
 #    def __init__(self,q,geom,pes):

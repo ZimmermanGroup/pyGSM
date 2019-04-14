@@ -6,6 +6,7 @@ from cartesian import CartesianCoordinates
 import options
 from nifty import pmat2d,pvec1d
 
+#TODO Add primitive constraint e.g. a list of internal coordinates to be left basically frozen throughout optimization
 
 class base_optimizer(object):
     ''' some common functions that the children can use (ef, cg, hybrid ef/cg, etc). 

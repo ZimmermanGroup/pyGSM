@@ -12,7 +12,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
-def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
 
     # n is the non-constrained
     count = 0
@@ -21,19 +21,21 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule)
     result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
 
     # Compute the initial gradient in the search direction.
-    dginit = np.dot(g[:n].T, d[:n])
+    dginit = np.dot(g[nconstraints:].T, d[nconstraints:])
+
     # Make sure that s points to a descent direction.
     if 0 < dginit:
     	print('[ERROR] not descent direction')
     	result['status'] = -2
     	return result
+
     # The initial value of the objective function. 
     finit = fx
     dgtest = parameters['ftol'] * dginit
     
     while True:
         x = xp
-        x = x + d * step  + constraint_step # n goes up to constraint (hopefully)
+        x = x + d * step  + constraint_step 
         xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
         # Evaluate the function and gradient values. 
@@ -41,17 +43,18 @@ def backtrack(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule)
         fx = molecule.PES.get_energy(xyz)
         gx = molecule.PES.get_gradient(xyz)
         g = molecule.coord_obj.calcGrad(xyz,gx)
-        print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
+        #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
+
         count = count + 1
         # check the sufficient decrease condition (Armijo condition).
         if fx > finit + (step * dgtest) and np.all(constraint_step==0):  #+ np.dot(g.T,constraint_step): # doesn't work with constraint :(
             print(" [INFO] not satisfy sufficient decrease condition.")
             width = dec
-            print("step",step*width)
+            print(" step %1.2f" % (step*width))
         else:
             # check the wolfe condition
             # now g is the gradient of f(xk + step * d)
-            dg = np.dot(g[:n].T, d[:n])
+            dg = np.dot(g[nconstraints:].T, d[nconstraints:])
             if dg < parameters['wolfe'] * dginit:
                 print(" [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit))
                 print(" [INFO] not satisfy wolf condition.")

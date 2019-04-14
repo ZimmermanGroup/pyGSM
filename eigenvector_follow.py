@@ -41,6 +41,7 @@ class eigenvector_follow(base_optimizer):
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
 
+        # TODO are these used? -- n is used for gradrms,linesearch
         if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
             n = molecule.num_coordinates
         else:
@@ -85,7 +86,6 @@ class eigenvector_follow(base_optimizer):
                         nconstraints=1
                         opt_type='CLIMB'
 
-            # this should only be over the non-constrained region
             actual_step = np.linalg.norm(dq)
             print(" actual_step= %1.2f"% actual_step)
             dq = dq/actual_step #normalize
@@ -100,7 +100,7 @@ class eigenvector_follow(base_optimizer):
             gp = g.copy()
             xyzp = xyz.copy()
             fxp = fx
-            pgradrms = np.sqrt(np.dot(g.T,g)/n)
+            pgradrms = molecule.gradrms
             print(" pgradrms {:4}".format(pgradrms))
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 xp_prim = self.x_prim.copy()
@@ -110,7 +110,7 @@ class eigenvector_follow(base_optimizer):
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
             #print(" ### Starting  line search ###")
-            ls = self.Linesearch(n, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
+            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
             if ls['status'] ==-2:
                 x = xp.copy()
                 print('[ERROR] the point return to the privious point')
@@ -134,6 +134,7 @@ class eigenvector_follow(base_optimizer):
 
             # control step size 
             dEstep = fx - fxp
+            print(" dEstep=%5.4f" %dEstep)
             ratio = dEstep/dEpre
             molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
             self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
@@ -153,10 +154,8 @@ class eigenvector_follow(base_optimizer):
 
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
-            
                 # only form g_prim for non-constrained 
                 self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
-                #test_gp_prim = np.dot(molecule.coord_basis[:,nconstraints:],gp[nconstraints:])
                 self.dx = x-xp
                 self.dg = g - gp
 
@@ -169,9 +168,11 @@ class eigenvector_follow(base_optimizer):
                 raise NotImplementedError(" ef not implemented for CART")
 
             if self.options['print_level']>0:
-                print(" Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
+
+            # check for convergence TODO
             if molecule.gradrms < self.conv_grms:
                 break
 
@@ -183,9 +184,13 @@ class eigenvector_follow(base_optimizer):
                     x = np.copy(molecule.coordinates)
                     fx = molecule.energy
                     dE = molecule.difference_energy
+                    if dE is not 1000.:
+                        print(" difference energy is %5.4f" % dE)
                     g = molecule.gradient.copy()
                     molecule.form_Hessian_in_basis()
-        
+            print()
+       
+        print(" opt-summary")
         print(self.buf.getvalue())
         return geoms,energies
 
