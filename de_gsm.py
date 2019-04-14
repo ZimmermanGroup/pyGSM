@@ -9,9 +9,6 @@ import pybel as pb
 import sys
 
 class GSM(Base_Method):
-    @staticmethod
-    def from_options(**kwargs):
-        return GSM(GSM.default_options().set_values(kwargs))
 
     def __init__(
             self,
