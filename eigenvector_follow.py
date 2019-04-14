@@ -14,15 +14,10 @@ except:
 
 class eigenvector_follow(base_optimizer):
 
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return eigenvector_follow(eigenvector_follow.default_options().set_values(kwargs))
-
     def optimize(self,molecule,refE=0.,opt_type='UNCONSTRAINED',opt_steps=3,ictan=None):
 
         #print " refE %5.4f" % refE
-        print(" \ninitial E %5.4f" % (molecule.energy - refE))
+        print(" initial E %5.4f" % (molecule.energy - refE))
         geoms = []
         energies=[]
         geoms.append(molecule.geometry)

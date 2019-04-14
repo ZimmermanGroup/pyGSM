@@ -24,10 +24,6 @@ from nifty import printcool
 class Base_Method(object,Print,Analyze):
 
     @staticmethod
-    def from_options(**kwargs):
-        return GSM(GSM.default_options().set_values(kwargs))
-    
-    @staticmethod
     def default_options():
         if hasattr(Base_Method, '_default_options'): return Base_Method._default_options.copy()
 
@@ -130,9 +126,9 @@ class Base_Method(object,Print,Analyze):
         return Base_Method._default_options.copy()
 
 
-    @staticmethod
-    def from_options(**kwargs):
-        return Base_Method(Base_Method.default_options().set_values(kwargs))
+    @classmethod
+    def from_options(cls,**kwargs):
+        return cls(cls.default_options().set_values(kwargs))
 
     def __init__(
             self,

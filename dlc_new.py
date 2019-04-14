@@ -16,12 +16,6 @@ np.set_printoptions(precision=4,suppress=True)
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
 
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return DelocalizedInternalCoordinates(DelocalizedInternalCoordinates.default_options().set_values(kwargs))
-
-
     def __init__(self,
             options
             ):

@@ -127,11 +127,11 @@ class Molecule(object):
         lines.append(self.Data.__str__())
         return'\n'.join(lines)
 
-    @classmethod
-    def copy_from_options(cls,MoleculeA,xyz=None,new_node_id=1):
+    @staticmethod
+    def copy_from_options(MoleculeA,xyz=None,new_node_id=1):
         """Create a copy of MoleculeA"""
-        lot = MoleculeA.PES.lot.copy(new_node_id)
-        PES = type(MoleculeA.PES).create_pes_from(MoleculeA.PES,lot)
+        lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
+        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES,lot)
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
@@ -140,9 +140,12 @@ class Molecule(object):
             new_geom = MoleculeA.geometry
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy())
 
-        new_mol = cls(MoleculeA.Data.copy().set_values({"PES":PES,'coord_obj':coord_obj,'geom':new_geom}))
+        return Molecule(MoleculeA.Data.copy().set_values({
+            "PES":PES,
+            'coord_obj':coord_obj,
+            'geom':new_geom
+            }))
 
-        return new_mol
 
     def __init__(self,
             options,
@@ -171,14 +174,16 @@ class Molecule(object):
         else:
             raise RuntimeError
 
-        resid=[]
-        for a in ob.OBMolAtomIter(mol.OBMol):
-            res = a.GetResidue()
-            resid.append(res.GetName())
-        self.resid = resid
+        #resid=[]
+        #for a in ob.OBMolAtomIter(mol.OBMol):
+        #    res = a.GetResidue()
+        #    resid.append(res.GetName())
+        #self.resid = resid
 
         # Perform all the sanity checks and cache some useful attributes
-        self.PES = self.Data['PES']
+
+        #TODO make PES property
+        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'])
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
 
@@ -204,7 +209,7 @@ class Molecule(object):
             print(" getting coord_object from options")
             self.coord_obj = self.Data['coord_obj']
         elif self.Data['coordinate_type'] == "Cartesian":
-            self.coord_obj = CartesianCoordinates.from_options()
+            self.coord_obj = CartesianCoordinates.from_options(xyz=self.xyz,atoms=self.atoms)
         elif self.Data['coordinate_type'] == "DLC":
             print(" building coordinate object")
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True)
@@ -218,7 +223,7 @@ class Molecule(object):
         logger.debug("Molecule %s constructed.", repr(self))
 
         #TODO
-        self.gradrms = 0.
+        self.gradrms = 100.
         self.TSnode=False
         self.bdist =0.
 
@@ -444,6 +449,8 @@ class Molecule(object):
         return self.coord_obj.Vecs
 
     def update_coordinate_basis(self,constraints=None):
+        if self.coord_obj.__class__.__name__=='CartesianCoordinates':
+            return
         self.coord_obj.build_dlc(self.xyz,constraints)
         self.coord_obj.clearCache()
         return self.coord_basis

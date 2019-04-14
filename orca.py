@@ -114,29 +114,3 @@ class Orca(Lot):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])#*ANGSTROM_TO_AU #ORCA grad is given in AU
 
-    @staticmethod
-    def copy(OrcaA,node_id):
-        """ create a copy of this lot object"""
-        return Orca(OrcaA.options.copy().set_values({
-            "node_id" :node_id,
-            }))
-        
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return Orca(Orca.default_options().set_values(kwargs))
-
-if __name__ == '__main__':
-    from se_xing import *
-    filepath = 'tests/SiH4.xyz'
-    basis = '6-31G*'
-    lot = Orca.from_options(states=[(1,0)],charge=0,basis=basis,functional='B3LYP',nproc=4)
-    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-    print 'ic1'
-    mol=pb.readfile('xyz',filepath).next()
-    ic1 = DLC.from_options(mol=mol,PES=pes,print_level=1,resetopt=False)
-    ic1.PES.get_energy(ic1.geom)
-    print 'getting gradient'
-    ic1.PES.get_gradient(ic1.geom)
-    print 'printing gradient -----------'
-    print ic1.PES.lot.grada

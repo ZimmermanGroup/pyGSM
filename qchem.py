@@ -118,40 +118,13 @@ class QChem(Lot):
         test = np.asarray(tmp[state][1])
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
-    #@staticmethod
-    def copy(self,node_id):
+    @classmethod
+    def copy(cls,lot,**kwargs):
         base = os.environ['QCSCRATCH']
         for state in self.states:
             multiplicity = state[0]
             efilepath_old=base+ '/{}.{}'.format(self.node_id,multiplicity)
             efilepath_new =base+ '/{}.{}'.format(node_id,multiplicity)
             os.system('cp -r ' + efilepath_old +' ' + efilepath_new)
-        return type(self)(self.options.copy().set_values({
-            "node_id":node_id,
-            }))
+        return cls(lot.options.copy().set_values(options))
 
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return QChem(QChem.default_options().set_values(kwargs))
-    
-if __name__ == '__main__':
-
-    import hybrid_dlc 
-    import pybel as pb    
-    import manage_xyz
-    import pes
-
-    cwd = os.getcwd()
-    #filepath="examples/tests/fluoroethene.xyz"
-    filepath="firstnode.pdb"
-    geom=manage_xyz.read_xyz(filepath,scale=1)   
-
-    #lot=QChem.from_options(states=[(2,0)],charge=1,basis='6-31g(d)',functional='B3LYP')
-    lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart')
-    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
-    ic = Hybrid_DLC(mol=mol,pes=pes,IC_region=["UNL"])
-    #e=lot.get_energy(geom,2,0)
-    #print e
-    #g=lot.get_gradient(geom,2,0)
-    #print g

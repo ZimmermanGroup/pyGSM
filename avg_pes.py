@@ -23,13 +23,9 @@ class Avg_PES(PES):
         self.dE = 1000.
         self.lot = lot
 
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return Avg_PES(Avg_PES.default_options().set_values(kwargs))
-
     @classmethod
-    def create_pes_from(cls,PES,lot):
+    def create_pes_from(cls,PES):
+        lot = type(PES.lot).copy(PES.lot)
         return cls(PES.PES1,PES.PES2,lot)
 
     def get_energy(self,geom):

@@ -180,40 +180,16 @@ class Molpro(Lot):
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
 
-    def copy(self,node_id):
-        """ create a copy of this lot object"""
-        print(" creating copy, new node id =",node_id)
-        print(" old node id = ",self.node_id)
+    #TODO molpro requires extra things when copying. . . can this be done in the base_lot? 
+    # e.g. if cls=="Molpro": #do molpro stuff?
+    @classmethod
+    def copy(cls,lot,options):
+         """ create a copy of this lot object"""
+        #print(" creating copy, new node id =",node_id)
+        #print(" old node id = ",self.node_id)
         if node_id != self.node_id:
             cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(self.node_id,node_id)
             print(" ",cmd)
             os.system(cmd)
-        return Molpro(self.options.copy().set_values({
-            "node_id" :node_id,
-            }))
+        return cls(lot.options.copy().set_values(options))
 
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return Molpro(Molpro.default_options().set_values(kwargs))
-
-if __name__ == '__main__':
-
-    import pybel as pb    
-    import manage_xyz
-    from dlc import *
-    filepath="tests/fluoroethene.xyz"
-    nocc=11
-    nactive=2
-    geom=manage_xyz.read_xyz(filepath,scale=1)   
-    lot=Molpro.from_options(states=[(1,0),(1,1)],charge=0,nocc=nocc,nactive=nactive,basis='6-31G*',do_coupling=True,nproc=4)
-    e=lot.get_energy(geom,1,0)
-    print(e)
-    e=lot.get_energy(geom,1,1)
-    print(e)
-    g=lot.get_gradient(geom,1,0)
-    print(g)
-    g=lot.get_gradient(geom,1,1)
-    print(g)
-    d=lot.get_coupling(geom,state1=0,state2=1,multiplicity=1)
-    print(d)

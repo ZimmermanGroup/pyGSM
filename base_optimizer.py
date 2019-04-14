@@ -66,10 +66,10 @@ class base_optimizer(object):
         base_optimizer._default_options = opt
         return base_optimizer._default_options.copy()
 
-    @staticmethod
-    def from_options(**kwargs):
+    @classmethod
+    def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
-        return base_optimizer(base_optimizer.default_options().set_values(kwargs))
+        return cls(cls.default_options().set_values(kwargs))
 
     def __init__(self,
             options,

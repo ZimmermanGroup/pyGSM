@@ -12,10 +12,6 @@ from avg_pes import Avg_PES
 
 class SE_Cross(SE_GSM):
 
-    @staticmethod
-    def from_options(**kwargs):
-        return SE_Cross(SE_Cross.default_options().set_values(kwargs))
-
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=0):
         """rtype=0 MECI search
            rtype=1 MESX search
@@ -60,7 +56,7 @@ class SE_Cross(SE_GSM):
             self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             self.nodes[self.nR].PES.lot.do_coupling=True
-            avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES,self.nodes[self.nR].PES.lot)
+            avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
             self.optimizer[self.nR].options['OPTTHRESH']=self.options['CONV_TOL']
             self.optimizer[self.nR].optimize(

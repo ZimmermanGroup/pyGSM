@@ -165,6 +165,14 @@ class Lot(object):
                     lot_inp_lines = lot_inp.readlines()
                 #for line in lot_inp_lines:
                 #    print line.rstrip()
+    @classmethod
+    def from_options(cls,**kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return cls(cls.default_options().set_values(kwargs))
+
+    @classmethod
+    def copy(cls,lot,**kwargs):
+        return cls(lot.options.copy().set_values(kwargs))
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:

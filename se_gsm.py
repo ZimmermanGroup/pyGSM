@@ -11,10 +11,6 @@ from molecule import Molecule
 
 class SE_GSM(Base_Method):
 
-    @staticmethod
-    def from_options(**kwargs):
-        return SE_GSM(SE_GSM.default_options().set_values(kwargs))
-
     def __init__(
             self,
             options,

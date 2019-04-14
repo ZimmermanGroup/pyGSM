@@ -105,27 +105,5 @@ class PyTC(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         return self.getcoup(state1,state2,multiplicity)
-
-    def copy(self,node_id):
-        """ create a copy of this psiw object"""
-        do_coupling = self.do_coupling
-        obj = PyTC(self.options.copy().set_values({
-            "node_id" :node_id,
-            "do_coupling":do_coupling,
-            }))
-
-        #if self.psiw.__class__.__name__=="CASCI_LOT":
-        #    obj.psiw = psiw.CASCI_LOT(self.psiw.options.copy())
-        #            
-        #elif self.psiw.__class__.__name__=="RHF_LOT": 
-        #    obj.psiw = RHF_LOT(self.psiw.options.copy())
-        obj.psiw = type(obj.psiw)(self.psiw.options.copy())
-                    
-        return obj
-
-    @staticmethod
-    def from_options(**kwargs):
-        """ Returns an instance of this class with default options updated from values in kwargs"""
-        return PyTC(PyTC.default_options().set_values(kwargs))
-
+        return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
 
