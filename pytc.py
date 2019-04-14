@@ -21,9 +21,6 @@ class PyTC(Lot):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return self.getE(state,multiplicity)
-
-    def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
         return tmp[state][1]*KCAL_MOL_PER_AU
 
@@ -77,33 +74,24 @@ class PyTC(Lot):
                     run_code(T)
         else:
             run_code(T)
-
                 #filename="{}_rhf_update.molden".format(self.node_id)
                 #self.psiw.casci.reference.save_molden_file(filename)
 
         self.hasRanForCurrentCoords=True
         return
 
-    def getgrad(self,state,multiplicity):
-        tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
-
     def get_gradient(self,coords,multiplicity,state):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return self.getgrad(state,multiplicity)
-
-    def getcoup(self,state1,state2,multiplicity):
-        #TODO this could be better
-        return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
+        tmp = self.search_tuple(self.grada,multiplicity)
+        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     def get_coupling(self,coords,multiplicity,state1,state2):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return self.getcoup(state1,state2,multiplicity)
         return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
 

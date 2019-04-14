@@ -3,6 +3,7 @@ import numpy as np
 import os
 from units import *
 
+#TODO get rid of get_energy
 class QChem(Lot):
     
     def run(self,geom,multiplicity):
@@ -96,9 +97,6 @@ class QChem(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
             self.hasRanForCurrentCoords=True
-        return self.getE(state,multiplicity)
-
-    def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
         return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
 
@@ -111,11 +109,7 @@ class QChem(Lot):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
-        return self.getgrad(state,multiplicity)
-
-    def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
-        test = np.asarray(tmp[state][1])
         return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
 
     @classmethod

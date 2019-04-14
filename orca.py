@@ -84,20 +84,16 @@ class Orca(Lot):
         return
 
     def get_energy(self,geom,multiplicity,state):
-        if self.has_nelectrons==False:
-            for i in self.states:
-                self.get_nelec(geom,i[0])
-            self.has_nelectrons==True
+        #if self.has_nelectrons==False:
+        #    for i in self.states:
+        #        self.get_nelec(geom,i[0])
+        #    self.has_nelectrons==True
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
-        return self.getE(state,multiplicity)
-
-    def getE(self,state,multiplicity):
         tmp = self.search_tuple(self.E,multiplicity)
         return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
-
 
     def get_gradient(self,geom,multiplicity,state):
         if self.has_nelectrons==False:
@@ -108,9 +104,5 @@ class Orca(Lot):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
-        return self.getgrad(state,multiplicity)
-
-    def getgrad(self,state,multiplicity):
         tmp = self.search_tuple(self.grada,multiplicity)
         return np.asarray(tmp[state][1])#*ANGSTROM_TO_AU #ORCA grad is given in AU
-
