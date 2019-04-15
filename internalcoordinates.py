@@ -599,7 +599,37 @@ class InternalCoordinates(object):
 
         return bonds
 
-            
+    def apply_periodic_boundary(self,xyz,L):
+        tot=0
+        new_xyz = np.zeros_like(xyz)
+        for num_prim in self.nprims_frag:
+            index = num_prim + tot - 6  # the ICs are ordered [...Tx,Ty,Tz,Ra,Rb,Rc] per frag
+            prims = self.Internals[index:index+3]
+            atoms = prims[0].atoms   # all prims should have the same atoms so okay to use 0th
+            translate = False
+            # need to check all the atoms of the frag before deciding to translate
+            for a in atoms:
+                if any(abs(xyz[a,:]) > L):
+                    translate=True
+                else:
+                    translate=False
+                    break
+            # apply translation
+            for a in atoms:
+                if translate==True:
+                    for i,x in enumerate(xyz[a,:]):
+                        if x<-L/2:
+                            new_xyz[a,i]=x+L
+                        elif x>=L/2:
+                            new_xyz[a,i]=x-L
+                        else:
+                            new_xyz[a,i]=x
+                else:
+                    new_xyz[a,:] = xyz[a,:]
+            tot+=num_prim
+        return new_xyz
+
+
    # # CRA  3/2019 these should be utils -- not part of the class
    # def measure_distances(self, i, j):
    #     distances = []

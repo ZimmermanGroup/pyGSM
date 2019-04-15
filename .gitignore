@@ -4,3 +4,4 @@
 *.molden
 *temp
 temp*
+ipynb_demos/pytc/scratch/*.xyz
