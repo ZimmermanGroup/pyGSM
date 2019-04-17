@@ -599,7 +599,6 @@ class InternalCoordinates(object):
 
         return bonds
 
-
    # # CRA  3/2019 these should be utils -- not part of the class
    # def measure_distances(self, i, j):
    #     distances = []
