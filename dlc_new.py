@@ -305,7 +305,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         if C is not None:
             # orthogonalize
-            C = C.copy()
+            #C = C.copy()
             Cn = orthogonalize(C)
 
             # transform C into basis of DLC

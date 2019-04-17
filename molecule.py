@@ -131,7 +131,7 @@ class Molecule(object):
     def copy_from_options(MoleculeA,xyz=None,new_node_id=1):
         """Create a copy of MoleculeA"""
         lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
-        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES,lot)
+        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES)
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
