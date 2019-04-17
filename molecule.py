@@ -18,7 +18,8 @@ from avg_pes import Avg_PES
 from penalty_pes import Penalty_PES
 from dlc_new import DelocalizedInternalCoordinates
 from cartesian import CartesianCoordinates
-from nifty import printcool_dictionary,pvec1d,pmat2d,make_mol_from_coords,getAtomicSymbols,getAllCoords
+from nifty import printcool_dictionary,pvec1d,pmat2d,make_mol_from_coords,getAtomicSymbols,getAllCoords,click
+from time import time
 
 logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
@@ -107,6 +108,12 @@ class Molecule(object):
                 )
 
         opt.add_option(
+                key='Form_Hessian',
+                value=True,
+                doc='Form the Hessian in the current basis -- takes time for large molecules.'
+                )
+
+        opt.add_option(
                 key='comment',
                 required=False,
                 value='',
@@ -156,6 +163,8 @@ class Molecule(object):
 
         # => Read in the coordinates <= #
         # important first try to read in geom
+
+        t0 = time()
         if self.Data['geom'] is not None:
             print(" getting cartesian coordinates from geom")
             atoms=manage_xyz.get_atoms(self.Data['geom'])
@@ -174,6 +183,8 @@ class Molecule(object):
         else:
             raise RuntimeError
 
+        t1 = time()
+        print(" Time to get coords= %.3f" % (t1 - t0))
         #resid=[]
         #for a in ob.OBMolAtomIter(mol.OBMol):
         #    res = a.GetResidue()
@@ -201,6 +212,10 @@ class Molecule(object):
         # atoms contain info you need to know about the atoms
         self.atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atoms]
 
+        tx = time()
+        print(" Time to create PES,elements %.3f" % (tx-t1))
+        t1=tx
+
         if not isinstance(self.Data['comment'], str):
             raise TypeError("comment for a Molecule must be a string")
 
@@ -219,8 +234,8 @@ class Molecule(object):
             self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addtr=True) 
         self.Data['coord_obj']=self.coord_obj
 
-        logger.info("Molecule %s constructed.", repr(self))
-        logger.debug("Molecule %s constructed.", repr(self))
+        t2 = time() 
+        print(" Time  to build coordinate system= %.3f" % (t2-t1))
 
         #TODO
         self.gradrms = 100.
@@ -230,13 +245,18 @@ class Molecule(object):
         self.newHess = 0
         if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
             self.form_Primitive_Hessian()
+        t3 = time()
+        print(" Time to build Prim Hessian %.3f" % (t3-t2))
 
-        if self.Data['Hessian'] is None:
+        if self.Data['Hessian'] is None and self.Data['Form_Hessian']:
             if self.Data['Primitive_Hessian'] is not None:
                 print(" forming Hessian in basis")
                 self.form_Hessian_in_basis()
             else:
                 self.form_Hessian()
+
+        logger.info("Molecule %s constructed.", repr(self))
+        logger.debug("Molecule %s constructed.", repr(self))
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
