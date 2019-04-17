@@ -1,7 +1,7 @@
 import numpy as np
 from nifty import logger,commadash
 from rotate import get_expmap, get_expmap_der, is_linear
-from _math_utils import d_cross,d_ncross,d_unit_vector
+from _math_utils import d_cross,d_ncross,d_unit_vector,d_cross_ab
 
 class CartesianX(object):
     __slots__ = ['a','w','isAngular','isPeriodic']
@@ -664,6 +664,10 @@ class LinearAngle(object):
             raise RuntimeError('a, b, and c must be different')
         self.e0 = None
         self.stored_dot2 = 0.0
+
+    @property
+    def atoms(self):
+        return [self.a,self.b,self.c]
 
     def reset(self, xyz):
         xyz = xyz.reshape(-1,3)
