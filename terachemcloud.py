@@ -5,6 +5,7 @@ import numpy as np
 import manage_xyz
 from units import *
 import sys
+import time
 
 class TCC(Lot):
 
@@ -50,7 +51,15 @@ class TCC(Lot):
             if not self.orbfile:
                 grad_options['guess'] = self.orbfile
             print(" orbfile is %s" % self.orbfile)
-            results = self.TC.compute(coords,grad_options)
+            #results = self.TC.compute(coords,grad_options)
+            job_id = self.TC.submit(coords,grad_options)
+            results = self.TC.poll_for_results(job_id)
+            while results['message'] == "job not finished":
+                results=self.TC.poll_for_results(job_id)
+                print(results['message'])
+                print("sleeping for 1")
+                time.sleep(1)
+
             print((json.dumps(results, indent=2, sort_keys=True)))
             self.orbfile = results['orbfile']
             self.E.append((multiplicity,ad_idx,results['energy'][ad_idx]))
