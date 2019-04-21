@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 import manage_xyz
-from scipy.optimize.lbfgs import LbfgsInvHessProduct
+from scipy.optimize.lbfgsb import LbfgsInvHessProduct
 from base_optimizer import base_optimizer
 from nifty import pmat2d,pvec1d
 from units import *
