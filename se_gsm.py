@@ -22,8 +22,13 @@ class SE_GSM(Base_Method):
         print(" Done initializing isomer")
         self.nodes[0].form_Primitive_Hessian()
         print(" Primitive Internal Coordinates")
-        print(self.nodes[0].primitive_internal_coordinates)
+        print(self.nodes[0].primitive_internal_coordinates[0:50])
         print(" number of primitives is", self.nodes[0].num_primitives)
+
+        # stash bdist for node 0
+        ictan,self.nodes[0].bdist = self.tangent(0,None)
+        self.nodes[0].update_coordinate_basis(constraints=ictan)
+        self.nodes[0].form_Hessian_in_basis()
 
     def isomer_init(self):
         changed_top = False
@@ -103,8 +108,9 @@ class SE_GSM(Base_Method):
         if bdist<BDISTMIN:
             print("bdist too small")
             return 0
-        Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
-
+        new_node = Molecule.copy_from_options(self.nodes[n1],new_node_id=n2)
+        Vecs = new_node.update_coordinate_basis(constraints=ictan)
+        #print(new_node.coord_obj.GMatrix(new_node.xyz))
         dqmag_scale=1.5
         minmax = self.DQMAG_MAX - self.DQMAG_MIN
         a = bdist/dqmag_scale
@@ -118,10 +124,9 @@ class SE_GSM(Base_Method):
         dq0[0] = -dqmag
         print(" dq0[constraint]: %1.3f" % dq0[0])
 
-        old_xyz = self.nodes[n1].xyz.copy()
-        new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
-        new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)
+        new_node.update_xyz(dq0)
         new_node.bdist = bdist
+
         return new_node
 
 
