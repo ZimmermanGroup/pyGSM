@@ -428,9 +428,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def derivatives(self, xyz):
         self.calculate(xyz)
-        answer = []
-        for Internal in self.Internals:
-            answer.append(Internal.derivative(xyz))
+        #answer = []
+        #for Internal in self.Internals:
+        #    answer.append(Internal.derivative(xyz))
+        answer = [ p.derivative(xyz) for p in self.Internals]
         # This array has dimensions:
         # 1) Number of internal coordinates
         # 2) Number of atoms
