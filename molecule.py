@@ -255,22 +255,13 @@ class Molecule(object):
             else:
                 self.form_Hessian()
 
-        logger.info("Molecule %s constructed.", repr(self))
-        logger.debug("Molecule %s constructed.", repr(self))
+        #logger.info("Molecule %s constructed.", repr(self))
+        #logger.debug("Molecule %s constructed.", repr(self))
+        print("molecule constructed")
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
         raise NotImplementedError
-
-    def add_internal(self,dof):
-        self.coord_obj.Prims.add(dof)
-        M.coord_obj.build_dlc(self.xyz)
-
-        #might need to reset Hessian if not None
-        if self.Data['Hessian'] is None:
-            self.Data['Hessian'] = self.coord_obj.guess_hessian(self.xyz)
-        if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
-            self.Data['Primitive_Hessian'] = self.coord_obj.Prims.guess_hessian(self.xyz)
 
     def reorder(self, new_order):
         """Reorder atoms in the molecule"""
