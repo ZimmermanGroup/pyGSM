@@ -4,7 +4,6 @@ This class is the combination of Martinez group and Lee Ping's molecule class.
 import copy
 import logging
 import numpy as np
-#import fileio
 import elements
 import units as un
 from collections import Counter
@@ -20,6 +19,7 @@ from dlc_new import DelocalizedInternalCoordinates
 from cartesian import CartesianCoordinates
 from nifty import printcool_dictionary,pvec1d,pmat2d,make_mol_from_coords,getAtomicSymbols,getAllCoords,click
 from time import time
+from block_matrix import block_matrix as bm
 
 logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
@@ -137,7 +137,7 @@ class Molecule(object):
     @staticmethod
     def copy_from_options(MoleculeA,xyz=None,new_node_id=1):
         """Create a copy of MoleculeA"""
-        lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
+        #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
         PES = MoleculeA.PES.create_pes_from(MoleculeA.PES)
 
         if xyz is not None:
@@ -255,6 +255,7 @@ class Molecule(object):
             else:
                 self.form_Hessian()
 
+        self._c_Hess=None
         #logger.info("Molecule %s constructed.", repr(self))
         #logger.debug("Molecule %s constructed.", repr(self))
         print("molecule constructed")
@@ -388,6 +389,7 @@ class Molecule(object):
         self.newHess = 10
     
     def update_Primitive_Hessian(self,change=None):
+        print("updating prim hess")
         if change is not None:
             self.Primitive_Hessian += change
         return  self.Primitive_Hessian
@@ -411,9 +413,39 @@ class Molecule(object):
         return self.Hessian
 
     def form_Hessian_in_basis(self):
-        #print " forming Hessian in current basis"
-        self.Hessian = np.linalg.multi_dot([self.coord_basis.T,self.Primitive_Hessian,self.coord_basis])
+        print " forming Hessian in current basis"
+        #TODO this is not-functional yet
+        self.Hessian = bm.dot( bm.dot( bm.transpose(self.coord_basis),self.Primitive_Hessian),self.coord_basis)
         return self.Hessian
+
+    def form_constrained_Hessian(self):
+        if (self.constraints==0.).all():
+            return self.Hessian
+
+        c_Hess_list =[]
+        s=0
+        for block in self.Hessian.matlist:
+            size=len(block)
+            e=s+size
+            tmpblock=[]
+            for hvec in block:
+                tmphvec=hvec.copy()
+                for c in self.constraints.T:
+                    tmphvec -= np.dot(tmphvec,c[s:e])*c[s:e]
+                tmpblock.append(tmphvec)
+            s=e
+            tmphess = np.asarray(tmpblock)
+            c_Hess_list.append( tmphess.T )
+
+        self._c_Hess = bm(c_Hess_list)
+        return self.constrained_Hessian
+
+    @property
+    def constrained_Hessian(self):
+        if self._c_Hess is None:
+            self._c_Hess = self.form_constrained_Hessian()
+        return self._c_Hess
+
 
     @property
     def xyz(self):
@@ -462,9 +494,15 @@ class Molecule(object):
     def update_coordinate_basis(self,constraints=None):
         if self.coord_obj.__class__.__name__=='CartesianCoordinates':
             return
+        if constraints is not None:
+            assert constraints.shape[0] == self.coord_basis.shape[0], 'incorrect dimensions'
         self.coord_obj.build_dlc(self.xyz,constraints)
         self.coord_obj.clearCache()
         return self.coord_basis
+
+    @property
+    def constraints(self):
+        return self.coord_obj.Vecs.cnorms
 
     @property
     def coordinates(self):

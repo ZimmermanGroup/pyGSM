@@ -11,6 +11,7 @@ from elements import ElementData
 from nifty import pvec1d,cartesian_product2,click
 import itertools
 from scipy.linalg import block_diag
+from block_matrix import block_matrix
 import numpy as np
 import time
 
@@ -54,7 +55,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         click()
         self.makePrimitives(xyz,options)
         time_build = click()
-        #print "make prim %.3f" % time_build
+        print(" make prim %.3f" % time_build)
 
         #exit()
         #self.makeConstraints(xyz, constraints, cvals)
@@ -248,28 +249,121 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
 
+    # overwritting parent internal coordinate wilsonB with a block matrix representation
+    def wilsonB(self,xyz):
+        """
+        Given Cartesian coordinates xyz, return the Wilson B-matrix
+        given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
+        """
+        global CacheWarning
+        t0 = time.time()
+        xhash = hash(xyz.tostring())
+        ht = time.time() - t0
+        if xhash in self.stored_wilsonB:
+            ans = self.stored_wilsonB[xhash]
+            return ans
+
+        Blist = []
+        sa=0
+        sp=0
+        for nprim,na in zip(self.nprims_frag,self.natoms_frag):
+            WilsonB = []
+            ea = sa+na
+            ep=sp+nprim
+            Der = np.array([ p.derivative(xyz)[sa:ea,:] for p in self.Internals[sp:ep] ])
+            sa=ea
+            sp=ep
+            for i in range(Der.shape[0]):
+                WilsonB.append(Der[i].flatten())
+            Blist.append(np.asarray(WilsonB))
+       
+        ans = block_matrix(Blist)
+        self.stored_wilsonB[xhash] = ans
+        if len(self.stored_wilsonB) > 1000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
+            CacheWarning = True
+        return ans
+    
     def GMatrix(self,xyz):
+        #if len(self.nprims_frag)==1:
+        #    return block_matrix(super(PrimitiveInternalCoordinates,self).GMatrix(xyz))
         t0 = time.time()
         Bmat = self.wilsonB(xyz)
-        #t1 = time.time()
-        scoord=0
-        sprim=0
-        BBt_list = []
-        for nprim,na in zip(self.nprims_frag,self.natoms_frag):
-            nc=3*na
-            eprim = nprim+sprim
-            ecoord = nc+scoord
-            BBt_frag = np.dot(Bmat[sprim:eprim,scoord:ecoord],np.transpose(Bmat[sprim:eprim,scoord:ecoord]))
-            scoord=nc
-            sprim=nprim
-            BBt_list.append(BBt_frag)
-        BBt = block_diag(*BBt_list)
-        #t2 = time.time()
-        #t10 = t1-t0
-        #t21 = t2-t1
-        #print("time to form B-matrix %.3f" % t10)
-        #print("time to mat-mult B %.3f" % t21)
-        return BBt
+        t1 = time.time()
+        return block_matrix.dot(Bmat,block_matrix.transpose(Bmat))
+
+
+    def GInverse_SVD(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        # Perform singular value decomposition
+        click()
+        loops = 0
+        while True:
+            try:
+                G = self.GMatrix(xyz)
+                time_G = click()
+                start=0
+                tmpUvecs=[]
+                tmpVvecs=[]
+                tmpSvecs=[]
+                for Gmat in G.matlist:
+                    U, s, VT = np.linalg.svd(Gmat)
+                    tmpVvecs.append(VT.T)
+                    tmpUvecs.append(U.T)
+                    tmpSvecs.append(np.diag(s))
+                V = block_matrix(tmpVvecs)
+                UT = block_matrix(tmpUvecs)
+                S = block_matrix(tmpSvecs)
+                time_svd = click()
+            except np.linalg.LinAlgError:
+                logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
+                xyz = xyz + 1e-2*np.random.random(xyz.shape)
+                loops += 1
+                if loops == 10:
+                    raise RuntimeError('SVD failed too many times')
+                continue
+            break
+        print("Build G: %.3f SVD: %.3f" % (time_G, time_svd))
+
+        LargeVals = 0
+        
+        tmpSinv = []
+        for smat in S.matlist:
+            sinv = np.zeros_like(smat)
+            for ival,value in enumerate(np.diagonal(smat)):
+                if np.abs(value) >1e-6:
+                    LargeVals += 1
+                    sinv[ival,ival] = 1./value
+            tmpSinv.append(sinv)
+        Sinv = block_matrix(tmpSinv)
+
+        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+        #Inv = multi_dot([V, Sinv, UT])
+        tmpInv = []
+        for v,sinv,ut in zip(V.matlist,Sinv.matlist,UT.matlist):
+            tmpInv.append(np.dot(v,np.dot(sinv,ut)))
+        
+        return block_matrix(tmpInv)
+
+    def GInverse_EIG(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        click()
+        G = self.GMatrix(xyz)
+        time_G = click()
+        Gi = np.linalg.inv(G)
+        time_inv = click()
+        # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+        return Gi
+
+    def calcGrad(self, xyz, gradx):
+        #q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
+        #Gq = multi_dot([Ginv, Bmat, gradx])
+        #return Gq
+        return block_matrix.dot( Ginv,block_matrix.dot(Bmat,gradx) )
 
     def makeConstraints(self, xyz, constraints, cvals=None):
         # Add the list of constraints. 
@@ -428,9 +522,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def derivatives(self, xyz):
         self.calculate(xyz)
-        #answer = []
-        #for Internal in self.Internals:
-        #    answer.append(Internal.derivative(xyz))
         answer = [ p.derivative(xyz) for p in self.Internals]
         # This array has dimensions:
         # 1) Number of internal coordinates
@@ -444,6 +535,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Q2 = self.calculate(coord2)
         PMDiff = (Q1-Q2)
         for k in range(len(PMDiff)):
+            # TODO periodic boundary conditions
+            #if self.Internals[k].isPeriodicBoundary:
+            #    PlusL = PMdiff[k] + self.boundary
+            #    MinsL = PMdiff[k] - self.boundary
             if self.Internals[k].isPeriodic:
                 Plus2Pi = PMDiff[k] + 2*np.pi
                 Minus2Pi = PMDiff[k] - 2*np.pi
@@ -612,12 +707,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Build a guess Hessian that roughly follows Schlegel's guidelines. 
         """
         xyzs = coords.reshape(-1,3)
-        Hdiag = []
         def covalent(a, b):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
             rcov = self.atoms[a].covalent_radius + self.atoms[b].covalent_radius
             return r/rcov < 1.2
-        
+       
+        Hdiag = []
         for ic in self.Internals:
             if type(ic) is Distance:
                 r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) 
@@ -683,10 +778,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 Hdiag.append(0.05)
             else:
                 raise RuntimeError('Failed to build guess Hessian matrix. Make sure all IC types are supported')
-            
-        #print("printing diagonals")
-        #print(Hdiag)
-        #pvec1d(Hdiag,2,format='f')
         return np.diag(Hdiag)
 
     def distance_matrix(self,xyz, pbc=True):

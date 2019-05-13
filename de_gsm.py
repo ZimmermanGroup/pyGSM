@@ -3,10 +3,10 @@ import numpy as np
 import options
 import os
 from base_gsm import *
-#from dlc import *
 from pes import *
 import pybel as pb
 import sys
+from block_matrix import block_matrix
 
 class GSM(Base_Method):
 
@@ -172,16 +172,19 @@ class GSM(Base_Method):
         print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
         ictan,_ =  self.tangent(n3,n1)
         Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
-
-        dq0 = np.zeros((Vecs.shape[1],1))
-        dqmag = np.dot(Vecs[:,0],ictan)
+        constraint = self.nodes[n1].constraints
+        prim_constraint = block_matrix.dot(Vecs,constraint)
+        dqmag = np.dot(prim_constraint.T,ictan)
         print(" dqmag: %1.3f"%dqmag)
+        sign=-1
 
-        if self.nnodes-self.nn > 1:
-            dq0[0] = -dqmag/float(self.nnodes-self.nn)
+        if self.nnodes - self.nn > 1:
+            dqmag = sign*dqmag/float(self.nnodes-self.nn)
         else:
-            dq0[0] = -dqmag/2.0;
-        print(" dq0[constraint]: %1.3f" % dq0[0])
+            dqmag = sign*dqmag/2.0 
+        print(" scaled dqmag: %1.3f"%dqmag)
+
+        dq0 = dqmag*constraint
         old_xyz = self.nodes[n1].xyz.copy()
         new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
         new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)

@@ -12,6 +12,7 @@ from slots import *
 import itertools
 import networkx as nx
 from pkg_resources import parse_version
+from block_matrix import block_matrix as bm
 
 
 ELEMENT_TABLE = elements.ElementData()
@@ -313,11 +314,9 @@ class InternalCoordinates(object):
             microiter += 1
             Bmat = self.wilsonB(xyz1)
 
-            #CRA 3/2019
             Ginv = self.GInverse(xyz1)
-            #Ginv = np.linalg.inv(np.dot(Bmat,Bmat.T))
             # Get new Cartesian coordinates
-            dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1])
+            dxyz = damp*bm.dot(bm.transpose(Bmat),bm.dot(Ginv,dQ1))
             xyz2 = xyz1 + dxyz.reshape((-1,3))
             if microiter == 1:
                 xyzsave = xyz2.copy()
@@ -426,6 +425,7 @@ class InternalCoordinates(object):
         self.topology = G
         self.fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
         for g in self.fragments: g.__class__ = MyG
+
         # Deprecated in networkx 2.2
         # self.fragments = list(nx.connected_component_subgraphs(G))
 

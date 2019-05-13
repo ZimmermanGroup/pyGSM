@@ -110,19 +110,19 @@ class SE_GSM(Base_Method):
             return 0
         new_node = Molecule.copy_from_options(self.nodes[n1],new_node_id=n2)
         Vecs = new_node.update_coordinate_basis(constraints=ictan)
-        #print(new_node.coord_obj.GMatrix(new_node.xyz))
+        constraint = new_node.constraints
+        sign=-1.
+
         dqmag_scale=1.5
         minmax = self.DQMAG_MAX - self.DQMAG_MIN
         a = bdist/dqmag_scale
         if a>1.:
             a=1.
-        dqmag = self.DQMAG_MIN+minmax*a
+        dqmag = sign*(self.DQMAG_MIN+minmax*a)
         print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
 
-        dq0 = np.zeros((Vecs.shape[1],1))
-
-        dq0[0] = -dqmag
-        print(" dq0[constraint]: %1.3f" % dq0[0])
+        dq0 = dqmag*constraint
+        print(" dq0[constraint]: %1.3f" % dqmag)
 
         new_node.update_xyz(dq0)
         new_node.bdist = bdist
@@ -207,7 +207,7 @@ class SE_GSM(Base_Method):
 
     def tangent(self,n1,n2):
         if n2 ==None or n2==n1:
-            #print(" getting tangent from node ",n1)
+            print(" getting tangent from node ",n1)
             nadds = self.driving_coords.count("ADD")
             nbreaks = self.driving_coords.count("BREAK")
             nangles = self.driving_coords.count("ANGLE")

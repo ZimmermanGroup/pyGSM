@@ -1,6 +1,7 @@
 import numpy as np 
 
 def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+    
     x = x + d * step  + constraint_step  # 
     xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
@@ -12,7 +13,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
-def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+def backtrack(nconstraints, x, fx, gc, d, step, xp, gp,constraint_step, parameters,molecule):
 
     # n is the non-constrained
     count = 0
@@ -21,7 +22,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameter
     result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
 
     # Compute the initial gradient in the search direction.
-    dginit = np.dot(g[nconstraints:].T, d[nconstraints:])
+    dginit = np.dot(gc.T, d)
 
     # Make sure that s points to a descent direction.
     if 0 < dginit:
@@ -43,6 +44,9 @@ def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameter
         fx = molecule.PES.get_energy(xyz)
         gx = molecule.PES.get_gradient(xyz)
         g = molecule.coord_obj.calcGrad(xyz,gx)
+
+        # project out the constraint
+        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
         #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
 
         count = count + 1
@@ -54,7 +58,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameter
         else:
             # check the wolfe condition
             # now g is the gradient of f(xk + step * d)
-            dg = np.dot(g[nconstraints:].T, d[nconstraints:])
+            dg = np.dot(gc.T, d)
             if dg < parameters['wolfe'] * dginit:
                 print(" [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit))
                 print(" [INFO] not satisfy wolf condition.")

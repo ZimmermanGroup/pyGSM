@@ -5,6 +5,8 @@ from _linesearch import backtrack,NoLineSearch
 from cartesian import CartesianCoordinates
 import options
 from nifty import pmat2d,pvec1d
+from block_matrix import block_matrix as bm
+from scipy.linalg import block_diag
 
 #TODO Add primitive constraint e.g. a list of internal coordinates to be left basically frozen throughout optimization
 

@@ -6,6 +6,8 @@ from _linesearch import backtrack,NoLineSearch
 from cartesian import CartesianCoordinates
 from base_optimizer import base_optimizer
 from nifty import pmat2d,pvec1d
+from block_matrix import block_matrix as bm
+from sys import exit
 
 try:
     from io import StringIO
@@ -54,7 +56,10 @@ class eigenvector_follow(base_optimizer):
         fx = molecule.energy
         g = molecule.gradient.copy()
 
-        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
+        # project out the constraint
+        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+
+        molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
         if molecule.gradrms < self.conv_grms:
             print(" already at min")
             return geoms,energies
@@ -67,7 +72,7 @@ class eigenvector_follow(base_optimizer):
             # update Hess
             if update_hess:
                 if opt_type!='TS':
-                    self.update_Hessian(molecule,'BFGS')
+                    change = self.update_Hessian(molecule,'BFGS')
                 else:
                     self.update_Hessian(molecule,'BOFILL')
             update_hess = True
@@ -77,9 +82,7 @@ class eigenvector_follow(base_optimizer):
                 raise NotImplementedError
             else:
                 if opt_type !='TS':
-                    dq = self.eigenvector_step(molecule,g,nconstraints)
-                    #print "dq"
-                    #pmat2d(dq.T,4,format='f')
+                    dq = self.eigenvector_step(molecule,gc,nconstraints)
                 else:
                     dq,maxol_good = self.TS_eigenvector_step(molecule,g,ictan)
                     if not maxol_good:
@@ -97,7 +100,7 @@ class eigenvector_follow(base_optimizer):
         
             # store values
             xp = x.copy()
-            gp = g.copy()
+            gp = gc.copy()
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = molecule.gradrms
@@ -110,36 +113,35 @@ class eigenvector_follow(base_optimizer):
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
             #print(" ### Starting  line search ###")
-            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
+            ls = self.Linesearch(nconstraints, x, fx, gc, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
             if ls['status'] ==-2:
                 x = xp.copy()
                 print('[ERROR] the point return to the privious point')
                 return ls['status']
-            #print(" ## Done line search")
+            print(" ## Done line search")
         
             # get values from linesearch
             step = ls['step']
             x = ls['x']
             fx = ls['fx']
             g  = ls['g']
+            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
-            # calculate predicted value from Hessian
-            #TODO change limits since constraints are now at beginning
+            # calculate predicted value from Hessian, gp is previous constrained gradient
             scaled_dq = dq*step
-            dEtemp = np.dot(molecule.Hessian[nconstraints:,nconstraints:],scaled_dq[nconstraints:])
-            dEpre = np.dot(np.transpose(scaled_dq[nconstraints:]),gp[nconstraints:]) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq[nconstraints:])
+            dEtemp = np.dot(molecule.constrained_Hessian,scaled_dq)
+            dEpre = np.dot(np.transpose(scaled_dq),gp) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq)
             dEpre *=KCAL_MOL_PER_AU
-            for nc in range(nconstraints):
-                dEpre += gp[nc]*constraint_steps[nc]*KCAL_MOL_PER_AU  # DO this b4 recalc gradq WARNING THIS IS ONLY GOOD FOR DLC
+            dEpre += np.dot(gp.T,constraint_steps)*KCAL_MOL_PER_AU  #linear approximation
 
             # control step size 
             dEstep = fx - fxp
             print(" dEstep=%5.4f" %dEstep)
             ratio = dEstep/dEpre
-            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
+            molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
             self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
             # report the progress 
-            #TODO make these lists and check last element for convergence
+            #TODO make these lists and check last element for convergene
             self.disp = np.max(x - xp)/ANGSTROM_TO_AU
             self.Ediff = (fx -fxp) / KCAL_MOL_PER_AU
             xnorm = np.sqrt(np.dot(x.T, x))
@@ -155,13 +157,15 @@ class eigenvector_follow(base_optimizer):
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 # only form g_prim for non-constrained 
-                self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
+                #self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
+                self.g_prim = bm.dot(molecule.coord_basis,gc)
                 self.dx = x-xp
                 self.dg = g - gp
 
                 self.dx_prim_actual = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
                 self.dx_prim_actual = np.reshape(self.dx_prim_actual,(-1,1))
-                self.dx_prim = np.dot(molecule.coord_basis[:,nconstraints:],scaled_dq[nconstraints:]) 
+                #self.dx_prim = np.dot(molecule.coord_basis[:,nconstraints:],scaled_dq[nconstraints:]) 
+                self.dx_prim = bm.dot(molecule.coord_basis,scaled_dq)
                 self.dg_prim = self.g_prim - gp_prim
 
             else:

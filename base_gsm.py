@@ -20,6 +20,7 @@ from dlc_new import DelocalizedInternalCoordinates
 from molecule import Molecule
 import manage_xyz
 from nifty import printcool
+from block_matrix import block_matrix as bm
 
 class Base_Method(object,Print,Analyze):
 
@@ -282,20 +283,25 @@ class Base_Method(object,Print,Analyze):
             assert self.nodes[n]!=None,"n is bad"
             assert self.nodes[n-1]!=None,"n-1 is bad"
             ictan[n],_ = self.tangent(n-1,n)
-                    #self.nodes[n-1],self.nodes[n])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
             ictan[n] /= np.linalg.norm(ictan[n])
 
             self.newic.xyz = self.nodes[n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan0)
-            #dqmaga[n] = np.sqrt(np.dot(Vecs[:,0],ictan0))
+
+            constraint = self.newic.constraints
+            prim_constraint = bm.dot(Vecs,constraint)
+            dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
+            if dqmaga[n]<0.:
+                raise RuntimeError
+            dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
             # note: C++ gsm modifies tangent here
-            nbonds=self.nodes[0].num_bonds
-            dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
-            dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
-            dqmaga[n] = float(np.sqrt(dqmaga[n]))
+            #nbonds=self.nodes[0].num_bonds
+            #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
+            #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
+            #print('dqmaga[n] %.3f' % dqmaga[n])
         
         self.dqmaga = dqmaga
         self.ictan = ictan
@@ -364,10 +370,16 @@ class Base_Method(object,Print,Analyze):
             self.newic.xyz = self.nodes[newic_n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan0)
             nbonds=self.nodes[0].num_bonds
-            dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
-            dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
-            dqmaga[n] = float(np.sqrt(dqmaga[n]))
+
+            constraint = self.nodes[n].constraints
+            prim_constraint = bm.dot(Vecs,constraint)
+            dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
+            #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
+            #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
+            if dqmaga[n]<0.:
+                raise RuntimeError
         
+            dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
         if self.print_level>1:
             print('------------printing ictan[:]-------------')
@@ -383,10 +395,7 @@ class Base_Method(object,Print,Analyze):
         Tangents referenced to left or right during growing phase.
         Also updates coordinates
         """
-        #ictan = [[]]*self.nnodes
         dqmaga = [0.]*self.nnodes
-        #dqa = [[],]*self.nnodes
-
         ncurrent,nlist = self.make_nlist()
 
         for n in range(ncurrent):
@@ -394,15 +403,20 @@ class Base_Method(object,Print,Analyze):
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
-            if self.print_level>1:
+            if self.print_level>0:
                 print("forming space for", nlist[2*n+1])
 
+            if (ictan0[:]==0.).all():
+                print(nlist[2*n])
+                raise RuntimeError
             Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
 
             #normalize ictan
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
-            
-            dqmaga[nlist[2*n]] = np.dot(Vecs[:,0],ictan0)
+           
+            constraint = self.nodes[nlist[2*n+1]].constraints
+            prim_constraint = bm.dot(Vecs,constraint)
+            dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
         self.dqmaga = dqmaga
@@ -441,6 +455,7 @@ class Base_Method(object,Print,Analyze):
             self.ic_reparam_g()
 
         # create newic object
+        print(" creating newic molecule--used for ic_reparam")
         self.newic  = Molecule.copy_from_options(self.nodes[0])
         return n
 
@@ -602,7 +617,7 @@ class Base_Method(object,Print,Analyze):
 
             totaldqmag = 0.
             totaldqmag = np.sum(self.dqmaga[n0+1:self.nnodes])
-            #print " totaldqmag = %1.3f" %totaldqmag
+            print(" totaldqmag = %1.3f" %totaldqmag)
             dqavg = totaldqmag/(self.nnodes-1)
 
             #if climb:
@@ -702,12 +717,11 @@ class Base_Method(object,Print,Analyze):
                     ictan[n] = np.copy(ictan0[n]) 
                 else:
                     ictan[n] = np.copy(ictan0[n+1]) 
-
-                dq = np.zeros((self.newic.num_coordinates,1),dtype=float)
-                dq[0] = rpmove[n]
-
                 self.newic.update_coordinate_basis(ictan[n])
-                self.newic.update_xyz(dq,verbose=False)
+
+                constraint = self.newic.constraints
+                dq = rpmove[n]*constraint
+                self.newic.update_xyz(dq,verbose=True)
                 self.nodes[n].xyz = self.newic.xyz
 
                 #TODO might need to recalculate energy here for seam? 
@@ -718,7 +732,7 @@ class Base_Method(object,Print,Analyze):
         print()
         print("  disprms: {:1.3}\n".format(disprms))
 
-    def ic_reparam_g(self,ic_reparam_steps=8,n0=0):  #see line 3863 of gstring.cpp
+    def ic_reparam_g(self,ic_reparam_steps=4,n0=0):  #see line 3863 of gstring.cpp
         """
         
         """
@@ -802,11 +816,11 @@ class Base_Method(object,Print,Analyze):
             for n in range(n0+1,self.nnodes-1):
                 if isinstance(self.nodes[n],Molecule):
                     if rpmove[n] > 0:
-                        dq0 = np.zeros((self.nodes[n].num_coordinates,1))
                         self.nodes[n].update_coordinate_basis(constraints=self.ictan[n])
-                        dq0[0] = rpmove[n]  # ictan is first
+                        constraint = self.nodes[n].constraints
+                        dq0 = rpmove[n]*constraint
                         if self.print_level>1:
-                            print(" dq0[constraint]: {:1.3}".format(float(dq0[0])))
+                            print(" dq0[constraint]: {:1.3}".format(rpmove[n]))
                         self.nodes[n].update_xyz(dq0,verbose=False)
                     else:
                         pass

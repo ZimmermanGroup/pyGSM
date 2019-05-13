@@ -134,10 +134,18 @@ class Analyze:
         print("ispast2",ispast2)
         print("ispast3",ispast3)
 
-        cgrad = self.nodes[self.nR-1].gradient[0]
+        #TODO 5/9/2019 what about multiple constraints
+        #cgrad = self.nodes[self.nR-1].gradient[0]
+        constraints = self.nodes[self.nR-1].constraints
+        gradient = self.nodes[self.nR-1].gradient
+        cgrad = np.dot(gradient.T,constraints)*constraints
+
+        #cgrad = np.dot(self.nodes[self.nR-1].gradient,self.nodes[self.nR-1].constraints)*self.nodes[self.nR-1].constraints
+        cgrad = np.linalg.norm(cgrad)
+
         print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
 
-        if cgrad>CTHRESH:
+        if cgrad>CTHRESH and False:
             print("constraint gradient positive")
             ispast=2
         elif ispast1>0 and cgrad>OTHRESH:

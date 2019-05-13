@@ -1,3 +1,4 @@
+from __future__ import print_function
 from internalcoordinates import InternalCoordinates
 from prim_internals import PrimitiveInternalCoordinates
 from collections import OrderedDict, defaultdict
@@ -7,10 +8,12 @@ import networkx as nx
 from _math_utils import *
 import options
 from slots import *
-from nifty import click
+from nifty import click,pmat2d
 from scipy.linalg import block_diag
+from block_matrix import block_matrix
 from numpy.linalg import multi_dot
 from sys import exit
+from time import time
 np.set_printoptions(precision=4,suppress=True)
 
     
@@ -31,8 +34,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # The DLC contains an instance of primitive internal coordinates.
         if self.options['primitives'] is None:
-            print(" making primitives from options!")
+            print(" making primitives from options")
+            t1 = time()
             self.Prims = PrimitiveInternalCoordinates(options.copy())
+            dt = time() - t1
+            print(" Time to make prims %.3f" % dt)
             self.options['primitives'] = self.Prims
         else:
             print(" setting primitives from options!")
@@ -220,6 +226,28 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             xyz2 = self.applyConstraints(xyz2)
         return xyz2
     
+    def wilsonB(self,xyz):
+        Bp = self.Prims.wilsonB(xyz)
+        #Vt = block_matrix.transpose(self.Vecs)
+        #print(Vt.shape)
+        #return block_matrix.dot(Vt,block_matrix.dot(Bp,self.Vecs))
+        return block_matrix.dot(block_matrix.transpose(self.Vecs),Bp)
+
+    def calcGrad(self, xyz, gradx):
+        #q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
+        click()
+        #Gq = multi_dot([Ginv, Bmat, gradx])
+        Bg = block_matrix.dot(Bmat,gradx)
+        Gq = block_matrix.dot( Ginv, Bg)
+        #print("time to do block mult %.3f" % click())
+        #Gq = np.dot(np.multiply(np.diag(Ginv)[:,None],Bmat),gradx)
+        #print("time to do efficient mult %.3f" % click())
+        return Gq
+    
     def calcGradProj(self, xyz, gradx):
         """
         Project out the components of the internal coordinate gradient along the
@@ -275,25 +303,25 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """
 
         click()
-
         G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = click()
-        start=0
+
         tmpvecs=[]
-        for nprim in self.Prims.nprims_frag:
-            L, Q = np.linalg.eigh(G[start:nprim+start,start:nprim+start])
-            start=nprim
+        for A in G.matlist:
+            L,Q = np.linalg.eigh(A)
             LargeVals = 0
             LargeIdx = []
             for ival, value in enumerate(L):
+                #print("val=%.4f" %value,end=' ')
                 if np.abs(value) > 1e-6:
                     LargeVals += 1
                     LargeIdx.append(ival)
+            #print()
+            #print("LargeVals %i" % LargeVals)
             tmpvecs.append(Q[:,LargeIdx])
-        self.Vecs = block_diag(*tmpvecs)
-        
+        self.Vecs = block_matrix(tmpvecs)
         time_eig = click()
-        print " Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig)
+        #print(" Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig))
 
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
 
@@ -303,31 +331,46 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             assert cVec is None,"can't have vector constraint and cprim."
             cVec=self.form_cVec_from_cPrims()
 
+        #TODO use block diagonal
         if C is not None:
             # orthogonalize
             #C = C.copy()
+            if (C[:]==0.).all():
+                raise RuntimeError
             Cn = orthogonalize(C)
 
             # transform C into basis of DLC
             # CRA 3/2019 NOT SURE WHY THIS IS DONE
             # couldn't Cn just be used?
-            cVecs = np.linalg.multi_dot([self.Vecs,self.Vecs.T,Cn])
+
+            cVecs = block_matrix.dot(block_matrix.dot(self.Vecs,block_matrix.transpose(self.Vecs)),Cn)
 
             # normalize C_U
             try:
+                #print(cVecs.T)
                 cVecs = orthogonalize(cVecs) 
             except:
                 print(cVecs)
                 print("error forming cVec")
                 exit(-1)
 
-            # V contains the constraint vectors on the left, and the original DLCs on the right
-            #print "appending cVecs to set of Vecs"
-            V = np.hstack((cVecs, np.array(self.Vecs)))
-            # Apply Gram-Schmidt to V, and produce U.
-            self.Vecs = orthogonalize(V,cVecs.shape[1])
-            # print "Gram-Schmidt completed with thre=%.0e" % thre
+            
+            # artificially increase component of distance,angle,dihedral 
+            #typs=[Distance,Angle,LinearAngle,OutOfPlane,Dihedral]
+            #for inum,p in enumerate(self.Prims.Internals):
+            #    if type(p) in typs:
+            #        pass
+            #    else:
+            #        cVecs[inum,:] = 0.
 
+
+            #project constraints into vectors
+            self.Vecs = block_matrix.project_constraint(self.Vecs,cVecs)
+            #overDeterminedVecs = block_matrix.project_constraint(self.Vecs,cVecs)
+            #print("shape overdetermined %s" %(overDeterminedVecs.shape,))
+            #self.Vecs = block_matrix.gram_schmidt(overDeterminedVecs)
+
+        return
 
     def form_cVec_from_cPrims(self):
         """ forms the constraint vector from self.cPrim -- not used in GSM"""
@@ -364,25 +407,41 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
         PMDiff = self.Prims.calcDiff(coord1, coord2)
-        Answer = np.dot(PMDiff, self.Vecs)
+        #Answer = np.dot(PMDiff, self.Vecs)
+        Answer = block_matrix.dot(block_matrix.transpose(self.Vecs),PMDiff)
         return np.array(Answer).flatten()
 
     def calculate(self, coords):
         """ Calculate the DLCs given the Cartesian coordinates. """
         PrimVals = self.Prims.calculate(coords)
-        Answer = np.dot(PrimVals, self.Vecs)
+        #Answer = np.dot(PrimVals, self.Vecs)
+        Answer = block_matrix.dot(block_matrix.transpose(self.Vecs),PrimVals)
         # print np.dot(np.array(self.Vecs[0,:]).flatten(), np.array(Answer).flatten())
         # print PrimVals[0]
         # raw_input()
         return np.array(Answer).flatten()
 
-    def DLC_to_primitive(self,vecq):
+    def calcPrim(self,vecq):
         # To obtain the primitive coordinates from the delocalized internal coordinates,
         # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
         # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
         # are simply the rows of the Vecs matrix.
+        #return self.Vecs.dot(vecq)
+        return block_matrix.dot(Vecs,vecq)
 
-        return np.dot(self.Vecs,vecq)
+    # overwritting the parent internalcoordinates GMatrix 
+    # which is an elegant way to use the derivatives
+    # but there is a more efficient way to compute G
+    # using the block diagonal properties of G and V
+    def GMatrix(self,xyz):
+        tmpvecs=[]
+        s3a=0
+        sp=0
+        Gp = self.Prims.GMatrix(xyz)
+        Vt = block_matrix.transpose(self.Vecs)
+        for vt,G,v in zip(Vt.matlist,Gp.matlist,self.Vecs.matlist):
+            tmpvecs.append( np.dot(np.dot(vt,G),v))
+        return block_matrix(tmpvecs)
 
     def derivatives(self, coords):
         """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
@@ -399,7 +458,30 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         return np.array(Answer1)
 
     def GInverse(self, xyz):
-        return self.GInverse_SVD(xyz)
+        #return self.GInverse_diag(xyz)
+        return self.GInverse_EIG(xyz)
+
+    #TODO this needs to be fixed
+    def GInverse_diag(self,xyz):
+        t0 = time()
+        G = self.GMatrix(xyz)
+        #print(G)
+        dt = time() - t0
+        #print(" total time to get GMatrix %.3f" % dt)
+        d = np.diagonal(G)
+        #print(d)
+        return np.diag(1./d)
+
+    def GInverse_EIG(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        click()
+        G = self.GMatrix(xyz)
+        time_G = click()
+        #Gi = np.linalg.inv(G)
+        tmpGi = [ np.linalg.inv(g) for g in G.matlist ]
+        time_inv = click()
+        # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+        return block_matrix(tmpGi)
 
     def repr_diff(self, other):
         return self.Prims.repr_diff(other.Prims)

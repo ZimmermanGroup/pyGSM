@@ -5,6 +5,8 @@ from scipy.optimize.lbfgsb import LbfgsInvHessProduct
 from base_optimizer import base_optimizer
 from nifty import pmat2d,pvec1d
 from units import *
+from block_matrix import block_matrix as bm
+from sys import exit
 
 try:
     from io import StringIO
@@ -31,9 +33,10 @@ class lbfgs(base_optimizer):
             molecule,
             refE=0.,
             opt_type='UNCONSTRAINED',
-            opt_steps=3,
+            opt_steps=20,
             maxcor=10,
-            ictan=None
+            ictan=None,
+            xyzframerate=4,
             ):
 
         # stash/initialize some useful attributes
@@ -48,39 +51,49 @@ class lbfgs(base_optimizer):
         nconstraints=self.get_nconstraints(opt_type)
         self.buf = StringIO()
 
-        #form initial coord basis
+        # form initial coord basis
         constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
         molecule.update_coordinate_basis(constraints=constraints)
 
         # get coordinates 
         x = np.copy(molecule.coordinates)
         xyz = np.copy(molecule.xyz)
-        x_prim = np.dot(molecule.coord_basis,molecule.coordinates)
+        x_prim = molecule.primitive_internal_values
         num_coords =  molecule.num_coordinates - nconstraints 
         
         # Evaluate the function value and its gradient.
         fx = molecule.energy
         g = molecule.gradient.copy()
-        g_prim = np.dot(molecule.coord_basis,g)
-        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/num_coords)
+    
+        # project out the constraint
+        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+
+        g_prim = bm.dot(molecule.coord_basis,gc)
+        molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
+
         if molecule.gradrms < self.conv_grms:
             print(" already at min")
             return geoms,energies 
         
+        # reset k in principle k does not have to reset but . . . 
+        #self.k = 0
+        #self.end=0
+
         # initialize the iteration data list
-        self.lm = []
-        for i in xrange(0, maxcor):
-            s_prim = np.zeros_like(g_prim)
-            y_prim = np.zeros_like(g_prim)
-            self.lm.append(iterationData(0.0, s_prim.flatten(), y_prim.flatten()))
+        if self.k==0:
+            self.lm = []
+            for i in xrange(0, maxcor):
+                s_prim = np.zeros_like(g_prim)
+                y_prim = np.zeros_like(g_prim)
+                self.lm.append(iterationData(0.0, s_prim.flatten(), y_prim.flatten()))
        
         for ostep in range(opt_steps):
             print(" On opt step {} ".format(ostep+1))
 
             if self.k!=0:
                 # update vectors s and y:
-                self.lm[self.end].s_prim = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
-                self.lm[self.end].y_prim = g_prim - gp_prim
+                self.lm[self.end].s_prim = molecule.coord_obj.Prims.calcDiff(xyz,self.xyzp)
+                self.lm[self.end].y_prim = g_prim - self.gp_prim
                 self.end = (self.end + 1) % maxcor
                 #j = self.end
                 bound = min(self.k, maxcor)
@@ -98,7 +111,7 @@ class lbfgs(base_optimizer):
             self.k = self.k + 1
 
             # form in DLC basis (does nothing if cartesian)
-            d = np.dot(molecule.coord_basis.T,d_prim)
+            d = bm.dot(bm.transpose(molecule.coord_basis),d_prim)
 
             # normalize the direction
             actual_step = np.linalg.norm(d)
@@ -112,18 +125,18 @@ class lbfgs(base_optimizer):
 
             # store
             xp = x.copy()
-            xyzp = xyz.copy()
-            gp = g.copy()
-            gp_prim = np.dot(molecule.coord_basis,gp)
+            self.xyzp = xyz.copy()
+            gp = gc.copy()
+            self.gp_prim = bm.dot(molecule.coord_basis,gp)
             fxp = fx
 
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
 
             # line search  
-            print(" Linesearch")
-            ls = self.Linesearch(nconstraints, x, fx, g, d, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
-            print(" Done linesearch")
+            #print(" Linesearch")
+            ls = self.Linesearch(nconstraints, x, fx, gc, d, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
+            #print(" Done linesearch")
             
             # revert to the privious point
             if ls['status'] < 0:
@@ -137,22 +150,29 @@ class lbfgs(base_optimizer):
             x = ls['x']
             fx = ls['fx']
             g  = ls['g']
-            g_prim = np.dot(molecule.coord_basis,g)
+            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+            g_prim = bm.dot(molecule.coord_basis,gc)
             dEstep = fx - fxp
             print(" dEstep=%5.4f" %dEstep)
+            dE = molecule.difference_energy
+            if dE is not 1000.:
+                print(" difference energy is %5.4f" % dE)
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)
-            geoms.append(molecule.geometry)
-            energies.append(molecule.energy-refE)
+
+            if ostep % xyzframerate==0:
+                geoms.append(molecule.geometry)
+                energies.append(molecule.energy-refE)
 
             if self.options['print_level']>0:
                 print(" Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
 
             # check for convergence TODO
-            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/num_coords)
+            molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
             if molecule.gradrms < self.conv_grms:
+                print(" Converged! gradrms: %.4f" % molecule.gradrms) 
                 break
 
             #print " ########## DONE WITH TOTAL STEP #########"
