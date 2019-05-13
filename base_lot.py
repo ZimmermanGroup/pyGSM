@@ -139,14 +139,13 @@ class Lot(object):
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
 
-        #TODO remove some of these options 
+        #TODO remove some of these options  make others properties
         self.nocc=self.options['nocc']
         self.nactive=self.options['nactive']
         self.basis=self.options['basis']
         self.functional=self.options['functional']
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
-        self.do_coupling=self.options['do_coupling']
         self.node_id=self.options['node_id']
         self.hasRanForCurrentCoords =False
         self.has_nelectrons =False
@@ -163,6 +162,16 @@ class Lot(object):
     def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return cls(cls.default_options().set_values(kwargs))
+
+
+    @property
+    def do_coupling(self):
+        return self.options['do_coupling']
+
+    @do_coupling.setter
+    def do_coupling(self,value):
+        assert type(value)==bool, "incorrect type for do_coupling"
+        self.options['do_coupling']=value
 
     @classmethod
     def copy(cls,lot,**kwargs):
