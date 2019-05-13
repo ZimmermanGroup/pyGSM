@@ -119,7 +119,7 @@ class SE_Cross(SE_GSM):
         if condition1:
             print(" Condition 1 satisfied")
             print(" bdist current %1.3f" % abs(self.nodes[self.nR-1].bdist))
-            print(" bdist target %1.3f" % abs(self.nodes[0].bdist)*(1-self.BDIST_RATIO))
+            print(" bdist target %1.3f" % (abs(self.nodes[0].bdist)*(1-self.BDIST_RATIO)))
             print(" Growth-phase over")
             isDone=True
         #elif condition2:

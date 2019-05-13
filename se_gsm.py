@@ -28,7 +28,12 @@ class SE_GSM(Base_Method):
         # stash bdist for node 0
         ictan,self.nodes[0].bdist = self.tangent(0,None)
         self.nodes[0].update_coordinate_basis(constraints=ictan)
-        self.nodes[0].form_Hessian_in_basis()
+        self.set_V0()
+
+    def set_V0(self):
+        self.nodes[0].V0 = self.nodes[0].energy
+        #TODO should be actual gradient
+        self.nodes[0].gradrms = 0.
 
     def isomer_init(self):
         changed_top = False
@@ -157,7 +162,6 @@ class SE_GSM(Base_Method):
                         opt_steps=noptsteps,
                         )
         return
-
 
     def check_add_node(self):
         success=True
@@ -289,14 +293,14 @@ class SE_GSM(Base_Method):
                     if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
                         bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
                     if self.print_level>0:
-                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv,tort,tor_diff)))
+                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
 
             bdist = np.sqrt(bdist)
             if np.all(ictan==0.0):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
         else:
-            #print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
             Q1 = self.nodes[n1].primitive_internal_values 
             Q2 = self.nodes[n2].primitive_internal_values 
             PMDiff = Q2-Q1
@@ -316,7 +320,10 @@ class SE_GSM(Base_Method):
         self.pastts = self.past_ts()
         isDone=False
         #TODO break planes
-        if self.pastts and self.nn>3: #TODO extra criterion here
+        condition1 = (abs(self.nodes[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.nodes[0].bdist))
+        print(" bdist %.3f" % self.nodes[self.nR-1].bdist)
+
+        if self.pastts and self.nn>3 and condition1: #TODO extra criterion here
             print("pastts is ",self.pastts)
             isDone=True
         fp = self.find_peaks(1)

@@ -233,7 +233,7 @@ class Base_Method(object,Print,Analyze):
             #TODO special SSM criteria if first opt'd node is too high?
 
             # => calculate totalgrad <= #
-            totalgrad,gradrms = self.calc_grad()
+            totalgrad,gradrms,sum_gradrms = self.calc_grad()
             print(" opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
 
             # => set stage <= #
@@ -249,8 +249,14 @@ class Base_Method(object,Print,Analyze):
             isDone = self.check_opt(totalgrad,fp,rtype)
             if isDone:
                 break
-            if not self.climber and not self.finder and totalgrad<0.025: #Break even if not climb/find
+
+            sum_conv_tol = (self.nn-2)*self.options['CONV_TOL'] + (self.nn-2)*self.options['CONV_TOL']/10
+            print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
+            if not self.climber and not self.finder and sum_gradrms<sum_conv_tol: #Break even if not climb/find
+                print(" convergence criteria is %.3f, current convergence %.3f" % (sum_conv_tol,sum_gradrms))
                 break
+            elif not self.climber and not self.finder:
+                print(" convergence criteria is %.3f, current convergence %.3f" % (sum_conv_tol,sum_gradrms))
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -439,7 +445,7 @@ class Base_Method(object,Print,Analyze):
             self.get_tangents_1g()
             self.opt_steps(maxopt)
             self.store_energies()
-            totalgrad,gradrms = self.calc_grad()
+            totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.emax = float(max(self.energies[1:-1]))
             self.TSnode = np.where(self.energies==self.emax)[0][0]
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
@@ -560,6 +566,11 @@ class Base_Method(object,Print,Analyze):
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
             self.nodes[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+
+            if self.__class__.__name__!="GSM":
+                ictan,bdist =  self.tangent(self.nR,None)
+                self.nodes[self.nR].bdist = bdist
+
             if self.nodes[self.nR]==0:
                 success= False
                 break
@@ -569,7 +580,6 @@ class Base_Method(object,Print,Analyze):
             print(" nn=%i,nR=%i" %(self.nn,self.nR))
             self.active[self.nR-1] = True
         return success
-
 
     def interpolateP(self,newnodes=1):
         print(" Adding product node")

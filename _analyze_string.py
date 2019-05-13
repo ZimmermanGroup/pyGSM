@@ -227,6 +227,7 @@ class Analyze:
     def calc_grad(self):
         totalgrad = 0.0
         gradrms = 0.0
+        sum_gradrms = 0.0
         for i,ico in zip(list(range(1,self.nnodes-1)),self.nodes[1:self.nnodes-1]):
             if ico!=None:
                 print(" node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),end='')
@@ -234,9 +235,10 @@ class Analyze:
                     print()
                 totalgrad += ico.gradrms*self.rn3m6
                 gradrms += ico.gradrms*ico.gradrms
+                sum_gradrms += ico.gradrms
         print('')
         #TODO wrong for growth
         gradrms = np.sqrt(gradrms/(self.nnodes-2))
-        return totalgrad,gradrms
+        return totalgrad,gradrms,sum_gradrms
 
 

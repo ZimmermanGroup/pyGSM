@@ -29,7 +29,7 @@ class Penalty_PES(PES):
     @classmethod
     def create_pes_from(cls,PES):
         lot = type(PES.lot).copy(PES.lot)
-        return cls(PES.PES1,PES.PES2,lot)
+        return cls(PES.PES1,PES.PES2,lot,PES.sigma,PES.alpha)
 
     def get_energy(self,geom):
         E1 = self.PES1.get_energy(geom)

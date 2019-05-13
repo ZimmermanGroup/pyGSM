@@ -1,5 +1,5 @@
 import lightspeed as ls
-import psiw
+#import psiw
 from base_lot import Lot 
 import numpy as np
 import manage_xyz

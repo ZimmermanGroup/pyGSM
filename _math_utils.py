@@ -112,12 +112,8 @@ def orthogonalize(vecs,numCvecs=0):
     for v in vecs.T:
         w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
         wnorm = np.linalg.norm(w)
-        #print count,wnorm
         if wnorm > 1e-5 and (abs(w) > 1e-6).any():
-        #if (abs(w) > 1e-3).any() and wnorm > 1e-6:
             try:
-                #print "adding vector ",count
-                #print wnorm
                 basis[:,count]=w/wnorm
                 count+=1
             except:
@@ -132,5 +128,3 @@ def orthogonalize(vecs,numCvecs=0):
         raise RuntimeError("error in orthonormality")
     return basis
 
-
-    # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number

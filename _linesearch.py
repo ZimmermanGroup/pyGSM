@@ -19,7 +19,7 @@ def backtrack(nconstraints, x, fx, gc, d, step, xp, gp,constraint_step, paramete
     count = 0
     dec = 0.5
     inc = 2.1
-    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':gc}
 
     # Compute the initial gradient in the search direction.
     dginit = np.dot(gc.T, d)

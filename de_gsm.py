@@ -28,9 +28,10 @@ class GSM(Base_Method):
         # this tests if the primitives are the same
         assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
 
-        print(" Primitive Internal Coordinates")
-        print(self.nodes[0].primitive_internal_coordinates)
+        #print(" Primitive Internal Coordinates")
+        #print(self.nodes[0].primitive_internal_coordinates)
         print(" number of primitives is", self.nodes[0].num_primitives)
+        self.set_V0()
 
     def restart_string(self,xyzbase='restart'):
         self.growth_direction=0
@@ -126,7 +127,6 @@ class GSM(Base_Method):
         0 turning of climbing image and TS search
         """
 
-        self.set_V0()
         if not self.isRestarted:
             if self.growth_direction==0:
                 self.interpolate(2) 
