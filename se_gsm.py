@@ -87,7 +87,7 @@ class SE_GSM(Base_Method):
             print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']
+                self.optimizer[n].conv_grms=self.options['CONV_TOL']
 
         print(" initial ic_reparam")
         self.ic_reparam()
@@ -129,17 +129,16 @@ class SE_GSM(Base_Method):
 
         return new_node
 
-
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
-        noptsteps=15
+        noptsteps=50
         if rtype==1:
             print(" copying last node, opting")
             #self.nodes[self.nR] = DLC.copy_node(self.nodes[self.nR-1],self.nR)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             print(" Optimizing node %i" % self.nR)
-            self.optimizer[self.nR].options['OPTTHRESH'] = self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_grms = self.options['CONV_TOL']
             self.optimizer[self.nR].optimize(
                         molecule=self.nodes[self.nR],
                         refE=self.nodes[0].V0,
@@ -188,8 +187,10 @@ class SE_GSM(Base_Method):
         for i in range(self.nnodes):
             if self.nodes[i] != None:
                 self.active[i] = False
-                self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
-        self.optimizer[nR].options['OPTTHRESH'] = self.options['ADD_NODE_TOL']
+                self.optimizer[i].conv_grms = self.options['CONV_TOL']
+                print(" CONV_TOL of node %d is %.4f" % (i,self.optimizer[i].conv_grms))
+        #self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        self.optimizer[nR].conv_grms = self.options['CONV_TOL']
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 

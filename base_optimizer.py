@@ -107,6 +107,14 @@ class base_optimizer(object):
         }
         return
 
+    @property
+    def conv_grms(self):
+        return self.options['OPTTHRESH']
+
+    @conv_grms.setter
+    def conv_grms(self,value):
+        self.options['OPTTHRESH']=value
+
     def get_nconstraints(self,opt_type):
         if opt_type in ["ICTAN", "CLIMB"]:
             nconstraints = 1
@@ -130,25 +138,25 @@ class base_optimizer(object):
         if opt_type in ['TS','TS-SEAM']:
             assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
-    def converged(self,g,nconstraints):
-        # check if finished
-        gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
-        #print "current gradrms= %r au" % gradrms
-        #print "gnorm =",gnorm
-        
-        gmax = np.max(g[nconstraints:])/ANGSTROM_TO_AU
-        #print "maximum gradient component (au)", gmax
+    #def converged(self,g,nconstraints):
+    #    # check if finished
+    #    gradrms = np.sqrt(np.dot(g[nconstraints:].T,g[nconstraints:])/n)
+    #    #print "current gradrms= %r au" % gradrms
+    #    #print "gnorm =",gnorm
+    #    
+    #    gmax = np.max(g[nconstraints:])/ANGSTROM_TO_AU
+    #    #print "maximum gradient component (au)", gmax
 
-        if gradrms <self.conv_grms:
-            print('[INFO] converged')
-            return True
+    #    if gradrms <self.conv_grms:
+    #        print('[INFO] converged')
+    #        return True
 
-        #if gradrms <= self.conv_grms  or \
-        #    (self.disp <= self.conv_disp and self.Ediff <= self.conv_Ediff) or \
-        #    (gmax <= self.conv_gmax and self.Ediff <= self.conv_Ediff):
-        #    print '[INFO] converged'
-        #    return True
-        return False
+    #    #if gradrms <= self.conv_grms  or \
+    #    #    (self.disp <= self.conv_disp and self.Ediff <= self.conv_Ediff) or \
+    #    #    (gmax <= self.conv_gmax and self.Ediff <= self.conv_Ediff):
+    #    #    print '[INFO] converged'
+    #    #    return True
+    #    return False
 
     def set_lambda1(self,opt_type,eigen,maxoln=None):
         if opt_type == 'TS':
@@ -193,8 +201,8 @@ class base_optimizer(object):
         nconstraints=self.get_nconstraints(opt_type)
         n=len(g)
         #TODO Raise Error for CartesianCoordinates
-
-        #return constraint_steps
+    
+        #TODO 4/24/2019 block matrix/distributed constraints
         constraint_steps = np.zeros((n,1))
         # => ictan climb
         if opt_type=="CLIMB": 
@@ -236,7 +244,6 @@ class base_optimizer(object):
         print(" walking up the %i coordinate = %1.4f" % (n,dq))
         if abs(dq) > self.options['MAXAD']/SCALEW:
             dq = np.sign(dq)*self.options['MAXAD']/SCALE
-
         return dq
 
     #def walk_up_DNR(self,g,n):
@@ -417,6 +424,7 @@ class base_optimizer(object):
             self.Hessian += change
         molecule.newHess-=1
 
+        return change
 
     def update_bfgs(self,molecule):
         if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
@@ -429,7 +437,6 @@ class base_optimizer(object):
             print("In update bfgsp")
         Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
-        #dxHdx = np.linalg.multi_dot([self.dx_prim.T,molecule.Primitive_Hessian,self.dx_prim])
         dgdg = np.outer(self.dg_prim,self.dg_prim)
         dgtdx = np.dot(np.transpose(self.dg_prim),self.dx_prim)
         change = np.zeros_like(molecule.Primitive_Hessian)
@@ -447,6 +454,7 @@ class base_optimizer(object):
         if dxHdx>0.:
             if dxHdx<0.001: dxHdx=0.001
             change -= np.outer(Hdx,Hdx)/dxHdx
+
         return change
 
     def update_bofill(self,molecule):

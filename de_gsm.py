@@ -104,7 +104,7 @@ class GSM(Base_Method):
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
-            self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2
             self.optimizer[n].options['DMAX'] = 0.05
         print(" V_profile: ", end=' ')
         for n in range(self.nnodes):
@@ -140,14 +140,14 @@ class GSM(Base_Method):
             self.done_growing = True
             print(" initial ic_reparam")
             self.get_tangents_1()
-            self.ic_reparam(ic_reparam_steps=25)
+            self.ic_reparam(ic_reparam_steps=8)
             self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
         else:
             oi=0
             self.get_tangents_1()
         for i in range(self.nnodes):
             if self.nodes[i] !=None:
-                self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2
+                self.optimizer[i].conv_grms = self.options['CONV_TOL']
 
         if self.tscontinue==True:
             if max_iters-oi>0:
@@ -203,7 +203,7 @@ class GSM(Base_Method):
 
         for i in range(self.nnodes):
             if self.nodes[i] != None:
-                self.optimizer[i].options['OPTTHRESH'] = self.options['CONV_TOL']*2.
+                self.optimizer[i].conv_grms = self.options['CONV_TOL']*2.
         self.active[nR] = True
         self.active[nP] = True
         if self.growth_direction==1:

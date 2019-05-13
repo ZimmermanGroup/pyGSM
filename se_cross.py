@@ -39,9 +39,11 @@ class SE_Cross(SE_GSM):
         print(' SE_Cross growth phase over')
         print(' Warning last node still not fully optimized')
 
-        if rtype==0:
+
+        if True:
             # doing extra constrained penalty optimization for MECI
-            self.optimizer[self.nR-1].options['OPTTHRESH']=0.01
+            print(" extra constrained optimization for the nnR-1 = %d" % (self.nR-1))
+            self.optimizer[self.nR-1].conv_grms=0.01
             ictan,_ = self.tangent(self.nR-1,self.nR-2)
             self.nodes[self.nR-1].PES.sigma=3.5
 
@@ -52,13 +54,15 @@ class SE_Cross(SE_GSM):
                     opt_steps=50,
                     ictan=ictan,
                     )
+
+        if rtype==0:
             # MECI optimization
             self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             self.nodes[self.nR].PES.lot.do_coupling=True
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
-            self.optimizer[self.nR].options['OPTTHRESH']=self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
             self.optimizer[self.nR].optimize(
                     molecule=self.nodes[self.nR],
                     refE=self.nodes[0].V0,
@@ -68,9 +72,12 @@ class SE_Cross(SE_GSM):
             self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
         else:
             # unconstrained penalty optimization
-            self.optimizer[self.nR-1].options['OPTTHRESH']=self.options['CONV_TOL']
-            self.optimizer[self.nR-1].optimize(
-                    molecule=self.nodes[self.nR-1],
+            #TODO make unctonstrained "CROSSING" which checks for dE convergence
+            self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
+            print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
+            self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
+            self.optimizer[self.nR].optimize(
+                    molecule=self.nodes[self.nR],
                     refE=self.nodes[0].V0,
                     opt_type='UNCONSTRAINED',
                     opt_steps=100,
@@ -92,7 +99,7 @@ class SE_Cross(SE_GSM):
             else:
                 return False
         elif opt_type=="ICTAN": #constrained growth
-            if self.nodes[n].gradrms<self.optimizer[n].options['OPTTHRESH']:
+            if self.nodes[n].gradrms<self.optimizer[n].conv_grms:
                 return True
             else:
                 return False
