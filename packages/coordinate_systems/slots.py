@@ -1,7 +1,12 @@
+
+# standard library imports
+
+# third party
 import numpy as np
-from nifty import logger,commadash
+
+# local application imports
+from utilities import nifty,math_utils
 from rotate import get_expmap, get_expmap_der, is_linear
-from _math_utils import d_cross,d_ncross,d_unit_vector,d_cross_ab
 
 class CartesianX(object):
     __slots__ = ['a','w','isAngular','isPeriodic']
@@ -18,7 +23,7 @@ class CartesianX(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            nifty.logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -51,7 +56,7 @@ class CartesianY(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            nifty.logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -84,7 +89,7 @@ class CartesianZ(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            nifty.logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -112,7 +117,7 @@ class TranslationX(object):
 
     def __repr__(self):
         # return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
-        return "Translation-X %s" % (commadash(self.a))
+        return "Translation-X %s" % (nifty.commadash(self.a))
         
     @property
     def atoms(self):
@@ -122,7 +127,7 @@ class TranslationX(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationX same atoms, different weights")
+            nifty.logger.warning("Warning: TranslationX same atoms, different weights")
             eq = False
         return eq
 
@@ -152,7 +157,7 @@ class TranslationY(object):
 
     def __repr__(self):
         # return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
-        return "Translation-Y %s" % (commadash(self.a))
+        return "Translation-Y %s" % (nifty.commadash(self.a))
 
     @property
     def atoms(self):
@@ -162,7 +167,7 @@ class TranslationY(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationY same atoms, different weights")
+            nifty.logger.warning("Warning: TranslationY same atoms, different weights")
             eq = False
         return eq
 
@@ -192,7 +197,7 @@ class TranslationZ(object):
 
     def __repr__(self):
         # return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
-        return "Translation-Z %s" % (commadash(self.a))
+        return "Translation-Z %s" % (nifty.commadash(self.a))
 
     @property
     def atoms(self):
@@ -202,7 +207,7 @@ class TranslationZ(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationZ same atoms, different weights")
+            nifty.logger.warning("Warning: TranslationZ same atoms, different weights")
             eq = False
         return eq
 
@@ -257,11 +262,11 @@ class Rotator(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
-            logger.warning("Warning: Rotator same atoms, different reference positions")
+            nifty.logger.warning("Warning: Rotator same atoms, different reference positions")
         return eq
 
     def __repr__(self):
-        return "Rotator %s" % commadash(self.a)
+        return "Rotator %s" % nifty.commadash(self.a)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -348,8 +353,8 @@ class Rotator(object):
                 # Chain rule is applied to get terms from
                 # dummy atom derivatives
                 nxdum = np.linalg.norm(xdum)
-                dxdum = d_cross(vx, self.e0)
-                dnxdum = d_ncross(vx, self.e0)
+                dxdum = nifty.d_cross(vx, self.e0)
+                dnxdum = nifty.d_ncross(vx, self.e0)
                 # Derivative of dummy atom position w/r.t. molecular axis vector
                 dexdum = (dxdum*nxdum - np.outer(dnxdum,xdum))/nxdum**2
                 # Here we may compute finite difference derivatives to check
@@ -394,7 +399,7 @@ class RotationA(object):
 
     def __repr__(self):
         # return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-        return "Rotation-A %s" % (commadash(self.a))
+        return "Rotation-A %s" % (nifty.commadash(self.a))
 
     @property
     def atoms(self):
@@ -434,7 +439,7 @@ class RotationB(object):
 
     def __repr__(self):
         # return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-        return "Rotation-B %s" % (commadash(self.a))
+        return "Rotation-B %s" % (nifty.commadash(self.a))
 
     @property
     def atoms(self):
@@ -474,7 +479,7 @@ class RotationC(object):
 
     def __repr__(self):
         # return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-        return "Rotation-C %s" % (commadash(self.a))
+        return "Rotation-C %s" % (nifty.commadash(self.a))
 
     @property
     def atoms(self):
@@ -768,13 +773,13 @@ class LinearAngle(object):
         ebc = vbc / np.linalg.norm(vbc)
         # Derivative terms
         de0 = np.zeros((3, 3), dtype=float)
-        dev = d_unit_vector(v)
-        dc1 = d_cross_ab(ev, e0, dev, de0)
-        de1 = np.dot(dc1, d_unit_vector(c1))
-        dc2 = d_cross_ab(ev, e1, dev, de1)
-        de2 = np.dot(dc2, d_unit_vector(c2))
-        deba = d_unit_vector(vba)
-        debc = d_unit_vector(vbc)
+        dev = nifty.d_unit_vector(v)
+        dc1 = nifty.d_cross_ab(ev, e0, dev, de0)
+        de1 = np.dot(dc1, nifty.d_unit_vector(c1))
+        dc2 = nifty.d_cross_ab(ev, e1, dev, de1)
+        de2 = np.dot(dc2, nifty.d_unit_vector(c2))
+        deba = nifty.d_unit_vector(vba)
+        debc = nifty.d_unit_vector(vbc)
         if self.axis == 0:
             derivatives[a, :] = np.dot(deba, e1) + np.dot(-de1, eba) + np.dot(-de1, ebc)
             derivatives[b, :] = np.dot(-deba, e1) + np.dot(-debc, e1)
@@ -1116,7 +1121,7 @@ class OutOfPlane(object):
         if self.a == other.a:
             if {self.b, self.c, self.d} == {other.b, other.c, other.d}:
                 if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
-                    logger.warning("Warning: OutOfPlane atoms are the same, ordering is different")
+                    nifty.logger.warning("Warning: OutOfPlane atoms are the same, ordering is different")
                 return True
         #     if self.b == other.b:
         #         if self.c == other.c:
@@ -1191,12 +1196,12 @@ def logArray(mat, precision=3, fmt="f"):
     fmt="%% .%i%s" % (precision, fmt)
     if len(mat.shape) == 1:
         for i in range(mat.shape[0]):
-            logger.info(fmt % mat[i]),
+            nifty.logger.info(fmt % mat[i]),
         print()
     elif len(mat.shape) == 2:
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
-                logger.info(fmt % mat[i,j]),
+                nifty.logger.info(fmt % mat[i,j]),
             print()
     else:
         raise RuntimeError("One or two dimensional arrays only")

@@ -1,22 +1,24 @@
 from __future__ import print_function
-from internalcoordinates import InternalCoordinates
-from prim_internals import PrimitiveInternalCoordinates
-from collections import OrderedDict, defaultdict
-import itertools
-from copy import deepcopy
-import networkx as nx
-from _math_utils import *
-import options
-from slots import *
-from nifty import click,pmat2d
-from scipy.linalg import block_diag
-from block_matrix import block_matrix
-from numpy.linalg import multi_dot
+
+# standard library imports
 from sys import exit
 from time import time
+
+# third party
+import networkx as nx
+from collections import OrderedDict, defaultdict
+import itertools
+from numpy.linalg import multi_dot
+import numpy as np
 np.set_printoptions(precision=4,suppress=True)
 
-    
+# local application imports
+from internal_coordinates import InternalCoordinates
+from primitive_internals import PrimitiveInternalCoordinates
+from slots import *
+from utilities import *
+   
+
 class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def __init__(self,
@@ -239,13 +241,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Bmat = self.wilsonB(xyz)
         # Internal coordinate gradient
         # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
-        click()
+        nifty.click()
         #Gq = multi_dot([Ginv, Bmat, gradx])
         Bg = block_matrix.dot(Bmat,gradx)
         Gq = block_matrix.dot( Ginv, Bg)
-        #print("time to do block mult %.3f" % click())
+        #print("time to do block mult %.3f" % nifty.click())
         #Gq = np.dot(np.multiply(np.diag(Ginv)[:,None],Bmat),gradx)
-        #print("time to do efficient mult %.3f" % click())
+        #print("time to do efficient mult %.3f" % nifty.click())
         return Gq
     
     def calcGradProj(self, xyz, gradx):
@@ -302,9 +304,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 Float array containing difference in primitive coordinates
         """
 
-        click()
+        nifty.click()
         G = self.Prims.GMatrix(xyz)  # in primitive coords
-        time_G = click()
+        time_G = nifty.click()
 
         tmpvecs=[]
         for A in G.matlist:
@@ -320,7 +322,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #print("LargeVals %i" % LargeVals)
             tmpvecs.append(Q[:,LargeIdx])
         self.Vecs = block_matrix(tmpvecs)
-        time_eig = click()
+        time_eig = nifty.click()
         #print(" Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig))
 
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
@@ -337,7 +339,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #C = C.copy()
             if (C[:]==0.).all():
                 raise RuntimeError
-            Cn = orthogonalize(C)
+            Cn = math_utils.orthogonalize(C)
 
             # transform C into basis of DLC
             # CRA 3/2019 NOT SURE WHY THIS IS DONE
@@ -348,7 +350,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # normalize C_U
             try:
                 #print(cVecs.T)
-                cVecs = orthogonalize(cVecs) 
+                cVecs = math_utils.orthogonalize(cVecs) 
             except:
                 print(cVecs)
                 print("error forming cVec")
@@ -474,12 +476,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        click()
+        nifty.click()
         G = self.GMatrix(xyz)
-        time_G = click()
+        time_G = nifty.click()
         #Gi = np.linalg.inv(G)
         tmpGi = [ np.linalg.inv(g) for g in G.matlist ]
-        time_inv = click()
+        time_inv = nifty.click()
         # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
         return block_matrix(tmpGi)
 

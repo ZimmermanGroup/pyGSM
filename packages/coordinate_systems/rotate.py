@@ -1,11 +1,15 @@
 from __future__ import division
 
+# standard library imports
 import sys
 
+# third party
 import numpy as np
-
 from numpy.linalg import multi_dot
-from nifty import invert_svd, logger
+
+# local application imports
+from utilities import nifty 
+
 
 """
 References
@@ -352,7 +356,7 @@ def get_R_der(x, y):
                 RMinus = build_correlation(x, y)
                 x[u, w] += h
                 FDiffR = (RPlus-RMinus)/(2*h)
-                logger.info(u, w, np.max(np.abs(ADiffR[u, w]-FDiffR)))
+                nifty.logger.info(u, w, np.max(np.abs(ADiffR[u, w]-FDiffR)))
     return ADiffR
 
 def get_F_der(x, y):
@@ -417,7 +421,7 @@ def get_F_der(x, y):
                 FMinus = build_F(x, y)
                 x[u, w] += h
                 FDiffF = (FPlus-FMinus)/(2*h)
-                logger.info(u, w, np.max(np.abs(dF[u, w]-FDiffF)))
+                nifty.logger.info(u, w, np.max(np.abs(dF[u, w]-FDiffF)))
     return dF
 
 def get_q_der(x, y):
@@ -446,7 +450,7 @@ def get_q_der(x, y):
     dF = get_F_der(x, y)
     mat = np.eye(4)*l - F
     # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
-    pinv = invert_svd(np.eye(4)*l - F, thresh=1e-6)
+    pinv = nifty.invert_svd(np.eye(4)*l - F, thresh=1e-6)
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
@@ -464,9 +468,9 @@ def get_q_der(x, y):
                 QMinus = get_quat(x, y)
                 x[u, w] += h
                 FDiffQ = (QPlus-QMinus)/(2*h)
-                logger.info(QPlus, QMinus)
-                logger.info(dq[u, w], FDiffQ)
-                logger.info(u, w, np.dot(QPlus, QMinus), np.max(np.abs(dq[u, w]-FDiffQ)))
+                nifty.logger.info(QPlus, QMinus)
+                nifty.logger.info(dq[u, w], FDiffQ)
+                nifty.logger.info(u, w, np.dot(QPlus, QMinus), np.max(np.abs(dq[u, w]-FDiffQ)))
     return dq
 
 def calc_fac_dfac(q0):
@@ -551,7 +555,7 @@ def get_expmap_der(x,y):
             VMinus = fac*q[1:]
             q[i] += h
             FDiffV = (VZero-VMinus)/h
-            logger.info(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
+            nifty.logger.info(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in q (4)
     dqdx = get_q_der(x, y)
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in v (3)
@@ -571,7 +575,7 @@ def get_expmap_der(x,y):
                 VMinus = get_expmap(x, y)
                 x[u, w] += h
                 FDiffV = (VPlus-VMinus)/(2*h)
-                logger.info(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
+                nifty.logger.info(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
     return dvdx
 
 def main():

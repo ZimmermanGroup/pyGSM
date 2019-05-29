@@ -1,6 +1,6 @@
 import numpy as np
-from internalcoordinates import InternalCoordinates
-from prim_internals import PrimitiveInternalCoordinates
+from internal_coordinates import InternalCoordinates
+from primitive_internals import PrimitiveInternalCoordinates
 from slots import *
 
 class CartesianCoordinates(InternalCoordinates):

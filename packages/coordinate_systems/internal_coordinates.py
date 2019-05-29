@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 
+# standard library imports
 import time
+
+# third party
 from collections import OrderedDict, defaultdict
 import numpy as np
 from numpy.linalg import multi_dot
-import elements
-from nifty import click, commadash, logger,cartesian_product2
-from _math_utils import *
-import options
-from slots import *
 import itertools
 import networkx as nx
 from pkg_resources import parse_version
-from block_matrix import block_matrix as bm
+
+# local application imports
+from slots import *
+from utilities import *
 
 
 ELEMENT_TABLE = elements.ElementData()
@@ -156,7 +157,7 @@ class InternalCoordinates(object):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
         if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
+            nifty.logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -180,16 +181,16 @@ class InternalCoordinates(object):
     def GInverse_SVD(self, xyz):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
-        click()
+        nifty.click()
         loops = 0
         while True:
             try:
                 G = self.GMatrix(xyz)
-                time_G = click()
+                time_G = nifty.click()
                 U, S, VT = np.linalg.svd(G)
-                time_svd = click()
+                time_svd = nifty.click()
             except np.linalg.LinAlgError:
-                logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
+                nifty.logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
                 loops += 1
                 if loops == 10:
@@ -213,11 +214,11 @@ class InternalCoordinates(object):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        click()
+        nifty.click()
         G = self.GMatrix(xyz)
-        time_G = click()
+        time_G = nifty.click()
         Gi = np.linalg.inv(G)
-        time_inv = click()
+        time_inv = nifty.click()
         # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
         return Gi
 
@@ -235,7 +236,7 @@ class InternalCoordinates(object):
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
         for i in range(Analytical.shape[0]):
-            logger.info("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]))
+            nifty.logger.info("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]))
             lines = [""]
             maxerr = 0.0
             for j in range(Analytical.shape[1]):
@@ -250,10 +251,10 @@ class InternalCoordinates(object):
                     if maxerr < np.abs(error):
                         maxerr = np.abs(error)
             if maxerr > 1e-5:
-                logger.info('\n'.join(lines))
+                nifty.logger.info('\n'.join(lines))
             else:
-                logger.info("Max Error = %.5e" % maxerr)
-        logger.info("Finite-difference Finished")
+                nifty.logger.info("Max Error = %.5e" % maxerr)
+        nifty.logger.info("Finite-difference Finished")
 
     def calcGrad(self, xyz, gradx):
         #q0 = self.calculate(xyz)
@@ -299,14 +300,14 @@ class InternalCoordinates(object):
         # Function to exit from loop
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info(" Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: nifty.logger.info(" Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyzsave.reshape((-1,3))
             elif ndqt > 1e-3:
-                if verbose: logger.info(" Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: nifty.logger.info(" Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info(" Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: nifty.logger.info(" Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.reshape((-1,3))
         fail_counter = 0
@@ -316,7 +317,7 @@ class InternalCoordinates(object):
 
             Ginv = self.GInverse(xyz1)
             # Get new Cartesian coordinates
-            dxyz = damp*bm.dot(bm.transpose(Bmat),bm.dot(Ginv,dQ1))
+            dxyz = damp*block_matrix.dot(block_matrix.transpose(Bmat),block_matrix.dot(Ginv,dQ1))
             xyz2 = xyz1 + dxyz.reshape((-1,3))
             if microiter == 1:
                 xyzsave = xyz2.copy()
@@ -327,19 +328,19 @@ class InternalCoordinates(object):
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: logger.info(" Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
+                if verbose: nifty.logger.info(" Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
@@ -403,7 +404,7 @@ class InternalCoordinates(object):
         """
         # can do an assert for xyz here CRA TODO
         if self.natoms > 100000:
-            logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.natoms)
+            nifty.logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.natoms)
 
         bonds = self.build_bonds(xyz)
 
@@ -463,7 +464,7 @@ class InternalCoordinates(object):
             ymax = self.boxes[sn].b
             zmax = self.boxes[sn].c
             if any([i != 90.0 for i in [self.boxes[sn].alpha, self.boxes[sn].beta, self.boxes[sn].gamma]]):
-                logger.warning("Warning: Topology building will not work with broken molecules in nonorthogonal cells.")
+                nifty.logger.warning("Warning: Topology building will not work with broken molecules in nonorthogonal cells.")
                 toppbc = False
         else:
             xmin = mins[0]
@@ -551,7 +552,7 @@ class InternalCoordinates(object):
             AtomIterator = []
             for i in gasn:
                 for j in gngh[i]:
-                    apairs = cartesian_product2([gasn[i], gasn[j]])
+                    apairs = nifty.cartesian_product2([gasn[i], gasn[j]])
                     if len(apairs) > 0: AtomIterator.append(apairs[apairs[:,0]>apairs[:,1]])
             AtomIterator = np.ascontiguousarray(np.vstack(AtomIterator))
         else:
@@ -627,10 +628,10 @@ class InternalCoordinates(object):
    #     phis = []
    #     if 'bonds' in self.Data:
    #         if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
-   #             logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
-   #             logger.warning("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
+   #             nifty.logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
+   #             nifty.logger.warning("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
    #     else:
-   #         logger.warning("This molecule object doesn't have bonds defined, sanity-checking is off.")
+   #         nifty.logger.warning("This molecule object doesn't have bonds defined, sanity-checking is off.")
    #     for s in range(self.ns):
    #         x4 = self.xyzs[s][l]
    #         x3 = self.xyzs[s][k]
@@ -753,4 +754,4 @@ try:
             coors = nx.get_node_attributes(self,'x')
             return np.array([coors[i] for i in self.L()])
 except ImportError:
-    logger.warning("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")
+    nifty.logger.warning("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")

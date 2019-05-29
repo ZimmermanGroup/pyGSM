@@ -1,21 +1,20 @@
 from __future__ import print_function
-from internalcoordinates import InternalCoordinates,AtomContact
-from collections import OrderedDict, defaultdict
-from copy import deepcopy
-import networkx as nx
-from _math_utils import *
-import options
-from slots import *
-from units import *
-from elements import ElementData
-from nifty import pvec1d,cartesian_product2,click
-import itertools
-from scipy.linalg import block_diag
-from block_matrix import block_matrix
-import numpy as np
+
+# standard library imports
 import time
 
+# third party
+import networkx as nx
+from copy import deepcopy
+import numpy as np
 np.set_printoptions(precision=4,suppress=True)
+import itertools
+from collections import OrderedDict, defaultdict
+
+# local application imports
+from internal_coordinates import InternalCoordinates,AtomContact
+from slots import *
+
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
 
@@ -52,9 +51,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         xyz = options['xyz']
 
         # setup
-        click()
+        nifty.click()
         self.makePrimitives(xyz,options)
-        time_build = click()
+        time_build = nifty.click()
         print(" make prim %.3f" % time_build)
 
         #exit()
@@ -296,12 +295,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def GInverse_SVD(self, xyz):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
-        click()
+        nifty.click()
         loops = 0
         while True:
             try:
                 G = self.GMatrix(xyz)
-                time_G = click()
+                time_G = nifty.click()
                 start=0
                 tmpUvecs=[]
                 tmpVvecs=[]
@@ -314,7 +313,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 V = block_matrix(tmpVvecs)
                 UT = block_matrix(tmpUvecs)
                 S = block_matrix(tmpSvecs)
-                time_svd = click()
+                time_svd = nifty.click()
             except np.linalg.LinAlgError:
                 logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
@@ -347,11 +346,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        click()
+        nifty.click()
         G = self.GMatrix(xyz)
-        time_G = click()
+        time_G = nifty.click()
         Gi = np.linalg.inv(G)
-        time_inv = click()
+        time_inv = nifty.click()
         # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
         return Gi
 
