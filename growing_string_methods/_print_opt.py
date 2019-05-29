@@ -1,7 +1,6 @@
 import os 
 import manage_xyz
 
-
 class Print:
                 
     def write_xyz_files(self,iters=0,base='xyzgeom',nconstraints=1):

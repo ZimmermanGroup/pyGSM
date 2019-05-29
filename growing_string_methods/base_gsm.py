@@ -1,26 +1,23 @@
 from __future__ import print_function
-import options
-import numpy as np
-import os
-#import openbabel as ob
-#import pybel as pb
-#from dlc import DLC
-from pes import PES
-from penalty_pes import Penalty_PES
-from avg_pes import Avg_PES
-from copy import deepcopy
-import StringIO
-from _print_opt import *
-from _analyze_string import *
-from units import *
+# standard library imports
 import sys
-import base_optimizer
-import eigenvector_follow
-from dlc_new import DelocalizedInternalCoordinates
-from molecule import Molecule
-import manage_xyz
-from nifty import printcool
-from block_matrix import block_matrix as bm
+import os
+from os import path
+import StringIO
+
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+from wrappers import Molecule
+from coordinate_system import DelocalizedInternalCoordinates
+from _print_opt import Print
+from _analyze_string import Analyze
+
+# is this required?
+#import eigenvector_follow
 
 class Base_Method(object,Print,Analyze):
 
@@ -190,7 +187,7 @@ class Base_Method(object,Print,Analyze):
         #print("*********************************************************************")
         #print("************************** in opt_iters *****************************")
         #print("*********************************************************************")
-        printcool("In opt_iters")
+        nifty.printcool("In opt_iters")
 
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
@@ -297,7 +294,7 @@ class Base_Method(object,Print,Analyze):
             Vecs = self.newic.update_coordinate_basis(ictan0)
 
             constraint = self.newic.constraints
-            prim_constraint = bm.dot(Vecs,constraint)
+            prim_constraint = block_matrix.dot(Vecs,constraint)
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             if dqmaga[n]<0.:
                 raise RuntimeError
@@ -378,7 +375,7 @@ class Base_Method(object,Print,Analyze):
             nbonds=self.nodes[0].num_bonds
 
             constraint = self.nodes[n].constraints
-            prim_constraint = bm.dot(Vecs,constraint)
+            prim_constraint = block_matrix.dot(Vecs,constraint)
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
             #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
@@ -421,7 +418,7 @@ class Base_Method(object,Print,Analyze):
             self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
            
             constraint = self.nodes[nlist[2*n+1]].constraints
-            prim_constraint = bm.dot(Vecs,constraint)
+            prim_constraint = block_matrix.dot(Vecs,constraint)
             dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
             dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
 
@@ -438,7 +435,7 @@ class Base_Method(object,Print,Analyze):
                 raise RuntimeError
 
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
-        printcool("In growth_iters")
+        nifty.printcool("In growth_iters")
 
         for n in range(iters):
             sys.stdout.flush()
@@ -855,10 +852,10 @@ class Base_Method(object,Print,Analyze):
         nicd = self.newic.num_coordinates
         num_ics = self.newic.num_primitives 
 
-        E0 = self.energies[en]/KCAL_MOL_PER_AU
-        Em1 = self.energies[en-1]/KCAL_MOL_PER_AU
+        E0 = self.energies[en]/units.KCAL_MOL_PER_AU
+        Em1 = self.energies[en-1]/units.KCAL_MOL_PER_AU
         if en+1<self.nnodes:
-            Ep1 = self.energies[en+1]/KCAL_MOL_PER_AU
+            Ep1 = self.energies[en+1]/units.KCAL_MOL_PER_AU
         else:
             Ep1 = Em1
 

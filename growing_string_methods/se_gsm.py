@@ -1,13 +1,18 @@
 from __future__ import print_function
-import numpy as np
-import options
-import os
+# standard library imports
 import sys
-from base_gsm import *
-from dlc_new import *
-from pes import *
-from slots import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
-from molecule import Molecule
+import os
+from os import path
+
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+from wrappers import Molecule
+from base_gsm import Base_Method
+from coordinate_system import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
 class SE_GSM(Base_Method):

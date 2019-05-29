@@ -1,13 +1,19 @@
 from __future__ import print_function
-import numpy as np
-import options
-import os
-from se_gsm import SE_GSM
-import pybel as pb
+# standard library imports
 import sys
-from nifty import printcool,pmat2d,pvec1d
-from molecule import Molecule
-from avg_pes import Avg_PES
+import os
+from os import path
+
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+from wrappers import Molecule
+from base_gsm import Base_Method
+from se_gsm import SE_GSM
+from potential_energy_surface import Avg_PES
 
 
 class SE_Cross(SE_GSM):
@@ -18,9 +24,9 @@ class SE_Cross(SE_GSM):
         """
         assert rtype in [0,1], "rtype not defined"
         if rtype==0:
-            printcool("Doing SE-MECI search")
+            nifty.printcool("Doing SE-MECI search")
         else:
-            printcool("Doing SE-MESX search")
+            nifty.printcool("Doing SE-MESX search")
 
         self.nodes[0].gradrms=0.
         self.nodes[0].V0 = self.nodes[0].energy

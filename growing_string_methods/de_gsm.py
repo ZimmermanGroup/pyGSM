@@ -1,21 +1,26 @@
 from __future__ import print_function
-import numpy as np
-import options
-import os
-from base_gsm import *
-from pes import *
-import pybel as pb
+# standard library imports
 import sys
-from block_matrix import block_matrix
+import os
+from os import path
 
-class GSM(Base_Method):
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+from wrappers import Molecule
+from base_gsm import Base_Method
+
+class DE_GSM(Base_Method):
 
     def __init__(
             self,
             options,
             ):
 
-        super(GSM,self).__init__(options)
+        super(DE_GSM,self).__init__(options)
 
         print(" Forming Union of primitive coordinates")
         self.nodes[0].coord_obj = self.nodes[0].coord_obj.union(self.nodes[-1].coord_obj,self.nodes[0].xyz)
@@ -68,7 +73,9 @@ class GSM(Base_Method):
                 self.opt_iters(max_iter=opt_iters,optsteps=opt_steps,rtype=rtype)
         else:
             print("Exiting early")
-        print("Finished GSM!")  
+        print("Finished GSM!") 
+
+        return self.nnodes,self.energies
 
     def interpolate(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
