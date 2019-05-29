@@ -36,9 +36,10 @@ class SE_GSM(Base_Method):
         self.nodes[0].gradrms = 0.
 
     def isomer_init(self):
+        #TODO ANGLE, TORSION or OOP between fragments will not work if using TRIC with BLOCK LA
         changed_top = False
         for i in self.driving_coords:
-            if "ADD" or "BREAK" in i:
+            if "ADD" in i or "BREAK" in i:
                 bond = Distance(i[1]-1,i[2]-1)
                 self.nodes[0].coord_obj.Prims.add(bond,verbose=True)
                 changed_top =True
@@ -54,8 +55,8 @@ class SE_GSM(Base_Method):
         self.nodes[0].coord_obj.Prims.clearCache()
         if changed_top:
             self.nodes[0].coord_obj.Prims.rebuild_topology_from_prim_bonds(self.nodes[0].xyz)
-            self.nodes[0].coord_obj.Prims.reorderPrimitives()
-            self.nodes[0].update_coordinate_basis()
+        self.nodes[0].coord_obj.Prims.reorderPrimitives()
+        self.nodes[0].update_coordinate_basis()
 
     def go_gsm(self,max_iters=50,opt_steps=10,rtype=2):
         """
@@ -111,7 +112,7 @@ class SE_GSM(Base_Method):
         ictan,bdist =  self.tangent(n1,None)
 
         if bdist<BDISTMIN:
-            print("bdist too small")
+            print("bdist too small %.3f" % bdist)
             return 0
         new_node = Molecule.copy_from_options(self.nodes[n1],new_node_id=n2)
         Vecs = new_node.update_coordinate_basis(constraints=ictan)
@@ -137,7 +138,7 @@ class SE_GSM(Base_Method):
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
-        noptsteps=50
+        noptsteps=100
         if rtype==1:
             print(" copying last node, opting")
             #self.nodes[self.nR] = DLC.copy_node(self.nodes[self.nR-1],self.nR)

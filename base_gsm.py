@@ -252,11 +252,11 @@ class Base_Method(object,Print,Analyze):
 
             sum_conv_tol = (self.nn-2)*self.options['CONV_TOL'] + (self.nn-2)*self.options['CONV_TOL']/10
             print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
+            print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
             if not self.climber and not self.finder and sum_gradrms<sum_conv_tol: #Break even if not climb/find
-                print(" convergence criteria is %.3f, current convergence %.3f" % (sum_conv_tol,sum_gradrms))
                 break
             elif not self.climber and not self.finder:
-                print(" convergence criteria is %.3f, current convergence %.3f" % (sum_conv_tol,sum_gradrms))
+                pass
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -567,13 +567,14 @@ class Base_Method(object,Print,Analyze):
         for i in range(newnodes):
             self.nodes[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
 
+            if self.nodes[self.nR]==0:
+                success= False
+                break
+
             if self.__class__.__name__!="GSM":
                 ictan,bdist =  self.tangent(self.nR,None)
                 self.nodes[self.nR].bdist = bdist
 
-            if self.nodes[self.nR]==0:
-                success= False
-                break
             print(" getting energy for node %d: %5.4f" %(self.nR,self.nodes[self.nR].energy - self.nodes[0].V0))
             self.nn+=1
             self.nR+=1
