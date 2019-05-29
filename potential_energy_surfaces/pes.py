@@ -1,8 +1,14 @@
-import options
-import manage_xyz
+# standard library imports
+import sys
+from os import path
+
+# third party
 import numpy as np
-from units import *
-import elements 
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+
 ELEMENT_TABLE = elements.ElementData()
 
 class PES(object):
@@ -76,9 +82,9 @@ class PES(object):
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
-                diff = (xyz[i[0]]- xyz[i[1]])*ANGSTROM_TO_AU
+                diff = (xyz[i[0]]- xyz[i[1]])*units.ANGSTROM_TO_AU
                 d = np.linalg.norm(diff)
-                fdE +=  force*d*KCAL_MOL_PER_AU
+                fdE +=  force*d*units.KCAL_MOL_PER_AU
         return self.lot.get_energy(xyz,self.multiplicity,self.ad_idx) +fdE
 
     #TODO this needs to be fixed
@@ -117,7 +123,7 @@ class PES(object):
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
-                diff = (xyz[i[0]]- xyz[i[1]])*ANGSTROM_TO_AU
+                diff = (xyz[i[0]]- xyz[i[1]])*units.ANGSTROM_TO_AU
                 t = (force/d/2.)  # Hartree/Ang
                 savegrad = np.copy(grad)
                 sign=1
