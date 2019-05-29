@@ -23,7 +23,7 @@ anaconda 2.5.1 or greater\
 openbabel 2.4.1\
 python 2.7\
 numpy\
-scikit-learn
+networkx\
 
 ## Intalling Openbabel 
 1. create a conda environment if necessary

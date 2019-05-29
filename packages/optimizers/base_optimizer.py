@@ -8,6 +8,7 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+from _linesearch import backtrack,NoLineSearch
 
 
 #TODO Add primitive constraint e.g. a list of internal coordinates to be left basically frozen throughout optimization
@@ -45,7 +46,8 @@ class base_optimizer(object):
 
         opt.add_option(
                 key='Linesearch',
-                value=NoLineSearch,
+                value="NoLineSearch",
+                allowed_values=["NoLineSearch","backtrack"],
                 required=False,
                 doc='A function to do a linesearch e.g. bactrack,NoLineSearch, etc.'
                 )
@@ -80,7 +82,11 @@ class base_optimizer(object):
             ):
 
         self.options = options
-        self.Linesearch=self.options['Linesearch']
+        if self.options['Linesearch']=="backtrack":
+            self.Linesearch=backtrack
+        elif self.options['Linesearch']=="NoLineSearch":
+            self.Linesearch=NoLineSearch
+
         
         # additional convergence criterion (default parameters for Q-Chem)
         self.conv_disp = 12e-4 #max atomic displacement
