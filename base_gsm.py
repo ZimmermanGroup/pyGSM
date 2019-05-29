@@ -988,6 +988,103 @@ class Base_Method(object,Print,Analyze):
                """
         print(msg)
 
+    def restart_string(self,xyzbase='restart'):
+        self.growth_direction=0
+        xyzfile=xyzbase+".xyz"
+        with open(xyzfile) as f:
+            nlines = sum(1 for _ in f)
+        #print "number of lines is ", nlines
+        with open(xyzfile) as f:
+            natoms = int(f.readlines()[2])
+
+        #print "number of atoms is ",natoms
+        nstructs = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
+        
+        #print "number of structures in restart file is %i" % nstructs
+        coords=[]
+        grmss = []
+        atomic_symbols=[]
+        dE = []
+        with open(xyzfile) as f:
+            f.readline()
+            f.readline() #header lines
+            # get coords
+            for struct in range(nstructs):
+                tmpcoords=np.zeros((natoms,3))
+                f.readline() #natoms
+                f.readline() #space
+                for a in range(natoms):
+                    line=f.readline()
+                    tmp = line.split()
+                    tmpcoords[a,:] = [float(i) for i in tmp[1:]]
+                    if struct==0:
+                        atomic_symbols.append(tmp[0])
+                coords.append(tmpcoords)
+            ## Get energies
+            #f.readline() # line
+            #f.readline() #energy
+            #for struct in range(nstructs):
+            #    self.energies[struct] = float(f.readline())
+            ## Get grms
+            #f.readline() # max-force
+            #for struct in range(nstructs):
+            #    grmss.append(float(f.readline()))
+            ## Get dE
+            #f.readline()
+            #for struct in range(nstructs):
+            #    dE.append(float(f.readline()))
+
+        # create newic object
+        self.newic  = Molecule.copy_from_options(self.nodes[0])
+
+        # initialize lists
+        self.energies = [0.]*nstructs
+        self.gradrms = [0.]*nstructs
+        self.dE = [1000.]*nstructs
+
+        # initial energy
+        self.nodes[0].V0 = self.nodes[0].energy 
+        #self.nodes[0].gradrms=grmss[0]
+        #self.nodes[0].PES.dE = dE[0]
+        #self.nodes[-1].gradrms=grmss[-1]
+        #self.nodes[-1].PES.dE = dE[-1]
+        self.energies[0] = 0.
+        print(" initial energy is %3.4f" % self.nodes[0].energy)
+
+        for struct in range(1,nstructs):
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],struct)
+            print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
+            self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
+            print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+            #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
+            #self.nodes[struct].gradrms=grmss[struct]
+            #self.nodes[struct].PES.dE = dE[struct]
+            self.nodes[struct].newHess=5
+
+        self.emax = float(max(self.energies[1:-1]))
+        self.TSnode = np.argmax(self.energies)
+
+        self.nnodes=self.nR=nstructs
+        self.isRestarted=True
+        self.done_growing=True
+        self.nodes[self.TSnode].isTSnode=True
+        print(" setting all interior nodes to active")
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2
+            self.optimizer[n].options['DMAX'] = 0.05
+        print(" V_profile: ", end=' ')
+        for n in range(self.nnodes):
+            print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+        print()
+        #print(" grms_profile: ", end=' ')
+        #for n in range(self.nnodes):
+        #    print(" {:7.3f}".format(float(self.nodes[n].gradrms)), end=' ')
+        #print()
+        print(" dE_profile: ", end=' ')
+        for n in range(self.nnodes):
+            print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
+        print()
 
 
 
