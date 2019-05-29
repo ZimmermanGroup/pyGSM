@@ -140,33 +140,77 @@ class PES(object):
 
 if __name__ == '__main__':
 
-    QCHEM=True
-    PYTC=False
+    QCHEM=False
+    PYTC=True
     if QCHEM:
-        from .qchem import *
+        #from .qchem import QChem
+        from level_of_theories import QChem
     elif PYTC:
-        from .pytc import *
+        from level_of_theories import PyTC 
+        import psiw
+        import lightspeed as ls
 
-    #filepath="tests/fluoroethene.xyz"
-    #nocc=11
-    #nactive=2
-    #geom=manage_xyz.read_xyz(filepath,scale=1)   
-    #if QCHEM:
-    #    lot=QChem.from_options(states=[(1,0),(3,0)],charge=0,basis='6-31g(d)',functional='B3LYP')
-    #elif PYTC:
-    #    lot=PyTC.from_options(states=[(1,0),(3,0)],nocc=nocc,nactive=nactive,basis='6-31gs')
-    #    lot.casci_from_file_from_template(x,x,nocc,nocc) # hack to get it to work,need casci1
+    filepath='../../data/ethylene.xyz'
+    geom=manage_xyz.read_xyz(filepath,scale=1)   
+    if QCHEM:
+        lot=QChem.from_options(states=[(1,0),(1,1)],charge=0,basis='6-31g(d)',functional='B3LYP')
+    elif PYTC:
+        ##### => Job Data <= #####
+        states = [(1,0),(1,1)]
+        charge=0
+        nocc=7
+        nactive=2
+        basis='6-31gs'
 
-    #pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
-    #print pes.get_energy(geom)
-    #print pes.get_gradient(geom)
+        #### => PSIW Obj <= ######
+        nifty.printcool("Build resources")
+        resources = ls.ResourceList.build()
+        nifty.printcool('{}'.format(resources))
+        
+        molecule = ls.Molecule.from_xyz_file(filepath)
+        geom = psiw.geometry.Geometry.build(
+            resources=resources,
+            molecule=molecule,
+            basisname=basis,
+            )
+        nifty.printcool('{}'.format(geom))
+        
+        ref = psiw.RHF.from_options(
+             geometry= geom, 
+             g_convergence=1.0E-6,
+             fomo=True,
+             fomo_method='gaussian',
+             fomo_temp=0.3,
+             fomo_nocc=nocc,
+             fomo_nact=nactive,
+             print_level=1,
+            )
+        ref.compute_energy()
+        casci = psiw.CASCI.from_options(
+            reference=ref,
+            nocc=nocc,
+            nact=nactive,
+            nalpha=nactive/2,
+            nbeta=nactive/2,
+            S_inds=[0],
+            S_nstates=[2],
+            print_level=1,
+            )
+        casci.compute_energy()
+        psiw = psiw.CASCI_LOT.from_options(
+            casci=casci,
+            rhf_guess=True,
+            rhf_mom=True,
+            orbital_coincidence='core',
+            state_coincidence='full',
+            )
 
-    filepath="firstnode.pdb"
-    #geom=manage_xyz.read_xyz(filepath,scale=1)   
+        nifty.printcool("Build the pyGSM Level of Theory object (LOT)")
+        lot=PyTC.from_options(states=[(1,0),(1,1)],job_data={'psiw':psiw},do_coupling=False,fnm=filepath) 
 
-    #lot=QChem.from_options(states=[(2,0)],charge=1,basis='6-31g(d)',functional='B3LYP')
-    lot = QChem.from_options(states=[(2,0)],lot_inp_file='qstart',nproc=4)
-    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=2)
-    print(pes.get_energy(geom))
-    print(pes.get_gradient(geom))
-    #ic = Hybrid_DLC(mol=mol,pes=pes,IC_region=["UNL"])
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    geom=manage_xyz.read_xyz(filepath,scale=1)   
+    coords= manage_xyz.xyz_to_np(geom)
+    print pes.get_energy(coords)
+    print pes.get_gradient(coords)
+
