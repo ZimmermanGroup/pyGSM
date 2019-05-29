@@ -1,9 +1,16 @@
-from base_lot import * 
-import numpy as np
-import manage_xyz as mx
-from units import *
+# standard library imports
+import sys
 import os
+from os import path
 import re
+
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from base_lot import Lot
+from utilities import *
 
 class Molpro(Lot):
 
@@ -152,7 +159,7 @@ class Molpro(Lot):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*KCAL_MOL_PER_AU
+        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
 
     def get_gradient(self,coords,multiplicity,state):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
@@ -160,14 +167,14 @@ class Molpro(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        return np.asarray(tmp)*ANGSTROM_TO_AU
+        return np.asarray(tmp)*units.ANGSTROM_TO_AU
 
     def get_coupling(self,coords,multiplicity,state1,state2):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
+        return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
 
     #TODO molpro requires extra things when copying. . . can this be done in the base_lot? 
     # e.g. if cls=="Molpro": #do molpro stuff?

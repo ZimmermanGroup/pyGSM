@@ -1,9 +1,16 @@
-from base_lot import *
-import numpy as np
+# standard library imports
+import sys
 import os
-from units import *
+from os import path
 
-#TODO get rid of get_energy
+# third party
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from base_lot import Lot
+from utilities import *
+
 class QChem(Lot):
     
     def run(self,geom,multiplicity):
@@ -98,7 +105,7 @@ class QChem(Lot):
             self.runall(geom)
             self.hasRanForCurrentCoords=True
         tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
+        return np.asarray(tmp[state][1])*units.KCAL_MOL_PER_AU
 
     def get_gradient(self,coords,multiplicity,state):
         #if self.has_nelectrons==False:
@@ -110,7 +117,7 @@ class QChem(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU
 
     @classmethod
     def copy(cls,lot,**kwargs):

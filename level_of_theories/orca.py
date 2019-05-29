@@ -1,7 +1,15 @@
-from base_lot import *
-import numpy as np
+# standard library imports
+import sys
 import os
-from units import *
+from os import path
+
+# third party 
+import numpy as np
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from base_lot import Lot
+from utilities import *
 
 class Orca(Lot):
     
@@ -93,7 +101,7 @@ class Orca(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*KCAL_MOL_PER_AU
+        return np.asarray(tmp[state][1])*units.KCAL_MOL_PER_AU
 
     def get_gradient(self,coords,multiplicity,state):
         #if self.has_nelectrons==False:

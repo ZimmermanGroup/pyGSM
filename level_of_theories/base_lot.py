@@ -1,12 +1,18 @@
-import options
-import manage_xyz
-import numpy as np
-from units import *
-import elements 
+# standard library imports
 import os
+
+# third party 
+import numpy as np
+
+# local application imports
+from utilities import *
+
 ELEMENT_TABLE = elements.ElementData()
 
 #TODO take out all job-specific data -- encourage external files since those are most customizable
+#TODO fix tuple searches
+
+
 class Lot(object):
     """ Lot object for level of theory calculators """
 

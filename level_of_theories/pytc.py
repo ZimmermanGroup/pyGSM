@@ -1,13 +1,17 @@
-import lightspeed as ls
-#import psiw
-from base_lot import Lot 
+# standard library imports
+import sys
+from os import path
+
+# third party 
 import numpy as np
-import manage_xyz
-from units import *
+import lightspeed as ls
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from base_lot import Lot
+from utilities import *
 from rhf_lot import RHF_LOT
 from casci_lot_svd import CASCI_LOT_SVD
-import sys
-from nifty import custom_redirection
 
 #TODO get rid of get_energy, get_gradient
 class PyTC(Lot):
@@ -30,12 +34,12 @@ class PyTC(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         tmp = self.search_tuple(self.E,multiplicity)
-        return tmp[state][1]*KCAL_MOL_PER_AU
+        return tmp[state][1]*units.KCAL_MOL_PER_AU
 
     def get_mm_energy(self,coords):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
-            self.psiw.update_qmmm(coords*ANGSTROM_TO_AU)
+            self.psiw.update_qmmm(coords*units.ANGSTROM_TO_AU)
         if self.psiw.__class__.__name__=="CASCI_LOT" or self.psiw.__class__.__name__=="CASCI_LOT_SVD":
             return self.psiw.casci.ref.geometry.qmmm.mm_energy
         else:
@@ -45,7 +49,7 @@ class PyTC(Lot):
         #TODO need diff variable for hasRan MM energy
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
-            self.psiw.update_qmmm(coords*ANGSTROM_TO_AU)
+            self.psiw.update_qmmm(coords*units.ANGSTROM_TO_AU)
         if self.psiw.__class__.__name__=="CASCI_LOT" or self.psiw.__class__.__name__=="CASCI_LOT_SVD":
             return self.psiw.casci.ref.geometry.qmmm.mm_gradient
         else:
@@ -75,11 +79,11 @@ class PyTC(Lot):
         self.grada=[]
         #normal update
         coords = manage_xyz.xyz_to_np(geom)
-        T = ls.Tensor.array(coords*ANGSTROM_TO_AU)
+        T = ls.Tensor.array(coords*units.ANGSTROM_TO_AU)
 
         if not verbose:
             with open('psiw_jobs.txt','a') as out:
-                with custom_redirection(out):
+                with nifty.custom_redirection(out):
                     self.run_code(T)
         else:
             self.run_code(T)
@@ -95,12 +99,12 @@ class PyTC(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*ANGSTROM_TO_AU
+        return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU
 
     def get_coupling(self,coords,multiplicity,state1,state2):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
-        return np.reshape(self.coup,(3*len(self.coup),1))*ANGSTROM_TO_AU
+        return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
 
