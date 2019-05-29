@@ -303,30 +303,55 @@ class base_optimizer(object):
             self.options['DMAX']=self.DMIN
         print(" DMAX %1.2f" % self.options['DMAX'])
 
-    def eigenvector_step(self,molecule,g,nconstraints):
+    def eigenvector_step(self,molecule,g):
 
         SCALE =self.options['SCALEQN']
         if molecule.newHess>0: SCALE = self.options['SCALEQN']*molecule.newHess
         if self.options['SCALEQN']>10.0: SCALE=10.0
-        
-        # convert to eigenvector basis
-        temph = molecule.Hessian[nconstraints:,nconstraints:].copy()
-        e,v_temp = np.linalg.eigh(temph)
-        gqe = np.dot(v_temp.T,g[nconstraints:])
 
+        if self.options['print_level']>1:
+            print("new_hess %i" % molecule.newHess)
+
+        new_rows = []
+        if self.options['print_level']>1:
+            print("constraints")
+            print(molecule.constraints.T)
+
+        P =np.eye(len(molecule.constraints),dtype=float) -  np.outer(molecule.constraints,molecule.constraints.T)
+        self.Hessian = np.dot(np.dot(P,molecule.Hessian),P)
+
+        e,v_temp = np.linalg.eigh(self.Hessian)
+        gqe = np.dot(v_temp.T,g)
         lambda1 = self.set_lambda1('NOT-TS',e) 
+
+        if self.options['print_level']>1:
+            print(" eigenvalues ",e)
+        if self.options['print_level']>1:
+            print(" eigenvectors ",v_temp)
+
+        if self.options['print_level']>1:
+            print(" g ",g.T)
+
+        if self.options['print_level']>1:
+            print(" gqe ",gqe.T)
 
         dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
         dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
+        dqe0 = np.asarray(dqe0)
         
         # => Convert step back to DLC basis <= #
-        dq_tmp = np.dot(v_temp,dqe0)
-        dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
-        dq = np.zeros_like(g)
+        dq = np.dot(v_temp,dqe0)
+        #TODO THIS CAN BE MADE MORE EFFICIENT
+        dq = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq ]
+        dq = np.asarray(dq)
 
-        for i in range(len(dq_tmp)): dq[nconstraints+i] = dq_tmp[i]
-        
-        return dq
+        print("check overlap")
+        dq = np.reshape(dq,(-1,1))
+        dq = dq - np.dot(molecule.constraints.T,dq)*molecule.constraints
+        print(np.dot(dq.T,molecule.constraints))
+        if self.options['print_level']>1:
+            print(" dq ",dq.T)
+        return np.reshape(dq,(-1,1))
 
     # need to modify this only for the DLC region
     def TS_eigenvector_step(self,molecule,g,ictan):
@@ -412,16 +437,16 @@ class base_optimizer(object):
             molecule.update_Primitive_Hessian(change=change)
             if self.options['print_level']>1:
                 print("change")
-                pmat2d(change,4,format='f')
+                print(change)
                 print(" updated primitive internals Hessian")
-                pmat2d(molecule.Primitive_Hessian,4,format='f')
+                print(molecule.Primitive_Hessian)
             if mode=='BFGS':
                 molecule.form_Hessian_in_basis()
             if mode=='BOFILL':
                 change=self.update_bofill(molecule)
                 molecule.update_Hessian(change)
-        else:
-            self.Hessian += change
+        #else:
+        #    self.Hessian += change
         molecule.newHess-=1
 
         return change
@@ -435,6 +460,9 @@ class base_optimizer(object):
     def update_bfgsp(self,molecule):
         if self.options['print_level']>1:
             print("In update bfgsp")
+            print('dx_prim ',self.dx_prim.T)
+            print('dg_prim ',self.dg_prim.T)
+
         Hdx = np.dot(molecule.Primitive_Hessian, self.dx_prim)
         dxHdx = np.dot(np.transpose(self.dx_prim),Hdx)
         dgdg = np.outer(self.dg_prim,self.dg_prim)

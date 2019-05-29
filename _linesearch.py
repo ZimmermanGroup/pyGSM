@@ -1,7 +1,7 @@
 import numpy as np 
 
 def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
-    
+   
     x = x + d * step  + constraint_step  # 
     xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
@@ -9,16 +9,21 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     fx = molecule.PES.get_energy(xyz)
     gx = molecule.PES.get_gradient(xyz)
     g = molecule.coord_obj.calcGrad(xyz,gx)
+
     #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
-def backtrack(nconstraints, x, fx, gc, d, step, xp, gp,constraint_step, parameters,molecule):
+def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
 
     # n is the non-constrained
     count = 0
     dec = 0.5
     inc = 2.1
+
+    # project out the constraint
+    gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+
     result = {'status':0,'fx':fx,'step':step,'x':x, 'g':gc}
 
     # Compute the initial gradient in the search direction.
