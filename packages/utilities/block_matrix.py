@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import block_diag
 from nifty import printcool,pvec1d
 import sys
-from _math_utils import orthogonalize
+from math_utils import orthogonalize
 
 
 class block_matrix(object):

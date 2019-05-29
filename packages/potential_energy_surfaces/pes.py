@@ -141,20 +141,20 @@ class PES(object):
 
 if __name__ == '__main__':
 
-    QCHEM=False
-    PYTC=True
+    QCHEM=True
+    PYTC=False
     if QCHEM:
         #from .qchem import QChem
-        from level_of_theories import QChem
+        from level_of_theories.qchem import QChem
     elif PYTC:
-        from level_of_theories import PyTC 
+        from level_of_theories.pytc import PyTC 
         import psiw
         import lightspeed as ls
 
     filepath='../../data/ethylene.xyz'
     geom=manage_xyz.read_xyz(filepath,scale=1)   
     if QCHEM:
-        lot=QChem.from_options(states=[(1,0),(1,1)],charge=0,basis='6-31g(d)',functional='B3LYP')
+        lot=QChem.from_options(states=[(1,0),(1,1)],charge=0,basis='6-31g(d)',functional='B3LYP',fnm=filepath)
     elif PYTC:
         ##### => Job Data <= #####
         states = [(1,0),(1,1)]

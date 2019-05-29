@@ -2,11 +2,13 @@
 import sys
 import os
 from os import path
+import importlib
+
+# third party
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
-from level_of_theories import *
 from potential_energy_surfaces import PES
 from potential_energy_surfaces import Avg_PES
 from potential_energy_surfaces import Penalty_PES
@@ -225,7 +227,9 @@ class GSM(object):
 
         #LOT
         nifty.printcool("Build the pyGSM level of theory (LOT) object")
-        lot_class = getattr(sys.modules[__name__], options['EST_Package'])
+        est_package=importlib.import_module("level_of_theories."+options['EST_Package'].lower())
+        lot_class = getattr(est_package,options['EST_Package'])
+
         geom = manage_xyz.read_xyz(self.options['xyzfile1'])
         lot = lot_class.from_options(
                 states=self.options['states'],

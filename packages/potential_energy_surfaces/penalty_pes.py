@@ -69,7 +69,7 @@ class Penalty_PES(PES):
 
 if __name__ == '__main__':
 
-    from level_of_theories import PyTC 
+    from level_of_theories.pytc import PyTC 
     import psiw
     import lightspeed as ls
 
