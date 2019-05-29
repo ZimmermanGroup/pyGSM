@@ -2,10 +2,11 @@ from __future__ import print_function
 import numpy as np
 import options
 import os
+import sys
 from base_gsm import *
 from dlc_new import *
 from pes import *
-from slots import Distance,Angle,Dihedral,OutOfPlane
+from slots import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from molecule import Molecule
 
 
@@ -296,12 +297,57 @@ class SE_GSM(Base_Method):
                     if self.print_level>0:
                         print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
 
+                trans = ['TranslationX', 'TranslationY', 'TranslationZ']
+                if any(elem in trans for elem in i):
+                    fragid = i[1]
+                    destination = i[2]
+                    indices = self.nodes[n1].get_frag_atomic_index(fragid)
+                    atoms=range(indices[0]-1,indices[1])
+                    #print('indices of frag %i is %s' % (fragid,indices))
+                    T_class = getattr(sys.modules[__name__], i[0])
+                    translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(translation)
+                    trans_curr = translation.value(xyz)
+                    trans_diff = destination-trans_curr
+                    ictan[prim_idx] = -trans_diff
+                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if self.print_level>0:
+                        print((" current trans: %4.3f align to %4.3f diff: %4.3f" %(trans_curr,destination,trans_diff)))
+
+                #TODO
+                rots = ['RotationA','RotationB','RotationC']
+                if any(elem in rots for elem in i):
+                    fragid = i[1]
+                    rot_angle = i[2]
+                    indices = self.nodes[n1].get_frag_atomic_index(fragid)
+                    atoms=range(indices[0]-1,indices[1])
+                    R_class = getattr(sys.modules[__name__], i[0])
+                    coords = self.nodes[n1].xyz
+                    sel = coords.reshape(-1,3)[atoms,:]
+                    sel -= np.mean(sel,axis=0)
+                    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+                    rotation = R_class(atoms,coords,self.nodes[n1].coord_obj.Prims.Rotators,w=rg)
+                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(rotation)
+                    rot_curr = rotation.value(xyz)
+                    rot_diff = rot_angle-rot_curr
+                    #print('rot_diff before periodic %.3f' % rot_diff)
+                    #if rot_diff > 2*np.pi:
+                    #    rot_diff -= 2*np.pi
+                    #elif rot_diff< -2*np.pi:
+                    #    rot_diff += 2*np.pi
+
+                    ictan[prim_idx] = -rot_diff
+                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if self.print_level>0:
+                        print((" current rot: %4.3f align to %4.3f diff: %4.3f" %(rot_curr,rot_angle,rot_diff)))
+
             bdist = np.sqrt(bdist)
             if np.all(ictan==0.0):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
         else:
             print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+            assert self.nodes[n2]!=None,'node n2 is None'
             Q1 = self.nodes[n1].primitive_internal_values 
             Q2 = self.nodes[n2].primitive_internal_values 
             PMDiff = Q2-Q1

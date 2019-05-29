@@ -490,3 +490,9 @@ class Molecule(object):
     def num_coordinates(self):
         return len(self.coordinates)
 
+    @property
+    def frag_atomic_indices(self):
+        return self.coord_obj.Prims.frag_atomic_indices
+
+    def get_frag_atomic_index(self,fragid):
+        return self.frag_atomic_indices[fragid]

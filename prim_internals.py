@@ -607,6 +607,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             for frag in frags:
                 natoms_frag += len(frag)
             self.natoms_frag=[natoms_frag]
+            self.frag_atomic_indices=[(1,len(frag))]
 
     def reorderPrimsByFrag(self):
         # these are the subgraphs
@@ -614,15 +615,20 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims = []
         self.nprims_frag=[]
         self.natoms_frag=[]
+        self.frag_atomic_indices=[]
+        start_atomidx=1
         for frag in frags:
-            count=0
+            nprims=0
+            end_atomidx=start_atomidx+len(frag)-1
             self.natoms_frag.append(len(frag))
+            self.frag_atomic_indices.append((start_atomidx,end_atomidx))
             for p in self.Internals:
                 atoms = p.atoms
                 if all([atom in frag for atom in atoms]):
                     newPrims.append(p)
-                    count+=1
-            self.nprims_frag.append(count)
+                    nprims+=1
+            self.nprims_frag.append(nprims)
+            start_atomidx=end_atomidx+1
 
         if len(newPrims) != len(self.Internals):
             print(np.setdiff1d(self.Internals,newPrims))
