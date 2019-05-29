@@ -180,7 +180,7 @@ class Molpro(Lot):
     # e.g. if cls=="Molpro": #do molpro stuff?
     @classmethod
     def copy(cls,lot,options):
-         """ create a copy of this lot object"""
+        """ create a copy of this lot object"""
         #print(" creating copy, new node id =",node_id)
         #print(" old node id = ",self.node_id)
         if node_id != self.node_id:
@@ -189,3 +189,10 @@ class Molpro(Lot):
             os.system(cmd)
         return cls(lot.options.copy().set_values(options))
 
+if __name__=='__main__':
+    filepath="../../data/ethylene.xyz"
+    molpro = Molpro.from_options(states=[(1,0)],fnm=filepath,lot_inp_file='../../data/ethylene_molpro.com')
+    geom=manage_xyz.read_xyz(filepath)
+    xyz = manage_xyz.xyz_to_np(geom)
+    print molpro.get_energy(xyz,1,0)
+    print molpro.get_gradient(xyz,1,0)

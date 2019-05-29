@@ -108,3 +108,69 @@ class PyTC(Lot):
             self.run(geom)
         return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
 
+
+if __name__=="__main__":
+    import psiw
+    from utilities import nifty
+
+    ##### => Job Data <= #####
+    states = [(1,0),(1,1)]
+    charge=0
+    nocc=7
+    nactive=2
+    basis='6-31gs'
+    filepath='../../data/ethylene.xyz'
+
+    #### => PSIW Obj <= ######
+    nifty.printcool("Build resources")
+    resources = ls.ResourceList.build()
+    nifty.printcool('{}'.format(resources))
+    
+    molecule = ls.Molecule.from_xyz_file(filepath)
+    geom = psiw.geometry.Geometry.build(
+        resources=resources,
+        molecule=molecule,
+        basisname=basis,
+        )
+    nifty.printcool('{}'.format(geom))
+    
+    ref = psiw.RHF.from_options(
+         geometry= geom, 
+         g_convergence=1.0E-6,
+         fomo=True,
+         fomo_method='gaussian',
+         fomo_temp=0.3,
+         fomo_nocc=nocc,
+         fomo_nact=nactive,
+         print_level=1,
+        )
+    ref.compute_energy()
+    casci = psiw.CASCI.from_options(
+        reference=ref,
+        nocc=nocc,
+        nact=nactive,
+        nalpha=nactive/2,
+        nbeta=nactive/2,
+        S_inds=[0],
+        S_nstates=[2],
+        print_level=1,
+        )
+    casci.compute_energy()
+    psiw = psiw.CASCI_LOT.from_options(
+        casci=casci,
+        rhf_guess=True,
+        rhf_mom=True,
+        orbital_coincidence='core',
+        state_coincidence='full',
+        )
+
+    nifty.printcool("Build the pyGSM Level of Theory object (LOT)")
+    lot=PyTC.from_options(states=[(1,0),(1,1)],job_data={'psiw':psiw},do_coupling=False,fnm=filepath) 
+
+    geoms = manage_xyz.read_xyz(filepath,scale=1.)
+    coords= manage_xyz.xyz_to_np(geoms)
+    e=lot.get_energy(coords,1,0)
+    print(e)
+
+    g=lot.get_gradient(coords,1,0)
+    print(g)

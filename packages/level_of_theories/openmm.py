@@ -65,8 +65,8 @@ class OpenMM(Lot):
 if __name__=="__main__":
     import pybel as pb
     # Create and initialize System object from prmtop/inpcrd
-    prmtopfile='../data/solvated.prmtop'
-    inpcrdfile='../data/solvated.rst7'
+    prmtopfile='../../data/solvated.prmtop'
+    inpcrdfile='../../data/solvated.rst7'
     prmtop = openmm_app.AmberPrmtopFile(prmtopfile)
     inpcrd = openmm_app.AmberInpcrdFile(inpcrdfile)
     system = prmtop.createSystem(

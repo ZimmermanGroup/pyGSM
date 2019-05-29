@@ -46,6 +46,9 @@ from collections import OrderedDict, defaultdict
 import pybel as pb
 import openbabel as ob
 
+#local 
+from . import elements
+
 
 from contextlib import contextmanager
 import io
@@ -1505,7 +1508,6 @@ def concurrent_map(func, data):
 
 
 # ob utils
-import elements
 ELEMENT_TABLE = elements.ElementData()
 def getAllCoords(mol):
     natoms = mol.OBMol.NumAtoms()

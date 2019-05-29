@@ -3,6 +3,7 @@ import sys
 import os
 from os import path
 import subprocess
+import re
 
 # third party 
 import numpy as np
@@ -87,8 +88,8 @@ class DFTB(Lot):
         return np.asarray(tmp)*units.ANGSTROM_TO_AU
 
 if __name__=='__main__':
-    filepath="ipynb_demos/data/ethylene.xyz"
-    dftb = DFTB.from_options(states=[(1,0)],fnm=filepath,lot_inp_file='scratch/dftb_in.hsd')
+    filepath="../../data/ethylene.xyz"
+    dftb = DFTB.from_options(states=[(1,0)],fnm=filepath,lot_inp_file='../../data/dftb_in.hsd')
     geom=manage_xyz.read_xyz(filepath)
     xyz = manage_xyz.xyz_to_np(geom)
     print dftb.get_energy(xyz,1,0)
