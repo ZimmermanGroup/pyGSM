@@ -1,15 +1,16 @@
+# standard library imports
+import sys
+from os import path
+
+# third party
 import numpy as np
-import manage_xyz
-from units import *
-from _linesearch import backtrack,NoLineSearch
-from cartesian import CartesianCoordinates
-import options
-from nifty import pmat2d,pvec1d
-from block_matrix import block_matrix as bm
-from scipy.linalg import block_diag
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from utilities import *
+
 
 #TODO Add primitive constraint e.g. a list of internal coordinates to be left basically frozen throughout optimization
-
 class base_optimizer(object):
     ''' some common functions that the children can use (ef, cg, hybrid ef/cg, etc). 
     e.g. walk_up, dgrad_step, what else?
@@ -226,7 +227,7 @@ class base_optimizer(object):
             print(" norm_dg is %1.4f" % norm_dg)
             print(" dE is %1.4f" % molecule.difference_energy)
 
-        dq = -molecule.difference_energy/KCAL_MOL_PER_AU/norm_dg 
+        dq = -molecule.difference_energy/units.KCAL_MOL_PER_AU/norm_dg 
         if dq<-0.075:
             dq=-0.075
 

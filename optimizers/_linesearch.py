@@ -93,3 +93,103 @@ def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameter
         step = step * width
 
 
+def golden_section(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+
+    z = (1 + np.sqrt(5))/2
+    x1 = x.copy()
+    x4 = x + d*step
+    x2 = x4 - (x4-x1)/z
+    x3 = x1 + (x4-x1)/z
+
+    f1 = molecule.PES.get_energy(x1)
+    f2 = molecule.PES.get_energy(x2)
+    f3 = molecule.PES.get_energy(x3)
+    f4 = molecule.PES.get_energy(x4)
+
+    #check that a min exists
+    min_exists=False
+    if f2>f1 and f2>f4 and f3>f1 and f3>f4:
+        min_exists=True
+    
+    if not min_exists:
+        print(" no minimum exists")
+        return {'status':1,'fx':f1,'step':step*0.,'x':x1, 'g':g}
+
+    accuracy = 1.0e-3
+    count=0
+    while x4-x1>accuracy:
+        if f2<f3:
+            x4,f4 = x3,f3
+            x3,f3 = x2,f2
+            x2 = x4-(x4-x1)/z
+            f2 = molecule.PES.get_energy(x2)
+        else:
+            x1,f1 = x2,f2
+            x2,f2 = x3,f3
+            x3 = x1 + (x4-x1)/z
+            f3 = molecule.PES.get_energy(x3)
+
+        count+=1
+        if count>10:
+            break
+
+    x = 0.5*(x1+x4)
+    fx = molecule.PES.get_energy(x)
+    g = molecule.PES.get_gradient(x)
+    step = x - x1
+    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+    
+    return
+
+def secant_method(nconstraints, x, fx, gc, d, step, xp, gp,constraint_step, parameters,molecule):
+    raise NotImplementedError
+
+def steepest_ascent(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+    '''
+    along the direction d
+    x_new = x + step*d
+
+    find the step that maximizes f(x)
+    such that f'(x_new) normal to d is zero.
+    np.dot(d.T,g_new) = 0
+
+
+    x_new = x + gamma*g(x)
+
+    gamma = abs( np.dot(dx.T,df))/abs(
+    '''
+
+    while True:
+
+        # the gradient orthogonal to d
+        gc = g - np.dot(g.T,d)*d
+        step = np.linalg.norm(gc)
+
+        # store 
+        xp = x.copy()
+        gp = g.copy()
+        fxp = fx
+       
+        ls = backtrack(0, x, fx, gc, d, step, xp, gp,constraint_steps,parameters,molecule)
+
+        # get values from linesearch
+        p_step = step
+        step = ls['step']
+        x = ls['x']
+        fx = ls['fx']
+        g  = ls['g']
+
+        #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
+        x = x + d * step
+        #xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
+        xyz = moleule.update_xyz(x-xp)
+
+        # check for convergence TODO
+        gradrms = np.sqrt(np.dot(g.T,g)/n)
+        if gradrms < self.conv_grms:
+            break
+
+    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':gc}
+
+
+

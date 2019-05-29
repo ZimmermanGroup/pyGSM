@@ -1,18 +1,21 @@
 from __future__ import print_function
-import numpy as np
-import manage_xyz
-from units import *
-from _linesearch import backtrack,NoLineSearch
-from cartesian import CartesianCoordinates
-from base_optimizer import base_optimizer
-from nifty import pmat2d,pvec1d
-from block_matrix import block_matrix as bm
-from sys import exit
 
+# standard library imports
+import sys
+from os import path
 try:
     from io import StringIO
 except:
     from StringIO import StringIO
+
+# third party
+import numpy as np
+
+# local application imports
+from _linesearch import backtrack,NoLineSearch
+from base_optimizer import base_optimizer
+from utilities import *
+
 
 class eigenvector_follow(base_optimizer):
 
@@ -134,8 +137,8 @@ class eigenvector_follow(base_optimizer):
             scaled_dq = dq*step
             dEtemp = np.dot(self.Hessian,scaled_dq)
             dEpre = np.dot(np.transpose(scaled_dq),gp) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq)
-            dEpre *=KCAL_MOL_PER_AU
-            dEpre += np.dot(gp.T,constraint_steps)*KCAL_MOL_PER_AU  #linear approximation
+            dEpre *=units.KCAL_MOL_PER_AU
+            dEpre += np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  #linear approximation
 
             # control step size 
             dEstep = fx - fxp
@@ -145,8 +148,8 @@ class eigenvector_follow(base_optimizer):
             self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
             # report the progress 
             #TODO make these lists and check last element for convergene
-            self.disp = np.max(x - xp)/ANGSTROM_TO_AU
-            self.Ediff = (fx -fxp) / KCAL_MOL_PER_AU
+            self.disp = np.max(x - xp)/units.ANGSTROM_TO_AU
+            self.Ediff = (fx -fxp) / units.KCAL_MOL_PER_AU
             xnorm = np.sqrt(np.dot(x.T, x))
             gnorm = np.sqrt(np.dot(g.T, g)) 
             if xnorm < 1.0:
@@ -161,14 +164,14 @@ class eigenvector_follow(base_optimizer):
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 # only form g_prim for non-constrained 
                 #self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
-                self.g_prim = bm.dot(molecule.coord_basis,gc)
+                self.g_prim = block_matrix.dot(molecule.coord_basis,gc)
                 self.dx = x-xp
                 self.dg = g - gp
 
                 self.dx_prim_actual = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
                 self.dx_prim_actual = np.reshape(self.dx_prim_actual,(-1,1))
                 #self.dx_prim = np.dot(molecule.coord_basis[:,nconstraints:],scaled_dq[nconstraints:]) 
-                self.dx_prim = bm.dot(molecule.coord_basis,scaled_dq)
+                self.dx_prim = block_matrix.dot(molecule.coord_basis,scaled_dq)
                 self.dg_prim = self.g_prim - gp_prim
 
             else:

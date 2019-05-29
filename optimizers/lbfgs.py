@@ -1,17 +1,21 @@
 from __future__ import print_function
-import numpy as np
-import manage_xyz
-from scipy.optimize.lbfgsb import LbfgsInvHessProduct
-from base_optimizer import base_optimizer
-from nifty import pmat2d,pvec1d
-from units import *
-from block_matrix import block_matrix as bm
-from sys import exit
 
+# standard library imports
+import sys
+from os import path
 try:
     from io import StringIO
 except:
     from StringIO import StringIO
+
+# third party
+import numpy as np
+from scipy.optimize.lbfgsb import LbfgsInvHessProduct
+
+# local application imports
+from _linesearch import backtrack,NoLineSearch
+from base_optimizer import base_optimizer
+from utilities import *
 
 class iterationData:
     """docstring for iterationData"""
@@ -68,7 +72,7 @@ class lbfgs(base_optimizer):
         # project out the constraint
         gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
-        g_prim = bm.dot(molecule.coord_basis,gc)
+        g_prim = block_matrix.dot(molecule.coord_basis,gc)
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
 
         if molecule.gradrms < self.conv_grms:
@@ -111,7 +115,7 @@ class lbfgs(base_optimizer):
             self.k = self.k + 1
 
             # form in DLC basis (does nothing if cartesian)
-            d = bm.dot(bm.transpose(molecule.coord_basis),d_prim)
+            d = block_matrix.dot(block_matrix.transpose(molecule.coord_basis),d_prim)
 
             # normalize the direction
             actual_step = np.linalg.norm(d)
@@ -127,7 +131,7 @@ class lbfgs(base_optimizer):
             xp = x.copy()
             self.xyzp = xyz.copy()
             gp = gc.copy()
-            self.gp_prim = bm.dot(molecule.coord_basis,gp)
+            self.gp_prim = block_matrix.dot(molecule.coord_basis,gp)
             fxp = fx
 
             # => calculate constraint step <= #
@@ -151,12 +155,13 @@ class lbfgs(base_optimizer):
             fx = ls['fx']
             g  = ls['g']
             gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-            g_prim = bm.dot(molecule.coord_basis,gc)
+            g_prim = block_matrix.dot(molecule.coord_basis,gc)
             dEstep = fx - fxp
             print(" dEstep=%5.4f" %dEstep)
             dE = molecule.difference_energy
             if dE is not 1000.:
                 print(" difference energy is %5.4f" % dE)
+            molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)
@@ -170,9 +175,11 @@ class lbfgs(base_optimizer):
             self.buf.write(u' Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
 
             # check for convergence TODO
-            molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
             if molecule.gradrms < self.conv_grms:
                 print(" Converged! gradrms: %.4f" % molecule.gradrms) 
+                if ostep % xyzframerate!=0:
+                    geoms.append(molecule.geometry)
+                    energies.append(molecule.energy-refE)
                 break
 
             #print " ########## DONE WITH TOTAL STEP #########"

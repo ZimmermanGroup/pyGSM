@@ -1,16 +1,20 @@
 from __future__ import print_function
-import numpy as np
-import manage_xyz
-from units import *
-from _linesearch import backtrack,NoLineSearch
-from base_optimizer import base_optimizer
-from nifty import pmat2d,pvec1d
 
+# standard library imports
+import sys
+from os import path
 try:
     from io import StringIO
 except:
     from StringIO import StringIO
 
+# third party
+import numpy as np
+
+# local application imports
+from _linesearch import backtrack,NoLineSearch
+from base_optimizer import base_optimizer
+from utilities import *
 
 class conjugate_gradient(base_optimizer):
 
@@ -140,10 +144,10 @@ class conjugate_gradient(base_optimizer):
                 print(" Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
 
-            #gmax = np.max(g)/ANGSTROM_TO_AU/KCAL_MOL_PER_AU
+            #gmax = np.max(g)/units.ANGSTROM_TO_AU/KCAL_MOL_PER_AU
             #print "current gradrms= %r au" % gradrms
-            gmax = np.max(g)/ANGSTROM_TO_AU
-            self.disp = np.max(x - xp)/ANGSTROM_TO_AU
+            gmax = np.max(g)/units.ANGSTROM_TO_AU
+            self.disp = np.max(x - xp)/units.ANGSTROM_TO_AU
             self.Ediff = fx -fxp / KCAL_MOL_PER_AU
             print(" maximum displacement component %1.2f (au)" % self.disp)
             print(" maximum gradient component %1.2f (au)" % gmax)
