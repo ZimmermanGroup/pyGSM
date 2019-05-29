@@ -25,7 +25,7 @@ class Molpro(Lot):
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
-        tempfile.write(' file,2,mp_0000_{:03d}\n'.format(self.node_id))
+        tempfile.write(' file,2,mp_0000_{:04d}\n'.format(self.node_id))
         tempfile.write(' memory,800,m\n')
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
@@ -179,15 +179,16 @@ class Molpro(Lot):
     #TODO molpro requires extra things when copying. . . can this be done in the base_lot? 
     # e.g. if cls=="Molpro": #do molpro stuff?
     @classmethod
-    def copy(cls,lot,options):
+    def copy(cls,lot,**kwargs):
         """ create a copy of this lot object"""
         #print(" creating copy, new node id =",node_id)
         #print(" old node id = ",self.node_id)
-        if node_id != self.node_id:
-            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(self.node_id,node_id)
-            print(" ",cmd)
+        node_id = kwargs.get('node_id',1)
+        if node_id != lot.node_id:
+            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(lot.node_id,node_id)
+            print(cmd)
             os.system(cmd)
-        return cls(lot.options.copy().set_values(options))
+        return cls(lot.options.copy().set_values(kwargs))
 
 if __name__=='__main__':
     filepath="../../data/ethylene.xyz"

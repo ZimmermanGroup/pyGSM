@@ -30,8 +30,8 @@ class Avg_PES(PES):
         self.lot = lot
 
     @classmethod
-    def create_pes_from(cls,PES):
-        lot = type(PES.lot).copy(PES.lot)
+    def create_pes_from(cls,PES,**kwargs):
+        lot = type(PES.lot).copy(PES.lot,**kwargs)
         return cls(PES.PES1,PES.PES2,lot)
 
     @property

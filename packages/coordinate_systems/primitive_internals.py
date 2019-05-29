@@ -14,6 +14,7 @@ from collections import OrderedDict, defaultdict
 # local application imports
 from internal_coordinates import InternalCoordinates,AtomContact
 from slots import *
+from utilities import *
 
 
 class PrimitiveInternalCoordinates(InternalCoordinates):

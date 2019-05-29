@@ -17,11 +17,12 @@ import pybel as pb
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from potential_energy_surface import PES
-from potential_energy_surface import Avg_PES
-from potential_energy_surface import Penalty_PES
-from coordinate_system import DelocalizedInternalCoordinates
-from coordinate_system import CartesianCoordinates
+from utilities import *
+from potential_energy_surfaces import PES
+from potential_energy_surfaces import Avg_PES
+from potential_energy_surfaces import Penalty_PES
+from coordinate_systems import DelocalizedInternalCoordinates
+from coordinate_systems import CartesianCoordinates
 
 logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
@@ -140,7 +141,7 @@ class Molecule(object):
     def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1):
         """Create a copy of MoleculeA"""
         #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
-        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES)
+        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES,{'node_id': new_node_id})
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
@@ -498,3 +499,16 @@ class Molecule(object):
 
     def get_frag_atomic_index(self,fragid):
         return self.frag_atomic_indices[fragid]
+
+
+if __name__=='__main__':
+    from level_of_theories import Molpro
+    filepath='../../data/ethylene.xyz'
+    molpro = Molpro.from_options(states=[(1,0)],fnm=filepath,lot_inp_file='../../data/ethylene_molpro.com')
+
+    pes = PES.from_options(lot=molpro,ad_idx=0,multiplicity=1)
+
+    
+    reactant = Molecule.from_options(fnm=filepath,PES=pes,coordinate_type="TRIC",Form_Hessian=False)
+
+    print(reactant.coord_basis)

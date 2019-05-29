@@ -122,10 +122,11 @@ class QChem(Lot):
     @classmethod
     def copy(cls,lot,**kwargs):
         base = os.environ['QCSCRATCH']
+        node_id = kwargs.get('node_id',1)
         for state in self.states:
             multiplicity = state[0]
-            efilepath_old=base+ '/{}.{}'.format(self.node_id,multiplicity)
+            efilepath_old=base+ '/{}.{}'.format(lot.node_id,multiplicity)
             efilepath_new =base+ '/{}.{}'.format(node_id,multiplicity)
             os.system('cp -r ' + efilepath_old +' ' + efilepath_new)
-        return cls(lot.options.copy().set_values(options))
+        return cls(lot.options.copy().set_values(kwargs))
 
