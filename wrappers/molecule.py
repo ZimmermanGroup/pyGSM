@@ -1,25 +1,27 @@
 """Class structures of important chemical concepts
 This class is the combination of Martinez group and Lee Ping's molecule class.
 """
-import copy
+
+# standard library imports
+import sys
+import os
+from os import path
+from time import time
+
+# third party
 import logging
 import numpy as np
-import elements
-import units as un
 from collections import Counter
 import openbabel as ob
 import pybel as pb
-import os
-import manage_xyz
-import options
-from pes import PES
-from avg_pes import Avg_PES
-from penalty_pes import Penalty_PES
-from dlc_new import DelocalizedInternalCoordinates
-from cartesian import CartesianCoordinates
-from nifty import printcool_dictionary,pvec1d,pmat2d,make_mol_from_coords,getAtomicSymbols,getAllCoords,click
-from time import time
-from block_matrix import block_matrix as bm
+
+# local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
+from potential_energy_surface import PES
+from potential_energy_surface import Avg_PES
+from potential_energy_surface import Penalty_PES
+from coordinate_system import DelocalizedInternalCoordinates
+from coordinate_system import CartesianCoordinates
 
 logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
@@ -173,7 +175,7 @@ class Molecule(object):
             print(" getting cartesian coordinates from geom")
             atoms=manage_xyz.get_atoms(self.Data['geom'])
             xyz=manage_xyz.xyz_to_np(self.Data['geom'])
-            mol = make_mol_from_coords(xyz,atoms)
+            mol = nifty.make_mol_from_coords(xyz,atoms)
         elif self.Data['fnm'] is not None:
             print(" reading cartesian coordinates from file")
             if self.Data['ftype'] is None:
@@ -182,8 +184,8 @@ class Molecule(object):
                 logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.Data['fnm'])
                 raise IOError
             mol=next(pb.readfile(self.Data['ftype'],self.Data['fnm']))
-            xyz = getAllCoords(mol)
-            atoms =  getAtomicSymbols(mol)
+            xyz = nifty.getAllCoords(mol)
+            atoms =  nifty.getAtomicSymbols(mol)
         else:
             raise RuntimeError
 
@@ -302,7 +304,7 @@ class Molecule(object):
 
     @property
     def atomic_mass(self):
-        return np.array([un.AMU_TO_AU * ele.mass_amu for ele in self.atoms])
+        return np.array([units.AMU_TO_AU * ele.mass_amu for ele in self.atoms])
 
     @property
     def mass_amu(self):
@@ -330,7 +332,7 @@ class Molecule(object):
     def atom_data(self):
         uniques = list(set(M.atoms))
         for a in uniques:
-            printcool_dictionary(a._asdict())
+            nifty.printcool_dictionary(a._asdict())
 
     @property
     def center_of_mass(self):
@@ -419,7 +421,7 @@ class Molecule(object):
 
     def form_Hessian_in_basis(self):
         #print " forming Hessian in current basis"
-        self.Hessian = bm.dot( bm.dot(bm.transpose(self.coord_basis),self.Primitive_Hessian),self.coord_basis)
+        self.Hessian = block_matrix.dot( block_matrix.dot(block_matrix.transpose(self.coord_basis),self.Primitive_Hessian),self.coord_basis)
 
         #print(" Hessian")
         #print(self.Hessian)
