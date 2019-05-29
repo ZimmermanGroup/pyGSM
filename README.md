@@ -12,6 +12,11 @@ readability.
 git clone git@github.com:ZimmermanGroup/pyGSM.git\
 (need to have github ssh key activated)
 
+## LICENCE Notifications
+This project contains source material from the geomeTRIC package.
+Copyright 2016-2019 Regents of the University of California and the Authors
+Authors: Lee-Ping Wang, Chenchen Song
+https://github.com/leeping/geomeTRIC/blob/master/LICENSE
 
 ## Requirements
 anaconda 2.5.1 or greater\
