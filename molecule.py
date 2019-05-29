@@ -135,13 +135,17 @@ class Molecule(object):
         return'\n'.join(lines)
 
     @staticmethod
-    def copy_from_options(MoleculeA,xyz=None,new_node_id=1):
+    def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1):
         """Create a copy of MoleculeA"""
         #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
         PES = MoleculeA.PES.create_pes_from(MoleculeA.PES)
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
+            coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy().set_values({"xyz":xyz}))
+        elif fnm is not None:
+            new_geom = manage_xyz.read_xyz(fnm)
+            xyz = manage_xyz.xyz_to_np(new_geom)
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy().set_values({"xyz":xyz}))
         else:
             new_geom = MoleculeA.geometry

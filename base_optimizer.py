@@ -129,8 +129,8 @@ class base_optimizer(object):
     def check_inputs(self,molecule,opt_type,ictan):
         if opt_type in ['MECI','SEAM','TS-SEAM']:
             assert molecule.PES.lot.do_coupling==True,"Turn do_coupling on."                   
-        elif opt_type not in ['MECI','SEAM','TS-SEAM']: 
-            assert molecule.PES.lot.do_coupling==False,"Turn do_coupling off."                 
+        #elif opt_type not in ['MECI','SEAM','TS-SEAM']: 
+        #    assert molecule.PES.lot.do_coupling==False,"Turn do_coupling off."                 
         if opt_type=="UCONSTRAINED":  
             assert ictan==None
         if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
