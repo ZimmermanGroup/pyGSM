@@ -12,7 +12,7 @@ import numpy as np
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
-from coordinate_system import DelocalizedInternalCoordinates
+from coordinate_systems import DelocalizedInternalCoordinates
 from _print_opt import Print
 from _analyze_string import Analyze
 
@@ -30,13 +30,13 @@ class Base_Method(object,Print,Analyze):
         opt.add_option(
             key='reactant',
             required=True,
-            allowed_types=[Molecule],
+            #allowed_types=[Molecule],
             doc='Molecule object as the initial reactant structure')
 
         opt.add_option(
             key='product',
             required=False,
-            allowed_types=[Molecule],
+            #allowed_types=[Molecule],
             doc='Molecule object for the product structure (not required for single-ended methods.')
 
         opt.add_option(
@@ -164,7 +164,7 @@ class Base_Method(object,Print,Analyze):
         self.TSnode = 0 
         self.climb = False 
         self.find = False  
-        self.n0 = 0 # something to do with added nodes? "first node along current block"
+        self.n0 = 1 # something to do with added nodes? "first node along current block"
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
         self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
@@ -562,13 +562,13 @@ class Base_Method(object,Print,Analyze):
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            self.nodes[self.nR] =self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+            self.nodes[self.nR] = self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
 
             if self.nodes[self.nR]==0:
                 success= False
                 break
 
-            if self.__class__.__name__!="GSM":
+            if self.__class__.__name__!="DE_GSM":
                 ictan,bdist =  self.tangent(self.nR,None)
                 self.nodes[self.nR].bdist = bdist
 

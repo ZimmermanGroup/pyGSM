@@ -4,7 +4,8 @@ import os
 from os import path
 import importlib
 
-# third party
+#third party
+import argparse
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -14,6 +15,7 @@ from potential_energy_surfaces import Avg_PES
 from potential_energy_surfaces import Penalty_PES
 from molecule import Molecule
 from optimizers import *
+from growing_string_methods import *
 
 class GSM(object):
     """ """
@@ -24,6 +26,13 @@ class GSM(object):
 
         if hasattr(GSM, '_default_options'): return GSM._default_options.copy()
         opt = options.Options() 
+        opt.add_option(
+                key='gsm_type',
+                value='DE_GSM',
+                required=False,
+                allowed_values=['DE_GSM','SE_GSM','SE_Cross'],
+                doc='The type of GSM to use'
+                )
 
         opt.add_option(
             key='states',
@@ -49,17 +58,16 @@ class GSM(object):
                 )
 
         opt.add_option(
-                key='xyzfile1',
-                required=True,
-                allowed_types=[str],
-                doc='reactant xyzfile name.'
+                key='lot_inp_file',
+                required=False,
+                value=None,
                 )
 
         opt.add_option(
-                key='xyzfile2',
+                key='xyzfile',
                 required=True,
                 allowed_types=[str],
-                doc='product xyzfile name.'
+                doc='reactant xyzfile name.'
                 )
 
         opt.add_option(
@@ -118,13 +126,6 @@ class GSM(object):
                 doc='1 prints normal, 2 prints almost everything for optimization.'
                 )
 
-        opt.add_option(
-                key='gsm_type',
-                value='DE-GSM',
-                required=False,
-                allowed_values=['DE_GSM','SE_GSM','SE_Cross'],
-                doc='The type of GSM to use'
-                )
 
         opt.add_option(
                 key='num_nodes',
@@ -136,7 +137,7 @@ class GSM(object):
         opt.add_option(
                 key='driving_coordinates',
                 value=None,
-                required=False if opt.options['gsm_type']=='DE-GSM' else True,
+                required=False if opt.options['gsm_type']=='DE_GSM' else True,
                 doc='List of tuples specifying coordinates to drive and to what value\
                      indexed at 1. E.g. [("BREAK",1,2,5.0)] tells break 1 2 to 5. angstrom.\
                      ADD and BREAK have default distances specified')
@@ -216,6 +217,7 @@ class GSM(object):
         
     @classmethod
     def from_options(cls,**kwargs):
+        nifty.printcool_dictionary(kwargs)
         return cls(cls.default_options().set_values(kwargs))
 
     def __init__(
@@ -230,17 +232,18 @@ class GSM(object):
         est_package=importlib.import_module("level_of_theories."+options['EST_Package'].lower())
         lot_class = getattr(est_package,options['EST_Package'])
 
-        geom = manage_xyz.read_xyz(self.options['xyzfile1'])
+        geoms = manage_xyz.read_xyzs(self.options['xyzfile'])
         lot = lot_class.from_options(
+                lot_inp_file=self.options['lot_inp_file'],
                 states=self.options['states'],
                 job_data=self.options['job_data'],
-                geom=geom
+                geom=geoms[0],
                 )
 
         #PES
         nifty.printcool("Building the PES objects")
         pes_class = getattr(sys.modules[__name__], options['PES_type'])
-        if pes_class=='PES':
+        if options['PES_type']=='PES':
             pes = pes_class.from_options(
                     lot=lot,
                     ad_idx=self.options['adiabatic_index'],
@@ -265,30 +268,31 @@ class GSM(object):
         nifty.printcool("Building the reactant object")
         Form_Hessian = True if self.options['optimizer']=='eigenvector_follow' else False
         reactant = Molecule.from_options(
-                fnm=self.options['xyzfile1'],
+                geom=geoms[0],
                 PES=pes,
                 coordinate_type=self.options['coordinate_type'],
                 Form_Hessian=Form_Hessian
                 )
 
-        if self.options['GSM_type']=='DE-GSM':
+        if self.options['gsm_type']=='DE_GSM':
             nifty.printcool("Building the product object")
             product = Molecule.from_options(
-                    fnm=self.options['xyzfile2'],
+                    geom=geoms[1],
                     PES=pes,
                     coordinate_type=self.options['coordinate_type'],
-                    Form_Hessian=Form_Hessian
+                    Form_Hessian=Form_Hessian,
+                    node_id=self.options['num_nodes']-1,
                     )
        
         # optimizer
         nifty.printcool("Building the Optimizer object")
         opt_class = getattr(sys.modules[__name__], options['optimizer'])
-        optimizer = opt_class.from_options(print_level=self.options['opt_print_level'],Linesearch=self.options['Linesearch'])
+        optimizer = opt_class.from_options(print_level=self.options['opt_print_level'],Linesearch=self.options['linesearch'])
 
         # GSM
         nifty.printcool("Building the GSM object")
-        gsm_class = getattr(sys.modules[__name__], options['GSM_type'])
-        if GSM_type=="DE_GSM":
+        gsm_class = getattr(sys.modules[__name__], options['gsm_type'])
+        if options['gsm_type']=="DE_GSM":
             self.gsm = gsm_class.from_options(
                     reactant=reactant,
                     product=product,
@@ -298,7 +302,7 @@ class GSM(object):
                     growth_direction=self.options['growth_direction'],
                     product_geom_fixed=self.options['product_geom_fixed'],
                     optimizer=optimizer,
-                    print_level=self.options['gsm_print_level'],
+                    #print_level=self.options['gsm_print_level'],
                     )
         else:
             self.gsm = gsm_class.from_options(
@@ -324,13 +328,25 @@ class GSM(object):
 
 if __name__=='__main__':
 
+    parser = argparse.ArgumentParser(description="Parse GSM ")   
+    parser.add_argument('-xyzfile', help='XYZ file',  required=True)
+    parser.add_argument('-isomers', help='driving coordinate file', type=str, required=False)
+    parser.add_argument('-mode', default="DE_GSM",help='GSM Type', type=str, required=True)
+    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package",required=False)
+    parser.add_argument('-lot_inp_file',type=str,default='qstart', help='qstart,gstart,etc',required=True)
+    parser.add_argument('-ID',default=0, type=int,help='string identification',required=False)
+    parser.add_argument('-num_nodes',type=int,default=9,help='number of nodes for string',required=False)
+    args = parser.parse_args()
+
+
+    #print 'Argument List:', str(sys.argv)
     inpfileq = {
                # LOT
               'states': [(1,0)],
               'job_data' : {},
-              'xyzfile1' : '../../data/butadiene_ethene.xyz',
-              'xyzfile2' : '../../data/cyclohexene.xyz',
-              'EST_Package': "QChem",
+              'lot_inp_file': args.lot_inp_file,
+              'xyzfile' : args.xyzfile,
+              'EST_Package': args.package,
 
               # PES 
               'PES_type': 'PES', 
@@ -347,8 +363,8 @@ if __name__=='__main__':
               'opt_print_level': 1 ,
 
               # GSM
-              'gsm_type': 'DE_GSM', # SE_GSM, SE_Cross
-              'num_nodes' : 9,
+              'gsm_type': args.mode, # SE_GSM, SE_Cross
+              'num_nodes' : args.num_nodes,
               'driving_coordinates': None,
               'DQMAG_MAX': 0.4,
               'gsm_print_level': 1,
@@ -357,3 +373,5 @@ if __name__=='__main__':
               }
 
     gsm = GSM.from_options(**inpfileq)
+   # gsm.go_gsm()
+

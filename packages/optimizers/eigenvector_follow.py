@@ -82,7 +82,7 @@ class eigenvector_follow(base_optimizer):
             update_hess = True
 
             # => Form eigenvector step <= #
-            if isinstance(molecule.coord_obj,CartesianCoordinates):
+            if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 raise NotImplementedError
             else:
                 if opt_type !='TS':

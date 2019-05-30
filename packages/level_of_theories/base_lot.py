@@ -96,6 +96,7 @@ class Lot(object):
                 key="node_id",
                 required=False,
                 value=0,
+                allowed_types=[int],
                 doc='unique id used for storing orbs,etc'
                 )
 
@@ -137,13 +138,13 @@ class Lot(object):
                     logger.error('Tried to create LOT object from a file that does not exist: %s\n' % self.options['fnm'])
                     raise IOError
                 self.geom = manage_xyz.read_xyz(self.options['fnm'],scale=1.)
-                self.atoms = manage_xyz.get_atoms(self.geom)
         else:
             raise RuntimeError("Need to initialize LOT object")
 
         # Cache some useful atributes
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
+        self.atoms = manage_xyz.get_atoms(self.geom)
 
         #TODO remove some of these options  make others properties
         self.nocc=self.options['nocc']
@@ -180,8 +181,8 @@ class Lot(object):
         self.options['do_coupling']=value
 
     @classmethod
-    def copy(cls,lot,**kwargs):
-        return cls(lot.options.copy().set_values(kwargs))
+    def copy(cls,lot,options):
+        return cls(lot.options.copy().set_values(options))
 
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:

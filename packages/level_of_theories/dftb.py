@@ -18,6 +18,7 @@ class DFTB(Lot):
     def __init__(self,options):
         super(DFTB,self).__init__(options)
         os.system('rm -f dftb_jobs.txt')
+        print(" making folder scratch/{}".format(self.node_id))
         os.system('mkdir -p scratch/{}'.format(self.node_id))
         os.system('cp {} scratch/{}'.format(self.lot_inp_file,self.node_id))
 
@@ -44,8 +45,8 @@ class DFTB(Lot):
         self.E = []
         temp = 0
         tmpgrada=[]
-        tmpgrad=[]
-        pattern=re.compile(r"Total energy:                      [-+]?[0-9]*\.?[0-9]+ H")
+        tmpgrad=[]  
+        pattern=re.compile(r"Total energy:                     [-+]?[0-9]*\.?[0-9]+ H")
         for line in olines:
             for match in re.finditer(pattern,line):
                 tmpline = line.split()
@@ -85,7 +86,7 @@ class DFTB(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        return np.asarray(tmp)*units.ANGSTROM_TO_AU
+        return np.asarray(tmp)*-1.*units.ANGSTROM_TO_AU
 
 if __name__=='__main__':
     filepath="../../data/ethylene.xyz"

@@ -1,5 +1,5 @@
 import os 
-import manage_xyz
+from utilities import manage_xyz
 
 class Print:
                 

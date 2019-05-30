@@ -17,7 +17,7 @@ class QChem(Lot):
 
         tempfilename = 'tempQCinp'
         tempfile = open(tempfilename,'w')
-        if self.lot_inp_file == False:
+        if not self.lot_inp_file:
             tempfile.write(' $rem\n')
             tempfile.write(' JOBTYPE FORCE\n')
             tempfile.write(' EXCHANGE {}\n'.format(self.functional))
@@ -120,7 +120,7 @@ class QChem(Lot):
         return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU
 
     @classmethod
-    def copy(cls,lot,**kwargs):
+    def copy(cls,lot,options):
         base = os.environ['QCSCRATCH']
         node_id = kwargs.get('node_id',1)
         for state in self.states:
@@ -128,5 +128,5 @@ class QChem(Lot):
             efilepath_old=base+ '/{}.{}'.format(lot.node_id,multiplicity)
             efilepath_new =base+ '/{}.{}'.format(node_id,multiplicity)
             os.system('cp -r ' + efilepath_old +' ' + efilepath_new)
-        return cls(lot.options.copy().set_values(kwargs))
+        return cls(lot.options.copy().set_values(options))
 

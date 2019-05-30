@@ -31,7 +31,6 @@ networkx\
    1. source activate gsm_env
    1. conda install -c openbabel openbabel 
    1. conda install numpy
-   1. conda install -c anaconda scikit-learn 
 1. source conda environment with openbabel, numpy
    1. source gsm_env
 

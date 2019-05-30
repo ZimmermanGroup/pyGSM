@@ -55,8 +55,8 @@ class PES(object):
 
     #TODO make kwargs
     @classmethod
-    def create_pes_from(cls,PES,**kwargs):
-        lot = type(PES.lot).copy(PES.lot,**kwargs)
+    def create_pes_from(cls,PES,options={}):
+        lot = type(PES.lot).copy(PES.lot,options)
         return cls(PES.options.copy().set_values({
             "lot":lot,
             }))

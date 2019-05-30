@@ -123,6 +123,13 @@ class Molecule(object):
                 doc='A string that is saved on the molecule, used for descriptive purposes'
                 )
 
+        opt.add_option(
+                key='node_id',
+                required=False,
+                value=0,
+                doc='used to specify level of theory node identification',
+                )
+
 
         Molecule._default_options = opt
         return Molecule._default_options.copy()
@@ -141,7 +148,7 @@ class Molecule(object):
     def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1):
         """Create a copy of MoleculeA"""
         #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
-        PES = MoleculeA.PES.create_pes_from(MoleculeA.PES,{'node_id': new_node_id})
+        #PES = MoleculeA.PES.create_pes_from(PES=MoleculeA.PES,options={'node_id': new_node_id})
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
@@ -155,9 +162,9 @@ class Molecule(object):
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy())
 
         return Molecule(MoleculeA.Data.copy().set_values({
-            "PES":PES,
             'coord_obj':coord_obj,
-            'geom':new_geom
+            'geom':new_geom,
+            'node_id':new_node_id,
             }))
 
 
@@ -201,7 +208,7 @@ class Molecule(object):
         # Perform all the sanity checks and cache some useful attributes
 
         #TODO make PES property
-        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'])
+        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'],{'node_id':self.Data['node_id']})
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
 

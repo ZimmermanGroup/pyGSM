@@ -32,6 +32,43 @@ def read_xyz(
             ))
     return geom
 
+def read_xyzs(
+    filename, 
+    scale=1.
+    ):
+
+    """ Read xyz file
+
+    Params:
+        filename (str) - name of xyz file to read
+
+    Returns:
+        geom ((natoms,4) np.ndarray) - system geometry (atom symbol, x,y,z)
+
+    """
+    
+    lines = open(filename).readlines()
+    natoms = int(lines[0])
+    total_lines = len(lines)
+    num_geoms = total_lines/(natoms+2)
+
+    geoms = []
+    sa=2
+    for i in range(num_geoms):
+        ea=sa+natoms
+        geom=[]
+        for line in lines[sa:ea]:
+            mobj = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
+            geom.append((
+                mobj.group(1),
+                scale*float(mobj.group(2)),
+                scale*float(mobj.group(3)),
+                scale*float(mobj.group(4)),
+                ))
+        sa=ea+2
+        geoms.append(geom)
+    return geoms
+
 def get_atoms(
         geom
         ):

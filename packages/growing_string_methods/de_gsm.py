@@ -107,7 +107,7 @@ class DE_GSM(Base_Method):
         dq0 = dqmag*constraint
         old_xyz = self.nodes[n1].xyz.copy()
         new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
-        new_node = Molecule.copy_from_options(self.nodes[n1],new_xyz,n2)
+        new_node = Molecule.copy_from_options(MoleculeA=self.nodes[n1],xyz=new_xyz,new_node_id=n2)
         return new_node
 
     def set_active(self,nR,nP):

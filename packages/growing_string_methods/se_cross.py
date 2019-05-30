@@ -13,7 +13,7 @@ from utilities import *
 from wrappers import Molecule
 from base_gsm import Base_Method
 from se_gsm import SE_GSM
-from potential_energy_surface import Avg_PES
+from potential_energy_surfaces import Avg_PES
 
 
 class SE_Cross(SE_GSM):
