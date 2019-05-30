@@ -4,7 +4,7 @@ from utilities import manage_xyz
 class Print:
                 
     def write_xyz_files(self,iters=0,base='xyzgeom',nconstraints=1):
-        xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}.xyz'.format(iters)
+        xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}_{:03}.xyz'.format(self.ID,iters)
         geoms = []
         for ico in self.nodes:
             if ico != None:

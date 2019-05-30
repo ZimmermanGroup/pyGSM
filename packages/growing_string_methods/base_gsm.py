@@ -120,6 +120,14 @@ class Base_Method(object,Print,Analyze):
                         bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
                         to be considered grown.",
                         )
+
+        opt.add_option(
+                key='ID',
+                value=0,
+                required=False,
+                doc='A Unique ID'
+                )
+
         Base_Method._default_options = opt
         return Base_Method._default_options.copy()
 
@@ -149,6 +157,7 @@ class Base_Method(object,Print,Analyze):
         self.DQMAG_MAX=self.options['DQMAG_MAX']
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
+        self.ID = self.options['ID']
         self.optimizer=[]
         optimizer = options['optimizer']
         for count in range(self.nnodes):

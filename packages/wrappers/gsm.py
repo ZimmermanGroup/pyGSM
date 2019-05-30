@@ -20,205 +20,10 @@ from growing_string_methods import *
 class GSM(object):
     """ """
 
-    @staticmethod
-    def default_options():
-        """ GSM default options. """
-
-        if hasattr(GSM, '_default_options'): return GSM._default_options.copy()
-        opt = options.Options() 
-        opt.add_option(
-                key='gsm_type',
-                value='DE_GSM',
-                required=False,
-                allowed_values=['DE_GSM','SE_GSM','SE_Cross'],
-                doc='The type of GSM to use'
-                )
-
-        opt.add_option(
-            key='states',
-            value=[(1,0)],
-            required=False,
-            doc='list of tuples (multiplicity,state) state is 0-indexed')
-
-        opt.add_option(
-                key='job_data',
-                value={},
-                required=False,
-                allowed_types=[dict],
-                doc='extra key-word arguments to define level of theory object. e.g.\
-                     TeraChem Cloud requires a TeraChem client and options dictionary.'
-                )
-
-        opt.add_option(
-                key='EST_Package',
-                value=None,
-                required=True,
-                allowed_values=['QChem','Molpro','Orca','PyTC','OpenMM','DFTB','TCC'],
-                doc='the electronic structure theory package that is being used.'
-                )
-
-        opt.add_option(
-                key='lot_inp_file',
-                required=False,
-                value=None,
-                )
-
-        opt.add_option(
-                key='xyzfile',
-                required=True,
-                allowed_types=[str],
-                doc='reactant xyzfile name.'
-                )
-
-        opt.add_option(
-                key='PES_type',
-                value='PES',
-                allowed_values=['PES','Penalty_PES','Avg_PES'],
-                required=False,
-                doc='PES type'
-                )
-        opt.add_option(
-                key='adiabatic_index',
-                value=0,
-                required=False if len(opt['states'])==1 else True,
-                doc='adiabatic index')
-
-        opt.add_option(
-                key='multiplicity',
-                value=1,
-                required=False if len(opt['states'])==1 else True,
-                doc='multiplicity')
-
-        opt.add_option(
-                key="FORCE",
-                value=None,
-                required=False,
-                doc='Apply a spring force between atoms in units of AU, e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',
-                )
-        
-        opt.add_option(
-                key='coordinate_type',
-                value='TRIC',
-                required=False,
-                allowed_values=['TRIC','DLC','HDLC'],
-                doc='the type of coordinate system, TRIC is recommended.'
-                )
-
-        opt.add_option(
-                key='optimizer',
-                value='eigenvector_follow',
-                required=False,
-                allowed_values=['eigenvector_follow','lbfgs','conjugate_gradient'],
-                doc='The type of optimizer, eigenvector follow is recommended for non-condensed phases. L-BFGS is recommended for condensed phases.'
-                )
-        opt.add_option(
-                key='linesearch',
-                value='NoLineSearch',
-                required=False,
-                allowed_values=['NoLineSearch','backtrack'],
-                doc='line search for the optimizer.'
-                )
-
-        opt.add_option(
-                key='opt_print_level',
-                value=1,
-                required=False,
-                doc='1 prints normal, 2 prints almost everything for optimization.'
-                )
-
-
-        opt.add_option(
-                key='num_nodes',
-                value=9,
-                required=False,
-                doc='The number of nodes for GSM -- choose large for SE-GSM or SE-CROSS.'
-                )
-
-        opt.add_option(
-                key='driving_coordinates',
-                value=None,
-                required=False if opt.options['gsm_type']=='DE_GSM' else True,
-                doc='List of tuples specifying coordinates to drive and to what value\
-                     indexed at 1. E.g. [("BREAK",1,2,5.0)] tells break 1 2 to 5. angstrom.\
-                     ADD and BREAK have default distances specified')
-
-        #opt.add_option(
-        #        key='rp_type',
-        #        value='Exact_TS',
-        #        required=True if opt.options['gsm_type']=='SE-CROSS' else False,
-        #        allowed_values=['Exact_TS','Climb','Opt_Only','SE-MECI','SE-MESX']
-        #        doc='How to optimize the string. Exact TS does an exact TS optimization,\
-        #                Climb only does climbing image, Opt only does not optimize the TS,\
-        #                SE-MECI and SE-MESX are for conical intersections/ISC'
-        #                )
-
-        opt.add_option(
-                key='DQMAG_MAX',
-                value=0.4,
-                required=False,
-                doc='maximum step size during growth phase for SE methods.'
-                )
-
-        opt.add_option(
-                key='CONV_TOL',
-                value=0.0005,
-                doc='convergence tolerance for a single node.'
-                )
-
-        opt.add_option(
-                key='gsm_print_level',
-                value=1,
-                allowed_values=[0,1,2],
-                doc='1-- normal, 2-- ?'
-                )
-
-        opt.add_option(
-            key='ADD_NODE_TOL',
-            value=0.1,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold before adding a new node'
-            )
-
-        opt.add_option(
-                key="product_geom_fixed",
-                value=True,
-                required=False,
-                doc="Fix last node?"
-                )
-
-        opt.add_option(
-                key="growth_direction",
-                value=0,
-                required=False,
-                doc="how to grow string,0=Normal,1=from reactant"
-                )
-
-
-        opt.add_option(
-                key="BDIST_RATIO",
-                value=0.5,
-                required=False,
-                doc="SE-Crossing uses this \
-                        bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
-                        to be considered grown.",
-                        )
-
-        opt.add_option(
-                key='ID',
-                value=1,
-                required=False,
-                doc='String identifier'
-                )
-
-        GSM._default_options = opt
-        return GSM._default_options.copy()
-
-        
     @classmethod
     def from_options(cls,**kwargs):
         nifty.printcool_dictionary(kwargs)
-        return cls(cls.default_options().set_values(kwargs))
+        return cls(kwargs)
 
     def __init__(
             self,
@@ -302,9 +107,11 @@ class GSM(object):
                     growth_direction=self.options['growth_direction'],
                     product_geom_fixed=self.options['product_geom_fixed'],
                     optimizer=optimizer,
+                    ID=self.options['ID'],
                     #print_level=self.options['gsm_print_level'],
                     )
         else:
+            driving_coordinates = self.read_isomers_file()
             self.gsm = gsm_class.from_options(
                     reactant=reactant,
                     nnodes=self.options['num_nodes'],
@@ -314,9 +121,42 @@ class GSM(object):
                     ADD_NODE_TOL=self.options['ADD_NODE_TOL'],
                     optimizer=optimizer,
                     print_level=self.options['gsm_print_level'],
-                    driving_coords=self.options['driving_coordinates']
+                    driving_coords=driving_coordinates,
+                    ID=self.options['ID'],
                     )
 
+
+    def read_isomers_file(self):
+        with open(self.options['isomers_file']) as f:
+            lines = f.readlines()
+        driving_coordinates=[]
+        for line in lines[1:]:
+            dc = []
+            twoInts=False
+            threeInts=False
+            fourInts=False
+            for i,elem in enumerate(line.split()):
+                if i==0:
+                    dc.append(elem)
+                    if elem=="ADD" or elem=="BREAK":
+                        twoInts =True
+                    elif elem=="ANGLE":
+                        threeInts =True
+                    elif elem=="TORSION" or elem=="OOP":
+                        threeInts =True
+                else:
+                    if twoInts and i>2:
+                        dc.append(float(elem))
+                    elif threeInts and i>3:
+                        dc.append(float(elem))
+                    elif fourInts and i>4:
+                        dc.append(float(elem))
+                    else:
+                        dc.append(int(elem))
+            driving_coordinates.append(dc)
+
+        nifty.printcool("driving coordinates {}".format(driving_coordinates))
+        return driving_coordinates
 
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         self.gsm.go_gsm(max_iters=max_iters,opt_steps=opt_steps,rtype=rtype)
@@ -338,8 +178,7 @@ if __name__=='__main__':
     parser.add_argument('-num_nodes',type=int,default=9,help='number of nodes for string',required=False)
     args = parser.parse_args()
 
-
-    #print 'Argument List:', str(sys.argv)
+    print 'Argument List:', str(sys.argv)
     inpfileq = {
                # LOT
               'states': [(1,0)],
@@ -365,13 +204,17 @@ if __name__=='__main__':
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
               'num_nodes' : args.num_nodes,
-              'driving_coordinates': None,
+              'isomers_file': args.isomers,
+              'ADD_NODE_TOL': 0.05,
+              'BDIST_RATIO': 0.5,
               'DQMAG_MAX': 0.4,
               'gsm_print_level': 1,
               'CONV_TOL': 0.0005,
-
+              'ID':args.ID,
+              'growth_direction': 0,
+              'product_geom_fixed': False,
               }
 
     gsm = GSM.from_options(**inpfileq)
-   # gsm.go_gsm()
+    gsm.go_gsm()
 
