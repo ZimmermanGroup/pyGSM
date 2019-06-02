@@ -89,6 +89,11 @@ class SE_GSM(Base_Method):
                     self.add_last_node(1)
 
             self.nnodes=self.nR
+            tmp = []
+            for n in range(self.nnodes):
+                tmp.append(self.energies[n])
+            self.energies = np.asarray(tmp)
+
             print(" Number of nodes is ",self.nnodes)
             print(" Warning last node still not optimized fully")
             self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)

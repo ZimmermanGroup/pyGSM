@@ -89,6 +89,12 @@ class SE_Cross(SE_GSM):
                     opt_steps=100,
                     )
             self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
+
+        
+        tmp = []
+        for n in range(self.nnodes):
+            tmp.append(self.energies[n])
+        self.energies = np.asarray(tmp)
     
     def converged(self,n,opt_type):
         if opt_type=="UNCSONTRAINED":

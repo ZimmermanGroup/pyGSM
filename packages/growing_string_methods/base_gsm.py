@@ -857,9 +857,11 @@ class Base_Method(object,Print,Analyze):
         self.nodes[en].update_coordinate_basis()
 
         self.newic.xyz = self.nodes[en].xyz
-        self.newic.update_coordinate_basis(self.ictan[en])
-        nicd = self.newic.num_coordinates
-        num_ics = self.newic.num_primitives 
+        Vecs = self.newic.update_coordinate_basis(self.ictan[en])
+        #nicd = self.newic.num_coordinates
+        #num_ics = self.newic.num_primitives 
+        print(" number of primitive coordinates: %i" % self.newic.num_primitives)
+        print(" number of non-redundant coordinates: %i" % self.newic.num_coordinates)
 
         E0 = self.energies[en]/units.KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/units.KCAL_MOL_PER_AU
@@ -870,7 +872,10 @@ class Base_Method(object,Print,Analyze):
 
         q0 = self.newic.coordinates[0]
         #print "q0 is %1.3f" % q0
-        tan0 = self.newic.coord_basis[:,0]
+        print(self.newic.coord_basis.shape)
+        #tan0 = self.newic.coord_basis[:,0]
+        constraint = self.newic.constraints
+        tan0 = block_matrix.dot(Vecs,constraint)
         #print "tan0"
         #print tan0
 
@@ -895,7 +900,9 @@ class Base_Method(object,Print,Analyze):
         self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian
         self.newic.form_Hessian_in_basis()
 
-        tan = np.dot(Vecs.T,tan0)   #nicd,1
+        print(tan0.shape)
+        tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   #nicd,1
+        print(tan.shape)
         #print "tan"
         #print tan
 
