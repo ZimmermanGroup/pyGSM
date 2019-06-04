@@ -8,3 +8,4 @@ ipynb_demos/pytc/scratch/*.xyz
 .*  # ignore all hidden files and folders
 !/.gitignore  # explicitly do not ignore .gitignore
 docs/html/
+html/
