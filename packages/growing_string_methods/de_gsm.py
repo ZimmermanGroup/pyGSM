@@ -23,7 +23,10 @@ class DE_GSM(Base_Method):
         super(DE_GSM,self).__init__(options)
 
         print(" Forming Union of primitive coordinates")
-        self.nodes[0].coord_obj = self.nodes[0].coord_obj.union(self.nodes[-1].coord_obj,self.nodes[0].xyz)
+        self.nodes[0].coord_obj = self.nodes[0].coord_obj.make_union_primitives(self.nodes[-1].coord_obj,self.nodes[0].xyz)
+
+        print('coordinates')
+        print(self.nodes[0].coord_obj.Prims.Internals[:100])
         self.nodes[0].form_Primitive_Hessian()
         print(" Done forming union")
         self.nodes[-1].PES.lot.node_id = self.nnodes-1

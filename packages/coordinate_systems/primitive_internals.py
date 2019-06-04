@@ -2,6 +2,7 @@ from __future__ import print_function
 
 # standard library imports
 import time
+import sys
 
 # third party
 import networkx as nx
@@ -27,8 +28,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # Cache some useful attributes
         self.options = options
-        constraints = options['constraints']
-        cvals = options['cVals']
         self.atoms = options['atoms']
         extra_kwargs=options['extra_kwargs']
 
@@ -45,30 +44,36 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.top_settings = {'toppbc' : extra_kwargs.get('toppbc', False),
                              'topframe' : extra_kwargs.get('topframe', 0),
                              'Fac' : extra_kwargs.get('Fac', 1.2),
-                             'read_bonds' : False,
+                             'build_topology' : extra_kwargs.get('build_topology',True),
+                             'make_primitives' : extra_kwargs.get('make_primitives',True),
                              'fragment' : extra_kwargs.get('fragment', False),
                              'radii' : extra_kwargs.get('radii', {})}
 
         xyz = options['xyz']
 
         # setup
-        nifty.click()
-        self.makePrimitives(xyz,options)
-        time_build = nifty.click()
-        print(" make prim %.3f" % time_build)
 
-        #exit()
+        if self.top_settings['make_primitives']:
+            nifty.click()
+            self.build_topology(xyz)
+            self.makePrimitives(xyz)
+            time_build = nifty.click()
+            print(" make prim %.3f" % time_build)
+            # Reorder primitives for checking with cc's code in TC.
+            # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
+            self.reorderPrimitives()
+        elif self.top_settings['build_topology']:
+            self.build_topology(xyz)
+
         #self.makeConstraints(xyz, constraints, cvals)
 
-        # Reorder primitives for checking with cc's code in TC.
-        # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
-        self.reorderPrimitives()
 
-    def makePrimitives(self, xyz, options):
-        connect=options['connect']
-        addcart=options['addcart']
-        addtr=options['addtr']
-        self.build_topology(xyz)
+    def makePrimitives(self, xyz):
+
+        self.Internals =[]
+        connect=self.options['connect']
+        addcart=self.options['addcart']
+        addtr=self.options['addtr']
 
         # LPW also uses resid from molecule . . . 
         frags = [m.nodes() for m in self.fragments]
@@ -430,14 +435,17 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 Changed = True
         return Changed
 
-    def join(self, other):
+    def join(self, other,bonds_only=False):
         Changed = False
         for i in other.Internals:
             if i not in self.Internals:
-                #logger.info("Adding:  ", i)
-                print(("Adding ",i))
-                self.Internals.append(i)
-                Changed = True
+                if bonds_only and type(i)!="Distance":
+                    pass
+                else:
+                    #logger.info("Adding:  ", i)
+                    print(("Adding ",i))
+                    self.Internals.append(i)
+                    Changed = True
         return Changed
 
     def repr_diff(self, other):

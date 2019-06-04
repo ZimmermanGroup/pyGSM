@@ -277,11 +277,14 @@ class GSM(object):
         # Molecule
         nifty.printcool("Building the reactant object")
         Form_Hessian = True if self.options['optimizer']=='eigenvector_follow' else False
+        form_primitives = True if self.options['gsm_type']!='DE_GSM' else False
+
         reactant = Molecule.from_options(
                 geom=geoms[0],
                 PES=pes,
                 coordinate_type=self.options['coordinate_type'],
-                Form_Hessian=Form_Hessian
+                Form_Hessian=Form_Hessian,
+                top_settings = {'form_primitives': form_primitives},
                 )
 
         if self.options['gsm_type']=='DE_GSM':
@@ -292,19 +295,13 @@ class GSM(object):
                     coordinate_type=self.options['coordinate_type'],
                     Form_Hessian=Form_Hessian,
                     node_id=self.options['num_nodes']-1,
+                    top_settings = {'form_primitives': form_primitives},
                     )
        
         # optimizer
         nifty.printcool("Building the Optimizer object")
         opt_class = getattr(sys.modules[__name__], options['optimizer'])
         optimizer = opt_class.from_options(print_level=self.options['opt_print_level'],Linesearch=self.options['linesearch'])
-
-        if not self.options['reactant_geom_fixed']:
-            optimizer.optimize(
-               molecule = reactant,
-               refE = reactant.energy,
-               opt_steps=100,
-               )
 
         # GSM
         nifty.printcool("Building the GSM object")
@@ -336,6 +333,13 @@ class GSM(object):
                     driving_coords=driving_coordinates,
                     ID=self.options['ID'],
                     )
+
+        if not self.options['reactant_geom_fixed']:
+            optimizer.optimize(
+               molecule = reactant,
+               refE = reactant.energy,
+               opt_steps=100,
+               )
 
 
     def read_isomers_file(self):
@@ -427,7 +431,7 @@ if __name__=='__main__':
               'lot_inp_file': args.lot_inp_file,
               'xyzfile' : args.xyzfile,
               'EST_Package': args.package,
-              'reactant_geom_fixed' : False,
+              'reactant_geom_fixed' : True,
 
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
@@ -438,5 +442,9 @@ if __name__=='__main__':
               }
 
     gsm = GSM.from_options(**inpfileq)
-    gsm.go_gsm()
+    import networkx as nx
+    plt.plot()
+    nx.draw(gsm.gsm.nodes[0].coord_obj.Prims.topology,with_labels=True,font_weight='bold')
+    plt.savefig('topology.png')
+    #gsm.go_gsm()
 

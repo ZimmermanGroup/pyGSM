@@ -177,7 +177,7 @@ class Base_Method(object,Print,Analyze):
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
         self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
-        self.gaddmax = self.options['ADD_NODE_TOL']/self.rn3m6;
+        self.gaddmax = self.options['ADD_NODE_TOL'] #self.options['ADD_NODE_TOL']/self.rn3m6;
         print(" gaddmax:",self.gaddmax)
         self.ictan = [None]*self.nnodes
         self.active = [False] * self.nnodes

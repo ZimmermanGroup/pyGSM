@@ -406,7 +406,8 @@ class InternalCoordinates(object):
         if self.natoms > 100000:
             nifty.logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.natoms)
 
-        bonds = self.build_bonds(xyz)
+        if force_bonds:
+            self.bonds = self.build_bonds(xyz)
 
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -419,12 +420,13 @@ class InternalCoordinates(object):
             else:
                 nx.set_node_attributes(G,'e',{i:a})
                 nx.set_node_attributes(G,'x',{i:xyz[i]})
-        for (i, j) in bonds:
+        for (i, j) in self.bonds:
             G.add_edge(i, j)
 
         # The Topology is simply the NetworkX graph object.
         self.topology = G
         self.fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        print([ m.nodes() for m in self.fragments])
         for g in self.fragments: g.__class__ = MyG
 
         # Deprecated in networkx 2.2

@@ -81,11 +81,19 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def join(self, other):
         return self.Prims.join(other.Prims)
 
-    def union(self,DLC2,xyz):  #xyz is DLC1 xyz
-        self.Prims.join(DLC2.Prims)
-        self.Prims.rebuild_topology_from_prim_bonds(xyz)
-        self.Prims.reorderPrimitives() 
-        self.Prims.clearCache() 
+    def make_union_primitives(self,other,xyz):  #xyz is DLC1 xyz
+        for bond in other.Prims.bonds:
+            if bond in self.Prims.bonds:
+                pass
+            elif (bond[1],bond[0]) in self.Prims.bonds:
+                pass
+            else:
+                self.Prims.bonds.append(bond)
+        self.Prims.bonds = sorted(list(set(self.Prims.bonds)))
+        self.Prims.build_topology(xyz,force_bonds=False)
+
+        self.Prims.makePrimitives(xyz)
+        self.Prims.reorderPrimitives()
         return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
 
     def copy(self,xyz):

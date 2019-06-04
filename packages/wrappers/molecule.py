@@ -117,6 +117,12 @@ class Molecule(object):
                 )
 
         opt.add_option(
+                key="top_settings",
+                value={},
+                doc='some extra kwargs for forming coordinate object.'
+                )
+
+        opt.add_option(
                 key='comment',
                 required=False,
                 value='',
@@ -241,11 +247,11 @@ class Molecule(object):
             self.coord_obj = CartesianCoordinates.from_options(xyz=self.xyz,atoms=self.atoms)
         elif self.Data['coordinate_type'] == "DLC":
             print(" building coordinate object")
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True)
+            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True,extra_kwargs =self.Data['top_settings'])
         elif self.Data['coordinate_type'] == "HDLC":
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True) 
+            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True,extra_kwargs =self.Data['top_settings']) 
         elif self.Data['coordinate_type'] == "TRIC":
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addtr=True) 
+            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addtr=True,extra_kwargs =self.Data['top_settings']) 
         self.Data['coord_obj']=self.coord_obj
 
         t2 = time() 
