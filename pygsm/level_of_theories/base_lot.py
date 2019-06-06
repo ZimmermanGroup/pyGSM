@@ -97,7 +97,15 @@ class Lot(object):
                 required=False,
                 value=0,
                 allowed_types=[int],
-                doc='unique id used for storing orbs,etc'
+                doc='node id used for storing orbs,etc'
+                )
+
+        opt.add_option(
+                key="ID",
+                required=False,
+                value=0,
+                allowed_types=[int],
+                doc=' id used for storing orbs,etc for string'
                 )
 
         opt.add_option(
@@ -145,6 +153,7 @@ class Lot(object):
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.states =self.options['states']
         self.atoms = manage_xyz.get_atoms(self.geom)
+        self.ID = self.options['ID']
 
         #TODO remove some of these options  make others properties
         self.nocc=self.options['nocc']

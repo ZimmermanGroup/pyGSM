@@ -27,7 +27,7 @@ setup(
         'networkx',
         'scipy>=1.1.0',
         'six',
-        'matplotlib'
+        'matplotlib',
         #'openbabel>=2.4.1',
         ],
 

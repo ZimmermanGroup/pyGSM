@@ -426,7 +426,6 @@ class InternalCoordinates(object):
         # The Topology is simply the NetworkX graph object.
         self.topology = G
         self.fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
-        print([ m.nodes() for m in self.fragments])
         for g in self.fragments: g.__class__ = MyG
 
         # Deprecated in networkx 2.2

@@ -12,10 +12,20 @@ from .base_lot import Lot
 from utilities import *
 
 class QChem(Lot):
+    def __init__(self,options):
+        super(QChem,self).__init__(options)
+
+        qcscratch = os.environ['QCSCRATCH']
+        for state in self.states:
+            tempfolder = qcscratch + '/string_{:03d}/{}.{}/'.format(self.ID,self.node_id,state[0])
+            print(" making temp folder {}".format(tempfolder))
+            os.system('mkdir -p {}'.format(tempfolder))
     
     def run(self,geom,multiplicity):
 
-        tempfilename = 'tempQCinp'
+        qcscratch = os.environ['QCSCRATCH']
+        tempfilename = qcscratch + '/string_{:03d}/{}.{}/tempQCinp'.format(self.ID,self.node_id,multiplicity)
+
         tempfile = open(tempfilename,'w')
         if not self.lot_inp_file:
             tempfile.write(' $rem\n')
@@ -58,12 +68,12 @@ class QChem(Lot):
         tempfile.write('$end')
         tempfile.close()
         
-        cmd = "qchem -nt {} -save {} {}.qchem.out {}.{}".format(self.nproc,tempfilename,tempfilename,self.node_id,multiplicity)
+        cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
+        print(cmd)
 
         os.system(cmd)
         
-        efilepath = os.environ['QCSCRATCH']
-        efilepath += '/{}.{}/GRAD'.format(self.node_id,multiplicity)
+        efilepath = qcscratch + '/string_{:03d}/{}.{}/GRAD'.format(self.ID,self.node_id,multiplicity)
         with open(efilepath) as efile:
             elines = efile.readlines()
         
@@ -75,11 +85,8 @@ class QChem(Lot):
             if "$" in lines:
                 temp += 1
 
-        gradfilepath = os.environ['QCSCRATCH']
-        gradfilepath += '/{}.{}/GRAD'.format(self.node_id,multiplicity)
-
-        with open(gradfilepath) as gradfile:
-            gradlines = gradfile.readlines()
+        with open(efilepath) as efile:
+            gradlines = efile.readlines()
         temp = 0
         tmp=[]
         for lines in gradlines:
@@ -122,11 +129,15 @@ class QChem(Lot):
     @classmethod
     def copy(cls,lot,options):
         base = os.environ['QCSCRATCH']
-        node_id = kwargs.get('node_id',1)
-        for state in self.states:
-            multiplicity = state[0]
-            efilepath_old=base+ '/{}.{}'.format(lot.node_id,multiplicity)
-            efilepath_new =base+ '/{}.{}'.format(node_id,multiplicity)
-            os.system('cp -r ' + efilepath_old +' ' + efilepath_new)
+        node_id = options.get('node_id',1)
+
+        if node_id != lot.node_id:
+            for state in lot.states:
+                multiplicity = state[0]
+                efilepath_old=base+ '/string_{:03d}/{}.{}'.format(lot.ID,lot.node_id,multiplicity)
+                efilepath_new =base+ '/string_{:03d}/{}.{}'.format(lot.ID,node_id,multiplicity)
+                cmd = 'cp -r ' + efilepath_old +' ' + efilepath_new
+                print(" copying QCSCRATCH files\n {}".format(cmd))
+                os.system(cmd)
         return cls(lot.options.copy().set_values(options))
 

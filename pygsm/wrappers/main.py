@@ -25,32 +25,50 @@ from growing_string_methods import *
 
 def main():
     parser = argparse.ArgumentParser(description="Parse GSM ")   
-    parser.add_argument('-xyzfile', help='XYZ file',  required=True)
+    parser.add_argument('-xyzfile', help='XYZ file. If DE-GSM this contains reactant and product',  required=True)
     parser.add_argument('-isomers', help='driving coordinate file', type=str, required=False)
-    parser.add_argument('-mode', default="DE_GSM",help='GSM Type', type=str, required=True)
-    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package",required=False)
-    parser.add_argument('-lot_inp_file',type=str,default='qstart', help='qstart,gstart,etc',required=True)
-    parser.add_argument('-ID',default=0, type=int,help='string identification',required=False)
+    parser.add_argument('-mode', default="DE_GSM",help='GSM Type. Accepts DE_GSM, SE_GSM, or SE_Cross', type=str, required=True)
+    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package name",required=False)
+    parser.add_argument('-lot_inp_file',type=str,default='qstart', help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=True)
+    parser.add_argument('-ID',default=0, type=int,help='string identification number',required=False)
     parser.add_argument('-num_nodes',type=int,default=9,help='number of nodes for string',required=False)
-    parser.add_argument('-states',type=list,default=[(1,0)],help='',required=False)
-    parser.add_argument('-job_data',type=dict,default={},help='',required=False)
-    parser.add_argument('-pes_type',type=str,default='PES',help='',required=False)
-    parser.add_argument('-adiabatic_index',type=int,default=0,help='',required=False)
-    parser.add_argument('-multiplicity',type=int,default=1,help='',required=False)
-    parser.add_argument('-FORCE',type=list,default=None,help='',required=False)
-    parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='',required=False)
-    parser.add_argument('-opt_print_level',type=int,default=1,help='',required=False)
+    parser.add_argument('-states',type=list,default=None,help='List of (mult,ad_idx). Use this when calculating multiple electronic states or multiplicity. E.g. [(1,0),(1,1)] ',required=False)
+    parser.add_argument('-job_data',type=dict,default={},help='Extra job data. Used in some packages such as TCC, OpenMM, pyTC.',required=False)
+    parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface. Use PES for regular calculation. Penalty_PES and Avg_PES are used for surface crossings',required=False)
+    parser.add_argument('-adiabatic_index',type=int,default=0,help='Adiabatic index used for excited states',required=False)
+    parser.add_argument('-multiplicity',type=int,default=1,help='Multiplicity',required=False)
+    parser.add_argument('-FORCE',type=list,default=None,help='Apply a spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',required=False)
+    parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. Recommend LBFGS for large molecules >1000 atoms',required=False)
+    parser.add_argument('-opt_print_level',type=int,default=1,help='The amount of printout for optimization. 2 prints everything in opt.',required=False)
+    parser.add_argument('-gsm_print_level',type=int,default=1,help='The amount of printout for gsm. 1 prints ?',required=False)
     parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='',required=False)
-    parser.add_argument('-coordinate_type',type=str,default='TRIC',help='',required=False)
-    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.05,help='',required=False)
-    parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='',required=False)
-    parser.add_argument('-growth_direction',type=int,default=0,help='',required=False)
-    parser.add_argument('-reactant_geom_fixed',action='store_true',help='')
-    parser.add_argument('-product_geom_fixed',action='store_true',help='')
-
+    parser.add_argument('-coordinate_type',type=str,default='TRIC',help='Recommend TRIC for molecular systems, especially with intermolecular interactions. Can also use DLC and HDLC.',required=False)
+    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.05,help='Used during growth phase to determine when to add new node.',required=False)
+    parser.add_argument('-DQMAG_MAX',type=float,default=0.4,help='Used to control maximum step size in single-ended mode.',required=False)
+    parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Used to control convergence in SE modes, BDIST is the magnitude of driving coordinate. BDIST_RATIO is current node BDIST/ reactant BDIST')
+    parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes.',required=False)
+    parser.add_argument('-growth_direction',type=int,default=0,help='0 is normal double ended growth. 1 is growth from reactant.',required=False)
+    parser.add_argument('-reactant_geom_fixed',action='store_true',help='Pre-optimize reactant')
+    parser.add_argument('-product_geom_fixed',action='store_true',help='Optimize product')
+    parser.add_argument('-nproc',type=int,default=1,help='The number of processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
+    parser.add_argument('-charge',type=int,default=0,help='Total system charge')
 
     args = parser.parse_args()
 
+    if args.nproc>1:
+        force_num_procs=True
+        print("forcing number of processors to be {}!!!".format(args.nproc))
+    else:
+        force_num_procs=False
+    if force_num_procs:
+        nproc = args.nproc
+    else:
+        #nproc = get_nproc()
+        try:
+            nproc = os.environ['OMP_NUM_THREADS']
+        except: 
+            nproc = 1
+        print(" Using {} processors".format(nproc))
 
     inpfileq = {
                # LOT
@@ -60,6 +78,7 @@ def main():
               'reactant_geom_fixed' : args.reactant_geom_fixed,
               'states': args.states,
               'job_data': args.job_data,
+              'nproc': args.nproc,
               
               #PES
               'PES_type': args.pes_type,
@@ -81,9 +100,11 @@ def main():
               'isomers_file': args.isomers,
               'ADD_NODE_TOL': args.ADD_NODE_TOL,
               'CONV_TOL': args.CONV_TOL,
+              'BDIST_RATIO':args.BDIST_RATIO,
               'growth_direction': args.growth_direction,
               'ID':args.ID,
               'product_geom_fixed' : args.product_geom_fixed,
+              'gsm_print_level' : args.gsm_print_level,
               }
 
 
@@ -93,11 +114,19 @@ def main():
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
+    if not inpfileq['states'] and inpfileq['PES_Type]'=="PES":
+        inpfileq['states'] = [(args.multiplicity,args.adiabatic_index)]
+    else:
+        raise RuntimeError('states needs to be defined for potential energy surfaces other than PES')
+
     lot = lot_class.from_options(
+            ID = inpfileq['ID'],
             lot_inp_file=inpfileq['lot_inp_file'],
             states=inpfileq['states'],
             job_data=inpfileq['job_data'],
             geom=geoms[0],
+            nproc=nproc,
+            charge=args.charge,
             )
 
     #PES
@@ -167,7 +196,7 @@ def main():
                 product_geom_fixed=inpfileq['product_geom_fixed'],
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
-                #print_level=inpfileq['gsm_print_level'],
+                print_level=inpfileq['gsm_print_level'],
                 )
     else:
         driving_coordinates = read_isomers_file(inpfileq['isomers_file'])
@@ -185,8 +214,17 @@ def main():
                 )
 
     if not inpfileq['reactant_geom_fixed']:
+        nifty.printcool("RECTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
+           refE = reactant.energy,
+           opt_steps=100,
+           )
+
+    if not inpfileq['product_geom_fixed'] and inpfileq['gsm_type']=='DE_GSM':
+        nifty.printcool("PRODUCT GEOMETRY NOT FIXED!!! OPTIMIZING")
+        optimizer.optimize(
+           molecule = product,
            refE = reactant.energy,
            opt_steps=100,
            )
@@ -200,7 +238,13 @@ def read_isomers_file(isomers_file):
     with open(isomers_file) as f:
         lines = f.readlines()
     driving_coordinates=[]
-    for line in lines[1:]:
+    
+    if lines[0] == "NEW":
+        start = 1
+    else:
+        start = 0
+
+    for line in lines[start:]:
         dc = []
         twoInts=False
         threeInts=False
@@ -228,6 +272,14 @@ def read_isomers_file(isomers_file):
     nifty.printcool("driving coordinates {}".format(driving_coordinates))
     return driving_coordinates
 
+def read_force_file(force_file):
+    raise NotImplementedError
+    with open(force_file) as f:
+        lines=f.readlines()
+    force=[]
+    return
+
+
 def go_gsm(gsm,max_iters=50,opt_steps=3,rtype=2):
     gsm.go_gsm(max_iters=max_iters,opt_steps=opt_steps,rtype=rtype)
     self.post_processing(gsm)
@@ -251,6 +303,19 @@ def plot(fx,x,title):
     plt.ylabel('Energy (kcal/mol)')
     plt.legend(loc='best')
     plt.savefig('{:04d}_string.png'.format(title),dpi=600)
+
+def get_nproc():
+    # THIS FUNCTION DOES NOT RETURN "USABLE" CPUS 
+    try:
+        return os.cpu_count()
+    except (ImportError, NotImplementedError):
+        pass
+    try:
+        import multiprocessing
+        return multiprocessing.cpu_count()
+    except (ImportError, NotImplementedError):
+        pass
+    raise Exception('Can not determine number of CPUs on this system')
 
 def post_processing(gsm):
     plot(fx=gsm.energies,x=range(len(gsm.energies)),title=gsm.ID)

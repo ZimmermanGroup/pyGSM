@@ -108,7 +108,6 @@ class eigenvector_follow(base_optimizer):
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = molecule.gradrms
-            print(" pgradrms {:4}".format(pgradrms))
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 xp_prim = self.x_prim.copy()
                 gp_prim = self.g_prim.copy()
@@ -203,6 +202,7 @@ class eigenvector_follow(base_optimizer):
        
         print(" opt-summary")
         print(self.buf.getvalue())
+        sys.stdout.flush()
         return geoms,energies
 
 

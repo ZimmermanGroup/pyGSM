@@ -25,7 +25,7 @@ class Molpro(Lot):
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
-        tempfile.write(' file,2,mp_0000_{:04d}\n'.format(self.node_id))
+        tempfile.write(' file,2,mp_{:04d}_{:04d}\n'.format(self.ID,self.node_id))
         tempfile.write(' memory,800,m\n')
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
@@ -185,7 +185,7 @@ class Molpro(Lot):
         #print(" old node id = ",self.node_id)
         node_id = options.get('node_id',1)
         if node_id != lot.node_id:
-            cmd = "cp scratch/mp_0000_{:03d} scratch/mp_0000_{:03d}".format(lot.node_id,node_id)
+            cmd = "cp scratch/mp_{:04d}_{:04d} scratch/mp_{:04d}_{:04d}".format(self.ID,lot.node_id,self.ID,node_id)
             print(cmd)
             os.system(cmd)
         return cls(lot.options.copy().set_values(options))
