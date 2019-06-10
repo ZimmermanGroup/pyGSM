@@ -1,5 +1,6 @@
 # standard library imports
 import sys
+import os
 from os import path
 import time
 
@@ -13,7 +14,7 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from .base_lot import Lot 
 from utilities import *
 
-class TCC(Lot):
+class TeraChemCloud(Lot):
 
     @property
     def TC(self):
@@ -37,7 +38,13 @@ class TCC(Lot):
         self.options['job_data']['orbfile'] = value
 
     def __init__(self,options):
-        super(TCC,self).__init__(options)
+        super(TeraChemCloud,self).__init__(options)
+        if self.lot_inp_file is not None:
+           exec(open(self.lot_inp_file).read()) 
+           print(' done executing lot_inp_file')
+           self.options['job_data']['TC'] = TC
+           self.options['job_data']['tcc_options']= tcc_options
+           #self.options['job_data']['orbfile']
         tcc_options_copy = self.tcc_options.copy()
         tcc_options_copy['atoms'] = self.atoms
         self.tcc_options = tcc_options_copy
@@ -66,9 +73,13 @@ class TCC(Lot):
                 print("sleeping for 1")
                 time.sleep(1)
 
-            print((json.dumps(results, indent=2, sort_keys=True)))
+            #print((json.dumps(results, indent=2, sort_keys=True)))
             self.orbfile = results['orbfile']
-            self.E.append((multiplicity,ad_idx,results['energy'][ad_idx]))
+            try:
+                self.E.append((multiplicity,ad_idx,results['energy'][ad_idx]))
+            except:
+                self.E.append((multiplicity,ad_idx,results['energy']))
+
             self.grada.append((multiplicity,ad_idx,results['gradient']))
         if self.do_coupling==True:
             state1=self.states[0][1]

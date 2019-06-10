@@ -20,6 +20,13 @@ class PyTC(Lot):
     Inherits from Lot. Requires a PSIW object
     """
 
+    def __init__(self,options):
+        super(PyTC,self).__init__(options)
+        if self.lot_inp_file is not None:
+           exec(open(self.lot_inp_file).read()) 
+           print(' done executing lot_inp_file')
+           self.options['job_data']['psiw'] = psiw
+
     @property
     def psiw(self):
         return self.options['job_data']['psiw']

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 #third party
 import argparse
 import numpy as np
+import textwrap
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -24,40 +25,48 @@ from growing_string_methods import *
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Parse GSM ")   
-    parser.add_argument('-xyzfile', help='XYZ file. If DE-GSM this contains reactant and product',  required=True)
+    parser = argparse.ArgumentParser(
+        description="Reaction path transition state and photochemistry tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent('''\
+                Example of use:
+                --------------------------------
+                gsm -mode DE_GSM -xyzfile yourfile.xyz -package QChem -lot_inp_file qstart -ID 1
+                ''')
+        )
+    parser.add_argument('-xyzfile', help='XYZ file containing reactant and, if DE-GSM, product.',  required=True)
     parser.add_argument('-isomers', help='driving coordinate file', type=str, required=False)
-    parser.add_argument('-mode', default="DE_GSM",help='GSM Type. Accepts DE_GSM, SE_GSM, or SE_Cross', type=str, required=True)
-    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package name. CASE SENSITIVE!",required=False)
+    parser.add_argument('-mode', default="DE_GSM",help='GSM Type (default: %(default)s)',choices=["DE_GSM","SE_GSM","SE_Cross"], type=str, required=True)
+    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package (default: %(default)s)",choices=["QChem","Orca","Molpro","PyTC","TeraChemCloud","OpenMM","DFTB"])
     parser.add_argument('-lot_inp_file',type=str,default='qstart', help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=True)
-    parser.add_argument('-ID',default=0, type=int,help='string identification number',required=False)
-    parser.add_argument('-num_nodes',type=int,help='number of nodes for string',required=False)
-    parser.add_argument('-states',type=list,default=None,help='List of (mult,ad_idx). Use this when calculating multiple electronic states or multiplicity. E.g. [(1,0),(1,1)] ',required=False)
-    parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface. Use PES for regular calculation. Penalty_PES and Avg_PES are used for surface crossings',required=False)
-    parser.add_argument('-adiabatic_index',type=int,default=0,help='Adiabatic index used for excited states',required=False)
-    parser.add_argument('-multiplicity',type=int,default=1,help='Multiplicity',required=False)
-    parser.add_argument('-FORCE',type=list,default=None,help='Apply a spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',required=False)
+    parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
+    parser.add_argument('-num_nodes',type=int,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
+    parser.add_argument('-states',type=list,default=None,help='Electronic states labeled by (multiplicity,adiabatic_index) e.g. [(1,0),(1,1)] ',required=False)
+    parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
+    parser.add_argument('-adiabatic_index',type=int,default=0,help='Adiabatic index (default: %(default)s)',required=False)
+    parser.add_argument('-multiplicity',type=int,default=1,help='Multiplicity (default: %(default)s)')
+    parser.add_argument('-FORCE',type=list,default=None,help='Spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
     parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. Recommend LBFGS for large molecules >1000 atoms',required=False)
-    parser.add_argument('-opt_print_level',type=int,default=1,help='The amount of printout for optimization. 2 prints everything in opt.',required=False)
-    parser.add_argument('-gsm_print_level',type=int,default=1,help='The amount of printout for gsm. 1 prints ?',required=False)
-    parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='',required=False)
-    parser.add_argument('-coordinate_type',type=str,default='TRIC',help='Recommend TRIC for molecular systems, especially with intermolecular interactions. Can also use DLC and HDLC.',required=False)
-    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.01,help='Used during growth phase to determine when to add new node.',required=False)
-    parser.add_argument('-DQMAG_MAX',type=float,default=0.4,help='Used to control maximum step size in single-ended mode.',required=False)
-    parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Used to control convergence in SE modes, BDIST is the magnitude of driving coordinate. BDIST_RATIO is current node BDIST/ reactant BDIST')
-    parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes.',required=False)
-    parser.add_argument('-growth_direction',type=int,default=0,help='0 is normal double ended growth. 1 is growth from reactant.',required=False)
+    parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
+    parser.add_argument('-gsm_print_level',type=int,default=1,help='Printout for gsm. 1 prints ?',required=False)
+    parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='default: %(default)s',choices=['NoLineSearch','backtrack'])
+    parser.add_argument('-coordinate_type',type=str,default='TRIC',help='Coordinate system (default %(default)s)',choices=['TRIC','DLC','HDLC'])
+    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.01,help='Convergence tolerance for adding new node (default: %(default)s)',required=False)
+    parser.add_argument('-DQMAG_MAX',type=float,default=0.8,help='Maximum step size in single-ended mode (default: %(default)s)',required=False)
+    parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Reaction completion convergence in SE modes (default: %(default)s)')
+    parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes (default: %(default)s)',required=False)
+    parser.add_argument('-growth_direction',type=int,default=0,help='Direction adding new nodes (default: %(default)s)',choices=[0,1])
     parser.add_argument('-reactant_geom_fixed',action='store_true',help='Pre-optimize reactant')
     parser.add_argument('-product_geom_fixed',action='store_true',help='Optimize product')
-    parser.add_argument('-nproc',type=int,default=1,help='The number of processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
-    parser.add_argument('-charge',type=int,default=0,help='Total system charge')
-    parser.add_argument('-max_gsm_iters',type=int,default=100,help='The maximum number of GSM cycles')
-    parser.add_argument('-max_opt_steps',type=int,help='The maximum number of node optimizations per GSM cycle')
-    parser.add_argument('-only_climb',action='store_true',help="Dont' optimize TS with EF")
+    parser.add_argument('-nproc',type=int,default=1,help='Processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
+    parser.add_argument('-charge',type=int,default=0,help='Total system charge (default: %(default)s)')
+    parser.add_argument('-max_gsm_iters',type=int,default=100,help='The maximum number of GSM cycles (default: %(default)s)')
+    parser.add_argument('-max_opt_steps',type=int,help='The maximum number of node optimizations per GSM cycle (defaults: 3 DE-GSM, 10 SE-GSM)')
+    parser.add_argument('-only_climb',action='store_true',help="Only use climbing image to optimize TS")
     parser.add_argument('-no_climb',action='store_true',help="Don't climb to the TS")
     parser.add_argument('-optimize_mesx',action='store_true',help='optimize to the MESX')
     parser.add_argument('-optimize_meci',action='store_true',help='optimize to the MECI')
-    parser.add_argument('-restart_file',help='restart file')
+    parser.add_argument('-restart_file',help='restart file',type=str)
 
 
     args = parser.parse_args()
