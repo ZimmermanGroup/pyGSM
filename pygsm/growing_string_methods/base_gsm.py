@@ -246,7 +246,9 @@ class Base_Method(Print,Analyze,object):
             self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
 
             print(" fp = ",fp)
-            ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
+            #ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
+            ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints)*self.nodes[self.TSnode].constraints)
+
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
             print(" dE_iter ={:2.2f}".format(self.dE_iter))

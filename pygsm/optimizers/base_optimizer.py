@@ -211,9 +211,17 @@ class base_optimizer(object):
     
         #TODO 4/24/2019 block matrix/distributed constraints
         constraint_steps = np.zeros((n,1))
+
+        # 6/5 climb works with block matrix distributed constraints
         # => ictan climb
         if opt_type=="CLIMB": 
-            constraint_steps[0]=self.walk_up(g,0)
+            #constraint_steps[0]=self.walk_up(g,0)
+            #self.options['SCALEW'] = 1.0
+            constraint_steps = np.dot(g.T,molecule.constraints)*molecule.constraints
+            stepsize=np.linalg.norm(constraint_steps)
+            print(" gts %1.4f" % stepsize)
+            if stepsize > 0.05:
+                constraint_steps = constraint_steps*0.05/stepsize
         # => MECI
         elif opt_type=='MECI': 
             constraint_steps[0] = self.dgrad_step(molecule) #first vector is x
@@ -348,14 +356,13 @@ class base_optimizer(object):
         
         # => Convert step back to DLC basis <= #
         dq = np.dot(v_temp,dqe0)
-        #TODO THIS CAN BE MADE MORE EFFICIENT
         dq = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq ]
         dq = np.asarray(dq)
 
-        print("check overlap")
         dq = np.reshape(dq,(-1,1))
         dq = dq - np.dot(molecule.constraints.T,dq)*molecule.constraints
-        print(np.dot(dq.T,molecule.constraints))
+        #print("check overlap")
+        #print(np.dot(dq.T,molecule.constraints))
         if self.options['print_level']>1:
             print(" dq ",dq.T)
         return np.reshape(dq,(-1,1))
@@ -375,21 +382,25 @@ class base_optimizer(object):
         norm = np.linalg.norm(ictan)
         C = ictan/norm
         Vecs = molecule.coord_basis
-        Cn = np.linalg.multi_dot([Vecs,Vecs.T,C])
+        #Cn = np.linalg.multi_dot([Vecs,Vecs.T,C])
+        Cn = block_matrix.dot(block_matrix.dot(Vecs,block_matrix.transpose(Vecs)),C)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
 
         # => get eigensolution of Hessian <= 
-        eigen,tmph = np.linalg.eigh(molecule.Hessian) #nicd,nicd 
+        self.Hessian = molecule.Hessian.copy()
+        eigen,tmph = np.linalg.eigh(self.Hessian) #nicd,nicd 
         tmph = tmph.T
 
         #TODO nneg should be self and checked
         self.nneg = sum(1 for e in eigen if e<-0.01)
 
         #=> Overlap metric <= #
-        overlap = np.dot(np.dot(tmph,Vecs.T),Cn) 
+        #overlap = np.dot(np.dot(tmph,Vecs.T),Cn) 
+        overlap = np.dot(block_matrix.dot(tmph,block_matrix.transpose(Vecs)),Cn)
 
-        print("overlap", overlap[:4].T)
+        print(" overlap", overlap[:4].T)
+        print(" nneg", self.nneg)
         # Max overlap metrics
         path_overlap,maxoln = self.maxol_w_Hess(overlap[0:4])
         print(" t/ol %i: %3.2f" % (maxoln,path_overlap))
@@ -417,13 +428,18 @@ class base_optimizer(object):
             # => Convert step back to DLC basis <= #
             dq = np.dot(tmph.T,dqe0)  # should it be transposed?
             dq = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq ]
+            dq = np.asarray(dq)
+
+            dq = np.reshape(dq,(-1,1))
         else:
             # => if overlap is small use Cn as Constraint <= #
             molecule.update_coordinate_basis(ictan)
+            g = molecule.gradient
+            print(molecule.constraints.T)
             molecule.form_Hessian_in_basis()
-            dq = self.eigenvector_step(molecule,g,1)  #hard coded!
+            dq = self.eigenvector_step(molecule,g) 
 
-        return dq,maxol_good
+        return dq
 
     def maxol_w_Hess(self,overlap):
         # Max overlap metrics
