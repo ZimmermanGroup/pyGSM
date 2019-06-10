@@ -102,6 +102,7 @@ class base_optimizer(object):
         self.Hint=None
         self.dx=0.
         self.dg=0.
+        self.maxol_good=True
 
         # additional parameters needed by linesearch
         self.linesearch_parameters = {
@@ -408,11 +409,11 @@ class base_optimizer(object):
         # => set lamda1 scale factor <=#
         lambda1 = self.set_lambda1('TS',eigen,maxoln)
 
-        maxol_good=True
+        self.maxol_good=True
         if path_overlap < self.options['HESS_TANG_TOL_TS']:
-            maxol_good = False
+            self.maxol_good = False
 
-        if maxol_good:
+        if self.maxol_good:
             # => grad in eigenvector basis <= #
             gqe = np.dot(tmph,g)
             path_overlap_e_g = gqe[maxoln]

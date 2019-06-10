@@ -275,18 +275,41 @@ class Base_Method(Print,Analyze,object):
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
 
-            if self.pTSnode!=self.TSnode and self.climb and not self.find:
-                print(" slowing down climb optimization")
-                self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
-                if self.newclimbscale<5.0:
-                    self.newclimbscale +=1.
-
             # Modify TS Hess if necessary
             if form_TS_hess:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.05:
                     self.optimizer[self.TSnode].options['DMAX']=0.05
+
+            if self.pTSnode!=self.TSnode:
+                if self.climb and not self.find:
+                    print(" slowing down climb optimization")
+                    self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+                    if self.newclimbscale<5.0:
+                        self.newclimbscale +=1.
+                elif self.find:
+                    print(" resetting TS node coords Ut (and Hessian)")
+                    self.get_tangents_1e()
+                    self.get_eigenv_finite(self.TSnode)
+            # reform Hess for TS if not good
+            if self.find and not self.optimizer[n].maxol_good:
+                self.get_tangents_1e()
+                self.get_eigenv_finite(self.TSnode)
+            elif self.find and self.optimizer[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
+                #if self.hessrcount<1 and self.pTSnode == self.TSnode:
+                if self.pTSnode == self.TSnode:
+                    print(" resetting TS node coords Ut (and Hessian)")
+                    self.get_tangents_1e()
+                    self.get_eigenv_finite(self.TSnode)
+                    self.nhessreset=10
+                    self.hessrcount=1
+                else:
+                    print(" Hessian consistently bad, going back to climb (for 3 iterations)")
+                    self.find=0
+                    self.nclimb=3
+            elif self.find and self.optimizer[self.TSnode].nneg <= 3:
+                self.hessrcount-=1
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
