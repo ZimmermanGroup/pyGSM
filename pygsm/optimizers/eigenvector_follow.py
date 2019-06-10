@@ -23,6 +23,7 @@ class eigenvector_follow(base_optimizer):
 
         #print " refE %5.4f" % refE
         print(" initial E %5.4f" % (molecule.energy - refE))
+        print(" CONV_TOL %1.4f" % self.conv_grms)
         geoms = []
         energies=[]
         geoms.append(molecule.geometry)
@@ -88,23 +89,24 @@ class eigenvector_follow(base_optimizer):
                 if opt_type !='TS':
                     dq = self.eigenvector_step(molecule,gc)
                 else:
-                    dq,maxol_good = self.TS_eigenvector_step(molecule,g,ictan)
-                    if not maxol_good:
+                    dq = self.TS_eigenvector_step(molecule,g,ictan)
+                    if not self.maxol_good:
+                        print(" Switching to climb! Maxol not good!")
                         nconstraints=1
                         opt_type='CLIMB'
 
             actual_step = np.linalg.norm(dq)
-            print(" actual_step= %1.2f"% actual_step)
+            #print(" actual_step= %1.2f"% actual_step)
             dq = dq/actual_step #normalize
             if actual_step>self.options['DMAX']:
                 step=self.options['DMAX']
-                print(" reducing step, new step = %1.2f" %step)
+                #print(" reducing step, new step = %1.2f" %step)
             else:
                 step=actual_step
         
             # store values
             xp = x.copy()
-            gp = gc.copy()
+            gp = g.copy()
             xyzp = xyz.copy()
             fxp = fx
             pgradrms = molecule.gradrms
@@ -116,12 +118,12 @@ class eigenvector_follow(base_optimizer):
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
             #print(" ### Starting  line search ###")
-            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
+            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp,constraint_steps,self.linesearch_parameters,molecule)
             if ls['status'] ==-2:
                 x = xp.copy()
                 print('[ERROR] the point return to the privious point')
                 return ls['status']
-            print(" ## Done line search")
+            #print(" ## Done line search")
         
             # get values from linesearch
             step = ls['step']

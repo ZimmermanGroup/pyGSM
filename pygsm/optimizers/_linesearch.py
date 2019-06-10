@@ -1,7 +1,7 @@
 import numpy as np 
 
-def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
-   
+def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule):
+
     x = x + d * step  + constraint_step  # 
     xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
@@ -14,7 +14,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecu
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
-def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule):
 
     # n is the non-constrained
     count = 0
@@ -93,7 +93,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameter
         step = step * width
 
 
-def golden_section(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+def golden_section(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule):
 
     z = (1 + np.sqrt(5))/2
     x1 = x.copy()
@@ -141,10 +141,10 @@ def golden_section(n, x, fx, g, d, step, xp, gp,constraint_step, parameters,mole
     
     return
 
-def secant_method(nconstraints, x, fx, gc, d, step, xp, gp,constraint_step, parameters,molecule):
+def secant_method(nconstraints, x, fx, gc, d, step, xp,constraint_step, parameters,molecule):
     raise NotImplementedError
 
-def steepest_ascent(nconstraints, x, fx, g, d, step, xp, gp,constraint_step, parameters,molecule):
+def steepest_ascent(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule):
     '''
     along the direction d
     x_new = x + step*d

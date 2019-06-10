@@ -43,6 +43,10 @@ class base_optimizer(object):
                 key='SCALEQN',
                 value=1,
                 )
+        opt.add_option(
+                key='SCALEW',
+                value=1.,
+                )
 
         opt.add_option(
                 key='Linesearch',
@@ -257,6 +261,8 @@ class base_optimizer(object):
         SCALEW = 1.0
         SCALE = self.options['SCALEQN']
         dq = g[n,0]/SCALE
+        #dq = np.dot(g.T,molecule.constraints)*molecule.constraints
+
         print(" walking up the %i coordinate = %1.4f" % (n,dq))
         if abs(dq) > self.options['MAXAD']/SCALEW:
             dq = np.sign(dq)*self.options['MAXAD']/SCALE
@@ -289,35 +295,47 @@ class base_optimizer(object):
 
     def step_controller(self,step,ratio,gradrms,pgradrms,dEpre,opt_type,dE_iter):
         # => step controller controls DMAX/DMIN <= #
-        if dE_iter > 0.01 and opt_type in ['UNCONSTRAINED','ICTAN']:
-            if step<self.options['DMAX']:
-                self.options['DMAX'] = step/1.5
-            else:
-                self.options['DMAX'] = self.options['DMAX']/1.5
-        if (ratio<0.25 or ratio>2.0):  #and abs(dEpre)>0.05:
-            #or ratio >1.5
-            if self.options['print_level']>0:
-                print(" decreasing DMAX")
-            if step<self.options['DMAX']:
-                self.options['DMAX'] = step/1.2
-            else:
-                self.options['DMAX'] = self.options['DMAX']/1.2
-        elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
-            if self.options['print_level']>0:
+
+
+        if opt_type=="TS":
+            if ratio<0. and abs(dEpre)>0.05:
+                print("sign problem, decreasing DMAX")
+                self.options['DMAX'] /= 1.35
+            elif (ratio<0.75 or ratio>1.5) and abs(dEpre)>0.05:
+                if self.options['print_level']>0:
+                    print(" decreasing DMAX")
+                if step<self.options['DMAX']:
+                    self.options['DMAX'] = step/1.1
+                else:
+                    self.options['DMAX'] = self.options['DMAX']/1.2
+            elif ratio>0.85 and ratio<1.3 and step>self.options['DMAX'] and gradrms<pgradrms*1.35:
                 print(" increasing DMAX")
-            #self.buf.write(" increasing DMAX")
-            #if step > self.options['DMAX']:
-            #    if True:
-            #        print " wolf criterion increased stepsize... ",
-            #        print " setting DMAX to wolf  condition...?"
-            #        self.options['DMAX']=step
-            self.options['DMAX']=self.options['DMAX']*1.2 + 0.01
+                self.options['DMAX'] *= 1.1
+            if self.options['DMAX']>0.15:
+                self.options['DMAX']=0.15
+        else:
+            if dE_iter > 0.001 and opt_type in ['UNCONSTRAINED','ICTAN']:
+                if step<self.options['DMAX']:
+                    self.options['DMAX'] = step/1.5
+                else:
+                    self.options['DMAX'] = self.options['DMAX']/1.5
+            elif (ratio<0.25 or ratio>1.5) and abs(dEpre)>0.05:
+                if self.options['print_level']>0:
+                    print(" decreasing DMAX")
+                if step<self.options['DMAX']:
+                    self.options['DMAX'] = step/1.1
+                else:
+                    self.options['DMAX'] = self.options['DMAX']/1.2
+            elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
+                if self.options['print_level']>0:
+                    print(" increasing DMAX")
+                self.options['DMAX']=self.options['DMAX']*1.1 + 0.01
             if self.options['DMAX']>0.25:
                 self.options['DMAX']=0.25
         
         if self.options['DMAX']<self.DMIN:
             self.options['DMAX']=self.DMIN
-        print(" DMAX %1.2f" % self.options['DMAX'])
+        #print(" DMAX %1.2f" % self.options['DMAX'])
 
     def eigenvector_step(self,molecule,g):
 
@@ -527,7 +545,7 @@ class base_optimizer(object):
         dxtGdx = np.dot(self.dx.T,Gdx)
         dxtdx2 = dxtdx*dxtdx
         dxtdgmdxtGdx = dxtdg - dxtGdx 
-        Gpsb = np.outer(dgmGdx,self.dx)/dxtdx + np.outer(self.dx,dgmGdx)/dxtdx - dxtdgmdxtGdx*dxdx/dxtdx
+        Gpsb = np.outer(dgmGdx,self.dx)/dxtdx + np.outer(self.dx,dgmGdx)/dxtdx - dxtdgmdxtGdx*dxdx/dxtdx2
 
         # Bofill mixing 
         dxtE = np.dot(self.dx.T,dgmGdx) #(1,nicd)(nicd,1)
