@@ -357,6 +357,10 @@ class Molecule(object):
         return np.sum([self.xyz[i,:]*self.atomic_mass[i]/M for i in range(self.natoms)],axis=0)
 
     @property
+    def mass_weighted_cartesians(self):
+        return np.asarray( [self.xyz[i,:]*self.atomic_mass[i]/M for i in range(self.natoms)] )
+
+    @property
     def radius_of_gyration(self):
         com = self.center_of_mass
         M = self.total_mass_au
@@ -413,7 +417,7 @@ class Molecule(object):
         self.newHess = 10
     
     def update_Primitive_Hessian(self,change=None):
-        print("updating prim hess")
+        print(" updating prim hess")
         if change is not None:
             self.Primitive_Hessian += change
         return  self.Primitive_Hessian
@@ -449,7 +453,7 @@ class Molecule(object):
         return self.Data['xyz']
 
     @xyz.setter
-    def xyz(self,newxyz=None, dq=None):
+    def xyz(self,newxyz=None):
         if newxyz is not None:
             self.Data['xyz']=newxyz
 
@@ -493,8 +497,10 @@ class Molecule(object):
             return
         #if constraints is not None:
             #assert constraints.shape[0] == self.coord_basis.shape[0], '{} does not equal {} dimensions'.format(constraints.shape[0],self.coord_basis.shape[0])
-        self.coord_obj.build_dlc(self.xyz,constraints)
+
+        print(" updating coord basis")
         self.coord_obj.clearCache()
+        self.coord_obj.build_dlc(self.xyz,constraints)
         return self.coord_basis
 
     @property

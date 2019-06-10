@@ -12,6 +12,7 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
 from coordinate_systems import DelocalizedInternalCoordinates
+from coordinate_systems import rotate
 from ._print_opt import Print
 from ._analyze_string import Analyze
 
@@ -616,7 +617,10 @@ class Base_Method(Print,Analyze,object):
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            self.nodes[self.nR] = self.add_node(self.nR-1,self.nR,self.nnodes-self.nP)
+            iR = self.nR-1
+            iP = self.nnodes-self.nP
+            iN = self.nR
+            self.nodes[self.nR] = self.add_node(iR,iN,iP)
 
             if self.nodes[self.nR]==0:
                 success= False
@@ -630,12 +634,21 @@ class Base_Method(Print,Analyze,object):
             self.nR+=1
             print(" nn=%i,nR=%i" %(self.nn,self.nR))
             self.active[self.nR-1] = True
+
+            # align center of mass  and rotation
+            #print("%i %i %i" %(iR,iP,iN))
+            print(" Aligning")
+            self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
+            print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
+
         return success
 
     def interpolateP(self,newnodes=1):
         nifty.printcool("Adding product node")
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
+
+        success=True
         for i in range(newnodes):
             #self.nodes[-self.nP-1] = self.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
             n1=self.nnodes-self.nP
@@ -651,6 +664,15 @@ class Base_Method(Print,Analyze,object):
             print(" nn=%i,nP=%i" %(self.nn,self.nP))
             self.active[-self.nP] = True
 
+            # align center of mass  and rotation
+            #print("%i %i %i" %(n1,n3,n2))
+            print(" Aligning")
+            self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
+            print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
+
+            return success
+
+
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
         nifty.printcool("reparametrizing string nodes")
         ictalloc = self.nnodes+1
@@ -663,7 +685,9 @@ class Base_Method(Print,Analyze,object):
         h2dqmag = 0.0
         dE = np.zeros(ictalloc)
         edist = np.zeros(ictalloc)
-        
+        for n in range(1,self.nnodes-1):
+            self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
+
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
 
@@ -771,22 +795,31 @@ class Base_Method(Print,Analyze,object):
                 break
 
             for n in range(n0+1,self.nnodes-1):
-                #print "moving node %i %1.3f" % (n,rpmove[n])
-                self.newic.xyz = self.nodes[n].xyz
-                opt_type=self.set_opt_type(n,quiet=True)
+                if abs(rpmove[n])>0.:
+                    #print "moving node %i %1.3f" % (n,rpmove[n])
+                    self.newic.xyz = self.nodes[n].xyz
+                    opt_type=self.set_opt_type(n,quiet=True)
 
-                if rpmove[n] < 0.:
-                    ictan[n] = np.copy(ictan0[n]) 
-                else:
-                    ictan[n] = np.copy(ictan0[n+1]) 
-                self.newic.update_coordinate_basis(ictan[n])
+                    if rpmove[n] < 0.:
+                        ictan[n] = np.copy(ictan0[n]) 
+                    else:
+                        ictan[n] = np.copy(ictan0[n+1]) 
+                    self.newic.update_coordinate_basis(ictan[n])
 
-                constraint = self.newic.constraints
-                dq = rpmove[n]*constraint
-                self.newic.update_xyz(dq,verbose=True)
-                self.nodes[n].xyz = self.newic.xyz
+                    constraint = self.newic.constraints
+                    dq = rpmove[n]*constraint
+                    self.newic.update_xyz(dq,verbose=True)
+                    self.nodes[n].xyz = self.newic.xyz
+
+                    # new 6/7/2019
+                    if self.nodes[n].newHess==0:
+                        self.nodes[n].newHess=2
 
                 #TODO might need to recalculate energy here for seam? 
+
+        for n in range(1,self.nnodes-1):
+            self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
+        
 
         print(' spacings (end ic_reparam, steps: {}/{}):'.format(i+1,ic_reparam_steps))
         for n in range(1,self.nnodes):
@@ -972,7 +1005,7 @@ class Base_Method(Print,Analyze,object):
         #    print self.nodes[en].Hessian
         #print "shape of Hessian is %s" % (np.shape(self.nodes[en].Hessian),)
 
-        self.nodes[en].newHess = 2
+        self.nodes[en].newHess = 5
 
         if False:
             print("newHess of node %i %i" % (en,self.nodes[en].newHess))
@@ -988,7 +1021,7 @@ class Base_Method(Print,Analyze,object):
     def set_opt_type(self,n,quiet=False):
         #TODO
         opt_type='ICTAN' 
-        if self.climb and self.nodes[n].isTSnode==True:
+        if self.climb and self.nodes[n].isTSnode==True and not self.find:
             opt_type='CLIMB'
         elif self.find and self.nodes[n].isTSnode==True:
             opt_type='TS'
@@ -1144,6 +1177,43 @@ class Base_Method(Print,Analyze,object):
             print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
         print()
 
+
+    def com_rotate_move(self,iR,iP,iN):
+        mfrac = 0.5
+        if self.nnodes - self.nn+1  != 1:
+            mfrac = 1./(self.nnodes - self.nn+1)
+
+        xyz0 = self.nodes[iR].xyz.copy()
+        xyz1 = self.nodes[iN].xyz.copy()
+        if self.nodes[iP] != None:
+            xyz2 = self.nodes[iP].xyz.copy()
+            com2 = self.nodes[iP].center_of_mass
+        else:
+            xyz2 = self.nodes[0].xyz.copy()
+            com2 = self.nodes[0].center_of_mass
+
+        #print("non-rotated coordinates")
+        #print(xyz0)
+        #print(xyz1)
+        #print(xyz2)
+
+        com0 = self.nodes[iR].center_of_mass
+        xyz1 += (com2 - com0)*mfrac
+
+        #print('translated xyz1')
+        #print(xyz1)
+        #print("doing rotation")
+
+        U = rotate.get_rot(xyz1,xyz0)
+        #print(U)
+        #print(U.shape)
+
+        #new_xyz = np.dot(xyz1,U)
+        new_xyz = np.dot(U,xyz1.T).T
+        #print(' rotated and translated xyz1')
+        #print(new_xyz)
+
+        return new_xyz
 
 
 if __name__=='__main__':
