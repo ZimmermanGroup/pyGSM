@@ -235,9 +235,7 @@ class Base_Method(Print,Analyze,object):
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
 
-            # => calculate totalgrad <= #
-            totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            # => set stage <= #
+            # => find peaks <= #
             fp = self.find_peaks(2)
 
             # => get TS node <=
@@ -252,7 +250,8 @@ class Base_Method(Print,Analyze,object):
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
             print(" dE_iter ={:2.2f}".format(self.dE_iter))
-            self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
+            # => calculate totalgrad <= #
+            totalgrad,gradrms,sum_gradrms = self.calc_grad()
 
             # => Check Convergence <= #
             isDone = self.check_opt(totalgrad,fp,rtype)
@@ -265,6 +264,9 @@ class Base_Method(Print,Analyze,object):
                 print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
                 if sum_gradrms<sum_conv_tol: #Break even if not climb/find
                     break
+
+            # => set stage <= #
+            form_TS_hess = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -279,6 +281,12 @@ class Base_Method(Print,Analyze,object):
                 if self.newclimbscale<5.0:
                     self.newclimbscale +=1.
 
+            # Modify TS Hess if necessary
+            if form_TS_hess:
+                self.get_tangents_1e()
+                self.get_eigenv_finite(self.TSnode)
+                if self.optimizer[self.TSnode].options['DMAX']>0.05:
+                    self.optimizer[self.TSnode].options['DMAX']=0.05
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
@@ -528,22 +536,26 @@ class Base_Method(Print,Analyze,object):
                         ictan=self.ictan[n]
                         )
 
+
             if optlastnode==True and n==self.nnodes-1 and not self.nodes[n].PES.lot.do_coupling:
                 print(" optimizing last node")
                 self.nodes[n].energy = self.optimizer[n].optimize(
-                        c_obj=self.nodes[n],
+                        molecule=self.nodes[n],
                         refE=self.nodes[0].V0,
-                        opt_type=opt_type,
                         opt_steps=opt_steps
                         )
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
+        form_TS_hess=False
+
+        #TODO totalgrad is not a good criteria for large systems
         if totalgrad < 0.3 and fp>0: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
-            elif (self.climb and not self.find and self.finder and self.dE_iter<4. and self.nclimb<1 and
+                self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+            elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or
                     (ts_gradrms<self.options['CONV_TOL']*5.))
@@ -551,32 +563,20 @@ class Base_Method(Print,Analyze,object):
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
-                self.get_tangents_1e()
-                self.get_eigenv_finite(self.TSnode)
+                form_TS_hess=True
+                #self.get_tangents_1e()
+                #self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
             if self.climb: 
                 self.nclimb-=1
 
-            for n in range(1,self.nnodes-1):
-                self.active[n]=True
-                self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+            #for n in range(1,self.nnodes-1):
+            #    self.active[n]=True
+            #    self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
+            self.nhessreset-=1
 
-        if self.find and self.optimizer[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
-            #if self.hessrcount<1 and self.pTSnode == self.TSnode:
-            if self.pTSnode == self.TSnode:
-                print(" resetting TS node coords Ut (and Hessian)")
-                self.get_tangents_1e()
-                self.get_eigenv_finite(self.TSnode)
-                self.nhessreset=10
-                self.hessrcount=1
-            else:
-                print(" Hessian consistently bad, going back to climb (for 3 iterations)")
-                self.find=0
-                self.nclimb=3
-        elif self.find and self.optimizer[self.TSnode].nneg <= 3:
-            self.hessrcount-=1
-        self.nhessreset-=1
+        return form_TS_hess
 
     def interpolateR(self,newnodes=1):
         nifty.printcool("Adding reactant node")
