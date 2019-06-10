@@ -37,9 +37,10 @@ class eigenvector_follow(base_optimizer):
         self.buf = StringIO()
 
         #form initial coord basis
-        constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-        molecule.update_coordinate_basis(constraints=constraints)
-        molecule.form_Hessian_in_basis()
+        if opt_type != 'TS':
+            constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
+            molecule.update_coordinate_basis(constraints=constraints)
+            molecule.form_Hessian_in_basis()
 
         # for cartesian these are the same
         x = np.copy(molecule.coordinates)
@@ -70,6 +71,7 @@ class eigenvector_follow(base_optimizer):
             return geoms,energies
 
         update_hess=False
+
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
             print(" On opt step {} ".format(ostep+1))
@@ -131,15 +133,19 @@ class eigenvector_follow(base_optimizer):
             fx = ls['fx']
             g  = ls['g']
 
-            # project out the constraint
-            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-
             # calculate predicted value from Hessian, gp is previous constrained gradient
             scaled_dq = dq*step
             dEtemp = np.dot(self.Hessian,scaled_dq)
-            dEpre = np.dot(np.transpose(scaled_dq),gp) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq)
+            dEpre = np.dot(np.transpose(scaled_dq),gc) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq)
             dEpre *=units.KCAL_MOL_PER_AU
-            dEpre += np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  #linear approximation
+            constraint_energy = np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  
+            #print("constraint_energy: %1.4f" % constraint_energy)
+            dEpre += constraint_energy
+            if abs(dEpre)<0.05:
+                dEpre = np.sign(dEpre)*0.05
+
+            # project out the constraint
+            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
             # control step size 
             dEstep = fx - fxp
@@ -184,6 +190,7 @@ class eigenvector_follow(base_optimizer):
 
             # check for convergence TODO
             if molecule.gradrms < self.conv_grms:
+                print(" converged")
                 break
 
             #update DLC  --> this changes q, g, Hint
@@ -194,17 +201,17 @@ class eigenvector_follow(base_optimizer):
                     x = np.copy(molecule.coordinates)
                     fx = molecule.energy
                     dE = molecule.difference_energy
-                    if dE is not 1000.:
+                    if dE != 1000.:
                         print(" difference energy is %5.4f" % dE)
                     g = molecule.gradient.copy()
                     # project out the constraint
                     gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
                     #molecule.form_Hessian_in_basis()
             print()
+            sys.stdout.flush()
        
         print(" opt-summary")
         print(self.buf.getvalue())
-        sys.stdout.flush()
         return geoms,energies
 
 
