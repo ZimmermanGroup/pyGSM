@@ -537,9 +537,7 @@ class Base_Method(Print,Analyze,object):
         # this can be put in a function
         optlastnode=False
         if self.product_geom_fixed==False:
-            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0:
-                optlastnode=True
-            if self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
+            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
                 optlastnode=True
 
         for n in range(self.nnodes):
@@ -550,10 +548,14 @@ class Base_Method(Print,Analyze,object):
                 opt_type = self.set_opt_type(n)
 
                 exsteps=1 #multiplier for nodes near the TS node
-                if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  # should this be for climb too?
+                if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
                     exsteps=2
                     print(" multiplying steps for node %i by %i" % (n,exsteps))
-                if self.find and n==self.TSnode: #multiplier for TS node during
+                if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+                    exsteps=2
+                    print(" multiplying steps for node %i by %i" % (n,exsteps))
+
+                elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
                     exsteps=2
                     print(" multiplying steps for node %i by %i" % (n,exsteps))
                 
