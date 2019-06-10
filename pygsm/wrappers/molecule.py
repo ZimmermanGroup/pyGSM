@@ -265,7 +265,6 @@ class Molecule(object):
         self.TSnode=False
         self.bdist =0.
 
-        #TODO BUGGGGGGG make property so it copies over properly...
         self.newHess = 10
         ###
         if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
@@ -282,7 +281,7 @@ class Molecule(object):
 
         #logger.info("Molecule %s constructed.", repr(self))
         #logger.debug("Molecule %s constructed.", repr(self))
-        print("molecule constructed")
+        print(" molecule constructed")
 
     def __add__(self,other):
         """ add method for molecule objects. Concatenates"""
@@ -510,6 +509,17 @@ class Molecule(object):
     @property
     def coordinates(self):
         return np.reshape(self.coord_obj.calculate(self.xyz),(-1,1))
+
+    #property
+    #def der_coords
+
+    #der_coords.setter
+
+
+    #property
+    #def second_der_coords
+
+    #def update_second_der
 
     @property
     def num_coordinates(self):

@@ -28,12 +28,11 @@ def main():
     parser.add_argument('-xyzfile', help='XYZ file. If DE-GSM this contains reactant and product',  required=True)
     parser.add_argument('-isomers', help='driving coordinate file', type=str, required=False)
     parser.add_argument('-mode', default="DE_GSM",help='GSM Type. Accepts DE_GSM, SE_GSM, or SE_Cross', type=str, required=True)
-    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package name",required=False)
+    parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package name. CASE SENSITIVE!",required=False)
     parser.add_argument('-lot_inp_file',type=str,default='qstart', help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=True)
     parser.add_argument('-ID',default=0, type=int,help='string identification number',required=False)
-    parser.add_argument('-num_nodes',type=int,default=9,help='number of nodes for string',required=False)
+    parser.add_argument('-num_nodes',type=int,help='number of nodes for string',required=False)
     parser.add_argument('-states',type=list,default=None,help='List of (mult,ad_idx). Use this when calculating multiple electronic states or multiplicity. E.g. [(1,0),(1,1)] ',required=False)
-    parser.add_argument('-job_data',type=dict,default={},help='Extra job data. Used in some packages such as TCC, OpenMM, pyTC.',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface. Use PES for regular calculation. Penalty_PES and Avg_PES are used for surface crossings',required=False)
     parser.add_argument('-adiabatic_index',type=int,default=0,help='Adiabatic index used for excited states',required=False)
     parser.add_argument('-multiplicity',type=int,default=1,help='Multiplicity',required=False)
@@ -43,7 +42,7 @@ def main():
     parser.add_argument('-gsm_print_level',type=int,default=1,help='The amount of printout for gsm. 1 prints ?',required=False)
     parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='',required=False)
     parser.add_argument('-coordinate_type',type=str,default='TRIC',help='Recommend TRIC for molecular systems, especially with intermolecular interactions. Can also use DLC and HDLC.',required=False)
-    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.05,help='Used during growth phase to determine when to add new node.',required=False)
+    parser.add_argument('-ADD_NODE_TOL',type=float,default=0.01,help='Used during growth phase to determine when to add new node.',required=False)
     parser.add_argument('-DQMAG_MAX',type=float,default=0.4,help='Used to control maximum step size in single-ended mode.',required=False)
     parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Used to control convergence in SE modes, BDIST is the magnitude of driving coordinate. BDIST_RATIO is current node BDIST/ reactant BDIST')
     parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes.',required=False)
@@ -52,6 +51,14 @@ def main():
     parser.add_argument('-product_geom_fixed',action='store_true',help='Optimize product')
     parser.add_argument('-nproc',type=int,default=1,help='The number of processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
     parser.add_argument('-charge',type=int,default=0,help='Total system charge')
+    parser.add_argument('-max_gsm_iters',type=int,default=100,help='The maximum number of GSM cycles')
+    parser.add_argument('-max_opt_steps',type=int,help='The maximum number of node optimizations per GSM cycle')
+    parser.add_argument('-only_climb',action='store_true',help="Dont' optimize TS with EF")
+    parser.add_argument('-no_climb',action='store_true',help="Don't climb to the TS")
+    parser.add_argument('-optimize_mesx',action='store_true',help='optimize to the MESX')
+    parser.add_argument('-optimize_meci',action='store_true',help='optimize to the MECI')
+    parser.add_argument('-restart_file',help='restart file')
+
 
     args = parser.parse_args()
 
@@ -77,7 +84,6 @@ def main():
               'EST_Package': args.package,
               'reactant_geom_fixed' : args.reactant_geom_fixed,
               'states': args.states,
-              'job_data': args.job_data,
               'nproc': args.nproc,
               
               #PES
@@ -101,10 +107,13 @@ def main():
               'ADD_NODE_TOL': args.ADD_NODE_TOL,
               'CONV_TOL': args.CONV_TOL,
               'BDIST_RATIO':args.BDIST_RATIO,
+              'DQMAG_MAX': args.DQMAG_MAX,
               'growth_direction': args.growth_direction,
               'ID':args.ID,
               'product_geom_fixed' : args.product_geom_fixed,
               'gsm_print_level' : args.gsm_print_level,
+              'max_gsm_iters' : args.max_gsm_iters,
+              'max_opt_steps' : args.max_opt_steps,
               }
 
 
@@ -114,22 +123,32 @@ def main():
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-    if not inpfileq['states'] and inpfileq['PES_Type]'=="PES":
+    if not inpfileq['states'] and inpfileq['PES_type']=="PES":
         inpfileq['states'] = [(args.multiplicity,args.adiabatic_index)]
     else:
         raise RuntimeError('states needs to be defined for potential energy surfaces other than PES')
-
+    if args.charge != 0:
+        print("Warning: charge is not implemented for all level of theories. Make sure this is correct for your package.")
+    if inpfileq['num_nodes'] is None:
+        if inpfileq['gsm_type']=="DE_GSM":
+            inpfileq['num_nodes']=9
+        else:
+            inpfileq['num_nodes']=20
+    do_coupling = True if inpfileq['PES_type']=="Avg_PES" else False
+    
     lot = lot_class.from_options(
             ID = inpfileq['ID'],
             lot_inp_file=inpfileq['lot_inp_file'],
             states=inpfileq['states'],
-            job_data=inpfileq['job_data'],
             geom=geoms[0],
             nproc=nproc,
             charge=args.charge,
+            do_coupling=do_coupling,
             )
 
     #PES
+    if args.optimize_mesx or args.optimize_meci:
+        assert inpfileq['PES_type'] == "Penalty_PES", "Need penalty pes for optimizing MESX/MECI"
     nifty.printcool("Building the PES objects")
     pes_class = getattr(sys.modules[__name__], inpfileq['PES_type'])
     if inpfileq['PES_type']=='PES':
@@ -229,7 +248,26 @@ def main():
            opt_steps=100,
            )
 
-    gsm.go_gsm()
+    rtype=2
+    if args.only_climb:
+        rtype=1
+    elif args.no_climb:
+        rtype=0
+    elif args.optimize_meci:
+        rtype=0
+    elif args.optimize_mesx:
+        rtype=1
+    if inpfileq['max_opt_steps'] is None:
+        if inpfileq['gsm_type']=="DE_GSM":
+            inpfileq['max_opt_steps']=3
+        else:
+            inpfileq['max_opt_steps']=10
+   
+    if args.restart_file is not None:
+        gsm.restart_string(args.restart_file)
+    gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
+    post_processing(gsm)
+    cleanup_scratch(gsm.ID)
 
     return
 
@@ -279,17 +317,12 @@ def read_force_file(force_file):
     force=[]
     return
 
-
-def go_gsm(gsm,max_iters=50,opt_steps=3,rtype=2):
-    gsm.go_gsm(max_iters=max_iters,opt_steps=opt_steps,rtype=rtype)
-    self.post_processing(gsm)
-    self.cleanup_scratch(gsm.ID)
-
 def cleanup_scratch(ID):
     cmd = "rm scratch/growth_iters_{:03d}_*.xyz".format(ID)
     os.system(cmd)
     cmd = "rm scratch/opt_iters_{:03d}_*.xyz".format(ID)
     os.system(cmd)
+    ##cmd = "rm scratch/initial_ic_reparam_{:03d}_{:03d}.xyz".format()
     #if inpfileq['EST_Package']=="DFTB":
     #    for i in range(self.gsm.nnodes):
     #        cmd = 'rm -rf scratch/{}'.format(i)
@@ -330,6 +363,10 @@ def post_processing(gsm):
     print(" min reactant node: %i min product node %i TS node is %i" % (minnodeR,minnodeP,gsm.TSnode))
     print(" TS energy: %5.4f" % TSenergy)
     print(" Delta E is %5.4f" % deltaE)
+
+#def go_gsm(gsm,max_iters=50,opt_steps=3,rtype=2):
+#    gsm.go_gsm(max_iters=max_iters,opt_steps=opt_steps,rtype=rtype)
+
 
 
 if __name__=='__main__':

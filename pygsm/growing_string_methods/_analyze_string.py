@@ -33,8 +33,8 @@ class Analyze:
                     diss=True
 
         print(" nnodes ",nnodes)  
-        print(" allup? ",allup)
-        print(" diss? ",diss)
+        print(" all uphill? ",allup)
+        print(" dissociative? ",diss)
         npeaks1=0
         npeaks2=0
         minnodes=[]

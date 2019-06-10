@@ -69,7 +69,7 @@ class QChem(Lot):
         tempfile.close()
         
         cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
-        print(cmd)
+        #print(cmd)
 
         os.system(cmd)
         
