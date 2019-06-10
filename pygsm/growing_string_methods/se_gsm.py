@@ -208,8 +208,8 @@ class SE_GSM(Base_Method):
                 self.active[i] = False
                 self.optimizer[i].conv_grms = self.options['CONV_TOL']
                 print(" CONV_TOL of node %d is %.4f" % (i,self.optimizer[i].conv_grms))
-        #self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
-        self.optimizer[nR].conv_grms = self.options['CONV_TOL']
+        self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        #self.optimizer[nR].conv_grms = self.options['CONV_TOL']*2
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 
@@ -472,8 +472,8 @@ class SE_GSM(Base_Method):
             isDone=True
             return isDone
 
-    def restart_string(self,xyzbase='restart'):
-        super(SE_Cross,self).restart_string(xyzbase)
+    def restart_string(self,xyzfile='restart.xyz'):
+        super(SE_Cross,self).restart_string(xyzfile)
         self.done_growing=False
         self.nnodes=20
         self.nR -=1 

@@ -1079,9 +1079,9 @@ class Base_Method(Print,Analyze,object):
                """
         print(msg)
 
-    def restart_string(self,xyzbase='restart'):
+    def restart_string(self,xyzfile='restart.xyz'):
+        nifty.printcool("Restarting string from file")
         self.growth_direction=0
-        xyzfile=xyzbase+".xyz"
         with open(xyzfile) as f:
             nlines = sum(1 for _ in f)
         #print "number of lines is ", nlines
@@ -1090,6 +1090,7 @@ class Base_Method(Print,Analyze,object):
 
         #print "number of atoms is ",natoms
         nstructs = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
+        nstructs = int(nstructs)
         
         #print "number of structures in restart file is %i" % nstructs
         coords=[]
