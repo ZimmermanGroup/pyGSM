@@ -56,13 +56,13 @@ class DE_GSM(Base_Method):
             elif self.growth_direction==2:
                 self.interpolateP(1)
             oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
-            print("Done Growing the String!!!")
-            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
-            print(" initial ic_reparam")
+            #nifty.printcool("initial ic_reparam")
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            #self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
         else:
             oi=0
             self.get_tangents_1()
@@ -159,7 +159,8 @@ class DE_GSM(Base_Method):
         return success
 
     def tangent(self,n1,n2):
-        #print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+        if self.print_level>1:
+            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
         # this could have been done easier but it is nicer to do it this way
         Q1 = self.nodes[n1].primitive_internal_values 
         Q2 = self.nodes[n2].primitive_internal_values 

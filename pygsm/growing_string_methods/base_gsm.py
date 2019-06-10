@@ -205,6 +205,11 @@ class Base_Method(Print,Analyze,object):
         self.set_finder(rtype)
 
         for oi in range(max_iter):
+
+            nifty.printcool("Starting opt iter %i" % oi)
+            if self.climb and not self.find: print(" CLIMBING")
+            elif self.find: print(" TS SEARCHING")
+
             sys.stdout.flush()
 
             # stash previous TSnode  
@@ -218,16 +223,13 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(optsteps)
             self.store_energies()
             self.emax = float(max(self.energies[1:-1]))
+
+            print()
+            #nifty.printcool("GSM iteration %i done: Reparametrizing" % oi)
             print(" V_profile: ", end=' ')
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(self.energies[n])), end=' ')
             print()
-
-            if self.climb and not self.find: print("c")
-            elif self.find: print("x")
-
-            #TODO stuff with path_overlap/path_overlapn #TODO need to save path_overlap
-            
 
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
@@ -235,8 +237,6 @@ class Base_Method(Print,Analyze,object):
 
             # => calculate totalgrad <= #
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            print(" opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
-
             # => set stage <= #
             fp = self.find_peaks(2)
 
@@ -258,12 +258,11 @@ class Base_Method(Print,Analyze,object):
                 break
 
             sum_conv_tol = (self.nn-2)*self.options['CONV_TOL'] + (self.nn-2)*self.options['CONV_TOL']/10
-            print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
-            print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
-            if not self.climber and not self.finder and sum_gradrms<sum_conv_tol: #Break even if not climb/find
-                break
-            elif not self.climber and not self.finder:
-                pass
+            if not self.climber and not self.finder:
+                print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
+                print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
+                if sum_gradrms<sum_conv_tol: #Break even if not climb/find
+                    break
 
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
@@ -279,7 +278,9 @@ class Base_Method(Print,Analyze,object):
                     self.newclimbscale +=1.
 
 
-            #also prints tgrads and jobGradCount
+            #TODO prints tgrads and jobGradCount
+            print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
+            print('\n')
 
         print(" Printing string to opt_converged_000.xyz")
         self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
@@ -411,13 +412,20 @@ class Base_Method(Print,Analyze,object):
         dqmaga = [0.]*self.nnodes
         ncurrent,nlist = self.make_nlist()
 
+        if self.print_level>1:
+            print("ncurrent, nlist")
+            print(ncurrent)
+            print(nlist)
+
         for n in range(ncurrent):
             self.ictan[nlist[2*n]],_ = self.tangent(nlist[2*n],nlist[2*n+1])
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
-            if self.print_level>0:
+            if self.print_level>1:
                 print("forming space for", nlist[2*n+1])
+            if self.print_level>1:
+                print("forming tangent for ",nlist[2*n])
 
             if (ictan0[:]==0.).all():
                 print(nlist[2*n])
@@ -448,6 +456,7 @@ class Base_Method(Print,Analyze,object):
         nifty.printcool("In growth_iters")
 
         for n in range(iters):
+            nifty.printcool("Starting growth iter %i" % n)
             sys.stdout.flush()
             self.get_tangents_1g()
             self.opt_steps(maxopt)
@@ -455,7 +464,6 @@ class Base_Method(Print,Analyze,object):
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.emax = float(max(self.energies[1:-1]))
             self.TSnode = np.where(self.energies==self.emax)[0][0]
-            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
                 break
@@ -466,6 +474,7 @@ class Base_Method(Print,Analyze,object):
                 break
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
+            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
 
         # create newic object
         print(" creating newic molecule--used for ic_reparam")
@@ -495,7 +504,8 @@ class Base_Method(Print,Analyze,object):
 
         for n in range(self.nnodes):
             if self.nodes[n] != None and self.active[n]==True:
-                print(" Optimizing node %i" % n)
+                print()
+                nifty.printcool("Optimizing node %i" % n)
                 # => set opt type <= #
                 opt_type = self.set_opt_type(n)
 
@@ -567,7 +577,7 @@ class Base_Method(Print,Analyze,object):
         self.nhessreset-=1
 
     def interpolateR(self,newnodes=1):
-        print(" Adding reactant node")
+        nifty.printcool("Adding reactant node")
         success= True
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
@@ -582,7 +592,6 @@ class Base_Method(Print,Analyze,object):
                 ictan,bdist =  self.tangent(self.nR,None)
                 self.nodes[self.nR].bdist = bdist
 
-            print(" getting energy for node %d: %5.4f" %(self.nR,self.nodes[self.nR].energy - self.nodes[0].V0))
             self.nn+=1
             self.nR+=1
             print(" nn=%i,nR=%i" %(self.nn,self.nR))
@@ -590,7 +599,7 @@ class Base_Method(Print,Analyze,object):
         return success
 
     def interpolateP(self,newnodes=1):
-        print(" Adding product node")
+        nifty.printcool("Adding product node")
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
@@ -602,13 +611,14 @@ class Base_Method(Print,Analyze,object):
             if self.nodes[-self.nP-1]==0:
                 success= False
                 break
-            print(" getting energy for node %d: %5.4f" %(self.nR,self.nodes[-self.nP-1].energy - self.nodes[0].V0))
+
             self.nn+=1
             self.nP+=1
             print(" nn=%i,nP=%i" %(self.nn,self.nP))
             self.active[-self.nP] = True
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
+        nifty.printcool("reparametrizing string nodes")
         ictalloc = self.nnodes+1
         rpmove = np.zeros(ictalloc)
         rpart = np.zeros(ictalloc)
@@ -717,7 +727,7 @@ class Base_Method(Print,Analyze,object):
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
             lastdispr = disprms
 
-            if self.print_level>1:
+            if self.print_level>0:
                 for n in range(n0+1,self.nnodes-1):
                     print(" disp[{}]: {:1.2}".format(n,rpmove[n]), end=' ')
                 print()
@@ -754,6 +764,7 @@ class Base_Method(Print,Analyze,object):
         """
         
         """
+        nifty.printcool("Reparamerizing string nodes")
         #close_dist_fix(0) #done here in GString line 3427.
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
@@ -839,10 +850,10 @@ class Base_Method(Print,Analyze,object):
                         dq0 = rpmove[n]*constraint
                         if self.print_level>1:
                             print(" dq0[constraint]: {:1.3}".format(rpmove[n]))
-                        self.nodes[n].update_xyz(dq0,verbose=False)
+                        self.nodes[n].update_xyz(dq0,verbose=True)
                     else:
                         pass
-        print(" spacings (end ic_reparam, steps: {}):".format(ic_reparam_steps), end=' ')
+        print(" spacings (end ic_reparam, steps: {}/{}):".format(i,ic_reparam_steps), end=' ')
         for n in range(self.nnodes):
             print(" {:1.2}".format(self.dqmaga[n]), end=' ')
         print("  disprms: {:1.3}".format(disprms))
@@ -901,9 +912,7 @@ class Base_Method(Print,Analyze,object):
         self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian
         self.newic.form_Hessian_in_basis()
 
-        print(tan0.shape)
         tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   #nicd,1
-        print(tan.shape)
         #print "tan"
         #print tan
 
@@ -932,9 +941,10 @@ class Base_Method(Print,Analyze,object):
         self.nodes[en].newHess = 2
 
         if False:
+            print("newHess of node %i %i" % (en,self.nodes[en].newHess))
             eigen,tmph = np.linalg.eigh(self.nodes[en].Hessian) #nicd,nicd
-            #print "eigenvalues of new Hess"
-            #print eigen
+            print("eigenvalues of new Hess")
+            print(eigen)
 
         # reset pgradrms ? 
 
@@ -962,7 +972,7 @@ class Base_Method(Print,Analyze,object):
         print('')
         print("*********************************************************************")
         if rtype==2:
-            print("****************** set climber and finder to True*****************")
+            print("****************** set climber and finder to True *******************")
             self.climber=True
             self.finder=True
         elif rtype==1:
