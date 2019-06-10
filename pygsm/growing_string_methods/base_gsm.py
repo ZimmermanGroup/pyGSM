@@ -144,6 +144,7 @@ class Base_Method(Print,Analyze,object):
         self.options = options
 
         self.print_msg()
+        os.system('mkdir -p scratch')
 
         # Cache attributes
         self.nnodes = self.options['nnodes']
@@ -497,6 +498,8 @@ class Base_Method(Print,Analyze,object):
         nifty.printcool("In growth_iters")
 
         self.get_tangents_1g()
+        self.set_active(self.nR-1, self.nnodes-self.nP)
+
         for n in range(iters):
             nifty.printcool("Starting growth iter %i" % n)
             sys.stdout.flush()

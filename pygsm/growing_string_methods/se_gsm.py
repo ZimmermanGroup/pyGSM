@@ -106,7 +106,10 @@ class SE_GSM(Base_Method):
             print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                self.optimizer[n].conv_grms=self.options['CONV_TOL']
+                if self.climber or self.finder:
+                    self.optimizer[n].conv_grms=self.options['CONV_TOL']*2
+                else:
+                    self.optimizer[n].conv_grms=self.options['CONV_TOL']
 
         print(" initial ic_reparam")
         self.ic_reparam()
@@ -207,8 +210,9 @@ class SE_GSM(Base_Method):
             if self.nodes[i] != None:
                 self.active[i] = False
                 self.optimizer[i].conv_grms = self.options['CONV_TOL']
-                print(" CONV_TOL of node %d is %.4f" % (i,self.optimizer[i].conv_grms))
+                print(" conv_tol of node %d is %.4f" % (i,self.optimizer[i].conv_grms))
         self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
         #self.optimizer[nR].conv_grms = self.options['CONV_TOL']*2
         self.active[nR] = True
         #print(" Here is new active:",self.active)

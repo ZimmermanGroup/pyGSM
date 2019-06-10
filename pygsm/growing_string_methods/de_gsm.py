@@ -135,6 +135,10 @@ class DE_GSM(Base_Method):
         for i in range(self.nnodes):
             if self.nodes[i] != None:
                 self.optimizer[i].conv_grms = self.options['CONV_TOL']*2.
+        self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        self.optimizer[nP].conv_grms = self.options['ADD_NODE_TOL']
+        print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
+        print(" conv_tol of node %d is %.4f" % (nP,self.optimizer[nP].conv_grms))
         self.active[nR] = True
         self.active[nP] = True
         if self.growth_direction==1:
