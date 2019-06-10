@@ -196,7 +196,8 @@ class SE_GSM(Base_Method):
             self.interpolateR()
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
-        pass
+        self.get_tangents_1g()
+        return
 
     def set_active(self,nR,nP=None):
         #print(" Here is active:",self.active)

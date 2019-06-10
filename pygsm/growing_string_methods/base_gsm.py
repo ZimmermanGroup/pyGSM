@@ -463,15 +463,22 @@ class Base_Method(Print,Analyze,object):
             if (ictan0[:]==0.).all():
                 print(nlist[2*n])
                 raise RuntimeError
-            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
 
             #normalize ictan
-            self.ictan[nlist[2*n]] /= np.linalg.norm(self.ictan[nlist[2*n]])
+            norm = np.linalg.norm(ictan0)  
+            self.ictan[nlist[2*n]] /= norm
            
-            constraint = self.nodes[nlist[2*n+1]].constraints
-            prim_constraint = block_matrix.dot(Vecs,constraint)
-            dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
-            dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
+            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
+            #constraint = self.nodes[nlist[2*n+1]].constraints
+            #prim_constraint = block_matrix.dot(Vecs,constraint)
+            #print(" norm of ictan %5.4f" % norm)
+            #dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
+            #dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
+
+            # for some reason the sqrt norm matches up 
+            dqmaga[nlist[2*n]] = np.sqrt(norm)
+
+            #print(" dqmaga %5.4f" %dqmaga[nlist[2*n]])
 
         self.dqmaga = dqmaga
        
@@ -488,10 +495,10 @@ class Base_Method(Print,Analyze,object):
     def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
         nifty.printcool("In growth_iters")
 
+        self.get_tangents_1g()
         for n in range(iters):
             nifty.printcool("Starting growth iter %i" % n)
             sys.stdout.flush()
-            self.get_tangents_1g()
             self.opt_steps(maxopt)
             self.store_energies()
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
