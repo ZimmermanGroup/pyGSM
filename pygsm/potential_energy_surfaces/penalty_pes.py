@@ -33,8 +33,8 @@ class Penalty_PES(PES):
         print(' PES1 multiplicity: {} PES2 multiplicity: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity))
 
     @classmethod
-    def create_pes_from(cls,PES,**kwargs):
-        lot = type(PES.lot).copy(PES.lot,**kwargs)
+    def create_pes_from(cls,PES,options={}):
+        lot = type(PES.lot).copy(PES.lot,options)
         return cls(PES.PES1,PES.PES2,lot,PES.sigma,PES.alpha)
 
     def get_energy(self,geom):

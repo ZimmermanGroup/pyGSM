@@ -41,10 +41,10 @@ def main():
     parser.add_argument('-lot_inp_file',type=str,default='qstart', help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=True)
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
     parser.add_argument('-num_nodes',type=int,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
-    parser.add_argument('-states',type=list,default=None,help='Electronic states labeled by (multiplicity,adiabatic_index) e.g. [(1,0),(1,1)] ',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
-    parser.add_argument('-adiabatic_index',type=int,default=0,help='Adiabatic index (default: %(default)s)',required=False)
-    parser.add_argument('-multiplicity',type=int,default=1,help='Multiplicity (default: %(default)s)')
+    parser.add_argument('-adiabatic_index',nargs="*",type=int,default=0,help='Adiabatic index (default: %(default)s)',required=False)
+    parser.add_argument('-multiplicity',nargs="*",type=int,default=1,help='Multiplicity (default: %(default)s)')
+    #parser.add_argument('-states',type=list,default=None,help='Electronic states labeled by (multiplicity,adiabatic_index) e.g. (1,0),(1,1) ',required=False)
     parser.add_argument('-FORCE',type=list,default=None,help='Spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
     parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. Recommend LBFGS for large molecules >1000 atoms',required=False)
     parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
@@ -86,14 +86,21 @@ def main():
             nproc = 1
         print(" Using {} processors".format(nproc))
 
+    #print(args.states)
+    #if args.states is not None:
+    #    states = [tuple(int(s) for s in my_tup.strip("()").split(",")) for my_tup in args.states ]
+    #    print(states)
+    #else:
+    #    states=None
+
     inpfileq = {
                # LOT
               'lot_inp_file': args.lot_inp_file,
               'xyzfile' : args.xyzfile,
               'EST_Package': args.package,
               'reactant_geom_fixed' : args.reactant_geom_fixed,
-              'states': args.states,
               'nproc': args.nproc,
+              'states': None,
               
               #PES
               'PES_type': args.pes_type,
@@ -127,15 +134,16 @@ def main():
 
 
     #LOT
-    nifty.printcool("Build the pyGSM level of theory (LOT) object")
+    nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
     est_package=importlib.import_module("level_of_theories."+inpfileq['EST_Package'].lower())
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-    if not inpfileq['states'] and inpfileq['PES_type']=="PES":
-        inpfileq['states'] = [(args.multiplicity,args.adiabatic_index)]
-    else:
-        raise RuntimeError('states needs to be defined for potential energy surfaces other than PES')
+
+    inpfileq['states'] = [ (m,s) for m,s in zip(args.multiplicity,args.adiabatic_index)]
+    if  not inpfileq['PES_type']!="PES":
+        assert len(args.adiabatic_index)>1, "need more states"
+        assert len(args.multiplicity)>1, "need more spins"
     if args.charge != 0:
         print("Warning: charge is not implemented for all level of theories. Make sure this is correct for your package.")
     if inpfileq['num_nodes'] is None:
@@ -156,9 +164,12 @@ def main():
             )
 
     #PES
-    if args.optimize_mesx or args.optimize_meci:
+    if inpfileq['gsm_type'] == "SE_Cross":
+        if inpfileq['PES_type']!="Penalty_PES":
+            inpfileq['PES_type']="Penalty_PES"
+    if args.optimize_mesx or args.optimize_meci  or inpfileq['gsm_type']=="SE_Cross":
         assert inpfileq['PES_type'] == "Penalty_PES", "Need penalty pes for optimizing MESX/MECI"
-    nifty.printcool("Building the PES objects")
+    nifty.printcool("Building the {} objects".format(inpfileq['PES_type']))
     pes_class = getattr(sys.modules[__name__], inpfileq['PES_type'])
     if inpfileq['PES_type']=='PES':
         pes = pes_class.from_options(
@@ -179,10 +190,10 @@ def main():
                 ad_idx=inpfileq['states'][1][1],
                 FORCE=inpfileq['FORCE']
                 )
-        pes = pes_class.from_options(PES1=pes1,PES2=pes2,lot=lot)
+        pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)
 
     # Molecule
-    nifty.printcool("Building the reactant object")
+    nifty.printcool("Building the reactant object with {}".format(inpfileq['coordinate_type']))
     Form_Hessian = True if inpfileq['optimizer']=='eigenvector_follow' else False
     form_primitives = True if inpfileq['gsm_type']!='DE_GSM' else False
 
@@ -241,7 +252,7 @@ def main():
                 ID=inpfileq['ID'],
                 )
 
-    if not inpfileq['reactant_geom_fixed']:
+    if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
         nifty.printcool("RECTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
@@ -266,6 +277,9 @@ def main():
         rtype=0
     elif args.optimize_mesx:
         rtype=1
+    elif inpfileq['gsm_type']=="SE_Cross":
+        rtype=1
+
     if inpfileq['max_opt_steps'] is None:
         if inpfileq['gsm_type']=="DE_GSM":
             inpfileq['max_opt_steps']=3
@@ -304,10 +318,12 @@ def read_isomers_file(isomers_file):
                 elif elem=="ANGLE":
                     threeInts =True
                 elif elem=="TORSION" or elem=="OOP":
-                    threeInts =True
+                    fourInts =True
             else:
                 if twoInts and i>2:
                     dc.append(float(elem))
+                elif twoInts and i>3:
+                    dc.append(float(elem)) # add break dist
                 elif threeInts and i>3:
                     dc.append(float(elem))
                 elif fourInts and i>4:
