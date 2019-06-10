@@ -66,9 +66,15 @@ class DE_GSM(Base_Method):
         else:
             oi=0
             self.get_tangents_1()
+
+        # set convergence for nodes
+        if not (self.climber or self.finder):
+            factor = 2.
+        else: 
+            factor = 1.
         for i in range(self.nnodes):
             if self.nodes[i] !=None:
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']
+                self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
 
         if self.tscontinue==True:
             if max_iters-oi>0:
@@ -197,14 +203,14 @@ class DE_GSM(Base_Method):
             nlist[2*ncurrent+1] = self.nR - 2 #for isMAP_SE
 
         #TODO is this actually used?
-        if self.nR == 0: nlist[2*ncurrent] += 1
-        if self.nP == 0: nlist[2*ncurrent+1] -= 1
+        #if self.nR == 0: nlist[2*ncurrent] += 1
+        #if self.nP == 0: nlist[2*ncurrent+1] -= 1
         ncurrent += 1
         nlist[2*ncurrent] = self.nnodes -self.nP
         nlist[2*ncurrent+1] = self.nR-1
-        #TODO is this actually used?
-        if self.nR == 0: nlist[2*ncurrent+1] += 1
-        if self.nP == 0: nlist[2*ncurrent] -= 1
+        ##TODO is this actually used?
+        #if self.nR == 0: nlist[2*ncurrent+1] += 1
+        #if self.nP == 0: nlist[2*ncurrent] -= 1
         ncurrent += 1
 
         return ncurrent,nlist
@@ -213,11 +219,12 @@ class DE_GSM(Base_Method):
         isDone=False
         #if rtype==self.stage: 
         # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
-        if True:
-            if self.nodes[self.TSnode].gradrms<self.options['CONV_TOL'] and self.dE_iter<0.1: #TODO should check totalgrad
+        #if True:
+        if (rtype == 2 and self.find) or (rtype==1 and self.climb):
+            if self.nodes[self.TSnode].gradrms<self.options['CONV_TOL']: 
                 isDone=True
                 self.tscontinue=False
-            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*self.options['CONV_TOL']: #TODO extra crit here
+            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.dE_iter<0.02: #TODO extra crit here
                 isDone=True
                 self.tscontinue=False
         return isDone
