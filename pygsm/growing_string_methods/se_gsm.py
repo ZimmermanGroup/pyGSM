@@ -93,6 +93,8 @@ class SE_GSM(Base_Method):
             for n in range(self.nnodes):
                 tmp.append(self.energies[n])
             self.energies = np.asarray(tmp)
+            self.TSnode = np.argmax(self.energies)
+            self.emax = self.energies[self.TSnode]
 
             print(" Number of nodes is ",self.nnodes)
             print(" Warning last node still not optimized fully")

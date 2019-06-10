@@ -209,11 +209,7 @@ class Base_Method(Print,Analyze,object):
 
             # stash previous TSnode  
             self.pTSnode = self.TSnode
-
-            # => get TS node <=
             self.emaxp = self.emax
-            self.TSnode = np.argmax(self.energies)
-            self.nodes[self.TSnode].isTSnode=True
 
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
@@ -243,6 +239,12 @@ class Base_Method(Print,Analyze,object):
 
             # => set stage <= #
             fp = self.find_peaks(2)
+
+            # => get TS node <=
+            self.TSnode = np.argmax(self.energies)
+            self.nodes[self.TSnode].isTSnode=True
+            self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
+
             print(" fp = ",fp)
             ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
             ts_gradrms=self.nodes[self.TSnode].gradrms
