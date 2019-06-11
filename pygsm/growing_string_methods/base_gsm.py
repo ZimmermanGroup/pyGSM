@@ -529,59 +529,51 @@ class Base_Method(Print,Analyze,object):
 
     def opt_steps(self,opt_steps):
 
-        # these can be put in a function
-        #for n in range(self.nnodes):
-        #    if self.nodes[n]!=None:
-        #        self.nodes[n].isTSnode=False
-        #fp=0
-        #if self.done_growing:
-        #    fp = self.find_peaks(2)
-        #if fp>0:
-        #    self.TSnode = np.argmax(self.energies)
-        #    self.nodes[self.TSnode].isTSnode=True
+        def run(self1,n):
+            optlastnode=False
+            if self1.product_geom_fixed==False:
+                if self1.energies[self1.nnodes-1]>self1.energies[self.nnodes-2] and fp>0 and self1.nodes[self1.nnodes-1].gradrms>self1.options['CONV_TOL']:
+                    optlastnode=True
 
-        # this can be put in a function
-        optlastnode=False
-        if self.product_geom_fixed==False:
-            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
-                optlastnode=True
-
-        for n in range(self.nnodes):
-            if self.nodes[n] != None and self.active[n]==True:
+            if self1.nodes[n] != None and self1.active[n]==True:
                 print()
                 nifty.printcool("Optimizing node %i" % n)
                 # => set opt type <= #
-                opt_type = self.set_opt_type(n)
+                opt_type = self1.set_opt_type(n)
 
                 exsteps=1 #multiplier for nodes near the TS node
-                if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
+                if self1.find and self1.energies[n]+1.5 > self1.energies[self1.TSnode] and n!=self1.TSnode:  #
                     exsteps=2
                     print(" multiplying steps for node %i by %i" % (n,exsteps))
-                if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+                if self1.find and n==self1.TSnode: #multiplier for TS node during  should this be for climb too?
                     exsteps=2
                     print(" multiplying steps for node %i by %i" % (n,exsteps))
 
-                elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
+                elif not (self1.find or self1.climb) and self1.energies[self1.TSnode] > 1.75*self1.energies[self1.TSnode-1] and self1.energies[self1.TSnode] > 1.75*self1.energies[self1.TSnode+1] and self1.done_growing and n==self1.TSnode: 
                     exsteps=2
                     print(" multiplying steps for node %i by %i" % (n,exsteps))
                 
                 # => do constrained optimization
-                self.optimizer[n].optimize(
-                        molecule=self.nodes[n],
-                        refE=self.nodes[0].V0,
+                self1.optimizer[n].optimize(
+                        molecule=self1.nodes[n],
+                        refE=self1.nodes[0].V0,
                         opt_type=opt_type,
                         opt_steps=opt_steps*exsteps,
-                        ictan=self.ictan[n]
+                        ictan=self1.ictan[n]
                         )
+                if optlastnode==True and n==self1.nnodes-1 and not self1.nodes[n].PES.lot.do_coupling:
+                    print(" optimizing last node")
+                    self1.nodes[n].energy = self1.optimizer[n].optimize(
+                            molecule=self1.nodes[n],
+                            refE=self1.nodes[0].V0,
+                            opt_steps=opt_steps
+                            )
+
+        #TODO parallelize here with multiprocessing
+        for n in range(self.nnodes):
+            run(self,n)
 
 
-            if optlastnode==True and n==self.nnodes-1 and not self.nodes[n].PES.lot.do_coupling:
-                print(" optimizing last node")
-                self.nodes[n].energy = self.optimizer[n].optimize(
-                        molecule=self.nodes[n],
-                        refE=self.nodes[0].V0,
-                        opt_steps=opt_steps
-                        )
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
         form_TS_hess=False
