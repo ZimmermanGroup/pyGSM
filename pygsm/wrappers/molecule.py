@@ -262,7 +262,7 @@ class Molecule(object):
 
         #TODO
         self.gradrms = 100.
-        self.TSnode=False
+        self.isTSnode=False
         self.bdist =0.
 
         self.newHess = 10

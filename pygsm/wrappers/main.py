@@ -42,9 +42,8 @@ def main():
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
     parser.add_argument('-num_nodes',type=int,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
-    parser.add_argument('-adiabatic_index',nargs="*",type=int,default=0,help='Adiabatic index (default: %(default)s)',required=False)
-    parser.add_argument('-multiplicity',nargs="*",type=int,default=1,help='Multiplicity (default: %(default)s)')
-    #parser.add_argument('-states',type=list,default=None,help='Electronic states labeled by (multiplicity,adiabatic_index) e.g. (1,0),(1,1) ',required=False)
+    parser.add_argument('-adiabatic_index',nargs="*",type=int,default=[0],help='Adiabatic index (default: %(default)s)',required=False)
+    parser.add_argument('-multiplicity',nargs="*",type=int,default=[1],help='Multiplicity (default: %(default)s)')
     parser.add_argument('-FORCE',type=list,default=None,help='Spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
     parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. Recommend LBFGS for large molecules >1000 atoms',required=False)
     parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
@@ -140,8 +139,8 @@ def main():
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
 
-    inpfileq['states'] = [ (m,s) for m,s in zip(args.multiplicity,args.adiabatic_index)]
-    if  not inpfileq['PES_type']!="PES":
+    inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)]
+    if inpfileq['PES_type']!="PES":
         assert len(args.adiabatic_index)>1, "need more states"
         assert len(args.multiplicity)>1, "need more spins"
     if args.charge != 0:
@@ -174,8 +173,8 @@ def main():
     if inpfileq['PES_type']=='PES':
         pes = pes_class.from_options(
                 lot=lot,
-                ad_idx=inpfileq['adiabatic_index'],
-                multiplicity=inpfileq['multiplicity'],
+                ad_idx=inpfileq['adiabatic_index'][0],
+                multiplicity=inpfileq['multiplicity'][0],
                 FORCE=inpfileq['FORCE']
                 )
     else:

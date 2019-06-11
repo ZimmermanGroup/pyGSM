@@ -285,6 +285,7 @@ class Base_Method(Print,Analyze,object):
                     self.optimizer[self.TSnode].options['DMAX']=0.05
 
             if self.pTSnode!=self.TSnode:
+                self.nodes[self.pTSnode].isTSnode=False
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
@@ -529,9 +530,9 @@ class Base_Method(Print,Analyze,object):
     def opt_steps(self,opt_steps):
 
         # these can be put in a function
-        for n in range(self.nnodes):
-            if self.nodes[n]!=None:
-                self.nodes[n].isTSnode=False
+        #for n in range(self.nnodes):
+        #    if self.nodes[n]!=None:
+        #        self.nodes[n].isTSnode=False
         #fp=0
         #if self.done_growing:
         #    fp = self.find_peaks(2)
@@ -1024,13 +1025,13 @@ class Base_Method(Print,Analyze,object):
     def set_opt_type(self,n,quiet=False):
         #TODO
         opt_type='ICTAN' 
-        if self.climb and self.nodes[n].isTSnode==True and not self.find:
+        if self.climb and self.nodes[n].isTSnode and not self.find:
             opt_type='CLIMB'
-        elif self.find and self.nodes[n].isTSnode==True:
+        elif self.find and self.nodes[n].isTSnode:
             opt_type='TS'
-        elif self.nodes[n].PES.lot.do_coupling==True:
+        elif self.nodes[n].PES.lot.do_coupling:
             opt_type='SEAM'
-        elif self.climb and self.nodes[n].isTSnode==True and opt_type=='SEAM':
+        elif self.climb and self.nodes[n].isTSnode and opt_type=='SEAM':
             opt_type='TS-SEAM'
         if not quiet:
             print((" setting node %i opt_type to %s" %(n,opt_type)))

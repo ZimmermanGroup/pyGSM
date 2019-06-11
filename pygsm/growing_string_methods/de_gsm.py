@@ -81,6 +81,7 @@ class DE_GSM(Base_Method):
                 opt_iters=max_iters-oi
                 self.TSnode = np.argmax(self.energies)
                 self.emax = self.energies[self.TSnode]
+                self.nodes[self.TSnode].isTSnode=True
                 self.opt_iters(max_iter=opt_iters,optsteps=opt_steps,rtype=rtype)
         else:
             print("Exiting early")
