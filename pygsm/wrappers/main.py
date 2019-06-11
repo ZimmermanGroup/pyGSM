@@ -289,7 +289,11 @@ def main():
     if args.restart_file is not None:
         gsm.restart_string(args.restart_file)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
-    post_processing(gsm)
+    if inpfileq['gsm_type']=='SE_Cross':
+        post_processing(gsm,have_TS=False)
+    else:
+        post_processing(gsm,have_TS=True)
+
     cleanup_scratch(gsm.ID)
 
     return
@@ -375,18 +379,25 @@ def get_nproc():
         pass
     raise Exception('Can not determine number of CPUs on this system')
 
-def post_processing(gsm):
+def post_processing(gsm,have_TS=True):
     plot(fx=gsm.energies,x=range(len(gsm.energies)),title=gsm.ID)
 
     # TS energy
-    minnodeR = np.argmin(gsm.energies[:gsm.TSnode])
-    TSenergy = gsm.energies[gsm.TSnode] - gsm.energies[minnodeR]
+    if have_TS:
+        minnodeR = np.argmin(gsm.energies[:gsm.TSnode])
+        TSenergy = gsm.energies[gsm.TSnode] - gsm.energies[minnodeR]
+        print(" TS energy: %5.4f" % TSenergy)
+        print(" absolute energy TS node %5.4f" % gsm.nodes[gsm.TSnode].energy)
+        minnodeP = gsm.TSnode + np.argmin(gsm.energies[gsm.TSnode:])
+        print(" min reactant node: %i min product node %i TS node is %i" % (minnodeR,minnodeP,gsm.TSnode))
+    else:
+        minnodeR = 0
+        minnodeP = gsm.nR
+        print(" absolute energy end node %5.4f" % gsm.nodes[gsm.nR].energy)
+        print(" difference energy end node %5.4f" % gsm.nodes[gsm.nR].difference_energy)
 
     # Delta E
-    minnodeP = gsm.TSnode + np.argmin(gsm.energies[gsm.TSnode:])
     deltaE = gsm.energies[minnodeR] - gsm.energies[minnodeP]
-    print(" min reactant node: %i min product node %i TS node is %i" % (minnodeR,minnodeP,gsm.TSnode))
-    print(" TS energy: %5.4f" % TSenergy)
     print(" Delta E is %5.4f" % deltaE)
 
 #def go_gsm(gsm,max_iters=50,opt_steps=3,rtype=2):
