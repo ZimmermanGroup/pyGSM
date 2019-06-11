@@ -129,7 +129,7 @@ class SE_GSM(Base_Method):
 
         if bdist<BDISTMIN:
             print("bdist too small %.3f" % bdist)
-            return 0
+            return None
         new_node = Molecule.copy_from_options(self.nodes[n1],new_node_id=n2)
         Vecs = new_node.update_coordinate_basis(constraints=ictan)
         constraint = new_node.constraints

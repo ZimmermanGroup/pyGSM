@@ -224,7 +224,6 @@ class Base_Method(Print,Analyze,object):
             # => do opt steps <= #
             self.opt_steps(optsteps)
             self.store_energies()
-            self.emax = float(max(self.energies[1:-1]))
 
             print()
             #nifty.printcool("GSM iteration %i done: Reparametrizing" % oi)
@@ -242,6 +241,7 @@ class Base_Method(Print,Analyze,object):
 
             # => get TS node <=
             self.TSnode = np.argmax(self.energies)
+            self.emax= self.energies[self.TSnode]
             self.nodes[self.TSnode].isTSnode=True
             self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
 
@@ -506,8 +506,8 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(maxopt)
             self.store_energies()
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.emax = float(max(self.energies[1:-1]))
-            self.TSnode = np.where(self.energies==self.emax)[0][0]
+            self.TSnode = np.argmax(self.energies)
+            self.emax = self.energies[self.TSnode]
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
                 break
@@ -515,6 +515,7 @@ class Base_Method(Print,Analyze,object):
             success = self.check_add_node()
             if not success:
                 print("can't add anymore nodes, bdist too small")
+                self.check_if_grown()
                 break
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
@@ -531,12 +532,12 @@ class Base_Method(Print,Analyze,object):
         for n in range(self.nnodes):
             if self.nodes[n]!=None:
                 self.nodes[n].isTSnode=False
-        fp=0
-        if self.done_growing:
-            fp = self.find_peaks(2)
-        if fp>0:
-            self.TSnode = np.argmax(self.energies)
-            self.nodes[self.TSnode].isTSnode=True
+        #fp=0
+        #if self.done_growing:
+        #    fp = self.find_peaks(2)
+        #if fp>0:
+        #    self.TSnode = np.argmax(self.energies)
+        #    self.nodes[self.TSnode].isTSnode=True
 
         # this can be put in a function
         optlastnode=False
@@ -625,7 +626,7 @@ class Base_Method(Print,Analyze,object):
             iN = self.nR
             self.nodes[self.nR] = self.add_node(iR,iN,iP)
 
-            if self.nodes[self.nR]==0:
+            if self.nodes[self.nR]==None:
                 success= False
                 break
 
@@ -658,7 +659,7 @@ class Base_Method(Print,Analyze,object):
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
             self.nodes[-self.nP-1] = self.add_node(n1,n2,n3)
-            if self.nodes[-self.nP-1]==0:
+            if self.nodes[-self.nP-1]==None:
                 success= False
                 break
 
@@ -844,7 +845,6 @@ class Base_Method(Print,Analyze,object):
         h2dqmag = 0.0
         dE = np.zeros(self.nnodes)
         edist = np.zeros(self.nnodes)
-        #self.TSnode = -1 
         emax = -1000 # And this?
 
         for i in range(ic_reparam_steps):
@@ -1156,8 +1156,8 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
 
-        self.emax = float(max(self.energies[1:-1]))
         self.TSnode = np.argmax(self.energies)
+        self.emax  = self.energies[self.TSnode]
 
         self.nnodes=self.nR=nstructs
         self.isRestarted=True
