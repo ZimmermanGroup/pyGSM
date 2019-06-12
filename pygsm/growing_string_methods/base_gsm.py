@@ -275,9 +275,13 @@ class Base_Method(Print,Analyze,object):
             self.nodes[self.TSnode].isTSnode=True
             self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
 
-            print(" fp = ",fp)
             #ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
-            ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints)*self.nodes[self.TSnode].constraints)
+
+            if not self.find:
+                ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints)*self.nodes[self.TSnode].constraints)
+                print(" ts_cgradq %5.4f" % ts_cgradq)
+            else: 
+                ts_cgradq = 0.
 
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
@@ -329,9 +333,8 @@ class Base_Method(Print,Analyze,object):
             if self.find and not self.optimizer[n].maxol_good:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
-            elif self.find and self.optimizer[self.TSnode].nneg > 3 and ts_cgradq>self.options['CONV_TOL']:
-                #if self.hessrcount<1 and self.pTSnode == self.TSnode:
-                if self.pTSnode == self.TSnode:
+            elif self.find and self.optimizer[self.TSnode].nneg > 3 and ts_gradrms >self.options['CONV_TOL']:
+                if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
                     self.get_eigenv_finite(self.TSnode)
@@ -339,7 +342,7 @@ class Base_Method(Print,Analyze,object):
                     self.hessrcount=1
                 else:
                     print(" Hessian consistently bad, going back to climb (for 3 iterations)")
-                    self.find=0
+                    self.find=False
                     self.nclimb=3
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
