@@ -6,6 +6,7 @@ from os import path
 
 # third party
 import numpy as np
+import multiprocessing as mp
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -16,8 +17,29 @@ from coordinate_systems import rotate
 from ._print_opt import Print
 from ._analyze_string import Analyze
 
-# is this required?
-#import eigenvector_follow
+def run(args):
+
+    node,optimizer,ictan,opt_steps,opt_type,refE,n = args
+    #print(" entering run: {}".format(n))
+    sys.stdout.flush()
+
+    print()
+    nifty.printcool("Optimizing node {}".format(n))
+
+    # => do constrained optimization
+    try:
+        optimizer.optimize(
+                molecule=node,
+                refE=0.,
+                opt_type=opt_type,
+                opt_steps=opt_steps,
+                ictan=ictan
+                )
+    except:
+        RuntimeError
+
+    return node,optimizer,n
+
 
 class Base_Method(Print,Analyze,object):
 
@@ -109,7 +131,14 @@ class Base_Method(Print,Analyze,object):
                 value=1,
                 required=False
                 )
-    
+
+        opt.add_option(
+                key='use_multiprocessing',
+                value=False,
+                doc='Use python multiprocessing module, an OpenMP like implementation \
+                        that parallelizes optimization cycles on a single compute node'
+                )
+
 #BDIST_RATIO controls when string will terminate, good when know exactly what you want
 #DQMAG_MAX controls max step size for adding node
         opt.add_option(
@@ -159,6 +188,7 @@ class Base_Method(Print,Analyze,object):
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
         self.ID = self.options['ID']
+        self.use_multiprocessing = self.options['use_multiprocessing']
         self.optimizer=[]
         optimizer = options['optimizer']
         for count in range(self.nnodes):
@@ -465,6 +495,9 @@ class Base_Method(Print,Analyze,object):
 
             if (ictan0[:]==0.).all():
                 print(nlist[2*n])
+                print(nlist[2*n+1])
+                print(self.nodes[nlist[2*n]])
+                print(self.nodes[nlist[2*n+1]])
                 raise RuntimeError
 
             #normalize ictan
@@ -529,50 +562,37 @@ class Base_Method(Print,Analyze,object):
 
     def opt_steps(self,opt_steps):
 
-        def run(self1,n):
-            optlastnode=False
-            if self1.product_geom_fixed==False:
-                if self1.energies[self1.nnodes-1]>self1.energies[self.nnodes-2] and fp>0 and self1.nodes[self1.nnodes-1].gradrms>self1.options['CONV_TOL']:
-                    optlastnode=True
+        refE=self.nodes[0].energy
+        if self.use_multiprocessing:
+            cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc
+            print(" Parallelizing over {} processes".format(cpus))
+            pool = mp.Pool(processes=cpus)
+            print("Created the pool")
+            results=pool.map(
+                    run, 
+                    [[self.nodes[n],self.optimizer[n],self.ictan[n],opt_steps*self.step_multiplier(n),self.set_opt_type(n),refE,n] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
+                    )
 
-            if self1.nodes[n] != None and self1.active[n]==True:
-                print()
-                nifty.printcool("Optimizing node %i" % n)
-                # => set opt type <= #
-                opt_type = self1.set_opt_type(n)
+            pool.close()
+            print("Calling join()...")
+            sys.stdout.flush()
+            pool.join()
+            print("Joined")
+        else:
+            results=[]
+            run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
+            for n in run_list:
+                args = [self.nodes[n],self.optimizer[n],self.ictan[n],opt_steps*self.step_multiplier(n),self.set_opt_type(n),refE,n]
+                results.append(run(args))
 
-                exsteps=1 #multiplier for nodes near the TS node
-                if self1.find and self1.energies[n]+1.5 > self1.energies[self1.TSnode] and n!=self1.TSnode:  #
-                    exsteps=2
-                    print(" multiplying steps for node %i by %i" % (n,exsteps))
-                if self1.find and n==self1.TSnode: #multiplier for TS node during  should this be for climb too?
-                    exsteps=2
-                    print(" multiplying steps for node %i by %i" % (n,exsteps))
+        for (node,optimizer,n) in results:
+            self.nodes[n]=node
+            self.optimizer[n]=optimizer
 
-                elif not (self1.find or self1.climb) and self1.energies[self1.TSnode] > 1.75*self1.energies[self1.TSnode-1] and self1.energies[self1.TSnode] > 1.75*self1.energies[self1.TSnode+1] and self1.done_growing and n==self1.TSnode: 
-                    exsteps=2
-                    print(" multiplying steps for node %i by %i" % (n,exsteps))
-                
-                # => do constrained optimization
-                self1.optimizer[n].optimize(
-                        molecule=self1.nodes[n],
-                        refE=self1.nodes[0].V0,
-                        opt_type=opt_type,
-                        opt_steps=opt_steps*exsteps,
-                        ictan=self1.ictan[n]
-                        )
-                if optlastnode==True and n==self1.nnodes-1 and not self1.nodes[n].PES.lot.do_coupling:
-                    print(" optimizing last node")
-                    self1.nodes[n].energy = self1.optimizer[n].optimize(
-                            molecule=self1.nodes[n],
-                            refE=self1.nodes[0].V0,
-                            opt_steps=opt_steps
-                            )
-
-        #TODO parallelize here with multiprocessing
-        for n in range(self.nnodes):
-            run(self,n)
-
+        optlastnode=False
+        if self.product_geom_fixed==False:
+            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
+                optlastnode=True
 
 
     def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
@@ -1013,6 +1033,20 @@ class Base_Method(Print,Analyze,object):
 
     def set_V0(self):
         raise NotImplementedError 
+
+    def step_multiplier(self,n):
+        exstep=1
+        if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
+            exsteps=2
+            print(" multiplying steps for node %i by %i" % (n,exsteps))
+        if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+            exsteps=2
+            print(" multiplying steps for node %i by %i" % (n,exsteps))
+
+        elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
+            exsteps=2
+            print(" multiplying steps for node %i by %i" % (n,exsteps))
+        return exstep
 
     def set_opt_type(self,n,quiet=False):
         #TODO

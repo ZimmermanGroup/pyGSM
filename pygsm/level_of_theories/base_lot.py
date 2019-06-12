@@ -82,6 +82,7 @@ class Lot(object):
                 key='nproc',
                 required=False,
                 value=1,
+                allowed_types=[int],
                 doc="number of processors",
                 )
 

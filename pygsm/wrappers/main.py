@@ -66,6 +66,7 @@ def main():
     parser.add_argument('-optimize_mesx',action='store_true',help='optimize to the MESX')
     parser.add_argument('-optimize_meci',action='store_true',help='optimize to the MECI')
     parser.add_argument('-restart_file',help='restart file',type=str)
+    parser.add_argument('-use_multiprocessing',action='store_true',help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
 
 
     args = parser.parse_args()
@@ -80,7 +81,7 @@ def main():
     else:
         #nproc = get_nproc()
         try:
-            nproc = os.environ['OMP_NUM_THREADS']
+            nproc = int(os.environ['OMP_NUM_THREADS'])
         except: 
             nproc = 1
         print(" Using {} processors".format(nproc))
@@ -129,6 +130,7 @@ def main():
               'gsm_print_level' : args.gsm_print_level,
               'max_gsm_iters' : args.max_gsm_iters,
               'max_opt_steps' : args.max_opt_steps,
+              'use_multiprocessing': args.use_multiprocessing,
               }
 
 
@@ -235,6 +237,7 @@ def main():
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
+                use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
     else:
         driving_coordinates = read_isomers_file(inpfileq['isomers_file'])
@@ -249,6 +252,7 @@ def main():
                 print_level=inpfileq['gsm_print_level'],
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
+                use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':

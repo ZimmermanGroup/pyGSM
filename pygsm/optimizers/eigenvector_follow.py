@@ -74,7 +74,7 @@ class eigenvector_follow(base_optimizer):
 
         # ====>  Do opt steps <======= #
         for ostep in range(opt_steps):
-            print(" On opt step {} ".format(ostep+1))
+            print(" On opt step {} for node {}".format(ostep+1,molecule.node_id))
 
             # update Hess
             if update_hess:
@@ -185,8 +185,8 @@ class eigenvector_follow(base_optimizer):
                 raise NotImplementedError(" ef not implemented for CART")
 
             if self.options['print_level']>0:
-                print(" Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
-            self.buf.write(u' Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+            self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
             # check for convergence TODO
             if molecule.gradrms < self.conv_grms:
@@ -210,7 +210,7 @@ class eigenvector_follow(base_optimizer):
             print()
             sys.stdout.flush()
        
-        print(" opt-summary")
+        print(" opt-summary {}".format(molecule.node_id))
         print(self.buf.getvalue())
         return geoms,energies
 

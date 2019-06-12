@@ -532,6 +532,9 @@ class Molecule(object):
     def get_frag_atomic_index(self,fragid):
         return self.frag_atomic_indices[fragid]
 
+    @property
+    def node_id(self):
+        return self.Data['node_id']
 
 if __name__=='__main__':
     from level_of_theories import Molpro
