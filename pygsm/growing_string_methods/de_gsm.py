@@ -69,7 +69,7 @@ class DE_GSM(Base_Method):
 
         # set convergence for nodes
         if not (self.climber or self.finder):
-            factor = 2.
+            factor = 2.5
         else: 
             factor = 1.
         for i in range(self.nnodes):

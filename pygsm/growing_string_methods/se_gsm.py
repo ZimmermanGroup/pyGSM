@@ -112,13 +112,13 @@ class SE_GSM(Base_Method):
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
                 if self.climber or self.finder:
-                    self.optimizer[n].conv_grms=self.options['CONV_TOL']*2
+                    self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
                 else:
                     self.optimizer[n].conv_grms=self.options['CONV_TOL']
 
         print(" initial ic_reparam")
-        self.ic_reparam()
-        if self.tscontinue==True:
+        self.ic_reparam(25)
+        if self.tscontinue:
             self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
         else:
             print("Exiting early")

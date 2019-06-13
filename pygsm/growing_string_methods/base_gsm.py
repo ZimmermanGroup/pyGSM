@@ -328,6 +328,8 @@ class Base_Method(Print,Analyze,object):
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+                    self.optimizer[self.TSnode].options['SCALEQN'] = 2.
+                    self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
                     if self.newclimbscale<5.0:
                         self.newclimbscale +=1.
                 elif self.find:
@@ -450,8 +452,10 @@ class Base_Method(Print,Analyze,object):
 
                 t1,_ = self.tangent(intic_n,newic_n)
                 t2,_ = self.tangent(newic_n,int2ic_n)
+                print(" done 3 way tangent")
                 ictan0 = f1*t1 +(1.-f1)*t2
-                self.ictan[n]=ictan0
+                #self.ictan[n]=ictan0
+            self.ictan[n] = ictan0/np.linalg.norm(ictan0)
             
             dqmaga[n]=0.0
             ictan0 = np.copy(self.ictan[n])
@@ -629,6 +633,7 @@ class Base_Method(Print,Analyze,object):
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
                 form_TS_hess=True
+                self.optimizer[self.TSnode].options['SCALEQN'] = 1.
                 #self.get_tangents_1e()
                 #self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10  # are these used??? TODO 
@@ -1067,7 +1072,8 @@ class Base_Method(Print,Analyze,object):
         #TODO
         opt_type='ICTAN' 
         if self.climb and self.nodes[n].isTSnode and not self.find:
-            opt_type='CLIMB'
+            #opt_type='CLIMB'
+            opt_type="GOLDEN"
         elif self.find and self.nodes[n].isTSnode:
             opt_type='TS'
         elif self.nodes[n].PES.lot.do_coupling:
@@ -1208,7 +1214,7 @@ class Base_Method(Print,Analyze,object):
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
-            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2
+            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
             self.optimizer[n].options['DMAX'] = 0.05
         print(" V_profile: ", end=' ')
         for n in range(self.nnodes):

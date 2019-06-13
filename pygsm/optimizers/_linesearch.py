@@ -93,7 +93,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         step = step * width
 
 
-def golden_section(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule):
+def golden_section(x, g, d, step, molecule,maximize=False):
 
     z = (1 + np.sqrt(5))/2
     x1 = x.copy()
@@ -101,10 +101,19 @@ def golden_section(n, x, fx, g, d, step, xp, constraint_step, parameters,molecul
     x2 = x4 - (x4-x1)/z
     x3 = x1 + (x4-x1)/z
 
-    f1 = molecule.PES.get_energy(x1)
-    f2 = molecule.PES.get_energy(x2)
-    f3 = molecule.PES.get_energy(x3)
-    f4 = molecule.PES.get_energy(x4)
+    xyz1 = molecule.coord_obj.newCartesian(molecule.xyz, x1-x,verbose=False)
+    xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
+    xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
+    xyz4 = molecule.coord_obj.newCartesian(molecule.xyz, x4-x,verbose=False)
+
+    sign=1.
+    if maximize:
+        sign=-1.
+
+    f1 = sign*molecule.PES.get_energy(xyz1)
+    f2 = sign*molecule.PES.get_energy(xyz2)
+    f3 = sign*molecule.PES.get_energy(xyz3)
+    f4 = sign*molecule.PES.get_energy(xyz4)
 
     #check that a min exists
     min_exists=False
@@ -113,7 +122,12 @@ def golden_section(n, x, fx, g, d, step, xp, constraint_step, parameters,molecul
     
     if not min_exists:
         print(" no minimum exists")
-        return {'status':1,'fx':f1,'step':step*0.,'x':x1, 'g':g}
+        if f1<f4:
+            print(" returning initial point")
+            return {'status':0,'fx':f1,'step':step*0.,'x':x1, 'g':g}
+        else:
+            print(" returning endpoint")
+            return {'status':0,'fx':f4,'step':x4-x1,'x':x4, 'g':g}
 
     accuracy = 1.0e-3
     count=0
@@ -122,24 +136,27 @@ def golden_section(n, x, fx, g, d, step, xp, constraint_step, parameters,molecul
             x4,f4 = x3,f3
             x3,f3 = x2,f2
             x2 = x4-(x4-x1)/z
-            f2 = molecule.PES.get_energy(x2)
+            xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
+            f2 = sign*molecule.PES.get_energy(xyz2)
         else:
             x1,f1 = x2,f2
             x2,f2 = x3,f3
             x3 = x1 + (x4-x1)/z
-            f3 = molecule.PES.get_energy(x3)
+            xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
+            f3 = sign*molecule.PES.get_energy(xyz3)
 
         count+=1
         if count>10:
             break
 
-    x = 0.5*(x1+x4)
-    fx = molecule.PES.get_energy(x)
-    g = molecule.PES.get_gradient(x)
+    xnew = 0.5*(x1+x4)
+    xyznew = molecule.coord_obj.newCartesian(molecule.xyz, xnew-x,verbose=False)
+    fx = molecule.PES.get_energy(xyxznew)
+    g = molecule.PES.get_gradient(xyznew)
     step = x - x1
-    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+    result = {'status':0,'fx':fx,'step':step,'x':xnew, 'g':g}
     
-    return
+    return result
 
 def secant_method(nconstraints, x, fx, gc, d, step, xp,constraint_step, parameters,molecule):
     raise NotImplementedError

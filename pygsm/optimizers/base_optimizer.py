@@ -128,7 +128,7 @@ class base_optimizer(object):
         self.options['OPTTHRESH']=value
 
     def get_nconstraints(self,opt_type):
-        if opt_type in ["ICTAN", "CLIMB"]:
+        if opt_type in ["ICTAN", "CLIMB","GOLDEN"]:
             nconstraints = 1
         elif opt_type in ['MECI']:
             nconstraints=2
@@ -145,7 +145,7 @@ class base_optimizer(object):
         #    assert molecule.PES.lot.do_coupling==False,"Turn do_coupling off."                 
         if opt_type=="UCONSTRAINED":  
             assert ictan==None
-        if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
+        if opt_type in ['ICTAN','GOLDEN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
             raise RuntimeError("Need ictan")
         if opt_type in ['TS','TS-SEAM']:
             assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
@@ -194,7 +194,7 @@ class base_optimizer(object):
 
         if opt_type=="UNCONSTRAINED":
             constraints=None
-        elif opt_type=='ICTAN' or opt_type=="CLIMB":
+        elif opt_type=='ICTAN' or opt_type=="CLIMB" or opt_type=="GOLDEN":
             constraints = ictan
         elif opt_type=='MECI':
             print("MECI")
@@ -222,9 +222,10 @@ class base_optimizer(object):
         if opt_type=="CLIMB": 
             #constraint_steps[0]=self.walk_up(g,0)
             #self.options['SCALEW'] = 1.0
-            constraint_steps = np.dot(g.T,molecule.constraints)*molecule.constraints
+            gts = np.dot(g.T,molecule.constraints)
+            constraint_steps = gts*molecule.constraints
             stepsize=np.linalg.norm(constraint_steps)
-            print(" gts %1.4f" % stepsize)
+            print(" gts %1.4f" % gts)
             if stepsize > 0.05:
                 constraint_steps = constraint_steps*0.05/stepsize
         # => MECI
@@ -268,34 +269,8 @@ class base_optimizer(object):
             dq = np.sign(dq)*self.options['MAXAD']/SCALE
         return dq
 
-    #def walk_up_DNR(self,g,n):
-    #    SCALE =self.options['SCALEQN']
-    #    if c_obj.newHess>0: SCALE = self.options['SCALEQN']*c_obj.newHess  # what to do about newHess?
-    #    if self.options['SCALEQN']>10.0: SCALE=10.0
-    #    
-    #    # convert to eigenvector basis
-    #    temph = self.Hint[:n,:n]
-    #    e,v_temp = np.linalg.eigh(temph)
-    #    v_temp = v_temp.T
-    #    gqe = np.dot(v_temp,g[:n])
-    #    
-    #    lambda1 = self.set_lambda1('NOT-TS',e) 
-
-    #    dqe0 = -gqe.flatten()/(e+lambda1)/SCALE
-    #    dqe0 = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dqe0 ]
-    #    
-    #    # => Convert step back to DLC basis <= #
-    #    dq_tmp = np.dot(v_temp.T,dqe0)
-    #    dq_tmp = [ np.sign(i)*self.options['MAXAD'] if abs(i)>self.options['MAXAD'] else i for i in dq_tmp ]
-    #    dq = np.zeros((c_obj.nicd_DLC,1))
-    #    for i in range(n): dq[i,0] = dq_tmp[i]
-
-    #    return dq
-
-
     def step_controller(self,step,ratio,gradrms,pgradrms,dEpre,opt_type,dE_iter):
         # => step controller controls DMAX/DMIN <= #
-
 
         if opt_type=="TS":
             if ratio<0. and abs(dEpre)>0.05:
