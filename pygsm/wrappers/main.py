@@ -67,6 +67,7 @@ def main():
     parser.add_argument('-optimize_meci',action='store_true',help='optimize to the MECI')
     parser.add_argument('-restart_file',help='restart file',type=str)
     parser.add_argument('-use_multiprocessing',action='store_true',help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
+    parser.add_argument('-dont_analyze_ICs',action='store_false',help="Don't post-print the internal coordinates primitives and values") #defaults to true
 
 
     args = parser.parse_args()
@@ -293,9 +294,17 @@ def main():
         gsm.restart_string(args.restart_file)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
-        post_processing(gsm,have_TS=False)
+        post_processing(
+                gsm,
+                analyze_ICs=args.dont_analyze_ICs,
+                have_TS=False,
+                )
     else:
-        post_processing(gsm,have_TS=True)
+        post_processing(
+                gsm,
+                analyze_ICs=args.dont_analyze_ICs,
+                have_TS=True,
+                )
 
     cleanup_scratch(gsm.ID)
 
@@ -382,8 +391,11 @@ def get_nproc():
         pass
     raise Exception('Can not determine number of CPUs on this system')
 
-def post_processing(gsm,have_TS=True):
+def post_processing(gsm,analyze_ICs=False,have_TS=True):
     plot(fx=gsm.energies,x=range(len(gsm.energies)),title=gsm.ID)
+
+    ICs = []
+    ICs.append(gsm.nodes[0].primitive_internal_coordinates)
 
     # TS energy
     if have_TS:
@@ -393,11 +405,28 @@ def post_processing(gsm,have_TS=True):
         print(" absolute energy TS node %5.4f" % gsm.nodes[gsm.TSnode].energy)
         minnodeP = gsm.TSnode + np.argmin(gsm.energies[gsm.TSnode:])
         print(" min reactant node: %i min product node %i TS node is %i" % (minnodeR,minnodeP,gsm.TSnode))
+
+        # ICs
+        ICs.append(gsm.nodes[minnodeR].primitive_internal_values)
+        ICs.append(gsm.nodes[gsm.TSnode].primitive_internal_values)
+        ICs.append(gsm.nodes[minnodeP].primitive_internal_values)
+        with open('IC_data_{:04d}.txt'.format(gsm.ID),'w') as f:
+            f.write("Internals \t minnodeR: {} \t TSnode: {} \t minnodeP: {}\n".format(minnodeR,gsm.TSnode,minnodeP))
+            for x in zip(*ICs):
+                f.write("{0}\t{1}\t{2}\t{3}\n".format(*x))
+
     else:
         minnodeR = 0
         minnodeP = gsm.nR
         print(" absolute energy end node %5.4f" % gsm.nodes[gsm.nR].energy)
         print(" difference energy end node %5.4f" % gsm.nodes[gsm.nR].difference_energy)
+        # ICs
+        ICs.append(gsm.nodes[minnodeR].primitive_internal_values)
+        ICs.append(gsm.nodes[minnodeP].primitive_internal_values)
+        with open('IC_data_{}.txt'.format(gsm.ID),'w') as f:
+            f.write("Internals \t Beginning: {} \t End: {}".format(minnodeR,gsm.TSnode,minnodeP))
+            for x in zip(*ICs):
+                f.write("{0}\t{1}\t{2}\n".format(*x))
 
     # Delta E
     deltaE = gsm.energies[minnodeR] - gsm.energies[minnodeP]
