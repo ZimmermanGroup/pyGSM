@@ -18,6 +18,7 @@ from collections import Counter
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+import potential_energy_surfaces
 from potential_energy_surfaces import PES
 from potential_energy_surfaces import Avg_PES
 from potential_energy_surfaces import Penalty_PES
@@ -91,7 +92,7 @@ class Molecule(object):
         opt.add_option(
                 key='PES',
                 required=True,
-                allowed_types=[PES,Avg_PES,Penalty_PES],
+                allowed_types=[PES,Avg_PES,Penalty_PES,potential_energy_surfaces.PES,potential_energy_surfaces.Penalty_PES,potential_energy_surfaces.Avg_PES],
                 doc='potential energy surface object to evaulate energies, gradients, etc. Pes is defined by charge, state, multiplicity,etc. '
                        
                 )

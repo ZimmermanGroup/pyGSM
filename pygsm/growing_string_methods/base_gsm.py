@@ -11,6 +11,7 @@ import multiprocessing as mp
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+import wrappers
 from wrappers import Molecule
 from coordinate_systems import DelocalizedInternalCoordinates
 from coordinate_systems import rotate
@@ -52,13 +53,13 @@ class Base_Method(Print,Analyze,object):
         opt.add_option(
             key='reactant',
             required=True,
-            allowed_types=[Molecule],
+            allowed_types=[Molecule,wrappers.Molecule],
             doc='Molecule object as the initial reactant structure')
 
         opt.add_option(
             key='product',
             required=False,
-            allowed_types=[Molecule],
+            allowed_types=[Molecule,wrappers.Molecule],
             doc='Molecule object for the product structure (not required for single-ended methods.')
 
         opt.add_option(
