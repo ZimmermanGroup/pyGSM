@@ -1,6 +1,9 @@
 from __future__ import print_function
 import numpy as np
 
+from collections import Counter
+from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
+
 class Analyze:
     def find_peaks(self,rtype):
         #rtype 1: growing
@@ -29,7 +32,7 @@ class Analyze:
                 if (abs(self.energies[nnodes-1]-self.energies[nnodes-2])<alluptol2 and
                 abs(self.energies[nnodes-2]-self.energies[nnodes-3])<alluptol2 and
                 abs(self.energies[nnodes-3]-self.energies[nnodes-4])<alluptol2):
-                    print("possible dissociative profile")
+                    print(" possible dissociative profile")
                     diss=True
 
         print(" nnodes ",nnodes)  
@@ -90,8 +93,8 @@ class Analyze:
             if nextmin>0:
                 npeaks=2
 
-        if rtype==3:
-            return nmax
+        #if rtype==3:
+        #    return nmax
         if allup==True and npeaks==0:
             return -1
         if diss==True and npeaks==0:
@@ -130,29 +133,31 @@ class Analyze:
                 ispast3+=1
             if ispast1>1:
                 break
-        print("ispast1",ispast1)
-        print("ispast2",ispast2)
-        print("ispast3",ispast3)
+        print(" ispast1",ispast1)
+        print(" ispast2",ispast2)
+        print(" ispast3",ispast3)
 
         #TODO 5/9/2019 what about multiple constraints
         #cgrad = self.nodes[self.nR-1].gradient[0]
         constraints = self.nodes[self.nR-1].constraints
         gradient = self.nodes[self.nR-1].gradient
-        cgrad = np.dot(gradient.T,constraints)*constraints
 
-        #cgrad = np.dot(self.nodes[self.nR-1].gradient,self.nodes[self.nR-1].constraints)*self.nodes[self.nR-1].constraints
-        cgrad = np.linalg.norm(cgrad)
+        overlap = np.dot(gradient.T,constraints)
+        cgrad = overlap*constraints
+
+        cgrad = np.linalg.norm(cgrad)*np.sign(overlap)
+        #cgrad = np.sum(cgrad)
 
         print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
 
-        if cgrad>CTHRESH and False:
-            print("constraint gradient positive")
+        if cgrad>CTHRESH and not self.nodes[self.nR-1].PES.lot.do_coupling:
+            print(" constraint gradient positive")
             ispast=2
         elif ispast1>0 and cgrad>OTHRESH:
-            print("over the hill(1)")
+            print(" over the hill(1)")
             ispast=1
         elif ispast2>1:
-            print("over the hill(2)")
+            print(" over the hill(2)")
             ispast=1
         else:
             ispast=0
@@ -162,19 +167,21 @@ class Analyze:
             if ispast3>1 and bch:
                 print("over the hill(3) connection changed " %bch)
                 ispast=3
-        print("ispast=",ispast)
+        print(" ispast=",ispast)
         return ispast
 
     def check_for_reaction_g(self,rtype):
-        nadds = self.driving_coords.count("ADD")
-        nbreaks = self.driving_coords.count("BREAK")
+
+        c = Counter(elem[0] for elem in self.driving_coords)
+        nadds = c['ADD']
+        nbreaks = c['BREAK']
         isrxn=False
 
         if (nadds+nbreaks) <1:
             return False
         nadded=0
         nbroken=0 
-        nnR = self.nR
+        nnR = self.nR-1
         xyz = self.nodes[nnR-1].xyz
         atoms = self.nodes[nnR].atoms
 
@@ -200,7 +207,7 @@ class Analyze:
         else:
             isrxn=True
             #isrxn=nadded+nbroken
-        print("check_for_reaction_g isrxn: %i nadd+nbrk: %i" %(isrxn,nadds+nbreaks))
+        print(" check_for_reaction_g isrxn: %r nadd+nbrk: %i" %(isrxn,nadds+nbreaks))
         return isrxn
 
     def check_for_reaction(self):
