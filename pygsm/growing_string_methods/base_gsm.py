@@ -30,7 +30,7 @@ def run(args):
     try:
         optimizer.optimize(
                 molecule=node,
-                refE=0.,
+                refE=refE,
                 opt_type=opt_type,
                 opt_steps=opt_steps,
                 ictan=ictan
@@ -270,7 +270,7 @@ class Base_Method(Print,Analyze,object):
             fp = self.find_peaks(2)
 
             # => get TS node <=
-            self.TSnode = np.argmax(self.energies)
+            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
             self.nodes[self.TSnode].isTSnode=True
             self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
@@ -543,7 +543,7 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(maxopt)
             self.store_energies()
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.TSnode = np.argmax(self.energies)
+            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax = self.energies[self.TSnode]
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
@@ -552,6 +552,13 @@ class Base_Method(Print,Analyze,object):
             success = self.check_add_node()
             if not success:
                 print("can't add anymore nodes, bdist too small")
+                if self.__class__.__name__=="SE_GSM":
+                    print(" optimizing last node")
+                    self.nodes[self.nR-1].energy = self.optimizer[self.nR-1].optimize(
+                            molecule=self.nodes[self.nR-1],
+                            refE=self.nodes[0].V0,
+                            opt_steps=50
+                            )
                 self.check_if_grown()
                 break
             self.set_active(self.nR-1, self.nnodes-self.nP)
@@ -1186,7 +1193,7 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
 
-        self.TSnode = np.argmax(self.energies)
+        self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         self.emax  = self.energies[self.TSnode]
 
         self.nnodes=self.nR=nstructs

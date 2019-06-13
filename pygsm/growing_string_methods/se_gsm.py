@@ -77,7 +77,7 @@ class SE_GSM(Base_Method):
             print(" Initial energy is %1.4f" % self.nodes[0].energy)
             self.interpolate(1) 
             self.growth_iters(iters=max_iters,maxopt=opt_steps)
-            if self.tscontinue==True:
+            if self.tscontinue:
                 if self.pastts==1: #normal over the hill
                     self.interpolateR(1)
                     self.add_last_node(2)
@@ -95,6 +95,11 @@ class SE_GSM(Base_Method):
             self.energies = np.asarray(tmp)
             self.TSnode = np.argmax(self.energies)
             self.emax = self.energies[self.TSnode]
+
+            if self.TSnode == self.nR:
+                print(" The highest energy node is the last")
+                print(" not continuing with TS optimization.")
+                self.tscontinue=False
 
             print(" Number of nodes is ",self.nnodes)
             print(" Warning last node still not optimized fully")
@@ -187,9 +192,10 @@ class SE_GSM(Base_Method):
             if self.nR == self.nnodes:
                 print(" Ran out of nodes, exiting GSM")
                 raise ValueError
-            self.active[self.nR-1] = False
             if self.nodes[self.nR] == None:
                 success=self.interpolateR()
+            else:
+                self.active[self.nR-1] = False
         return success
 
     def interpolate(self,newnodes=1):
@@ -387,40 +393,47 @@ class SE_GSM(Base_Method):
         condition1 = (abs(self.nodes[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.nodes[0].bdist))
         print(" bdist %.3f" % self.nodes[self.nR-1].bdist)
 
-        if self.pastts and self.nn>3 and condition1: #TODO extra criterion here
-            print("pastts is ",self.pastts)
-            isDone=True
         fp = self.find_peaks(1)
-        if fp==-1 and self.energies[self.nR-1]>200.:
+        if self.pastts and self.nn>3 and condition1: #TODO extra criterion here
+            print(" pastts is ",self.pastts)
+            isDone=True
+            if self.TSnode == self.nR-1:
+                print(" The highest energy node is the last")
+                print(" not continuing with TS optimization.")
+                self.tscontinue=False
+        elif fp==-1 and self.energies[self.nR-1]>200.:
             print("growth_iters over: all uphill and high energy")
             self.end_early=2
             self.tscontinue=False
             self.nnodes=self.nR
             isDone=True
-        if fp==-2:
+        elif fp==-2:
             print("growth_iters over: all uphill and flattening out")
             self.end_early=2
             self.tscontinue=False
             self.nnodes=self.nR
             isDone=True
+
+        # ADD extra criteria here to check if TS is higher energy than product
         return isDone
 
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
         added=False
         #if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
-        if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
-            if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
-                print("TS node is second to last node, adding one more node")
-                self.add_last_node(1)
-                self.nnodes=self.nR
-                self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
-                self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
-                added=True
-                print("done adding node")
-                print("nnodes = ",self.nnodes)
-                self.get_tangents_1()
-            return isDone
+        if (rtype == 2 and self.find) or (rtype==1 and self.climb):
+            if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
+                if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
+                    print("TS node is second to last node, adding one more node")
+                    self.add_last_node(1)
+                    self.nnodes=self.nR
+                    self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
+                    self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
+                    added=True
+                    print("done adding node")
+                    print("nnodes = ",self.nnodes)
+                    self.get_tangents_1()
+                return isDone
 
         # => check string profile <= #
         if fp==-1: #total string is uphill
@@ -452,10 +465,10 @@ class SE_GSM(Base_Method):
         # check for intermediates
         #if self.stage==1 and fp>0:
         if self.climb and fp>0:
-            fp=self.find_peaks(3)
+            fp=self.find_peaks(2)
             if fp>1:
                 rxnocc,wint = self.check_for_reaction()
-            if fp >1 and rxnocc==True and wint<self.nnodes-1:
+            if fp >1 and rxnocc and wint<self.nnodes-1:
                 print("Need to trim string")
                 self.tscontinue=False
                 isDone=True
