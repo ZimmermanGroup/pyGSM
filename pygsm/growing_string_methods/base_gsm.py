@@ -236,6 +236,10 @@ class Base_Method(Print,Analyze,object):
         self.newclimbscale=2.
 
         self.set_finder(rtype)
+        self.store_energies()
+        self.TSnode = np.argmax(self.energies[:self.nnodes-1])
+        self.emax = self.energies[self.TSnode]
+        self.nodes[self.TSnode].isTSnode=True
 
         for oi in range(max_iter):
 
@@ -581,7 +585,7 @@ class Base_Method(Print,Analyze,object):
             print("Created the pool")
             results=pool.map(
                     run, 
-                    [[self.nodes[n],self.optimizer[n],self.ictan[n],opt_steps*self.step_multiplier(n),self.set_opt_type(n),refE,n] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
+                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
                     )
 
             pool.close()
@@ -593,7 +597,7 @@ class Base_Method(Print,Analyze,object):
             results=[]
             run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
             for n in run_list:
-                args = [self.nodes[n],self.optimizer[n],self.ictan[n],opt_steps*self.step_multiplier(n),self.set_opt_type(n),refE,n]
+                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n]
                 results.append(run(args))
 
         for (node,optimizer,n) in results:
@@ -1045,8 +1049,8 @@ class Base_Method(Print,Analyze,object):
     def set_V0(self):
         raise NotImplementedError 
 
-    def step_multiplier(self,n):
-        exstep=1
+    def mult_steps(self,n,opt_steps):
+        exsteps=1
         if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
@@ -1057,7 +1061,7 @@ class Base_Method(Print,Analyze,object):
         elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-        return exstep
+        return exsteps*opt_steps
 
     def set_opt_type(self,n,quiet=False):
         #TODO
