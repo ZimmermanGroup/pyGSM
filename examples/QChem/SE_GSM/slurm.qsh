@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p zimintel --job-name=DE_GSM
+#SBATCH -p zimamd --job-name=DE_GSM
 #SBATCH --array=1
 #SBATCH --output=std.output
 #SBATCH --error=std.error
@@ -16,12 +16,13 @@ module load pygsm
 export OMP_NUM_THREADS=$SLURM_TASKS_PER_NODE
 
 #run job
-gsm  -coordinate_type DLC \
-    -xyzfile ../../../data/diels_alder.xyz \
-    -mode DE_GSM \
+gsm  -xyzfile ../../../data/diels_alder.xyz \
+    -isomers isomers.txt \
+    -mode SE_GSM \
     -package QChem \
     -lot_inp_file qstart \
-    -ID $SLURM_ARRAY_TASK_ID > log 2>&1
+    -ID $SLURM_ARRAY_TASK_ID \
+    -coordinate_type DLC > log 2>&1
 
 ID=`printf "%0*d\n" 3 $SLURM_ARRAY_TASK_ID`
 rm -rf $QCSCRATCH/string_$ID
