@@ -1,24 +1,40 @@
 from __future__ import print_function
-import numpy as np
-import manage_xyz
-from units import *
-from _linesearch import backtrack,NoLineSearch
-from base_optimizer import base_optimizer
-from nifty import pmat2d,pvec1d
-from block_matrix import block_matrix as bm
 
+# standard library imports
+import sys
+from os import path
 try:
     from io import StringIO
 except:
     from StringIO import StringIO
 
+# third party
+import numpy as np
+
+# local application imports
+from ._linesearch import backtrack,NoLineSearch,double_golden_section
+from .base_optimizer import base_optimizer
+from utilities import *
+from .eigenvector_follow import eigenvector_follow
+
 
 class beales_cg(base_optimizer):
 
-    def optimize(self,molecule,refE=0.,opt_type='TS',opt_steps=3,ictan=None):
+    def optimize(
+            self,
+            molecule,
+            xyz1,
+            xyz7,
+            f1,
+            f7,
+            refE=0.,
+            opt_type="BEALES_CG",
+            opt_steps=3,
+            ictan=None
+            ):
+
         print(" initial E %5.4f" % (molecule.energy - refE))
-        if opt_type!='TS' or ictan==None:
-            raise RuntimeError
+        sys.stdout.flush()
 
         # stash/initialize some useful attributes
         geoms = []
@@ -32,10 +48,6 @@ class beales_cg(base_optimizer):
         nconstraints=self.get_nconstraints(opt_type)
         self.buf = StringIO()
 
-        # form initial coord basis
-        constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-        molecule.update_coordinate_basis(constraints=constraints)
-
         # for cartesian these are the same
         x = np.copy(molecule.coordinates)
         xyz = np.copy(molecule.xyz)
@@ -47,54 +59,92 @@ class beales_cg(base_optimizer):
         fx = molecule.energy
         g = molecule.gradient
 
-        # project out the constraint
-        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-        g_prim = bm.dot(molecule.coord_basis,gc)
+        # maximize TS node
+        print(" calculating double")
+        results = double_golden_section(x,xyz1,xyz7,f1,f7,molecule)
+        print(" done")
 
-        molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
-        if molecule.gradrms < self.conv_grms:
-            print(" already at min")
-            return geoms,energies
+        # store
+        xp = x.copy()
+        gp = g.copy()
+        gp_prim = block_matrix.dot(molecule.coord_basis,gp)
+        xyzp = xyz.copy()
+        fxp = fx
+
+        # update 
+        if results['status']:
+            s0 = results['step']
+            s0_prim = block_matrix.dot(molecule.coord_basis,s0)
+            fx = results['fx']
+            xyz = results['xyz']
+            molecule.xyz = xyz
+            molecule.update_coordinate_basis()
+            geoms.append(molecule.geometry)
+            energies.append(molecule.energy-refE)
+            g = molecule.gradient
+            g_prim = block_matrix.dot(molecule.coord_basis,g)
+            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+        else:
+            print(" already at TS")
+            opt_type="ICTAN"
+            nconstraints = 1
+            molecule.update_coordinate_basis(constraints=ictan)
+            s0_prim = 0.*gp_prim
+            g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+            g_prim = block_matrix.dot(molecule.coord_basis,g)
+            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+
+        update_hess=False
 
         for ostep in range(opt_steps):
             print(" On opt step {} ".format(ostep+1))
 
+            if update_hess:
+                if opt_type!='TS':
+                    change = self.update_Hessian(molecule,'BFGS')
+                else:
+                    raise NotImplementedError
+            update_hess = True
+
             if ostep==0:
-                d_prim = g_prim
-            elif ostep==1:
-                dg = g_prim - gp_prim
-                h = dg/np.dot(ictan.T,dg)
-                d_prim = -g_prim + np.dot(h.T,g_prim)*ictan
+                if nconstraints<1:
+                    dg = g_prim - gp_prim
+                    h = dg/np.dot(s0_prim.T,dg)
+                else:
+                    h = 0.*g_prim
+                d_prim = -g_prim + np.dot(h.T,g_prim)*s0_prim   # the search direction
             else:
                 dnew = g_prim  
                 deltanew = np.dot(dnew.T,dnew)
                 deltaold=np.dot(gp_prim.T,gp_prim)
                 beta = deltanew/deltaold
-                d_prim = -g_prim + np.dot(h.T,g_prim)*ictan +beta*d_prim
+                d_prim = -g_prim + np.dot(h.T,g_prim)*s0_prim +beta*d_prim
 
             # form in DLC basis (does nothing if cartesian)
-            d = bm.dot(bm.transpose(molecule.coord_basis),d_prim)
+            d = block_matrix.dot(block_matrix.transpose(molecule.coord_basis),d_prim)
 
             # normalize the direction
-            actual_step = np.linalg.norm(d)
-            print(" actual_step= %1.2f"% actual_step)
-            d = d/actual_step #normalize
-            if actual_step>self.options['DMAX']:
-                step=self.options['DMAX']
-                print(" reducing step, new step = %1.2f" %step)
-            else:
-                step=actual_step
+            stepsize = np.linalg.norm(d)
+            print(" stepsize = %1.2f"% stepsize)
+            d = d/stepsize #normalize
+            if stepsize>self.options['DMAX']:
+                stepsize=self.options['DMAX']
+                print(" reducing step, new step = %1.2f" %stepsize)
 
             # store
             xp = x.copy()
             gp = g.copy()
-            self.gp_prim = bm.dot(molecule.coord_basis,gp)
+            gp_prim = block_matrix.dot(molecule.coord_basis,gp)
             xyzp = xyz.copy()
             fxp = fx
 
+            # => calculate constraint step <= #
+            constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
+
             # line search
             print(" Linesearch")
-            ls = self.Linesearch(n, x, fx, g, d, step, xp, gp,constraint_steps,self.linesearch_parameters,molecule)
+            sys.stdout.flush()
+            ls = self.Linesearch(n, x, fx, g, d, stepsize, xp, constraint_steps,self.linesearch_parameters,molecule)
             print(" Done linesearch")
             
             # revert to the previous point
@@ -104,12 +154,12 @@ class beales_cg(base_optimizer):
                 return ls['status']
 
             # get values from linesearch
-            p_step = step
-            step = ls['step']
             x = ls['x']
             fx = ls['fx']
             g  = ls['g']
-            g_prim = bm.dot(molecule.coord_basis,gc)
+            step = ls['step']
+            if nconstraints>0:
+                g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
             # dE 
             dEstep = fx - fxp
@@ -120,17 +170,26 @@ class beales_cg(base_optimizer):
             geoms.append(molecule.geometry)
             energies.append(molecule.energy-refE)
 
+            # save variables for update Hessian! 
+            if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
+                g_prim = block_matrix.dot(molecule.coord_basis,g)
+                self.dx_prim = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
+                self.dx_prim = np.reshape(self.dx_prim,(-1,1))
+                self.dg_prim = g_prim - gp_prim
+            else:
+                raise NotImplementedError(" ef not implemented for CART")
+
             if self.options['print_level']>0:
                 print(" Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1,fx-refE,molecule.gradrms,step,self.options['DMAX']))
 
-            #gmax = np.max(g)/ANGSTROM_TO_AU/KCAL_MOL_PER_AU
+            #gmax = np.max(g)/ANGSTROM_TO_AU/units.KCAL_MOL_PER_AU
             #print "current gradrms= %r au" % gradrms
-            gmax = np.max(g)/ANGSTROM_TO_AU
-            self.disp = np.max(x - xp)/ANGSTROM_TO_AU
-            self.Ediff = fx -fxp / KCAL_MOL_PER_AU
-            print(" maximum displacement component %1.2f (au)" % self.disp)
-            print(" maximum gradient component %1.2f (au)" % gmax)
+            #gmax = np.max(g)/units.ANGSTROM_TO_AU
+            #self.disp = np.max(x - xp)/units.ANGSTROM_TO_AU
+            #self.Ediff = fx -fxp / units.KCAL_MOL_PER_AU
+            #print(" maximum displacement component %1.2f (au)" % self.disp)
+            #print(" maximum gradient component %1.2f (au)" % gmax)
 
             # check for convergence TODO
             molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
@@ -139,17 +198,26 @@ class beales_cg(base_optimizer):
 
             #update DLC  --> this changes q, g, Hint
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
-                constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-                molecule.update_coordinate_basis(constraints=constraints)
+                print(" updating DLC") 
+                sys.stdout.flush()
+                if opt_type=="ICTAN":
+                    constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
+                    molecule.update_coordinate_basis(constraints=constraints)
+                else:
+                    molecule.update_coordinate_basis()
                 x = np.copy(molecule.coordinates)
                 fx = molecule.energy
                 dE = molecule.difference_energy
                 if dE != 1000.:
                     print(" difference energy is %5.4f" % dE)
                 g = molecule.gradient.copy()
-                molecule.form_Hessian_in_basis()
+                if nconstraints>0:
+                    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+                g_prim = block_matrix.dot(molecule.coord_basis,g)
+            print(" Done update")
+            sys.stdout.flush()
             print()
-
+            sys.stdout.flush()
 
         print(" opt-summary")
         print(self.buf.getvalue())
