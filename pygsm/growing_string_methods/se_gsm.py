@@ -289,8 +289,8 @@ class SE_GSM(Base_Method):
                 if "ANGLE" in i:
 
                     index = [i[1]-1, i[2]-1,i[3]-1]
-                    angle = Angle(index[0],index[1],index[3])
                     prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(angle)
+                    angle = Angle(index[0],index[1],index[2])
                     anglet = i[4]
                     ang_value = angle.value(xyz)
                     ang_diff = anglet*np.pi/180. - ang_value

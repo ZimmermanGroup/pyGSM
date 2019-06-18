@@ -315,7 +315,11 @@ def main():
 
 def read_isomers_file(isomers_file):
     with open(isomers_file) as f:
-        lines = f.readlines()
+        tmp = filter(None, (line.rstrip() for line in f))
+        lines=[]
+        for line in tmp:
+            lines.append(line)
+
     driving_coordinates=[]
     
     if lines[0] == "NEW":
