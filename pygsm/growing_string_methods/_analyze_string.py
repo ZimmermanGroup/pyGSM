@@ -150,7 +150,9 @@ class Analyze:
 
         print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
 
-        if cgrad>CTHRESH and not self.nodes[self.nR-1].PES.lot.do_coupling:
+
+        # 6/17 THIS should check if the last node is high in energy
+        if cgrad>CTHRESH and not self.nodes[self.nR-1].PES.lot.do_coupling and nodemax != self.TSnode:
             print(" constraint gradient positive")
             ispast=2
         elif ispast1>0 and cgrad>OTHRESH:
@@ -165,7 +167,7 @@ class Analyze:
         if ispast==0:
             bch=self.check_for_reaction_g(1)
             if ispast3>1 and bch:
-                print("over the hill(3) connection changed " %bch)
+                print("over the hill(3) connection changed %r " %bch)
                 ispast=3
         print(" ispast=",ispast)
         return ispast
