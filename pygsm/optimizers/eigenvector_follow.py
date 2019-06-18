@@ -23,7 +23,7 @@ class eigenvector_follow(base_optimizer):
 
         #print " refE %5.4f" % refE
         print(" initial E %5.4f" % (molecule.energy - refE))
-        print(" CONV_TOL %1.4f" % self.conv_grms)
+        print(" CONV_TOL %1.5f" % self.conv_grms)
         geoms = []
         energies=[]
         geoms.append(molecule.geometry)
@@ -67,7 +67,7 @@ class eigenvector_follow(base_optimizer):
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
         if molecule.gradrms < self.conv_grms:
-            print(" already at min")
+            print(" converged")
             return geoms,energies
 
         update_hess=False
@@ -83,22 +83,7 @@ class eigenvector_follow(base_optimizer):
                 else:
                     self.update_Hessian(molecule,'BOFILL')
             update_hess = True
-
-            if opt_type=="GOLDEN":
-                print(" in golden")
-                gts = np.dot(g.T,molecule.constraints)
-                d = gts*molecule.constraints
-                stepsize=np.linalg.norm(d)
-                print(" gts %1.4f" % gts)
-                # maximize stepsize for golden-section
-                if stepsize < 0.075:
-                    stepsize=0.075
-                g_results = golden_section(x,g,d,stepsize,molecule,maximize=True)
-                dqc = g_results['step']*d
-                xyz = molecule.update_xyz(dqc)
-                constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-                molecule.update_coordinate_basis(constraints=constraints)
-
+        
             # => Form eigenvector step <= #
             if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 raise NotImplementedError
@@ -178,8 +163,6 @@ class eigenvector_follow(base_optimizer):
             	xnorm = 1.0
 
             # update molecule xyz
-            #print(" step")
-            #print((x-xp).T)
             xyz = molecule.update_xyz(x-xp)
             geoms.append(molecule.geometry)
             energies.append(molecule.energy-refE)

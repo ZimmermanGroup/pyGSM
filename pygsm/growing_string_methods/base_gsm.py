@@ -1072,7 +1072,7 @@ class Base_Method(Print,Analyze,object):
         opt_type='ICTAN' 
         if self.climb and self.nodes[n].isTSnode and not self.find:
             #opt_type='CLIMB'
-            opt_type="GOLDEN"
+            opt_type='BEALES_CG'
         elif self.find and self.nodes[n].isTSnode:
             opt_type='TS'
         elif self.nodes[n].PES.lot.do_coupling:

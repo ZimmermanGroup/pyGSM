@@ -87,6 +87,7 @@ class base_optimizer(object):
 
         self.options = options
         if self.options['Linesearch']=="backtrack":
+            print("Using backtrack")
             self.Linesearch=backtrack
         elif self.options['Linesearch']=="NoLineSearch":
             self.Linesearch=NoLineSearch
@@ -128,7 +129,7 @@ class base_optimizer(object):
         self.options['OPTTHRESH']=value
 
     def get_nconstraints(self,opt_type):
-        if opt_type in ["ICTAN", "CLIMB","GOLDEN"]:
+        if opt_type in ["ICTAN", "CLIMB"]:
             nconstraints = 1
         elif opt_type in ['MECI']:
             nconstraints=2
@@ -143,9 +144,9 @@ class base_optimizer(object):
             assert molecule.PES.lot.do_coupling==True,"Turn do_coupling on."                   
         #elif opt_type not in ['MECI','SEAM','TS-SEAM']: 
         #    assert molecule.PES.lot.do_coupling==False,"Turn do_coupling off."                 
-        if opt_type=="UCONSTRAINED":  
+        if opt_type in ["UCONSTRAINED"]:  
             assert ictan==None
-        if opt_type in ['ICTAN','GOLDEN','CLIMB','TS', 'SEAM','TS-SEAM']  and ictan.any()==None:
+        if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM','BEALES_CG']  and ictan.any()==None:
             raise RuntimeError("Need ictan")
         if opt_type in ['TS','TS-SEAM']:
             assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
@@ -194,7 +195,7 @@ class base_optimizer(object):
 
         if opt_type=="UNCONSTRAINED":
             constraints=None
-        elif opt_type=='ICTAN' or opt_type=="CLIMB" or opt_type=="GOLDEN":
+        elif opt_type=='ICTAN' or opt_type=="CLIMB" or opt_type=="BEALES_CG":
             constraints = ictan
         elif opt_type=='MECI':
             print("MECI")
