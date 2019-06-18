@@ -353,8 +353,8 @@ class Rotator(object):
                 # Chain rule is applied to get terms from
                 # dummy atom derivatives
                 nxdum = np.linalg.norm(xdum)
-                dxdum = nifty.d_cross(vx, self.e0)
-                dnxdum = nifty.d_ncross(vx, self.e0)
+                dxdum = math_utils.d_cross(vx, self.e0)
+                dnxdum = math_utils.d_ncross(vx, self.e0)
                 # Derivative of dummy atom position w/r.t. molecular axis vector
                 dexdum = (dxdum*nxdum - np.outer(dnxdum,xdum))/nxdum**2
                 # Here we may compute finite difference derivatives to check
@@ -773,13 +773,13 @@ class LinearAngle(object):
         ebc = vbc / np.linalg.norm(vbc)
         # Derivative terms
         de0 = np.zeros((3, 3), dtype=float)
-        dev = nifty.d_unit_vector(v)
-        dc1 = nifty.d_cross_ab(ev, e0, dev, de0)
-        de1 = np.dot(dc1, nifty.d_unit_vector(c1))
-        dc2 = nifty.d_cross_ab(ev, e1, dev, de1)
-        de2 = np.dot(dc2, nifty.d_unit_vector(c2))
-        deba = nifty.d_unit_vector(vba)
-        debc = nifty.d_unit_vector(vbc)
+        dev = math_utils.d_unit_vector(v)
+        dc1 = math_utils.d_cross_ab(ev, e0, dev, de0)
+        de1 = np.dot(dc1, math_utils.d_unit_vector(c1))
+        dc2 = math_utils.d_cross_ab(ev, e1, dev, de1)
+        de2 = np.dot(dc2, math_utils.d_unit_vector(c2))
+        deba = math_utils.d_unit_vector(vba)
+        debc = math_utils.d_unit_vector(vbc)
         if self.axis == 0:
             derivatives[a, :] = np.dot(deba, e1) + np.dot(-de1, eba) + np.dot(-de1, ebc)
             derivatives[b, :] = np.dot(-deba, e1) + np.dot(-debc, e1)
