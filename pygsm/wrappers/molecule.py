@@ -92,7 +92,7 @@ class Molecule(object):
         opt.add_option(
                 key='PES',
                 required=True,
-                allowed_types=[PES,Avg_PES,Penalty_PES,potential_energy_surfaces.PES,potential_energy_surfaces.Penalty_PES,potential_energy_surfaces.Avg_PES],
+                #allowed_types=[PES,Avg_PES,Penalty_PES,potential_energy_surfaces.pes.PES,potential_energy_surfaces.Penalty_PES,potential_energy_surfaces.Avg_PES],
                 doc='potential energy surface object to evaulate energies, gradients, etc. Pes is defined by charge, state, multiplicity,etc. '
                        
                 )
@@ -169,6 +169,7 @@ class Molecule(object):
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy())
 
         return Molecule(MoleculeA.Data.copy().set_values({
+            'PES': MoleculeA.PES,
             'coord_obj':coord_obj,
             'geom':new_geom,
             'node_id':new_node_id,
@@ -346,10 +347,10 @@ class Molecule(object):
         """The number of atoms in the molecule"""
         return len(self.atoms)
 
-    def atom_data(self):
-        uniques = list(set(M.atoms))
-        for a in uniques:
-            nifty.printcool_dictionary(a._asdict())
+    #def atom_data(self):
+    #    uniques = list(set(M.atoms))
+    #    for a in uniques:
+    #        nifty.printcool_dictionary(a._asdict())
 
     @property
     def center_of_mass(self):
@@ -371,8 +372,11 @@ class Molecule(object):
 
     @property
     def geometry(self):
-        symbols =[a.symbol for a in self.atoms]
-        return manage_xyz.combine_atom_xyz(symbols,self.xyz)
+        return manage_xyz.combine_atom_xyz(self.atom_symbols,self.xyz)
+
+    @property
+    def atom_symbols(self):
+        return [a.symbol for a in self.atoms]
 
     @property
     def energy(self):
