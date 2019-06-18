@@ -45,7 +45,7 @@ def main():
     parser.add_argument('-adiabatic_index',nargs="*",type=int,default=[0],help='Adiabatic index (default: %(default)s)',required=False)
     parser.add_argument('-multiplicity',nargs="*",type=int,default=[1],help='Multiplicity (default: %(default)s)')
     parser.add_argument('-FORCE',type=list,default=None,help='Spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
-    parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. Recommend LBFGS for large molecules >1000 atoms',required=False)
+    parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. (default: %(default)s Recommend LBFGS for large molecules >1000 atoms)',required=False)
     parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
     parser.add_argument('-gsm_print_level',type=int,default=1,help='Printout for gsm. 1 prints ?',required=False)
     parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='default: %(default)s',choices=['NoLineSearch','backtrack'])
@@ -55,8 +55,8 @@ def main():
     parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Reaction completion convergence in SE modes (default: %(default)s)')
     parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes (default: %(default)s)',required=False)
     parser.add_argument('-growth_direction',type=int,default=0,help='Direction adding new nodes (default: %(default)s)',choices=[0,1])
-    parser.add_argument('-reactant_geom_fixed',action='store_true',help='Pre-optimize reactant')
-    parser.add_argument('-product_geom_fixed',action='store_true',help='Optimize product')
+    parser.add_argument('-reactant_geom_fixed',action='store_true',help='Fix reactant geometry i.e. do not pre-optimize')
+    parser.add_argument('-product_geom_fixed',action='store_true',help='Fix product geometry i.e. do not pre-optimize')
     parser.add_argument('-nproc',type=int,default=1,help='Processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
     parser.add_argument('-charge',type=int,default=0,help='Total system charge (default: %(default)s)')
     parser.add_argument('-max_gsm_iters',type=int,default=100,help='The maximum number of GSM cycles (default: %(default)s)')
@@ -71,6 +71,8 @@ def main():
 
 
     args = parser.parse_args()
+
+    print_msg()
 
     if args.nproc>1:
         force_num_procs=True
@@ -434,6 +436,36 @@ def post_processing(gsm,analyze_ICs=False,have_TS=True):
 
 #def go_gsm(gsm,max_iters=50,opt_steps=3,rtype=2):
 #    gsm.go_gsm(max_iters=max_iters,opt_steps=opt_steps,rtype=rtype)
+
+def print_msg():
+    msg="""
+    __        __   _                            _        
+    \ \      / /__| | ___ ___  _ __ ___   ___  | |_ ___  
+     \ \ /\ / / _ \ |/ __/ _ \| '_ ` _ \ / _ \ | __/ _ \ 
+      \ V  V /  __/ | (_| (_) | | | | | |  __/ | || (_) |
+       \_/\_/ \___|_|\___\___/|_| |_| |_|\___|  \__\___/ 
+                                    ____ ____  __  __ 
+                       _ __  _   _ / ___/ ___||  \/  |
+                      | '_ \| | | | |  _\___ \| |\/| |
+                      | |_) | |_| | |_| |___) | |  | |
+                      | .__/ \__, |\____|____/|_|  |_|
+                      |_|    |___/                    
+#==========================================================================#
+#| If this code has benefited your research, please support us by citing: |#
+#|                                                                        |# 
+#| Aldaz, C.; Kammeraad J. A.; Zimmerman P. M. "Discovery of conical      |#
+#| intersection mediated photochemistry with growing string methods",     |#
+#| Phys. Chem. Chem. Phys., 2018, 20, 27394                               |#
+#| http://dx.doi.org/10.1039/c8cp04703k                                   |#
+#|                                                                        |# 
+#| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+#| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+#| http://dx.doi.org/10.1063/1.4952956                                    |#
+#==========================================================================#
+
+
+    """
+    print(msg)
 
 
 
