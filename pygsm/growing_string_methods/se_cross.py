@@ -140,3 +140,11 @@ class SE_Cross(SE_GSM):
         #    isDone = True
         return isDone
 
+    def restart_string(self,xyzfile='restart.xyz'):
+        super(SE_Cross,self).restart_string(xyzfile)
+        self.done_growing=False
+        self.nnodes=20
+        self.nR -=1 
+        # stash bdist for node 0
+        _,self.nodes[0].bdist = self.tangent(self.nodes[0],None)
+
