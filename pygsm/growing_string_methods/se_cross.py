@@ -34,11 +34,11 @@ class SE_Cross(SE_GSM):
         sys.stdout.flush()
 
         # stash bdist for node 0
-        _,self.nodes[0].bdist = self.tangent(0,None)
+        _,self.nodes[0].bdist = self.tangent(self.nodes[0],None)
         print(" Initial bdist is %1.3f" %self.nodes[0].bdist)
 
         # interpolate first node
-        self.interpolate(1)
+        self.add_GSM_nodeR()
 
         # grow string
         self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=1)
@@ -50,7 +50,7 @@ class SE_Cross(SE_GSM):
             # doing extra constrained penalty optimization for MECI
             print(" extra constrained optimization for the nnR-1 = %d" % (self.nR-1))
             self.optimizer[self.nR-1].conv_grms=0.01
-            ictan,_ = self.tangent(self.nR-1,self.nR-2)
+            ictan,_ = self.tangent(self.nodes[self.nR-1],self.nodes[self.nR-2])
             self.nodes[self.nR-1].PES.sigma=3.5
 
             self.optimizer[self.nR-1].optimize(

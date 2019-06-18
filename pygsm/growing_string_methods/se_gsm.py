@@ -32,7 +32,7 @@ class SE_GSM(Base_Method):
         print(" number of primitives is", self.nodes[0].num_primitives)
 
         # stash bdist for node 0
-        ictan,self.nodes[0].bdist = self.tangent(0,None)
+        ictan,self.nodes[0].bdist = self.tangent(self.nodes[0],None)
         self.nodes[0].update_coordinate_basis(constraints=ictan)
         self.set_V0()
 
@@ -75,11 +75,11 @@ class SE_GSM(Base_Method):
             self.nodes[0].gradrms = 0.
             self.nodes[0].V0 = self.nodes[0].energy
             print(" Initial energy is %1.4f" % self.nodes[0].energy)
-            self.interpolate(1) 
+            self.add_GSM_nodeR()
             self.growth_iters(iters=max_iters,maxopt=opt_steps)
             if self.tscontinue:
                 if self.pastts==1: #normal over the hill
-                    self.interpolateR(1)
+                    self.add_GSM_nodeR(1)
                     self.add_last_node(2)
                 elif self.pastts==2 or self.pastts==3: #when cgrad is positive
                     self.add_last_node(1)
@@ -111,13 +111,10 @@ class SE_GSM(Base_Method):
             print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
-                if self.climber or self.finder:
-                    self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
-                else:
-                    self.optimizer[n].conv_grms=self.options['CONV_TOL']
 
-        print(" initial ic_reparam")
-        self.ic_reparam(25)
+        if not self.isRestarted:
+            print(" initial ic_reparam")
+            self.ic_reparam(25)
         if self.tscontinue:
             self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
         else:
@@ -125,36 +122,39 @@ class SE_GSM(Base_Method):
 
         print("Finished GSM!")  
 
+    def add_node(self,nodeR,nodeP=None,stepsize=0.5,node_id=1):
 
-    def add_node(self,n1,n2,n3=None):
-        # n3 is not used!
-        BDISTMIN=0.05
-        print(" adding node: %i from node %i" %(n2,n1))
-        ictan,bdist =  self.tangent(n1,None)
+        if nodeP is None:
+            # nodeP is not used!
+            BDISTMIN=0.05
+            ictan,bdist =  self.tangent(nodeR,None)
 
-        if bdist<BDISTMIN:
-            print("bdist too small %.3f" % bdist)
-            return None
-        new_node = Molecule.copy_from_options(self.nodes[n1],new_node_id=n2)
-        Vecs = new_node.update_coordinate_basis(constraints=ictan)
-        constraint = new_node.constraints
-        sign=-1.
+            if bdist<BDISTMIN:
+                print("bdist too small %.3f" % bdist)
+                return None
+            new_node = Molecule.copy_from_options(nodeR,new_node_id=node_id)
+            Vecs = new_node.update_coordinate_basis(constraints=ictan)
+            constraint = new_node.constraints
+            sign=-1.
 
-        dqmag_scale=1.5
-        minmax = self.DQMAG_MAX - self.DQMAG_MIN
-        a = bdist/dqmag_scale
-        if a>1.:
-            a=1.
-        dqmag = sign*(self.DQMAG_MIN+minmax*a)
-        print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
+            dqmag_scale=1.5
+            minmax = self.DQMAG_MAX - self.DQMAG_MIN
+            a = bdist/dqmag_scale
+            if a>1.:
+                a=1.
+            dqmag = sign*(self.DQMAG_MIN+minmax*a)
+            print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
 
-        dq0 = dqmag*constraint
-        print(" dq0[constraint]: %1.3f" % dqmag)
+            dq0 = dqmag*constraint
+            print(" dq0[constraint]: %1.3f" % dqmag)
 
-        new_node.update_xyz(dq0)
-        new_node.bdist = bdist
+            new_node.update_xyz(dq0)
+            new_node.bdist = bdist
 
-        return new_node
+            return new_node
+        else:
+            return super(SE_GSM,self).add_node(nodeR,nodeP,stepsize,node_id)
+
 
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
@@ -193,16 +193,16 @@ class SE_GSM(Base_Method):
                 print(" Ran out of nodes, exiting GSM")
                 raise ValueError
             if self.nodes[self.nR] == None:
-                success=self.interpolateR()
+                success=self.add_GSM_nodeR()
             else:
                 self.active[self.nR-1] = False
         return success
 
-    def interpolate(self,newnodes=1):
+    def add_GSM_nodes(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
             print("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
-            self.interpolateR()
+            self.add_GSM_nodeR()
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,nconstraints=1):  #see line 3863 of gstring.cpp
         self.get_tangents_1g()
@@ -235,24 +235,24 @@ class SE_GSM(Base_Method):
         ncurrent += 1
         return ncurrent,nlist
 
-    def tangent(self,n1,n2):
-        if n2 ==None or n2==n1:
-            print(" getting tangent from node ",n1)
+    def tangent(self,node1,node2):
+        if node2 == None or node2.node_id==node1.node_id:
+            print(" getting tangent from node ",node1.node_id)
             nadds = self.driving_coords.count("ADD")
             nbreaks = self.driving_coords.count("BREAK")
             nangles = self.driving_coords.count("ANGLE")
             ntorsions = self.driving_coords.count("TORSION")
-            ictan = np.zeros((self.nodes[n1].num_primitives,1),dtype=float)
+            ictan = np.zeros((node1.num_primitives,1),dtype=float)
             breakdq = 0.3
             bdist=0.0
-            atoms = self.nodes[n1].atoms
-            xyz = self.nodes[n1].xyz
+            atoms = node1.atoms
+            xyz = node1.xyz
 
             for i in self.driving_coords:
                 if "ADD" in i:
                     index = [i[1]-1, i[2]-1]
                     bond = Distance(index[0],index[1])
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(bond)
+                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
                     if len(i)==3:
                         #TODO why not just use the covalent radii?
                         d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
@@ -271,7 +271,7 @@ class SE_GSM(Base_Method):
                 if "BREAK" in i:
                     index = [i[1]-1, i[2]-1]
                     bond = Distance(index[0],index[1])
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(bond)
+                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
                     if len(i)==3:
                         d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
                     elif len(i)==4:
@@ -289,8 +289,8 @@ class SE_GSM(Base_Method):
                 if "ANGLE" in i:
 
                     index = [i[1]-1, i[2]-1,i[3]-1]
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(angle)
                     angle = Angle(index[0],index[1],index[2])
+                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
                     anglet = i[4]
                     ang_value = angle.value(xyz)
                     ang_diff = anglet*np.pi/180. - ang_value
@@ -305,7 +305,7 @@ class SE_GSM(Base_Method):
                     #torsion=(i[1],i[2],i[3],i[4])
                     index = [i[1]-1, i[2]-1,i[3]-1,i[4]-1]
                     torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(torsion)
+                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
                     tort = i[5]
                     torv = torsion.value(xyz)
                     tor_diff = tort - torv*180./np.pi
@@ -324,12 +324,12 @@ class SE_GSM(Base_Method):
                 if any(elem in trans for elem in i):
                     fragid = i[1]
                     destination = i[2]
-                    indices = self.nodes[n1].get_frag_atomic_index(fragid)
+                    indices = node1.get_frag_atomic_index(fragid)
                     atoms=range(indices[0]-1,indices[1])
                     #print('indices of frag %i is %s' % (fragid,indices))
                     T_class = getattr(sys.modules[__name__], i[0])
                     translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(translation)
+                    prim_idx = node1.coord_obj.Prims.dof_index(translation)
                     trans_curr = translation.value(xyz)
                     trans_diff = destination-trans_curr
                     ictan[prim_idx] = -trans_diff
@@ -342,15 +342,15 @@ class SE_GSM(Base_Method):
                 if any(elem in rots for elem in i):
                     fragid = i[1]
                     rot_angle = i[2]
-                    indices = self.nodes[n1].get_frag_atomic_index(fragid)
+                    indices = node1.get_frag_atomic_index(fragid)
                     atoms=range(indices[0]-1,indices[1])
                     R_class = getattr(sys.modules[__name__], i[0])
-                    coords = self.nodes[n1].xyz
+                    coords = node1.xyz
                     sel = coords.reshape(-1,3)[atoms,:]
                     sel -= np.mean(sel,axis=0)
                     rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                    rotation = R_class(atoms,coords,self.nodes[n1].coord_obj.Prims.Rotators,w=rg)
-                    prim_idx = self.nodes[n1].coord_obj.Prims.dof_index(rotation)
+                    rotation = R_class(atoms,coords,node1.coord_obj.Prims.Rotators,w=rg)
+                    prim_idx = node1.coord_obj.Prims.dof_index(rotation)
                     rot_curr = rotation.value(xyz)
                     rot_diff = rot_angle-rot_curr
                     #print('rot_diff before periodic %.3f' % rot_diff)
@@ -369,13 +369,13 @@ class SE_GSM(Base_Method):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
         else:
-            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
-            assert self.nodes[n2]!=None,'node n2 is None'
-            Q1 = self.nodes[n1].primitive_internal_values 
-            Q2 = self.nodes[n2].primitive_internal_values 
+            print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
+            assert node2!=None,'node n2 is None'
+            Q1 = node1.primitive_internal_values 
+            Q2 = node2.primitive_internal_values 
             PMDiff = Q2-Q1
             #for i in range(len(PMDiff)):
-            for k,prim in zip(list(range(len(PMDiff))),self.nodes[n1].primitive_internal_coordinates):
+            for k,prim in zip(list(range(len(PMDiff))),node1.primitive_internal_coordinates):
                 if prim.isPeriodic:
                     Plus2Pi = PMDiff[k] + 2*np.pi
                     Minus2Pi = PMDiff[k] - 2*np.pi
@@ -396,11 +396,11 @@ class SE_GSM(Base_Method):
         fp = self.find_peaks(1)
         if self.pastts and self.nn>3 and condition1: #TODO extra criterion here
             print(" pastts is ",self.pastts)
-            isDone=True
             if self.TSnode == self.nR-1:
                 print(" The highest energy node is the last")
                 print(" not continuing with TS optimization.")
                 self.tscontinue=False
+            isDone=True
         elif fp==-1 and self.energies[self.nR-1]>200.:
             print("growth_iters over: all uphill and high energy")
             self.end_early=2
@@ -420,20 +420,18 @@ class SE_GSM(Base_Method):
     def check_opt(self,totalgrad,fp,rtype):
         isDone=False
         added=False
-        #if self.TSnode==self.nnodes-2 and (self.stage==2 or totalgrad<0.2) and fp==1:
-        if (rtype == 2 and self.find) or (rtype==1 and self.climb):
-            if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
-                if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
-                    print("TS node is second to last node, adding one more node")
-                    self.add_last_node(1)
-                    self.nnodes=self.nR
-                    self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
-                    self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
-                    added=True
-                    print("done adding node")
-                    print("nnodes = ",self.nnodes)
-                    self.get_tangents_1()
-                return isDone
+        if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
+            if self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']:
+                print("TS node is second to last node, adding one more node")
+                self.add_last_node(1)
+                self.nnodes=self.nR
+                self.active[self.nnodes-1]=False #GSM makes self.active[self.nnodes-1]=True as well
+                self.active[self.nnodes-2]=True #GSM makes self.active[self.nnodes-1]=True as well
+                added=True
+                print("done adding node")
+                print("nnodes = ",self.nnodes)
+                self.get_tangents_1()
+            return isDone
 
         # => check string profile <= #
         if fp==-1: #total string is uphill
@@ -475,20 +473,24 @@ class SE_GSM(Base_Method):
                 return isDone
 
         # => Convergence Criteria
-        #if (((self.stage==1 and rtype==1) or self.stage==2) and
-        if (((self.climb and rtype==1) or self.find) and
-                self.nodes[self.TSnode].gradrms< self.options['CONV_TOL']):
-            self.tscontinue=False
-            isDone=True
-            return isDone
-        #if (((self.stage==1 and rtype==1) or self.stage==2) and totalgrad<0.1 and
-        if (((self.climb and rtype==1) or self.find) and totalgrad<0.1 and
-                self.nodes[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.emaxp+0.02> self.emax and 
-                self.emaxp-0.02< self.emax):
-            self.tscontinue=False
-            isDone=True
-            return isDone
+        dE_iter = abs(self.emaxp - self.emax)
+        TS_conv = self.options['CONV_TOL']
+        if self.find and self.optimizer[self.TSnode].nneg>1:
+            print(" reducing TS convergence because nneg>1")
+            TS_conv = self.options['CONV_TOL']/2.
+        self.optimizer[self.TSnode].conv_grms = TS_conv
 
+        if (rtype == 2 and self.find ) or (rtype==1 and self.climb):
+            if self.nodes[self.TSnode].gradrms< TS_conv:
+                self.tscontinue=False
+                isDone=True
+                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
+                return isDone
+            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and dE_iter < 0.02:
+                self.tscontinue=False
+                isDone=True
+                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
+                return isDone
 
 if __name__=='__main__':
     from .qchem import QChem

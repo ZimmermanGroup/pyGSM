@@ -361,7 +361,7 @@ class Base_Method(Print,Analyze,object):
             #print "getting tangent between %i %i" % (n,n-1)
             assert self.nodes[n]!=None,"n is bad"
             assert self.nodes[n-1]!=None,"n-1 is bad"
-            ictan[n],_ = self.tangent(n-1,n)
+            ictan[n],_ = self.tangent(self.nodes[n-1],self.nodes[n])
             dqmaga[n] = 0.
             ictan0= np.copy(ictan[n])
             ictan[n] /= np.linalg.norm(ictan[n])
@@ -425,7 +425,7 @@ class Base_Method(Print,Analyze,object):
                     intic_n = n+1
                     int2ic_n = n-1
             if not do3:
-                ictan0,_ = self.tangent(newic_n,intic_n)
+                ictan0,_ = self.tangent(self.nodes[newic_n],self.nodes[intic_n])
             else:
                 f1 = 0.
                 dE1 = abs(self.energies[n+1]-self.energies[n])
@@ -439,8 +439,8 @@ class Base_Method(Print,Analyze,object):
 
                 print(' 3 way tangent ({}): f1:{:3.2}'.format(n,f1))
 
-                t1,_ = self.tangent(intic_n,newic_n)
-                t2,_ = self.tangent(newic_n,int2ic_n)
+                t1,_ = self.tangent(self.nodes[intic_n],self.nodes[newic_n])
+                t2,_ = self.tangent(self.nodes[newic_n],self.nodes[int2ic_n])
                 print(" done 3 way tangent")
                 ictan0 = f1*t1 +(1.-f1)*t2
                 #self.ictan[n]=ictan0
@@ -485,7 +485,7 @@ class Base_Method(Print,Analyze,object):
             print(nlist)
 
         for n in range(ncurrent):
-            self.ictan[nlist[2*n]],_ = self.tangent(nlist[2*n],nlist[2*n+1])
+            self.ictan[nlist[2*n]],_ = self.tangent(self.nodes[nlist[2*n]],self.nodes[nlist[2*n+1]])
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
@@ -571,6 +571,45 @@ class Base_Method(Print,Analyze,object):
     def opt_steps(self,opt_steps):
 
         refE=self.nodes[0].energy
+        if self.climb and not self.find:
+            nm1 = self.TSnode-1
+            np1 = self.TSnode+1
+            nint = 1
+            #inodes = self.interpolate(self.nodes[self.TSnode],self.nodes[nm1],nint)[::-1]
+            inodes = self.interpolate(self.nodes[nm1],self.nodes[self.TSnode],nint)
+            #inodes += self.interpolate(self.nodes[self.TSnode],self.nodes[np1],nint)[1:]
+            inodes += reversed(self.interpolate(self.nodes[np1],self.nodes[self.TSnode],nint)[:-1])
+
+            geoms = [ m.geometry for m in inodes ]
+            manage_xyz.write_xyzs('test.xyz',geoms,scale=1.)
+
+            interp_E = []
+            interp_E.append(self.nodes[nm1].energy)
+            for n in inodes[1:nint+1]:
+                interp_E.append(n.energy)
+            interp_E.append(self.nodes[self.TSnode].energy)
+            for n in inodes[nint+2:-1]:
+                interp_E.append(n.energy)
+            interp_E.append(self.nodes[np1].energy)
+            interp_E = np.asarray(interp_E)
+            print(interp_E.T)
+
+            tnode = np.argmax(interp_E)
+            if tnode == 0 or tnode == (nint+1)*2:
+               print(" this shouldn't happen")
+               raise RuntimeError
+
+            if tnode == nint+1:
+                print("TS node is the max")
+            else:
+                self.nodes[self.TSnode] = Molecule.copy_from_options(inodes[tnode],new_node_id=int(self.TSnode))
+                self.nodes[self.TSnode].isTSnode=True
+
+            f1,xyz1 = inodes[tnode-1].energy,inodes[tnode-1].xyz
+            f7,xyz7 = inodes[tnode+1].energy,inodes[tnode+1].xyz
+        else:
+            f1,xyz1,f7,xyz7 = None,None,None,None
+
         if self.use_multiprocessing:
             cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc
             print(" Parallelizing over {} processes".format(cpus))
@@ -643,7 +682,46 @@ class Base_Method(Print,Analyze,object):
 
         return form_TS_hess
 
-    def interpolateR(self,newnodes=1):
+    def interpolate(self,start_node,end_node,num_interp):
+        nifty.printcool(" interpolate")
+       
+        num_nodes = num_interp + 2
+        nodes = [None]*(num_nodes)
+        nodes[0] = start_node
+        nodes[-1] = end_node
+        sign=1
+        nR = 1
+        nP = 1
+        nn = nR + nP
+        for n in range(num_interp):
+            if num_nodes - nn > 1:
+                stepsize = 1./float(self.nnodes-self.nn)
+            else:
+                stepsize = 0.5
+            if sign == 1:
+                iR = nR-1
+                iP = num_nodes - nP
+                iN = nR
+                nodes[nR] = self.add_node(nodes[iR],nodes[iP],stepsize,iN)
+                if nodes[nR] == None:
+                    raise RuntimeError
+                nR +=1 
+                nn += 1
+
+            else:
+                n1 = num_nodes - nP
+                n2 = n1 -1
+                n3 = nR -1
+                nodes[n2] = self.add_node(nodes[n1],nodes[n3],stepsize,n2)
+                if nodes[n2] == None:
+                    raise RuntimeError
+                nP +=1 
+                nn += 1
+            sign *= -1
+
+        return nodes
+
+    def add_GSM_nodeR(self,newnodes=1):
         nifty.printcool("Adding reactant node")
         success= True
         if self.nn+newnodes > self.nnodes:
@@ -652,14 +730,20 @@ class Base_Method(Print,Analyze,object):
             iR = self.nR-1
             iP = self.nnodes-self.nP
             iN = self.nR
-            self.nodes[self.nR] = self.add_node(iR,iN,iP)
+            print(" adding node: %i between %i %i from %i" %(iN,iR,iP,iR))
+            if self.nnodes - self.nn > 1:
+                stepsize = 1./float(self.nnodes-self.nn)
+            else:
+                stepsize = 0.5
+
+            self.nodes[self.nR] = self.add_node(self.nodes[iR],self.nodes[iP],stepsize,iN)
 
             if self.nodes[self.nR]==None:
                 success= False
                 break
 
             if self.__class__.__name__!="DE_GSM":
-                ictan,bdist =  self.tangent(self.nR,None)
+                ictan,bdist =  self.tangent(self.nodes[self.nR],None)
                 self.nodes[self.nR].bdist = bdist
 
             self.nn+=1
@@ -675,7 +759,7 @@ class Base_Method(Print,Analyze,object):
 
         return success
 
-    def interpolateP(self,newnodes=1):
+    def add_GSM_nodeP(self,newnodes=1):
         nifty.printcool("Adding product node")
         if self.nn+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
@@ -686,7 +770,13 @@ class Base_Method(Print,Analyze,object):
             n1=self.nnodes-self.nP
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
-            self.nodes[-self.nP-1] = self.add_node(n1,n2,n3)
+            print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n2))
+            if self.nnodes - self.nn > 1:
+                stepsize = 1./float(self.nnodes-self.nn)
+            else:
+                stepsize = 0.5
+
+            self.nodes[-self.nP-1] = self.add_node(self.nodes[n1],self.nodes[n3],stepsize,n2)
             if self.nodes[-self.nP-1]==None:
                 success= False
                 break
@@ -703,6 +793,24 @@ class Base_Method(Print,Analyze,object):
             print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
 
             return success
+
+    def add_node(self,nodeR,nodeP,stepsize,node_id):
+        ictan,_ =  self.tangent(nodeR,nodeP)
+        Vecs = nodeR.update_coordinate_basis(constraints=ictan)
+        constraint = nodeR.constraints
+        prim_constraint = block_matrix.dot(Vecs,constraint)
+        dqmag = np.dot(prim_constraint.T,ictan)
+        print(" dqmag: %1.3f"%dqmag)
+        #sign=-1
+        sign=1.
+        dqmag *= (sign*stepsize)
+        print(" scaled dqmag: %1.3f"%dqmag)
+
+        dq0 = dqmag*constraint
+        old_xyz = nodeR.xyz.copy()
+        new_xyz = nodeR.coord_obj.newCartesian(old_xyz,dq0)
+        new_node = Molecule.copy_from_options(MoleculeA=nodeR,xyz=new_xyz,new_node_id=node_id)
+        return new_node
 
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
@@ -1054,7 +1162,6 @@ class Base_Method(Print,Analyze,object):
         if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-        #if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
         if (self.find or self.climb) and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
@@ -1191,6 +1298,13 @@ class Base_Method(Print,Analyze,object):
         for n in range(self.nnodes):
             print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
         print()
+
+        #tmp for testing
+        #self.TSnode = np.argmax(self.energies[:self.nnodes-1])
+        #self.emax = self.energies[self.TSnode]
+        #self.nodes[self.TSnode].isTSnode=True
+        #self.climb=True
+        #self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
 
 
     def com_rotate_move(self,iR,iP,iN):

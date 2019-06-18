@@ -50,11 +50,11 @@ class DE_GSM(Base_Method):
 
         if not self.isRestarted:
             if self.growth_direction==0:
-                self.interpolate(2) 
+                self.add_GSM_nodes(2)
             elif self.growth_direction==1:
-                self.interpolateR(1)
+                self.add_GSM_nodeR(1)
             elif self.growth_direction==2:
-                self.interpolateP(1)
+                self.add_GSM_nodeP(1)
             oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
             nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
@@ -67,15 +67,6 @@ class DE_GSM(Base_Method):
             oi=0
             self.get_tangents_1()
 
-        # set convergence for nodes
-        if not (self.climber or self.finder):
-            factor = 2.5
-        else: 
-            factor = 1.
-        for i in range(self.nnodes):
-            if self.nodes[i] !=None:
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
-
         if self.tscontinue==True:
             if max_iters-oi>0:
                 opt_iters=max_iters-oi
@@ -86,38 +77,17 @@ class DE_GSM(Base_Method):
 
         return self.nnodes,self.energies
 
-    def interpolate(self,newnodes=1):
+    def add_GSM_nodes(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
-            print("Adding too many nodes, cannot interpolate")
+            print("Adding too many nodes, cannot add_GSM_node")
         sign = -1
         for i in range(newnodes):
             sign *= -1
             if sign == 1:
-                self.interpolateR()
+                self.add_GSM_nodeR()
             else:
-                self.interpolateP()
+                self.add_GSM_nodeP()
 
-    def add_node(self,n1,n2,n3):
-        print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
-        ictan,_ =  self.tangent(n3,n1)
-        Vecs = self.nodes[n1].update_coordinate_basis(constraints=ictan)
-        constraint = self.nodes[n1].constraints
-        prim_constraint = block_matrix.dot(Vecs,constraint)
-        dqmag = np.dot(prim_constraint.T,ictan)
-        print(" dqmag: %1.3f"%dqmag)
-        sign=-1
-
-        if self.nnodes - self.nn > 1:
-            dqmag = sign*dqmag/float(self.nnodes-self.nn)
-        else:
-            dqmag = sign*dqmag/2.0 
-        print(" scaled dqmag: %1.3f"%dqmag)
-
-        dq0 = dqmag*constraint
-        old_xyz = self.nodes[n1].xyz.copy()
-        new_xyz = self.nodes[n1].coord_obj.newCartesian(old_xyz,dq0)
-        new_node = Molecule.copy_from_options(MoleculeA=self.nodes[n1],xyz=new_xyz,new_node_id=n2)
-        return new_node
 
     def set_active(self,nR,nP):
         #print(" Here is active:",self.active)
@@ -160,21 +130,21 @@ class DE_GSM(Base_Method):
         success=True 
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             if self.nodes[self.nR] == None:
-                self.interpolateR()
+                self.add_GSM_nodeR()
         if self.nodes[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
             if self.nodes[-self.nP-1] == None:
-                self.interpolateP()
+                self.add_GSM_nodeP()
         return success
 
-    def tangent(self,n1,n2):
-        if self.print_level>1:
-            print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
+
+    def tangent(self,node1,node2):
+        #if self.print_level>1:
+        #    print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
         # this could have been done easier but it is nicer to do it this way
-        Q1 = self.nodes[n1].primitive_internal_values 
-        Q2 = self.nodes[n2].primitive_internal_values 
+        Q1 = node1.primitive_internal_values 
+        Q2 = node2.primitive_internal_values 
         PMDiff = Q2-Q1
-        #for i in range(len(PMDiff)):
-        for k,prim in zip(list(range(len(PMDiff))),self.nodes[n1].primitive_internal_coordinates):
+        for k,prim in zip(list(range(len(PMDiff))),node1.primitive_internal_coordinates):
             if prim.isPeriodic:
                 Plus2Pi = PMDiff[k] + 2*np.pi
                 Minus2Pi = PMDiff[k] - 2*np.pi
@@ -183,7 +153,6 @@ class DE_GSM(Base_Method):
                 if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
                     PMDiff[k] = Minus2Pi
         return np.reshape(PMDiff,(-1,1)),None
-
 
     def make_nlist(self):
         ncurrent = 0
@@ -222,11 +191,20 @@ class DE_GSM(Base_Method):
         #if rtype==self.stage: 
         # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
         #if True:
+
+        TS_conv = self.options['CONV_TOL']
+        if self.find and self.optimizer[self.TSnode].nneg>1:
+            print(" reducing TS convergence because nneg>1")
+            TS_conv = self.options['CONV_TOL']/2.
+        self.optimizer[self.TSnode].conv_grms = TS_conv
+
         if (rtype == 2 and self.find) or (rtype==1 and self.climb):
-            if self.nodes[self.TSnode].gradrms<self.options['CONV_TOL']: 
+            if self.nodes[self.TSnode].gradrms<TS_conv: 
                 isDone=True
+                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
                 self.tscontinue=False
-            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*self.options['CONV_TOL'] and self.dE_iter<0.02: #TODO extra crit here
+            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02: #TODO extra crit here
+                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
                 isDone=True
                 self.tscontinue=False
         return isDone
