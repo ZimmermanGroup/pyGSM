@@ -17,29 +17,10 @@ from coordinate_systems import DelocalizedInternalCoordinates
 from coordinate_systems import rotate
 from ._print_opt import Print
 from ._analyze_string import Analyze
+from optimizers import beales_cg,eigenvector_follow
 
-def run(args):
-
-    node,optimizer,ictan,opt_steps,opt_type,refE,n = args
-    #print(" entering run: {}".format(n))
-    sys.stdout.flush()
-
-    print()
-    nifty.printcool("Optimizing node {}".format(n))
-
-    # => do constrained optimization
-    try:
-        optimizer.optimize(
-                molecule=node,
-                refE=refE,
-                opt_type=opt_type,
-                opt_steps=opt_steps,
-                ictan=ictan
-                )
-    except:
-        RuntimeError
-
-    return node,optimizer,n
+# TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
+# but should create the xyz. GSM should create the new molecule based off that xyz.
 
 
 class Base_Method(Print,Analyze,object):
@@ -240,6 +221,15 @@ class Base_Method(Print,Analyze,object):
         self.emax = self.energies[self.TSnode]
         self.nodes[self.TSnode].isTSnode=True
 
+        # set convergence for nodes
+        if (self.climber or self.finder):
+            factor = 2.5
+        else: 
+            factor = 1.
+        for i in range(self.nnodes):
+            if self.nodes[i] !=None:
+                self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
+
         for oi in range(max_iter):
 
             nifty.printcool("Starting opt iter %i" % oi)
@@ -277,7 +267,6 @@ class Base_Method(Print,Analyze,object):
             self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
             self.nodes[self.TSnode].isTSnode=True
-            self.optimizer[self.TSnode].conv_grms = self.options['CONV_TOL']
 
             #ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
 
@@ -321,8 +310,9 @@ class Base_Method(Print,Analyze,object):
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.05:
                     self.optimizer[self.TSnode].options['DMAX']=0.05
-
-            if self.pTSnode!=self.TSnode:
+            elif self.pTSnode!=self.TSnode:
+                self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy())
+                self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
                 self.nodes[self.pTSnode].isTSnode=False
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
@@ -335,11 +325,11 @@ class Base_Method(Print,Analyze,object):
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
                     self.get_eigenv_finite(self.TSnode)
-            # reform Hess for TS if not good
-            if self.find and not self.optimizer[n].maxol_good:
+            elif self.find and not self.optimizer[n].maxol_good:
+                # reform Hess for TS if not good
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
-            elif self.find and self.optimizer[self.TSnode].nneg > 3 and ts_gradrms >self.options['CONV_TOL']:
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0) and ts_gradrms >self.options['CONV_TOL']:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
@@ -562,10 +552,10 @@ class Base_Method(Print,Analyze,object):
                 print("can't add anymore nodes, bdist too small")
                 if self.__class__.__name__=="SE_GSM":
                     print(" optimizing last node")
-                    self.nodes[self.nR-1].energy = self.optimizer[self.nR-1].optimize(
+                    self.optimizer[self.nR-1].optimize(
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
-                            opt_steps=50
+                            opt_steps=50,
                             )
                 self.check_if_grown()
                 break
@@ -588,7 +578,7 @@ class Base_Method(Print,Analyze,object):
             print("Created the pool")
             results=pool.map(
                     run, 
-                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
+                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,f1,f7,xyz1,xyz7] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
                     )
 
             pool.close()
@@ -600,7 +590,7 @@ class Base_Method(Print,Analyze,object):
             results=[]
             run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
             for n in run_list:
-                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n]
+                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,f1,f7,xyz1,xyz7]
                 results.append(run(args))
 
         for (node,optimizer,n) in results:
@@ -622,16 +612,22 @@ class Base_Method(Print,Analyze,object):
                 print(" ** starting climb **")
                 self.climb=True
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
-                self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+       
+                # set to beales
+                self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
+                #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
             elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
-                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or
-                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or
+                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10.) or #and ts_cgradq<0.01
+                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. ) or  #and ts_cgradq<0.02
                     (ts_gradrms<self.options['CONV_TOL']*5.))
                     ):
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
                 form_TS_hess=True
+
+                self.optimizer[self.TSnode] = eigenvector_follow(self.optimizer[0].options.copy())
+                print(type(self.optimizer[self.TSnode]))
                 self.optimizer[self.TSnode].options['SCALEQN'] = 1.
                 #self.get_tangents_1e()
                 #self.get_eigenv_finite(self.TSnode)
@@ -1058,7 +1054,8 @@ class Base_Method(Print,Analyze,object):
         if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-        if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+        #if self.find and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+        if (self.find or self.climb) and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
@@ -1164,7 +1161,7 @@ class Base_Method(Print,Analyze,object):
         print(" initial energy is %3.4f" % self.nodes[0].energy)
 
         for struct in range(1,nstructs):
-            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],struct)
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct)
             print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
             self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
             print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
@@ -1172,9 +1169,6 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].gradrms=grmss[struct]
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
-
-        self.TSnode = np.argmax(self.energies[:self.nnodes-1])
-        self.emax  = self.energies[self.TSnode]
 
         self.nnodes=self.nR=nstructs
         self.isRestarted=True
@@ -1235,6 +1229,48 @@ class Base_Method(Print,Analyze,object):
         #print(new_xyz)
 
         return new_xyz
+
+def run(args):
+
+    node,optimizer,ictan,opt_steps,opt_type,refE,n,f1,f7,xyz1,xyz7 = args
+    #print(" entering run: {}".format(n))
+    sys.stdout.flush()
+
+    print()
+    nifty.printcool("Optimizing node {}".format(n))
+
+    if opt_type=="BEALES_CG": 
+        print(opt_type)
+        print(type(optimizer))
+
+    # => do constrained optimization
+    try:
+
+        if opt_type!="BEALES_CG":
+            optimizer.optimize(
+                    molecule=node,
+                    refE=refE,
+                    opt_type=opt_type,
+                    opt_steps=opt_steps,
+                    ictan=ictan
+                    )
+        else:
+            optimizer.optimize(
+                    molecule=node,
+                    xyz1=xyz1,
+                    xyz7=xyz7,
+                    f1=f1,
+                    f7=f7,
+                    refE=refE,
+                    opt_type=opt_type,
+                    opt_steps=opt_steps,
+                    ictan=ictan,
+                    )
+
+    except:
+        RuntimeError
+
+    return node,optimizer,n
 
 
 if __name__=='__main__':

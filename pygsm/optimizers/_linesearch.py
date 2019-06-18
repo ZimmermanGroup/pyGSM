@@ -1,4 +1,8 @@
+import sys
 import numpy as np 
+from utilities import manage_xyz
+
+#TODO remove unecessary arguments: nconstraints, xp, ,...
 
 def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule):
 
@@ -15,6 +19,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule)
     return result
 
 def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule):
+    print(" In backtrack")
 
     # n is the non-constrained
     count = 0
@@ -92,6 +97,147 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         # update the step		
         step = step * width
 
+def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
+    print("in")
+    # read in xyz1,xyz7 and molecule with xyz set to xyz4
+    x1 = molecule.coord_obj.calculate(xyz1)
+    x7 = molecule.coord_obj.calculate(xyz7)
+    x4 = molecule.coordinates.copy()  # initially the same as x
+    x4 = x4.flatten()
+    x = x.flatten()
+    xyz4 = molecule.xyz.copy()
+    f4 = molecule.energy
+   
+    # stash coordinates for 4
+    xyz = molecule.xyz.copy()
+    
+    z = (1+np.sqrt(5))/2.
+    
+    # form x2,x3,x5,x6
+    x2 = x4 - (x4-x1)/z
+    x3 = x1 + (x4-x1)/z
+    x5 = x7 - (x7-x4)/z
+    x6 = x4 + (x7-x4)/z
+
+    #print(" getting 2")
+    #xyz2 = molecule.coord_obj.newCartesian(xyz,x2-x)
+    #if molecule.coord_obj.bork:
+    #    xyz2 = xyz4  - (xyz4 - xyz1)/z
+    #print(" getting 3")
+    #xyz3 = molecule.coord_obj.newCartesian(xyz,x3-x)
+    #if molecule.coord_obj.bork:
+    #    xyz3 = xyz1  + (xyz4 - xyz1)/z
+    #print(" getting 5")
+    #xyz5 = molecule.coord_obj.newCartesian(xyz,x5-x)
+    #if molecule.coord_obj.bork:
+    #    xyz5 = xyz7 - (xyz7 - xyz4)/z
+    #print(" getting 6")
+    #xyz6 = molecule.coord_obj.newCartesian(xyz,x6-x)
+    #if molecule.coord_obj.bork:
+    #    xyz6 = xyz4 + (xyz7 - xyz4)/z
+    
+    xyz2 = xyz4  - (xyz4 - xyz1)/z
+    xyz3 = xyz1  + (xyz4 - xyz1)/z
+    xyz5 = xyz7 - (xyz7 - xyz4)/z
+    xyz6 = xyz4 + (xyz7 - xyz4)/z
+
+    xyzs = [xyz1,xyz2,xyz3,xyz4,xyz5,xyz6,xyz7]
+    geoms = [manage_xyz.combine_atom_xyz(molecule.atom_symbols,xyz) for xyz in xyzs ]
+    manage_xyz.write_xyzs('test.xyz',geoms,scale=1.)
+    
+    sys.stdout.flush()
+    
+    f2 = molecule.PES.get_energy(xyz2)
+    f3 = molecule.PES.get_energy(xyz3)
+    f5 = molecule.PES.get_energy(xyz5)
+    f6 = molecule.PES.get_energy(xyz6)
+    print(" %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f" % (f1,f2,f3,f4,f5,f6,f7))
+    l = [f1, f2, f3, f4, f5, f6, f7 ]
+    sys.stdout.flush()
+    
+    def ismax(l1,val):
+        m = max(l1)
+        return (True if m==val else False)
+    
+    left=False
+    right=False
+    if ismax(l,f3):
+        print(" 3")
+        #x4,f4 = x3,f3
+        xyz4,f4 = xyz3,f3
+        left=True
+    elif ismax(l,f5):
+        print(" 5")
+        #x4,f4 = x5,f5
+        xyz4,f4 = xyz5,f5
+        right=True
+    elif ismax(l,f2):
+        print(" 2")
+        #x1,f1 = x2,f2
+        xyz1,f1 = xyz2,f2
+        left=True
+    elif ismax(l,f6):
+        print(" 6")
+        #x7,f7 = x6,f6
+        xyz7,f7 = xyz6,f6
+        right=True
+    elif ismax(l,f4):
+        print(" 4")
+        result = {'status':False,'fx':f4,'step': 0.*x,'xyz':xyz}
+        return result
+    else:
+        #something is wrong with TSnode
+        print(" Error")
+        raise RuntimeError
+    
+    
+    # rearrange right to be in canonical order
+    if right:
+        #x1,f1 = x4,f4
+        #x2,f2 = x5,f5
+        #x3,f3 = x6,f6
+        #x4,f4 = x7,f7
+        xyz1,f1 = xyz4,f4
+        xyz2,f2 = xyz5,f5
+        xyz3,f3 = xyz6,f6
+        xyz4,f4 = xyz7,f7
+    
+    TOLF = 0.01 # kcal/mol
+    TOLC = 1e-3 #
+    print('entering while loop')
+    count=0
+    while abs(f2-f3)>TOLF or np.linalg.norm(x2-x3)>TOLC:
+        if f2>f3:
+            #x4,f4 = x3,f3
+            xyz4,f4 = xyz3,f3
+        else:
+            xyz1,f1 = xyz2,f2
+        #x2 = x4 - (x4 - x1)/z
+        #x3 = x1 + (x4 - x1)/z
+        #xyz2 = molecule.coord_obj.newCartesian(xyz,x2-x)
+        #xyz3 = molecule.coord_obj.newCartesian(xyz,x3-x)
+        xyz2 = xyz4 - (xyz4-xyz1)/z
+        xyz3 = xyz1 + (xyz4-xyz1)/z
+        f2 = molecule.PES.get_energy(xyz2)
+        f3 = molecule.PES.get_energy(xyz3)
+
+        count+=1
+        if count>2:
+            break
+        
+    
+    #xnew = 0.5*(x1+x4)
+    #xyznew = molecule.coord_obj.newCartesian(xyz,xnew-x)
+    xyznew = 0.5*(xyz1+xyz4)
+    fnew = molecule.PES.get_energy(xyznew)
+    xnew = molecule.coord_obj.calculate(xyznew)
+    print(" GS: %5.4f" % fnew)
+    
+    step = xnew - x
+    result = {'status':True,'fx':fnew,'step':step,'xyz':xyznew}
+
+    return result
+
 
 def golden_section(x, g, d, step, molecule,maximize=False):
 
@@ -124,10 +270,10 @@ def golden_section(x, g, d, step, molecule,maximize=False):
         print(" no minimum exists")
         if f1<f4:
             print(" returning initial point")
-            return {'status':0,'fx':f1,'step':step*0.,'x':x1, 'g':g}
+            return {'status':0,'fx':sign*f1,'step':step*0.,'x':x1, 'g':g}
         else:
             print(" returning endpoint")
-            return {'status':0,'fx':f4,'step':x4-x1,'x':x4, 'g':g}
+            return {'status':0,'fx':sign*f4,'step':x4-x1,'x':x4, 'g':g}
 
     accuracy = 1.0e-3
     count=0
