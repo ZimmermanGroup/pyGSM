@@ -4,7 +4,7 @@
 #SBATCH --output=std.output
 #SBATCH --error=std.error
 #SBATCH --nodes=1
-#SBATCH --ntasks=12
+#SBATCH -c 12
 #SBATCH --time=48:00:00
 
 # load modules
@@ -12,8 +12,9 @@
 module load qchem
 module load pygsm
 
-# Set OMP_NUM_THREADS to the same value as n
-export OMP_NUM_THREADS=$SLURM_TASKS_PER_NODE
+# pygsm will automatically read the number of processors
+# use the -c option to specify threads. python will use 
+# the threads to make calculations faster
 
 #run job
 gsm  -coordinate_type DLC \

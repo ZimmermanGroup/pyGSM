@@ -468,9 +468,9 @@ class SE_GSM(Base_Method):
                 rxnocc,wint = self.check_for_reaction()
             if fp >1 and rxnocc and wint<self.nnodes-1:
                 print("Need to trim string")
-                self.tscontinue=False
-                isDone=True
-                return isDone
+                #self.tscontinue=False
+                #isDone=True
+                #return isDone
 
         # => Convergence Criteria
         dE_iter = abs(self.emaxp - self.emax)

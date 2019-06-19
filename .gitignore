@@ -9,3 +9,4 @@ ipynb_demos/pytc/scratch/*.xyz
 !/.gitignore  # explicitly do not ignore .gitignore
 docs/html/
 html/
+build/
