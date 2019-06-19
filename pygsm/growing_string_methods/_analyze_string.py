@@ -22,7 +22,7 @@ class Analyze:
         alluptol2=0.5
         allup=True
         diss=False
-        for n in range(len(self.energies[:nnodes])):
+        for n in range(1,len(self.energies[:nnodes])):
             if self.energies[n]+alluptol<self.energies[n-1]:
                 allup=False
                 break

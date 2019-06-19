@@ -300,17 +300,13 @@ class Base_Method(Print,Analyze,object):
             # => write Convergence to file <= #
             self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
 
-            # => Reparam the String <= #
-            if oi!=max_iter-1:
-                self.ic_reparam(nconstraints=nconstraints)
-
             # Modify TS Hess if necessary
             if form_TS_hess:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.05:
                     self.optimizer[self.TSnode].options['DMAX']=0.05
-            elif self.pTSnode!=self.TSnode:
+            elif self.pTSnode!=self.TSnode and self.climb:
                 self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy())
                 self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
                 self.nodes[self.pTSnode].isTSnode=False
@@ -342,6 +338,10 @@ class Base_Method(Print,Analyze,object):
                     self.nclimb=3
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
+
+            # => Reparam the String <= #
+            if oi!=max_iter-1:
+                self.ic_reparam(nconstraints=nconstraints)
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))

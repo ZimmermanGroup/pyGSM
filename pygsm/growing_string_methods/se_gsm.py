@@ -401,7 +401,7 @@ class SE_GSM(Base_Method):
                 print(" not continuing with TS optimization.")
                 self.tscontinue=False
             isDone=True
-        elif fp==-1 and self.energies[self.nR-1]>200.:
+        elif fp==-1 and self.energies[self.nR-1]>200. and self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']*5:
             print("growth_iters over: all uphill and high energy")
             self.end_early=2
             self.tscontinue=False
