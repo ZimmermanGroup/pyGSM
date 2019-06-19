@@ -16,7 +16,9 @@ class CartesianCoordinates(InternalCoordinates):
         self.cVals = []
         self.atoms = options['atoms']
         self.natoms = len(self.atoms)
-        self.Prims = PrimitiveInternalCoordinates(options.copy())
+        top_settings={'make_primitives':False}
+        self.Prims = PrimitiveInternalCoordinates(options.copy().set_values({'extra_kwargs':top_settings}))
+        #self.Prims = PrimitiveInternalCoordinates(options.copy())
 
         for i in range(self.natoms):
             self.Prims.add(CartesianX(i, w=1.0))

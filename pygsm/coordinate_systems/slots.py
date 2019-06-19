@@ -18,6 +18,10 @@ class CartesianX(object):
 
     def __repr__(self):
         return "Cartesian-X %i" % (self.a+1)
+
+    @property
+    def atoms(self):
+        return self.a
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -51,6 +55,10 @@ class CartesianY(object):
     def __repr__(self):
         # return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-Y %i" % (self.a+1)
+
+    @property
+    def atoms(self):
+        return self.a
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -84,6 +92,10 @@ class CartesianZ(object):
     def __repr__(self):
         # return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-Z %i" % (self.a+1)
+
+    @property
+    def atoms(self):
+        return self.a
         
     def __eq__(self, other):
         if type(self) is not type(other): return False

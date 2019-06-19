@@ -432,11 +432,13 @@ class InternalCoordinates(object):
         # self.fragments = list(nx.connected_component_subgraphs(G))
 
         # show topology
+        #import matplotlib as mpl
+        #mpl.use('Agg')
         #import matplotlib.pyplot as plt
         #plt.plot()
-        #nx.draw(m.topology,with_labels=True,font_weight='bold')
+        #nx.draw(self.topology,with_labels=True,font_weight='bold')
         #plt.show()
-        #plt.svefig('tmp.png')
+        #plt.savefig('tmp.png')
 
         return G
 

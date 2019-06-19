@@ -161,7 +161,7 @@ class Molecule(object):
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy().set_values({"xyz":xyz}))
         elif fnm is not None:
-            new_geom = manage_xyz.read_xyz(fnm)
+            new_geom = manage_xyz.read_xyz(fnm,scale=1.)
             xyz = manage_xyz.xyz_to_np(new_geom)
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy().set_values({"xyz":xyz}))
         else:
@@ -191,7 +191,6 @@ class Molecule(object):
             print(" getting cartesian coordinates from geom")
             atoms=manage_xyz.get_atoms(self.Data['geom'])
             xyz=manage_xyz.xyz_to_np(self.Data['geom'])
-            #mol = nifty.make_mol_from_coords(xyz,atoms)
         elif self.Data['fnm'] is not None:
             print(" reading cartesian coordinates from file")
             if self.Data['ftype'] is None:
@@ -202,8 +201,9 @@ class Molecule(object):
             #mol=next(pb.readfile(self.Data['ftype'],self.Data['fnm']))
             #xyz = nifty.getAllCoords(mol)
             #atoms =  nifty.getAtomicSymbols(mol)
-            xyz = manage_xyz.read_xyz(self.Data['fnm'])
-            atoms = manage_xyz.get_atoms(xyz)
+            geom = manage_xyz.read_xyz(self.Data['fnm'],scale=1.)
+            xyz = manage_xyz.xyz_to_np(geom)
+            atoms = manage_xyz.get_atoms(geom)
 
         else:
             raise RuntimeError
