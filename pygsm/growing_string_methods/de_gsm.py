@@ -120,9 +120,12 @@ class DE_GSM(Base_Method):
         if self.nn==self.nnodes:
             isDone=True
             if self.growth_direction==1:
-                print("need to add last node")
-                raise NotImplementedError
-                #TODO
+                print("Setting LOT of last node")
+                self.nodes[-1] = Molecule.copy_from_options(
+                        MoleculeA = self.nodes[-2],
+                        xyz = self.nodes[-1].xyz,
+                        new_node_id = self.nnodes-1
+                        )
 
         return isDone
 
