@@ -66,7 +66,11 @@ class eigenvector_follow(base_optimizer):
         gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
-        if molecule.gradrms < self.conv_grms:
+        if molecule.PES.__class__.__name__=="Penalty_PES" and self.opt_cross:
+            if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
+                print(" converged")
+                return geoms,energies
+        elif molecule.gradrms < self.conv_grms:
             print(" converged")
             return geoms,energies
 
@@ -189,7 +193,16 @@ class eigenvector_follow(base_optimizer):
             self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
             # check for convergence TODO
-            if molecule.gradrms < self.conv_grms:
+            fx = molecule.energy
+            dE = molecule.difference_energy
+            if dE != 1000.:
+                print(" difference energy is %5.4f" % dE)
+
+            if molecule.PES.__class__.__name__=="Penalty_PES" and self.opt_cross:
+                if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
+                    print(" converged")
+                    break
+            elif molecule.gradrms < self.conv_grms:
                 print(" converged")
                 break
 
@@ -199,10 +212,6 @@ class eigenvector_follow(base_optimizer):
                     constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
                     molecule.update_coordinate_basis(constraints=constraints)
                     x = np.copy(molecule.coordinates)
-                    fx = molecule.energy
-                    dE = molecule.difference_energy
-                    if dE != 1000.:
-                        print(" difference energy is %5.4f" % dE)
                     g = molecule.gradient.copy()
                     # project out the constraint
                     gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints

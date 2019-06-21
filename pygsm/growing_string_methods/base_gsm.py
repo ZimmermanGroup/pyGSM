@@ -1168,7 +1168,7 @@ class Base_Method(Print,Analyze,object):
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
         if (self.find or self.climb) and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
-            exsteps=2
+            exsteps=3
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
         elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 

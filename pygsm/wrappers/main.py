@@ -60,7 +60,7 @@ def main():
     parser.add_argument('-nproc',type=int,default=1,help='Processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')
     parser.add_argument('-charge',type=int,default=0,help='Total system charge (default: %(default)s)')
     parser.add_argument('-max_gsm_iters',type=int,default=100,help='The maximum number of GSM cycles (default: %(default)s)')
-    parser.add_argument('-max_opt_steps',type=int,help='The maximum number of node optimizations per GSM cycle (defaults: 3 DE-GSM, 10 SE-GSM)')
+    parser.add_argument('-max_opt_steps',type=int,help='The maximum number of node optimizations per GSM cycle (defaults: 3 DE-GSM, 20 SE-GSM)')
     parser.add_argument('-only_climb',action='store_true',help="Only use climbing image to optimize TS")
     parser.add_argument('-no_climb',action='store_true',help="Don't climb to the TS")
     parser.add_argument('-optimize_mesx',action='store_true',help='optimize to the MESX')
@@ -259,7 +259,7 @@ def main():
                 )
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
-        nifty.printcool("RECTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
+        nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
            refE = reactant.energy,
@@ -290,7 +290,7 @@ def main():
         if inpfileq['gsm_type']=="DE_GSM":
             inpfileq['max_opt_steps']=3
         else:
-            inpfileq['max_opt_steps']=10
+            inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
         gsm.restart_string(args.restart_file)

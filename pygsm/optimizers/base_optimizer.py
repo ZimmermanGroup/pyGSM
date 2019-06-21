@@ -103,6 +103,9 @@ class base_optimizer(object):
         self.nneg = 0  # number of negative eigenvalues
         self.DMIN = self.options['DMAX']/20.
 
+        #MECI 
+        self.opt_cross = False
+
         # Hessian
         self.Hint=None
         self.dx=0.
@@ -114,7 +117,7 @@ class base_optimizer(object):
                 'epsilon':1e-5,
                 'ftol':1e-4,
                 'wolfe':0.9,
-                'max_linesearch':5,
+                'max_linesearch':3,
                 'min_step':self.DMIN,
                 'max_step':0.5,
         }

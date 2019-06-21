@@ -61,6 +61,7 @@ class SE_Cross(SE_GSM):
                     ictan=ictan,
                     )
 
+        self.optimizer[self.nR].opt_cross=True
         if rtype==0:
             # MECI optimization
             self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
