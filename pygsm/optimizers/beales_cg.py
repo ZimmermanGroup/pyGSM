@@ -23,10 +23,8 @@ class beales_cg(base_optimizer):
     def optimize(
             self,
             molecule,
-            xyz1,
-            xyz7,
-            f1,
-            f7,
+            s0,
+            gp_prim,
             refE=0.,
             opt_type="BEALES_CG",
             opt_steps=3,
@@ -59,40 +57,15 @@ class beales_cg(base_optimizer):
         fx = molecule.energy
         g = molecule.gradient
 
-        # maximize TS node
-        print(" calculating double")
-        results = double_golden_section(x,xyz1,xyz7,f1,f7,molecule)
-        print(" done")
-
-        # store
-        xp = x.copy()
-        gp = g.copy()
-        gp_prim = block_matrix.dot(molecule.coord_basis,gp)
-        xyzp = xyz.copy()
-        fxp = fx
-
-        # update 
-        if results['status']:
-            s0 = results['step']
-            s0_prim = block_matrix.dot(molecule.coord_basis,s0)
-            fx = results['fx']
-            xyz = results['xyz']
-            molecule.xyz = xyz
-            molecule.update_coordinate_basis()
-            geoms.append(molecule.geometry)
-            energies.append(molecule.energy-refE)
-            g = molecule.gradient
-            g_prim = block_matrix.dot(molecule.coord_basis,g)
-            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
-        else:
+        if np.all(s0==0.):
             print(" already at TS")
-            opt_type="ICTAN"
-            nconstraints = 1
-            molecule.update_coordinate_basis(constraints=ictan)
+            nconstraints=1
             s0_prim = 0.*gp_prim
             g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-            g_prim = block_matrix.dot(molecule.coord_basis,g)
-            molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+        else:
+            s0_prim = block_matrix.dot(molecule.coord_basis,s0)
+        molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
+        g_prim = block_matrix.dot(molecule.coord_basis,g)
 
         update_hess=False
 
@@ -151,15 +124,20 @@ class beales_cg(base_optimizer):
             if ls['status'] < 0:
                 x = xp.copy()
                 print('[ERROR] the point return to the previous point')
-                return ls['status']
-
-            # get values from linesearch
-            x = ls['x']
-            fx = ls['fx']
-            g  = ls['g']
-            step = ls['step']
-            if nconstraints>0:
-                g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+                if nconstraints==1:
+                    return geoms,energies
+                else:
+                    nconstraints=1
+                    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+                    step=0.
+            else:
+                # get values from linesearch
+                x = ls['x']
+                fx = ls['fx']
+                g  = ls['g']
+                step = ls['step']
+                if nconstraints>0:
+                    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
 
             # dE 
             dEstep = fx - fxp
@@ -200,11 +178,11 @@ class beales_cg(base_optimizer):
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 print(" updating DLC") 
                 sys.stdout.flush()
-                if opt_type=="ICTAN":
-                    constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
-                    molecule.update_coordinate_basis(constraints=constraints)
-                else:
-                    molecule.update_coordinate_basis()
+                #if opt_type=="ICTAN":
+                constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
+                molecule.update_coordinate_basis(constraints=constraints)
+                #else:
+                #    molecule.update_coordinate_basis()
                 x = np.copy(molecule.coordinates)
                 fx = molecule.energy
                 dE = molecule.difference_energy

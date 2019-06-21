@@ -18,6 +18,7 @@ from coordinate_systems import rotate
 from ._print_opt import Print
 from ._analyze_string import Analyze
 from optimizers import beales_cg,eigenvector_follow
+from optimizers._linesearch import double_golden_section
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
@@ -568,47 +569,51 @@ class Base_Method(Print,Analyze,object):
         self.newic  = Molecule.copy_from_options(self.nodes[0])
         return n
 
+    def interpolate_xyz(self,nodeR,nodeP,stepsize):
+        ictan,_ =  self.tangent(nodeR,nodeP)
+        Vecs = nodeR.update_coordinate_basis(constraints=ictan)
+        constraint = nodeR.constraints
+        prim_constraint = block_matrix.dot(Vecs,constraint)
+        dqmag = np.dot(prim_constraint.T,ictan)
+        print(" dqmag: %1.3f"%dqmag)
+        #sign=-1
+        sign=1.
+        dqmag *= (sign*stepsize)
+        print(" scaled dqmag: %1.3f"%dqmag)
+
+        dq0 = dqmag*constraint
+        old_xyz = nodeR.xyz.copy()
+        new_xyz = nodeR.coord_obj.newCartesian(old_xyz,dq0)
+
+        return new_xyz 
+
     def opt_steps(self,opt_steps):
 
         refE=self.nodes[0].energy
         if self.climb and not self.find:
             nm1 = self.TSnode-1
             np1 = self.TSnode+1
-            nint = 1
-            #inodes = self.interpolate(self.nodes[self.TSnode],self.nodes[nm1],nint)[::-1]
-            inodes = self.interpolate(self.nodes[nm1],self.nodes[self.TSnode],nint)
-            #inodes += self.interpolate(self.nodes[self.TSnode],self.nodes[np1],nint)[1:]
-            inodes += reversed(self.interpolate(self.nodes[np1],self.nodes[self.TSnode],nint)[:-1])
 
-            geoms = [ m.geometry for m in inodes ]
-            manage_xyz.write_xyzs('test.xyz',geoms,scale=1.)
+            # interpolate closer to the TS node for the GS search
+            xyz = self.nodes[self.TSnode].xyz 
+            xyz1 = self.interpolate_xyz(self.nodes[nm1],self.nodes[self.TSnode],0.9)
+            xyz7 = self.interpolate_xyz(self.nodes[np1],self.nodes[self.TSnode],0.9)
 
-            interp_E = []
-            interp_E.append(self.nodes[nm1].energy)
-            for n in inodes[1:nint+1]:
-                interp_E.append(n.energy)
-            interp_E.append(self.nodes[self.TSnode].energy)
-            for n in inodes[nint+2:-1]:
-                interp_E.append(n.energy)
-            interp_E.append(self.nodes[np1].energy)
-            interp_E = np.asarray(interp_E)
-            print(interp_E.T)
+            # linear approximation
+            f1 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[nm1].energy 
+            f7 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[np1].energy 
 
-            tnode = np.argmax(interp_E)
-            if tnode == 0 or tnode == (nint+1)*2:
-               print(" this shouldn't happen")
-               raise RuntimeError
+            gp_prim = block_matrix.dot(self.nodes[self.TSnode].coord_basis,self.nodes[self.TSnode].gradient)
+            result = double_golden_section(self.nodes[self.TSnode].coordinates,xyz1,xyz7,f1,f7,self.nodes[self.TSnode])
+            status = result['status']
 
-            if tnode == nint+1:
-                print("TS node is the max")
-            else:
-                self.nodes[self.TSnode] = Molecule.copy_from_options(inodes[tnode],new_node_id=int(self.TSnode))
-                self.nodes[self.TSnode].isTSnode=True
-
-            f1,xyz1 = inodes[tnode-1].energy,inodes[tnode-1].xyz
-            f7,xyz7 = inodes[tnode+1].energy,inodes[tnode+1].xyz
+            if not status:
+                print("same geometry from golden section")
+            self.nodes[self.TSnode].xyz = result['xyz']
+            s = result['step']
         else:
-            f1,xyz1,f7,xyz7 = None,None,None,None
+            s = None
+            gp_prim=None
 
         if self.use_multiprocessing:
             cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc
@@ -617,7 +622,7 @@ class Base_Method(Print,Analyze,object):
             print("Created the pool")
             results=pool.map(
                     run, 
-                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,f1,f7,xyz1,xyz7] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
+                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
                     )
 
             pool.close()
@@ -629,7 +634,7 @@ class Base_Method(Print,Analyze,object):
             results=[]
             run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
             for n in run_list:
-                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,f1,f7,xyz1,xyz7]
+                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim]
                 results.append(run(args))
 
         for (node,optimizer,n) in results:
@@ -656,8 +661,8 @@ class Base_Method(Print,Analyze,object):
                 self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
                 #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
             elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
-                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10.) or #and ts_cgradq<0.01
-                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. ) or  #and ts_cgradq<0.02
+                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
+                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
                     (ts_gradrms<self.options['CONV_TOL']*5.))
                     ):
                 print(" ** starting exact climb **")
@@ -1346,7 +1351,7 @@ class Base_Method(Print,Analyze,object):
 
 def run(args):
 
-    node,optimizer,ictan,opt_steps,opt_type,refE,n,f1,f7,xyz1,xyz7 = args
+    node,optimizer,ictan,opt_steps,opt_type,refE,n,s0,gp_prim = args
     #print(" entering run: {}".format(n))
     sys.stdout.flush()
 
@@ -1371,10 +1376,8 @@ def run(args):
         else:
             optimizer.optimize(
                     molecule=node,
-                    xyz1=xyz1,
-                    xyz7=xyz7,
-                    f1=f1,
-                    f7=f7,
+                    s0=s0,
+                    gp_prim=gp_prim,
                     refE=refE,
                     opt_type=opt_type,
                     opt_steps=opt_steps,

@@ -18,6 +18,11 @@ def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule)
     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
     return result
 
+
+
+# TODO might be wise to add to backtrack a condition that says if 
+# the number of iterations was many and the energy increased
+# just return the initial point
 def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule):
     print(" In backtrack")
 
@@ -118,23 +123,6 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     x3 = x1 + (x4-x1)/z
     x5 = x7 - (x7-x4)/z
     x6 = x4 + (x7-x4)/z
-
-    #print(" getting 2")
-    #xyz2 = molecule.coord_obj.newCartesian(xyz,x2-x)
-    #if molecule.coord_obj.bork:
-    #    xyz2 = xyz4  - (xyz4 - xyz1)/z
-    #print(" getting 3")
-    #xyz3 = molecule.coord_obj.newCartesian(xyz,x3-x)
-    #if molecule.coord_obj.bork:
-    #    xyz3 = xyz1  + (xyz4 - xyz1)/z
-    #print(" getting 5")
-    #xyz5 = molecule.coord_obj.newCartesian(xyz,x5-x)
-    #if molecule.coord_obj.bork:
-    #    xyz5 = xyz7 - (xyz7 - xyz4)/z
-    #print(" getting 6")
-    #xyz6 = molecule.coord_obj.newCartesian(xyz,x6-x)
-    #if molecule.coord_obj.bork:
-    #    xyz6 = xyz4 + (xyz7 - xyz4)/z
     
     xyz2 = xyz4  - (xyz4 - xyz1)/z
     xyz3 = xyz1  + (xyz4 - xyz1)/z
@@ -161,6 +149,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     
     left=False
     right=False
+    center=False
     if ismax(l,f3):
         print(" 3")
         #x4,f4 = x3,f3
@@ -183,8 +172,10 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         right=True
     elif ismax(l,f4):
         print(" 4")
-        result = {'status':False,'fx':f4,'step': 0.*x,'xyz':xyz}
-        return result
+        print(" Center")
+        center=True
+        #result = {'status':False,'fx':f4,'step': 0.*x,'xyz':xyz}
+        #return result
     else:
         #something is wrong with TSnode
         print(" Error")
@@ -193,20 +184,26 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     
     # rearrange right to be in canonical order
     if right:
-        #x1,f1 = x4,f4
-        #x2,f2 = x5,f5
-        #x3,f3 = x6,f6
-        #x4,f4 = x7,f7
         xyz1,f1 = xyz4,f4
         xyz2,f2 = xyz5,f5
         xyz3,f3 = xyz6,f6
         xyz4,f4 = xyz7,f7
+    if center:
+        xyz1,f1 = xyz3,f3
+        xyz4,f4 = xyz5,f5
+        xyz2 = xyz4  - (xyz4 - xyz1)/z
+        xyz3 = xyz1  + (xyz4 - xyz1)/z
+        f2 = molecule.PES.get_energy(xyz2)
+        f3 = molecule.PES.get_energy(xyz3)
+        print(" f1: %5.4f f2: %5.4f f3: %5.4f f4: %5.4f " % (f1,f2,f3,f4))
+
     
-    TOLF = 0.01 # kcal/mol
-    TOLC = 1e-3 #
+    TOLF = 0.1 # kcal/mol
+    TOLC = 1.e-3 #
     print('entering while loop')
+    sys.stdout.flush()
     count=0
-    while abs(f2-f3)>TOLF or np.linalg.norm(x2-x3)>TOLC:
+    while abs(f2-f3)>TOLF or np.linalg.norm(xyz2.flatten()-xyz3.flatten())>TOLC:
         if f2>f3:
             #x4,f4 = x3,f3
             xyz4,f4 = xyz3,f3
@@ -220,9 +217,11 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         xyz3 = xyz1 + (xyz4-xyz1)/z
         f2 = molecule.PES.get_energy(xyz2)
         f3 = molecule.PES.get_energy(xyz3)
+        print("f2: %5.4f f3: %5.4f" %(f2,f3))
+        sys.stdout.flush()
 
         count+=1
-        if count>2:
+        if count>3:
             break
         
     
@@ -270,10 +269,10 @@ def golden_section(x, g, d, step, molecule,maximize=False):
         print(" no minimum exists")
         if f1<f4:
             print(" returning initial point")
-            return {'status':0,'fx':sign*f1,'step':step*0.,'x':x1, 'g':g}
+            return {'status':0,'fx':sign*f1,'step':step*0.,'x':x1, 'g':g,'xyznew':xyz1}
         else:
             print(" returning endpoint")
-            return {'status':0,'fx':sign*f4,'step':x4-x1,'x':x4, 'g':g}
+            return {'status':0,'fx':sign*f4,'step':x4-x1,'x':x4, 'g':g,'xyznew':xyz4}
 
     accuracy = 1.0e-3
     count=0
@@ -300,7 +299,7 @@ def golden_section(x, g, d, step, molecule,maximize=False):
     fx = molecule.PES.get_energy(xyxznew)
     g = molecule.PES.get_gradient(xyznew)
     step = x - x1
-    result = {'status':0,'fx':fx,'step':step,'x':xnew, 'g':g}
+    result = {'status':0,'fx':fx,'step':step,'x':xnew, 'g':g, 'xyznew':xyznew}
     
     return result
 
