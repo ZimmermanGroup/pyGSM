@@ -5,7 +5,9 @@ from os import path
 # third party 
 import numpy as np
 import lightspeed as ls 
-import psiw
+#import psiw
+import est
+import json
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -24,9 +26,142 @@ class PyTC(Lot):
     def __init__(self,options):
         super(PyTC,self).__init__(options)
         if self.lot_inp_file is not None and self.lot is None:
-           exec(open(self.lot_inp_file).read()) 
-           print(' done executing lot_inp_file')
-           self.options['job_data']['lot'] = lot
+            self.build_lot_from_dictionary()
+            #print(self.lot)
+            #print(' done executing lot_inp_file')
+            #exec(open(self.lot_inp_file).read()) 
+            #print(lot)
+            #self.options['job_data']['lot'] = lot
+
+    def build_lot_from_dictionary(self):
+
+        d = {}
+        #with open(self.lot_inp_file) as f:
+        #    for line in f:
+        #        (key, val) = line.split()
+        #        d[str(key)] = val
+        d = json.load(open(self.lot_inp_file))
+        print(d)
+
+        filepath = d.get('filepath',None)
+
+        # QM
+        basis = d.get('basis',None)
+        charge = d.get('charge',0)
+        S_inds = d.get('S_inds',[0])
+        S_nstates = d.get('S_nstates',[1])
+
+        # SCF
+        diis_max_vecs = d.get('diis_max_vecs',6)
+        maxiter = d.get('maxiter',200)
+        cphf_diis_max_vecs=d.get('cphf_diis_max_vecs',6)
+        diis_use_disk = d.get('diis_use_disk',False)
+        rhf_guess=d.get('rhf_guess',True)
+        rhf_mom=d.get('rhf_mom',True)
+    
+        # active space
+        doCASCI = d.get('doCASCI',False)
+        nactive = d.get('nactive',0)
+        nocc = d.get('nocc',0)
+        nalpha = d.get('nalpha',int(nactive/2))
+        nbeta = d.get('nbeta',nalpha)
+
+        # FOMO
+        doFOMO = d.get('doFOMO',False)
+        fomo = d.get('fomo',True)
+        fomo_temp = d.get('fomo_temp',0.3)
+        fomo_nocc=d.get('fomo_nocc',nocc)
+        fomo_nact = d.get('fomo_nact',nactive)
+        fomo_method = d.get('fomo_method','gaussian')
+
+        # QMMM
+        doQMMM = d.get('doQMMM',False)
+        prmtopfile = d.get('prmtopfile',None)
+        inpcrdfile = d.get('inpcrdfile',None)
+        qmindsfile = d.get('qmindsfile',None)
+        
+        # DFT
+        doDFT = d.get('doDFT',False)
+        dft_functional=d.get('dft_functional','None')
+        dft_grid_name = d.get('dft_grid_name','SG0')
+   
+        nifty.printcool("Building Resources")
+        resources = ls.ResourceList.build()
+        nifty.printcool("{}".format(resources))
+
+        if not doQMMM:
+            nifty.printcool("Building Molecule and Geom")
+            molecule = ls.Molecule.from_xyz_file(filepath)    
+            geom =est.Geometry.build(
+                resources=resources,
+                molecule=molecule,
+                basisname=basis,
+                )
+        else:
+            nifty.printcool("Building QMMM Molecule and Geom")
+            qmmm = QMMM.from_prmtop(
+                prmtopfile=prmtopfile,
+                inpcrdfile=inpcrdfile,
+                qmindsfile=qmindsfile,
+                charge=charge,
+                )
+            geom = geometry.Geometry.build(
+                resources=resources,
+                qmmm=qmmm,
+                basisname=basis,
+                )
+        nifty.printcool("{}".format(geom))
+
+        if doFOMO:
+            nifty.printcool("Building FOMO RHF")
+            ref = est.RHF.from_options(
+                    geometry=geom,
+                    diis_max_vecs=diis_max_vecs,
+                    maxiter=maxiter,
+                    cphf_diis_max_vecs=cphf_diis_max_vecs,
+                    diis_use_disk=diis_use_disk,
+                    fomo=fomo,
+                    fomo_method=fomo_method,
+                    fomo_temp=fomo_temp,
+                    fomo_nocc=nocc,
+                    fomo_nact=nactive,
+                    )
+            ref.compute_energy()
+        elif doDFT: 
+            nifty.printcool("Building DFT LOT")
+            ref = est.RHF.from_options(
+                    geometry=geom,
+                    diis_max_vecs=diis_max_vecs,
+                    maxiter=maxiter,
+                    cphf_diis_max_vecs=cphf_diis_max_vecs,
+                    diis_use_disk=diis_use_disk,
+                    dft_functional=dft_functional,
+                    dft_grid_name=dft_grid_name
+                    )
+            self.lot = RHF_LOT.from_options(rhf=ref)
+        else:
+            raise NotImplementedError
+
+        if doCASCI:
+            nifty.printcool("Building CASCI LOT")
+            casci = est.CASCI.from_options(
+                reference=ref,
+                nocc=nocc,
+                nact=nactive,
+                nalpha=nalpha,
+                nbeta=nbeta,
+                S_inds=S_inds,
+                S_nstates=S_nstates,
+                print_level=1,
+                )
+            casci.compute_energy()
+            self.lot = est.CASCI_LOT.from_options(
+                casci=casci,
+                print_level=1,
+                rhf_guess=rhf_guess,
+                rhf_mom=rhf_mom,
+                )
+
 
     @property
     def lot(self):
