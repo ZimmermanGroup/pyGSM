@@ -187,7 +187,8 @@ class Base_Method(Print,Analyze,object):
         self.emax = 0.0
         self.TSnode = 0 
         self.climb = False 
-        self.find = False  
+        self.find = False 
+        self.ts_exsteps = 3 # multiplier for ts node
         self.n0 = 1 # something to do with added nodes? "first node along current block"
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
@@ -222,6 +223,8 @@ class Base_Method(Print,Analyze,object):
         self.store_energies()
         self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         self.emax = self.energies[self.TSnode]
+        for n in range(self.nnodes):
+            self.nodes[n].isTSnode = False
         self.nodes[self.TSnode].isTSnode=True
 
         # set convergence for nodes
@@ -233,6 +236,7 @@ class Base_Method(Print,Analyze,object):
             if self.nodes[i] !=None:
                 self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
 
+        # enter loop
         for oi in range(max_iter):
 
             nifty.printcool("Starting opt iter %i" % oi)
@@ -247,13 +251,12 @@ class Base_Method(Print,Analyze,object):
 
             # => Get all tangents 3-way <= #
             self.get_tangents_1e()
-            
+           
             # => do opt steps <= #
             self.opt_steps(optsteps)
             self.store_energies()
 
             print()
-            #nifty.printcool("GSM iteration %i done: Reparametrizing" % oi)
             print(" V_profile: ", end=' ')
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(self.energies[n])), end=' ')
@@ -269,19 +272,20 @@ class Base_Method(Print,Analyze,object):
             # => get TS node <=
             self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
+            for n in range(self.nnodes):
+                self.nodes[n].isTSnode = False
             self.nodes[self.TSnode].isTSnode=True
+            print(" max E({}) {:5.4}".format(self.TSnode,self.emax))
 
-            #ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
-
+            ts_cgradq = 0.
             if not self.find:
                 ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
                 print(" ts_cgradq %5.4f" % ts_cgradq)
-            else: 
-                ts_cgradq = 0.
 
             ts_gradrms=self.nodes[self.TSnode].gradrms
             self.dE_iter=abs(self.emax-self.emaxp)
             print(" dE_iter ={:2.2f}".format(self.dE_iter))
+
             # => calculate totalgrad <= #
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
 
@@ -300,30 +304,12 @@ class Base_Method(Print,Analyze,object):
             # => set stage <= #
             form_TS_hess = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
 
-            # => write Convergence to file <= #
-            self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
-
             # Modify TS Hess if necessary
             if form_TS_hess:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.05:
                     self.optimizer[self.TSnode].options['DMAX']=0.05
-            elif self.pTSnode!=self.TSnode and self.climb:
-                self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy())
-                self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
-                self.nodes[self.pTSnode].isTSnode=False
-                if self.climb and not self.find:
-                    print(" slowing down climb optimization")
-                    self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
-                    self.optimizer[self.TSnode].options['SCALEQN'] = 2.
-                    self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
-                    if self.newclimbscale<5.0:
-                        self.newclimbscale +=1.
-                elif self.find:
-                    print(" resetting TS node coords Ut (and Hessian)")
-                    self.get_tangents_1e()
-                    self.get_eigenv_finite(self.TSnode)
             elif self.find and not self.optimizer[n].maxol_good:
                 # reform Hess for TS if not good
                 self.get_tangents_1e()
@@ -338,6 +324,7 @@ class Base_Method(Print,Analyze,object):
                 else:
                     print(" Hessian consistently bad, going back to climb (for 3 iterations)")
                     self.find=False
+                    self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     self.nclimb=3
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
@@ -345,6 +332,42 @@ class Base_Method(Print,Analyze,object):
             # => Reparam the String <= #
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
+
+            # store reparam energies
+            self.store_energies()
+            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
+            self.emax= self.energies[self.TSnode]
+            for n in range(self.nnodes):
+                self.nodes[n].isTSnode = False
+            self.nodes[self.TSnode].isTSnode=True
+            print(" V_profile (after reparam): ", end=' ')
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+            print()
+
+            if self.pTSnode!=self.TSnode and self.climb:
+                self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy())
+                self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
+                self.nodes[self.pTSnode].isTSnode=False
+                if self.climb and not self.find:
+                    print(" slowing down climb optimization")
+                    self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+                    self.optimizer[self.TSnode].options['SCALEQN'] = 2.
+                    self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
+                    self.ts_exsteps=1.
+                    if self.newclimbscale<5.0:
+                        self.newclimbscale +=1.
+                elif self.find:
+                    self.find = False
+                    self.nclimb=1
+                    print(" Find bad, going back to climb")
+                    self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
+                    self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
+                    #self.get_tangents_1e()
+                    #self.get_eigenv_finite(self.TSnode)
+
+            # => write Convergence to file <= #
+            self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
@@ -662,21 +685,23 @@ class Base_Method(Print,Analyze,object):
                 # set to beales
                 self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
                 #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+
+                # overwrite this here just in case TSnode changed wont cause slow down climb  
+                self.pTSnode = self.TSnode
+
             elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
-                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
-                    (ts_gradrms<self.options['CONV_TOL']*5.))
+                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) #or  #
+                    #(ts_gradrms<self.options['CONV_TOL']*5.))
+                    )
                     ):
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
                 form_TS_hess=True
-
-                self.optimizer[self.TSnode] = eigenvector_follow(self.optimizer[0].options.copy())
+                self.optimizer[self.TSnode] = eigenvector_follow(self.optimizer[self.TSnode].options.copy())
                 print(type(self.optimizer[self.TSnode]))
                 self.optimizer[self.TSnode].options['SCALEQN'] = 1.
-                #self.get_tangents_1e()
-                #self.get_eigenv_finite(self.TSnode)
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
             if self.climb: 
@@ -1170,7 +1195,8 @@ class Base_Method(Print,Analyze,object):
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
         if (self.find or self.climb) and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
-            exsteps=3
+            #exsteps=3
+            exsteps = self.ts_exsteps
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
         elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
