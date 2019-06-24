@@ -152,23 +152,23 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     center=False
     if ismax(l,f3):
         print(" 3")
-        #x4,f4 = x3,f3
-        xyz4,f4 = xyz3,f3
+        #xyz4,f4 = xyz3,f3
+        xyz1,f1 = xyz2,f2
         left=True
     elif ismax(l,f5):
         print(" 5")
-        #x4,f4 = x5,f5
-        xyz4,f4 = xyz5,f5
+        #xyz4,f4 = xyz5,f5
+        xyz7,f7 = xyz6,f6
         right=True
     elif ismax(l,f2):
         print(" 2")
-        #x1,f1 = x2,f2
-        xyz1,f1 = xyz2,f2
+        #xyz1,f1 = xyz2,f2
+        xyz4,f4 = xyz3,f3
         left=True
     elif ismax(l,f6):
         print(" 6")
-        #x7,f7 = x6,f6
-        xyz7,f7 = xyz6,f6
+        #xyz7,f7 = xyz6,f6
+        xyz4,f4 = xyz5,f5
         right=True
     elif ismax(l,f4):
         print(" 4")
@@ -178,7 +178,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         #return result
     else:
         #something is wrong with TSnode
-        print(" Error")
+        print(" End point is TSnode")
         raise RuntimeError
     
     
@@ -203,7 +203,8 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     print('entering while loop')
     sys.stdout.flush()
     count=0
-    while abs(f2-f3)>TOLF or np.linalg.norm(xyz2.flatten()-xyz3.flatten())>TOLC:
+    dxyz = np.linalg.norm(xyz2.flatten()-xyz3.flatten())
+    while abs(f2-f3)>TOLF and dxyz>TOLC:
         if f2>f3:
             #x4,f4 = x3,f3
             xyz4,f4 = xyz3,f3
@@ -218,13 +219,15 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         f2 = molecule.PES.get_energy(xyz2)
         f3 = molecule.PES.get_energy(xyz3)
         print("f2: %5.4f f3: %5.4f" %(f2,f3))
+        print(abs(f2-f3))
+        dxyz = np.linalg.norm(xyz2.flatten()-xyz3.flatten())
+        print(dxyz)
         sys.stdout.flush()
 
         count+=1
         if count>3:
             break
         
-    
     #xnew = 0.5*(x1+x4)
     #xyznew = molecule.coord_obj.newCartesian(xyz,xnew-x)
     xyznew = 0.5*(xyz1+xyz4)
