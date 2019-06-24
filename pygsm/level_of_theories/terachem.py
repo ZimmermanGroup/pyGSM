@@ -40,7 +40,6 @@ class TeraChem(Lot):
 
     def run(self,geom):
 
-        print(" In run")
         # count number of states
         singlets=self.search_tuple(self.states,1)
         len_singlets=len(singlets)
@@ -115,9 +114,7 @@ class TeraChem(Lot):
             grad = manage_xyz.xyz_to_np(grad)
             self.grada.append((1,s,grad))
 
-
         self.hasRanForCurrentCoords=True
-        
 
     def get_energy(self,coords,multiplicity,state):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
