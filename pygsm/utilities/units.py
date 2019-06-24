@@ -33,6 +33,10 @@ S_TO_AU = 1.0/S_PER_AU                      # (aut / s)
 FS_TO_AU = S_TO_AU * 1.0E-15                # (aut / fs)
 PS_TO_AU = S_TO_AU * 1.0E-12                # (aut / ps)
 
+# custom
+AKMA_TO_PS = .04888821290839616117          # ( ps / AKMA)  sqrt(1./(100*KJ_PER_KCAL))
+PS_TO_AKMA = 1./AKMA_TO_PS
+
 # Energy/temperature
 J_PER_AU = 4.359744650E-18                  # (J / E_h)
 J_TO_AU = 1.0/J_PER_AU                      # (E_h / J)
