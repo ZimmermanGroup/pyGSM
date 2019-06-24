@@ -23,6 +23,8 @@ from optimizers._linesearch import double_golden_section
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
 
+# TODO nconstraints in ic_reparam and write_iters is irrelevant
+
 
 class Base_Method(Print,Analyze,object):
 
@@ -272,7 +274,7 @@ class Base_Method(Print,Analyze,object):
             #ts_cgradq = abs(self.nodes[self.TSnode].gradient[0]) # 0th element represents tan
 
             if not self.find:
-                ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints)*self.nodes[self.TSnode].constraints)
+                ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
                 print(" ts_cgradq %5.4f" % ts_cgradq)
             else: 
                 ts_cgradq = 0.
@@ -370,7 +372,7 @@ class Base_Method(Print,Analyze,object):
             self.newic.xyz = self.nodes[n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan0)
 
-            constraint = self.newic.constraints
+            constraint = self.newic.constraints[:,0]
             prim_constraint = block_matrix.dot(Vecs,constraint)
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             if dqmaga[n]<0.:
@@ -453,7 +455,7 @@ class Base_Method(Print,Analyze,object):
             Vecs = self.newic.update_coordinate_basis(ictan0)
             nbonds=self.nodes[0].num_bonds
 
-            constraint = self.nodes[n].constraints
+            constraint = self.nodes[n].constraints[:,0]
             prim_constraint = block_matrix.dot(Vecs,constraint)
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
@@ -572,7 +574,7 @@ class Base_Method(Print,Analyze,object):
     def interpolate_xyz(self,nodeR,nodeP,stepsize):
         ictan,_ =  self.tangent(nodeR,nodeP)
         Vecs = nodeR.update_coordinate_basis(constraints=ictan)
-        constraint = nodeR.constraints
+        constraint = nodeR.constraints[:,0]
         prim_constraint = block_matrix.dot(Vecs,constraint)
         dqmag = np.dot(prim_constraint.T,ictan)
         print(" dqmag: %1.3f"%dqmag)
@@ -797,12 +799,12 @@ class Base_Method(Print,Analyze,object):
             self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
             print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
 
-            return success
+        return success
 
     def add_node(self,nodeR,nodeP,stepsize,node_id):
         ictan,_ =  self.tangent(nodeR,nodeP)
         Vecs = nodeR.update_coordinate_basis(constraints=ictan)
-        constraint = nodeR.constraints
+        constraint = nodeR.constraints[:,0]
         prim_constraint = block_matrix.dot(Vecs,constraint)
         dqmag = np.dot(prim_constraint.T,ictan)
         print(" dqmag: %1.3f"%dqmag)
@@ -951,7 +953,7 @@ class Base_Method(Print,Analyze,object):
                         ictan[n] = np.copy(ictan0[n+1]) 
                     self.newic.update_coordinate_basis(ictan[n])
 
-                    constraint = self.newic.constraints
+                    constraint = self.newic.constraints[:,0]
                     dq = rpmove[n]*constraint
                     self.newic.update_xyz(dq,verbose=True)
                     self.nodes[n].xyz = self.newic.xyz
@@ -1057,7 +1059,7 @@ class Base_Method(Print,Analyze,object):
                 if isinstance(self.nodes[n],Molecule):
                     if rpmove[n] > 0:
                         self.nodes[n].update_coordinate_basis(constraints=self.ictan[n])
-                        constraint = self.nodes[n].constraints
+                        constraint = self.nodes[n].constraints[:,0]
                         dq0 = rpmove[n]*constraint
                         if self.print_level>1:
                             print(" dq0[constraint]: {:1.3}".format(rpmove[n]))
@@ -1097,7 +1099,7 @@ class Base_Method(Print,Analyze,object):
         #print "q0 is %1.3f" % q0
         print(self.newic.coord_basis.shape)
         #tan0 = self.newic.coord_basis[:,0]
-        constraint = self.newic.constraints
+        constraint = self.newic.constraints[:,0]
         tan0 = block_matrix.dot(Vecs,constraint)
         #print "tan0"
         #print tan0

@@ -138,8 +138,8 @@ class Analyze:
         print(" ispast3",ispast3)
 
         #TODO 5/9/2019 what about multiple constraints
-        #cgrad = self.nodes[self.nR-1].gradient[0]
-        constraints = self.nodes[self.nR-1].constraints
+        # Done 6/23/2019
+        constraints = self.nodes[self.nR-1].constraints[:,0]
         gradient = self.nodes[self.nR-1].gradient
 
         overlap = np.dot(gradient.T,constraints)

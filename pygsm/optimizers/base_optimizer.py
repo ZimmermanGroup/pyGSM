@@ -226,21 +226,34 @@ class base_optimizer(object):
         if opt_type=="CLIMB": 
             #constraint_steps[0]=self.walk_up(g,0)
             #self.options['SCALEW'] = 1.0
-            gts = np.dot(g.T,molecule.constraints)
-            constraint_steps = gts*molecule.constraints
+            gts = np.dot(g.T,molecule.constraints[:,0])
+            constraint_steps = gts*molecule.constraints[:,0]
             stepsize=np.linalg.norm(constraint_steps)
             print(" gts %1.4f" % gts)
             if stepsize > 0.05:
                 constraint_steps = constraint_steps*0.05/stepsize
         # => MECI
         elif opt_type=='MECI': 
-            constraint_steps[0] = self.dgrad_step(molecule) #first vector is x
+            #constraint_steps[0] = self.dgrad_step(molecule) #first vector is x
+            dq = self.dgrad_step(molecule)
+            constraint_steps[:,0] = dq*molecule.constraints[:,0]
+
         elif opt_type=='SEAM':
-            constraint_steps[1]=self.dgrad_step(molecule)
+            #constraint_steps[1]=self.dgrad_step(molecule)
+            dq = self.dgrad_step(molecule)
+            constraint_steps[:,1] = dq*molecule.constraints[:,1]
         # => seam climb
         elif opt_type=='TS-SEAM':
-            constraint_steps[0]=self.walk_up(g,0)
-            constraint_steps[1]=self.dgrad_step(molecule)
+            #constraint_steps[0]=self.walk_up(g,0)
+            #constraint_steps[1]=self.dgrad_step(molecule)
+            gts = np.dot(g.T,molecule.constraints[:,0])
+            constraint_stepsi[:,0] = gts*molecule.constraints[:,0]
+            stepsize=np.linalg.norm(constraint_steps)
+            print(" gts %1.4f" % gts)
+            if stepsize > 0.05:
+                constraint_steps[:,0] = constraint_steps*0.05/stepsize
+            constraint_steps[:,1] = dq*molecule.constraints[:,1]
+
         return constraint_steps
 
     def dgrad_step(self,molecule):

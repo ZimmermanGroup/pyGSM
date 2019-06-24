@@ -134,7 +134,7 @@ class SE_GSM(Base_Method):
                 return None
             new_node = Molecule.copy_from_options(nodeR,new_node_id=node_id)
             Vecs = new_node.update_coordinate_basis(constraints=ictan)
-            constraint = new_node.constraints
+            constraint = new_node.constraints[:,0]
             sign=-1.
 
             dqmag_scale=1.5
