@@ -50,9 +50,9 @@ class block_matrix(object):
 
         # (b) renormalizing the constraints
         norms = np.sqrt((constraints*constraints).sum(axis=0,keepdims=True))
-        if norms<=0.:
-            print(norms)
-            raise RuntimeError
+        #if norms<=0.:
+        #    print(norms)
+        #    raise RuntimeError
         #print('norms')
         #print(norms)
         constraints = constraints/norms

@@ -202,12 +202,12 @@ class base_optimizer(object):
             constraints = ictan
         elif opt_type=='MECI':
             print("MECI")
-            dgrad_U = np.dot(molecule.coord_basis,molecule.difference_gradient)
-            dvec_U = np.dot(molecule.coord_basis,molecule.derivative_coupling)
+            dgrad_U = block_matrix.dot(molecule.coord_basis,molecule.difference_gradient)
+            dvec_U = block_matrix.dot(molecule.coord_basis,molecule.derivative_coupling)
             constraints = np.hstack((dgrad_U,dvec_U))
         elif opt_type=="SEAM" or opt_type=="TS-SEAM":
-            dgrad_U = np.dot(molecule.coord_basis,molecule.difference_gradient)
-            dvec_U = np.dot(molecule.coord_basis,molecule.derivative_coupling)
+            dgrad_U = block_matrix.dot(molecule.coord_basis,molecule.difference_gradient)
+            dvec_U = block_matrix.dot(molecule.coord_basis,molecule.derivative_coupling)
             constraints = np.hstack((ictan,dgrad_U,dvec_U))
         else:
             raise NotImplementedError
