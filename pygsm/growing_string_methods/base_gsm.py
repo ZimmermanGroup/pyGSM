@@ -645,16 +645,42 @@ class Base_Method(Print,Analyze,object):
             sys.stdout.flush()
             pool.join()
             print("Joined")
-        else:
-            results=[]
-            run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
-            for n in run_list:
-                args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim]
-                results.append(run(args))
 
-        for (node,optimizer,n) in results:
-            self.nodes[n]=node
-            self.optimizer[n]=optimizer
+            for (node,optimizer,n) in results:
+                self.nodes[n]=node
+                self.optimizer[n]=optimizer
+        else:
+            #results=[]
+            #run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
+            #for n in run_list:
+            #    args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim]
+            #    results.append(run(args))
+
+            for n in range(self.nnodes):
+                if self.nodes[n] and self.active[n]:
+                    print()
+                    nifty.printcool("Optimizing node {}".format(n))
+                    opt_type = self.set_opt_type(n)
+                    osteps = self.mult_steps(n,opt_steps)
+
+                    if opt_type != "BEALES_CG":
+                        self.optimizer[n].optimize(
+                                molecule=self.nodes[n],
+                                refE=refE,
+                                opt_type=opt_type,
+                                opt_steps=osteps,
+                                ictan=self.ictan[n],
+                                )
+                    else:
+                        self.optimizer[n].optimize(
+                                molecule=self.nodes[n],
+                                s0=s,
+                                gp_prim=gp_prim,
+                                refE=refE,
+                                opt_type=opt_type,
+                                opt_steps=osteps,
+                                ictan=self.ictan[n],
+                                )
 
         optlastnode=False
         if self.product_geom_fixed==False:
