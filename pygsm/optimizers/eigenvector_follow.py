@@ -63,9 +63,12 @@ class eigenvector_follow(base_optimizer):
         g = molecule.gradient.copy()
 
         # project out the constraint
-        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+        gc = g.copy()
+        for c in molecule.constraints.T:
+            gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
+        print(molecule.gradrms)
         if molecule.PES.__class__.__name__=="Penalty_PES" and self.opt_cross:
             if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
                 print(" converged")
@@ -142,6 +145,7 @@ class eigenvector_follow(base_optimizer):
             dEtemp = np.dot(self.Hessian,scaled_dq)
             dEpre = np.dot(np.transpose(scaled_dq),gc) + 0.5*np.dot(np.transpose(dEtemp),scaled_dq)
             dEpre *=units.KCAL_MOL_PER_AU
+            #print(constraint_steps.T)
             constraint_energy = np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  
             #print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
@@ -149,7 +153,9 @@ class eigenvector_follow(base_optimizer):
                 dEpre = np.sign(dEpre)*0.05
 
             # project out the constraint
-            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+            gc = g.copy()
+            for c in molecule.constraints.T:
+                gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
             # control step size 
             dEstep = fx - fxp
@@ -214,8 +220,9 @@ class eigenvector_follow(base_optimizer):
                     x = np.copy(molecule.coordinates)
                     g = molecule.gradient.copy()
                     # project out the constraint
-                    gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-                    #molecule.form_Hessian_in_basis()
+                    gc = g.copy()
+                    for c in molecule.constraints.T:
+                        gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
             print()
             sys.stdout.flush()
        

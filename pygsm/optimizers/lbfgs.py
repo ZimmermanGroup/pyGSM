@@ -70,7 +70,9 @@ class lbfgs(base_optimizer):
         g = molecule.gradient.copy()
     
         # project out the constraint
-        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+        gc = g.copy()
+        for c in molecule.constraints.T:
+            gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
         g_prim = block_matrix.dot(molecule.coord_basis,gc)
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
@@ -154,7 +156,12 @@ class lbfgs(base_optimizer):
             x = ls['x']
             fx = ls['fx']
             g  = ls['g']
-            gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+
+            # project out the constraints
+            gc = g.copy()
+            for c in molecule.constraints.T:
+                gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
+
             g_prim = block_matrix.dot(molecule.coord_basis,gc)
             dEstep = fx - fxp
             print(" dEstep=%5.4f" %dEstep)

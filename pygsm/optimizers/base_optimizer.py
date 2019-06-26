@@ -343,7 +343,9 @@ class base_optimizer(object):
             print("constraints")
             print(molecule.constraints.T)
 
-        P =np.eye(len(molecule.constraints),dtype=float) -  np.outer(molecule.constraints,molecule.constraints.T)
+        P =np.eye(len(molecule.constraints),dtype=float) 
+        for c in molecule.constraints.T:
+            P -= np.outer(c[:,np.newaxis],c[:,np.newaxis].T)
         self.Hessian = np.dot(np.dot(P,molecule.Hessian),P)
 
         e,v_temp = np.linalg.eigh(self.Hessian)
@@ -371,7 +373,9 @@ class base_optimizer(object):
         dq = np.asarray(dq)
 
         dq = np.reshape(dq,(-1,1))
-        dq = dq - np.dot(molecule.constraints.T,dq)*molecule.constraints
+        for c in molecule.constraints.T:
+            dq -= np.dot(c[:,np.newaxis].T,dq)*c[:,np.newaxis]
+
         #print("check overlap")
         #print(np.dot(dq.T,molecule.constraints))
         if self.options['print_level']>1:
