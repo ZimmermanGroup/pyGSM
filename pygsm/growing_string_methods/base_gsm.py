@@ -342,7 +342,7 @@ class Base_Method(Print,Analyze,object):
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
                     self.optimizer[self.TSnode].options['SCALEQN'] = 2.
                     self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
-                    self.ts_exsteps=1.
+                    self.ts_exsteps=1
                     if self.newclimbscale<5.0:
                         self.newclimbscale +=1.
                 elif self.find:
@@ -566,6 +566,8 @@ class Base_Method(Print,Analyze,object):
                 print("can't add anymore nodes, bdist too small")
                 if self.__class__.__name__=="SE_GSM":
                     print(" optimizing last node")
+                    self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
+                    print(self.optimizer[self.nR-1].conv_grms)
                     self.optimizer[self.nR-1].optimize(
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
@@ -671,7 +673,7 @@ class Base_Method(Print,Analyze,object):
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
        
                 # set to beales
-                self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
+                self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                 #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
 
                 # overwrite this here just in case TSnode changed wont cause slow down climb  
@@ -1378,6 +1380,8 @@ def run(args):
 
     if opt_type=="BEALES_CG": 
         print(opt_type)
+        print(type(optimizer))
+    else:
         print(type(optimizer))
 
     # => do constrained optimization

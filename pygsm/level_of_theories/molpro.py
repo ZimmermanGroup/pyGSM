@@ -167,7 +167,7 @@ class Molpro(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.run(geom)
         tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        return np.asarray(tmp)*units.ANGSTROM_TO_AU
+        return np.asarray(tmp)*units.ANGSTROM_TO_AU  #hartree/ang
 
     def get_coupling(self,coords,multiplicity,state1,state2):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
