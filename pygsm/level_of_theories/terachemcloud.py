@@ -61,10 +61,11 @@ class TeraChemCloud(Lot):
             grad_options['runtype'] = 'gradient'
             grad_options['castargetmult'] = multiplicity
             grad_options['castarget'] = ad_idx
-            if not self.orbfile:
+            if self.orbfile:
                 grad_options['guess'] = self.orbfile
-            print(" orbfile is %s" % self.orbfile)
-            #results = self.TC.compute(coords,grad_options)
+                print(" orbfile is %s" % self.orbfile)
+            else:
+                print(" generating orbs from guess")
             job_id = self.TC.submit(coords,grad_options)
             results = self.TC.poll_for_results(job_id)
             while results['message'] == "job not finished":
@@ -72,6 +73,7 @@ class TeraChemCloud(Lot):
                 print(results['message'])
                 print("sleeping for 1")
                 time.sleep(1)
+                sys.stdout.flush()
 
             #print((json.dumps(results, indent=2, sort_keys=True)))
             self.orbfile = results['orbfile']
@@ -88,8 +90,19 @@ class TeraChemCloud(Lot):
             nac_options['runtype'] = 'coupling'
             nac_options['nacstate1'] = 0
             nac_options['nacstate2'] = 1
-            results = self.TC.compute(coords,nac_options)
-            self.coup = results['coupling']
+            nac_options['guess'] = self.orbfile
+
+            #nifty.printcool_dictionary(nac_options)
+            job_id = self.TC.submit(coords,nac_options)
+            results = self.TC.poll_for_results(job_id)
+            while results['message'] == "job not finished":
+                results=self.TC.poll_for_results(job_id)
+                print(results['message'])
+                print("sleeping for 1")
+                time.sleep(1)
+                sys.stdout.flush()
+            #print((json.dumps(results, indent=2, sort_keys=True)))
+            self.coup = results['nacme']
 
         self.hasRanForCurrentCoords=True
         return  
@@ -111,4 +124,4 @@ class TeraChemCloud(Lot):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             self.run(coords)
-        return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
+        return np.reshape(self.coup,(-1,1))*units.ANGSTROM_TO_AU
