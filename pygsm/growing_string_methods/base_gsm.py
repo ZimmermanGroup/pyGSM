@@ -209,9 +209,6 @@ class Base_Method(Print,Analyze,object):
                 self.energies[i] = ico.energy - self.nodes[0].energy
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
-        #print("*********************************************************************")
-        #print("************************** in opt_iters *****************************")
-        #print("*********************************************************************")
         nifty.printcool("In opt_iters")
 
         self.nclimb=0
@@ -223,9 +220,6 @@ class Base_Method(Print,Analyze,object):
         self.store_energies()
         self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         self.emax = self.energies[self.TSnode]
-        for n in range(self.nnodes):
-            self.nodes[n].isTSnode = False
-        self.nodes[self.TSnode].isTSnode=True
 
         # set convergence for nodes
         if (self.climber or self.finder):
@@ -272,9 +266,6 @@ class Base_Method(Print,Analyze,object):
             # => get TS node <=
             self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
-            for n in range(self.nnodes):
-                self.nodes[n].isTSnode = False
-            self.nodes[self.TSnode].isTSnode=True
             print(" max E({}) {:5.4}".format(self.TSnode,self.emax))
 
             ts_cgradq = 0.
@@ -337,9 +328,6 @@ class Base_Method(Print,Analyze,object):
             self.store_energies()
             self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
-            for n in range(self.nnodes):
-                self.nodes[n].isTSnode = False
-            self.nodes[self.TSnode].isTSnode=True
             print(" V_profile (after reparam): ", end=' ')
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(self.energies[n])), end=' ')
@@ -348,7 +336,7 @@ class Base_Method(Print,Analyze,object):
             if self.pTSnode!=self.TSnode and self.climb:
                 self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy())
                 self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
-                self.nodes[self.pTSnode].isTSnode=False
+
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
@@ -1141,7 +1129,7 @@ class Base_Method(Print,Analyze,object):
 
         #print "qp1 is %1.3f" % qp1
 
-        if self.nodes[en].isTSnode:
+        if en == self.TSnode:
             print(" TS Hess init'd w/ existing Hintp")
 
         self.newic.xyz = self.nodes[en].xyz
@@ -1207,17 +1195,21 @@ class Base_Method(Print,Analyze,object):
     def set_opt_type(self,n,quiet=False):
         #TODO
         opt_type='ICTAN' 
-        if self.climb and self.nodes[n].isTSnode and not self.find:
+        if self.climb and n==self.TSnode and not self.find:
             #opt_type='CLIMB'
             opt_type='BEALES_CG'
-        elif self.find and self.nodes[n].isTSnode:
+        elif self.find and n==self.TSnode:
             opt_type='TS'
         elif self.nodes[n].PES.lot.do_coupling:
             opt_type='SEAM'
-        elif self.climb and self.nodes[n].isTSnode and opt_type=='SEAM':
+        elif self.climb and n==self.TSnode and opt_type=='SEAM':
             opt_type='TS-SEAM'
         if not quiet:
             print((" setting node %i opt_type to %s" %(n,opt_type)))
+
+        if isinstance(self.optimizer[n],beales_cg) and opt_type!="BEALES_CG":
+            print(self.TSnode)
+            raise RuntimeError("This shouldn't happen")
 
         return opt_type
 
@@ -1313,7 +1305,6 @@ class Base_Method(Print,Analyze,object):
         self.nnodes=self.nR=nstructs
         self.isRestarted=True
         self.done_growing=True
-        self.nodes[self.TSnode].isTSnode=True
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
@@ -1335,7 +1326,6 @@ class Base_Method(Print,Analyze,object):
         #tmp for testing
         #self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         #self.emax = self.energies[self.TSnode]
-        #self.nodes[self.TSnode].isTSnode=True
         #self.climb=True
         #self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
 

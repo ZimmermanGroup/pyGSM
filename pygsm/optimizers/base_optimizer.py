@@ -151,8 +151,8 @@ class base_optimizer(object):
             assert ictan==None
         if opt_type in ['ICTAN','CLIMB','TS', 'SEAM','TS-SEAM','BEALES_CG']  and ictan.any()==None:
             raise RuntimeError("Need ictan")
-        if opt_type in ['TS','TS-SEAM']:
-            assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
+        #if opt_type in ['TS','TS-SEAM']:
+            #assert molecule.isTSnode,"only run climb and eigenvector follow on TSnode."  
 
     #def converged(self,g,nconstraints):
     #    # check if finished
