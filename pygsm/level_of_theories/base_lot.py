@@ -169,8 +169,6 @@ class Lot(object):
         self.lot_inp_file = self.options['lot_inp_file']
 
         #package  specific implementation
-        self.options['job_data']['tcc_options'] = self.options['job_data'].get('tcc_options',{})
-        self.options['job_data']['TC'] = self.options['job_data'].get('TC',None)
         self.options['job_data']['orbfile'] = self.options['job_data'].get('orbfile','')
         self.options['job_data']['lot'] = self.options['job_data'].get('lot',None)
         self.options['job_data']['simulation'] = self.options['job_data'].get('simulation',None)
@@ -179,7 +177,6 @@ class Lot(object):
     def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return cls(cls.default_options().set_values(kwargs))
-
 
     @property
     def do_coupling(self):

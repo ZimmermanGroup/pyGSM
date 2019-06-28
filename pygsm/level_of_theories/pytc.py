@@ -36,10 +36,6 @@ class PyTC(Lot):
     def build_lot_from_dictionary(self):
 
         d = {}
-        #with open(self.lot_inp_file) as f:
-        #    for line in f:
-        #        (key, val) = line.split()
-        #        d[str(key)] = val
         d = json.load(open(self.lot_inp_file))
         print(d)
 
@@ -99,13 +95,13 @@ class PyTC(Lot):
                 )
         else:
             nifty.printcool("Building QMMM Molecule and Geom")
-            qmmm = QMMM.from_prmtop(
+            qmmm = est.QMMM.from_prmtop(
                 prmtopfile=prmtopfile,
                 inpcrdfile=inpcrdfile,
                 qmindsfile=qmindsfile,
                 charge=charge,
                 )
-            geom = geometry.Geometry.build(
+            geom = est.Geometry.build(
                 resources=resources,
                 qmmm=qmmm,
                 basisname=basis,

@@ -39,6 +39,9 @@ class TeraChemCloud(Lot):
 
     def __init__(self,options):
         super(TeraChemCloud,self).__init__(options)
+        self.options['job_data']['tcc_options'] = self.options['job_data'].get('tcc_options',{})
+        self.options['job_data']['TC'] = self.options['job_data'].get('TC',None)
+
         if self.lot_inp_file is not None:
            exec(open(self.lot_inp_file).read()) 
            print(' done executing lot_inp_file')
