@@ -179,12 +179,12 @@ class Molpro(Lot):
     #TODO molpro requires extra things when copying. . . can this be done in the base_lot? 
     # e.g. if cls=="Molpro": #do molpro stuff?
     @classmethod
-    def copy(cls,lot,options={}):
+    def copy(cls,lot,options,copy_wavefunction=True):
         """ create a copy of this lot object"""
         #print(" creating copy, new node id =",node_id)
         #print(" old node id = ",self.node_id)
         node_id = options.get('node_id',1)
-        if node_id != lot.node_id:
+        if node_id != lot.node_id and copy_wavefunction:
             cmd = "cp scratch/mp_{:04d}_{:04d} scratch/mp_{:04d}_{:04d}".format(self.ID,lot.node_id,self.ID,node_id)
             print(cmd)
             os.system(cmd)

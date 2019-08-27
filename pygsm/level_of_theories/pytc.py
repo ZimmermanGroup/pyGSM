@@ -196,6 +196,9 @@ class PyTC(Lot):
 
     def run_code(self,T):
         self.lot = self.lot.update_xyz(T)
+        print(" after update xyz")
+        #print(self.lot)
+        print(self.lot.options)
         for state in self.states:
             multiplicity=state[0]
             ad_idx=state[1]
@@ -219,6 +222,8 @@ class PyTC(Lot):
         #normal update
         coords = manage_xyz.xyz_to_np(geom)
         T = ls.Tensor.array(coords*units.ANGSTROM_TO_AU)
+        print(" In run")
+        print("Lot {} casci {} ref {}".format(id(self.lot),id(self.lot.casci),id(self.lot.casci.reference)))
 
         if not verbose:
             with open('lot_jobs.txt','a') as out:
@@ -231,6 +236,8 @@ class PyTC(Lot):
                 #filename="{}_rhf_update.molden".format(self.node_id)
                 #self.lot.casci.reference.save_molden_file(filename)
 
+        print(" after run")
+        print("Lot {} casci {} ref {}".format(id(self.lot),id(self.lot.casci),id(self.lot.casci.reference)))
         self.hasRanForCurrentCoords=True
         return
 

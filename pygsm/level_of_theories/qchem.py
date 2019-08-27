@@ -127,11 +127,11 @@ class QChem(Lot):
         return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU
 
     @classmethod
-    def copy(cls,lot,options):
+    def copy(cls,lot,options,copy_wavefunction=True):
         base = os.environ['QCSCRATCH']
         node_id = options.get('node_id',1)
 
-        if node_id != lot.node_id:
+        if node_id != lot.node_id:  #and copy_wavefunction: # other theories are more sensitive than qchem -- commenting out
             for state in lot.states:
                 multiplicity = state[0]
                 efilepath_old=base+ '/string_{:03d}/{}.{}'.format(lot.ID,lot.node_id,multiplicity)

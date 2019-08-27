@@ -45,6 +45,13 @@ class Lot(object):
             doc='list of states 0-indexed')
 
         opt.add_option(
+                key='coupling_states',
+                value=None,
+                required=False,
+                doc='states to calculate derivative coupling. Currently only one coupling can be calculated per level of theory object.'
+                )
+
+        opt.add_option(
                 key='functional',
                 required=False,
                 allowed_types=[str],
@@ -107,6 +114,14 @@ class Lot(object):
                 value=0,
                 allowed_types=[int],
                 doc=' id used for storing orbs,etc for string'
+                )
+
+        opt.add_option(
+                key="calc_grad",
+                required=False,
+                value=True,
+                allowed_types=[bool],
+                doc=' calculate gradient or not'
                 )
 
         opt.add_option(
@@ -187,8 +202,27 @@ class Lot(object):
         assert type(value)==bool, "incorrect type for do_coupling"
         self.options['do_coupling']=value
 
+    @property
+    def coupling_states(self):
+        return self.options['coupling_states']
+
+    @coupling_states.setter
+    def coupling_states(self,value):
+        assert type(value)==tuple, "incorrect type for coupling"
+        self.options['coupling_states']=value
+
+    @property
+    def calc_grad(self):
+        return self.options['calc_grad']
+
+    @calc_grad.setter
+    def calc_grad(self,value):
+        assert type(value)==bool, "incorrect type for calc_grad"
+        self.options['calc_grad']=value
+
+
     @classmethod
-    def copy(cls,lot,options):
+    def copy(cls,lot,options,copy_wavefunction=True):
         return cls(lot.options.copy().set_values(options))
 
     def check_multiplicity(self,multiplicity):
