@@ -19,7 +19,14 @@ from utilities import *
 
 class eigenvector_follow(base_optimizer):
 
-    def optimize(self,molecule,refE=0.,opt_type='UNCONSTRAINED',opt_steps=3,ictan=None):
+    def optimize(
+            self,
+            molecule,
+            refE=0.,
+            opt_type='UNCONSTRAINED',
+            opt_steps=3,
+            ictan=None,
+            xyzframerate=4):
 
         #print " refE %5.4f" % refE
         print(" initial E %5.4f" % (molecule.energy - refE))
@@ -69,7 +76,8 @@ class eigenvector_follow(base_optimizer):
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
         print(molecule.gradrms)
-        if molecule.PES.__class__.__name__=="Penalty_PES" and self.opt_cross:
+        dE = molecule.difference_energy
+        if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
             if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
                 print(" converged")
                 return geoms,energies
@@ -135,6 +143,7 @@ class eigenvector_follow(base_optimizer):
             #print(" ## Done line search")
         
             # get values from linesearch
+            molecule = ls['molecule']
             step = ls['step']
             x = ls['x']
             fx = ls['fx']
@@ -204,12 +213,18 @@ class eigenvector_follow(base_optimizer):
             if dE != 1000.:
                 print(" difference energy is %5.4f" % dE)
 
-            if molecule.PES.__class__.__name__=="Penalty_PES" and self.opt_cross:
+            if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
                 if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
                     print(" converged")
+                    if ostep % xyzframerate!=0:
+                        geoms.append(molecule.geometry)
+                        energies.append(molecule.energy-refE)
                     break
             elif molecule.gradrms < self.conv_grms:
                 print(" converged")
+                if ostep % xyzframerate!=0:
+                    geoms.append(molecule.geometry)
+                    energies.append(molecule.energy-refE)
                 break
 
             #update DLC  --> this changes q, g, Hint

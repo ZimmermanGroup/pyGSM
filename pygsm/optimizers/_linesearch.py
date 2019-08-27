@@ -10,12 +10,13 @@ def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule)
     xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
 
     # use these so molecule xyz doesn't change
+    print(" evaluate fx in linesearch")
     fx = molecule.PES.get_energy(xyz)
     gx = molecule.PES.get_gradient(xyz)
     g = molecule.coord_obj.calcGrad(xyz,gx)
 
     #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
-    result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x}
+    result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
     return result
 
 
@@ -32,9 +33,11 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
     inc = 2.1
 
     # project out the constraint
-    gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+    gc = g.copy()
+    for c in molecule.constraints.T:
+        gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
-    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':gc}
+    result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
 
     # Compute the initial gradient in the search direction.
     dginit = np.dot(gc.T, d)
@@ -61,7 +64,9 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         g = molecule.coord_obj.calcGrad(xyz,gx)
 
         # project out the constraint
-        gc = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+        gc = g.copy()
+        for c in molecule.constraints.T:
+            gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
         #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
 
         count = count + 1
@@ -84,19 +89,19 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
                 	print(" [INFO] not satisfy strong wolf condition.")
                 	width = dec
                 else:
-                    result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+                    result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
                     return result
         if step < parameters['min_step']:
-            result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             print(' [INFO] the linesearch step is too small')
             return result
         if step > parameters['max_step']:
-            result = {'status':-1,'fx':fx,'step':step,'x':x, 'g':g}
+            result = {'status':-1, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             print(' [INFO] the linesearch step is too large')
             return result
         if parameters['max_linesearch'] <= count:
             print(' [INFO] the iteration of linesearch is many')
-            result = {'status':0,'fx':fx,'step':step,'x':x, 'g':g}
+            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result	
 
         # update the step		

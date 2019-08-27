@@ -6,6 +6,7 @@ from os import path
 
 # third party
 import numpy as np
+from collections import Counter
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -93,7 +94,7 @@ class SE_GSM(Base_Method):
             for n in range(self.nnodes):
                 tmp.append(self.energies[n])
             self.energies = np.asarray(tmp)
-            self.TSnode = np.argmax(self.energies)
+            #self.TSnode = np.argmax(self.energies)
             self.emax = self.energies[self.TSnode]
 
             if self.TSnode == self.nR:
@@ -143,6 +144,8 @@ class SE_GSM(Base_Method):
             if a>1.:
                 a=1.
             dqmag = sign*(self.DQMAG_MIN+minmax*a)
+            if dqmag > self.DQMAG_MAX:
+                dqmag = self.DQMAG_MAX
             print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
 
             dq0 = dqmag*constraint
@@ -183,6 +186,10 @@ class SE_GSM(Base_Method):
                         refE=self.nodes[0].V0,
                         opt_steps=noptsteps,
                         )
+
+        print(" Aligning")
+        self.nodes[self.nR-1].xyz = self.com_rotate_move(self.nR-2,self.nR,self.nR-1) 
+
         return
 
     def check_add_node(self):
@@ -238,10 +245,13 @@ class SE_GSM(Base_Method):
     def tangent(self,node1,node2):
         if node2 == None or node2.node_id==node1.node_id:
             print(" getting tangent from node ",node1.node_id)
-            nadds = self.driving_coords.count("ADD")
-            nbreaks = self.driving_coords.count("BREAK")
-            nangles = self.driving_coords.count("ANGLE")
-            ntorsions = self.driving_coords.count("TORSION")
+
+            c = Counter(elem[0] for elem in self.driving_coords)
+            nadds = c['ADD']
+            nbreaks = c['BREAK']
+            nangles = c['nangles']
+            ntorsions = c['ntorsions']
+
             ictan = np.zeros((node1.num_primitives,1),dtype=float)
             breakdq = 0.3
             bdist=0.0
@@ -273,7 +283,7 @@ class SE_GSM(Base_Method):
                     bond = Distance(index[0],index[1])
                     prim_idx = node1.coord_obj.Prims.dof_index(bond)
                     if len(i)==3:
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
+                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
                     elif len(i)==4:
                         d0=i[3]
 
