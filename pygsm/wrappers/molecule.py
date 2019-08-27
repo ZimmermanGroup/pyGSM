@@ -25,7 +25,7 @@ from potential_energy_surfaces import Penalty_PES
 from coordinate_systems import DelocalizedInternalCoordinates
 from coordinate_systems import CartesianCoordinates
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 ELEMENT_TABLE = elements.ElementData()
 
 # TOC:
@@ -96,6 +96,12 @@ class Molecule(object):
                 doc='potential energy surface object to evaulate energies, gradients, etc. Pes is defined by charge, state, multiplicity,etc. '
                        
                 )
+        opt.add_option(
+                key='copy_wavefunction',
+                value=True,
+                doc='When copying the level of theory object, sometimes it is not helpful to copy the lot data as this will over write data \
+                        (e.g. at the beginning of DE-GSM)'
+                )
 
         opt.add_option(
                 key='Primitive_Hessian',
@@ -152,10 +158,11 @@ class Molecule(object):
         return'\n'.join(lines)
 
     @staticmethod
-    def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1):
+    def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1,copy_wavefunction=True):
         """Create a copy of MoleculeA"""
         #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
         #PES = MoleculeA.PES.create_pes_from(PES=MoleculeA.PES,options={'node_id': new_node_id})
+        print(" Copying from MoleculA {}".format(MoleculeA.node_id))
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
@@ -173,6 +180,7 @@ class Molecule(object):
             'coord_obj':coord_obj,
             'geom':new_geom,
             'node_id':new_node_id,
+            'copy_wavefunction':copy_wavefunction,
             }))
 
 
@@ -196,7 +204,7 @@ class Molecule(object):
             if self.Data['ftype'] is None:
                 self.Data['ftype'] = os.path.splitext(self.Data['fnm'])[1][1:]
             if not os.path.exists(self.Data['fnm']):
-                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.Data['fnm'])
+                #logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % self.Data['fnm'])
                 raise IOError
             #mol=next(pb.readfile(self.Data['ftype'],self.Data['fnm']))
             #xyz = nifty.getAllCoords(mol)
@@ -219,7 +227,7 @@ class Molecule(object):
         # Perform all the sanity checks and cache some useful attributes
 
         #TODO make PES property
-        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'],{'node_id':self.Data['node_id']})
+        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'],{'node_id':self.Data['node_id']},self.Data['copy_wavefunction'])
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
 
@@ -263,7 +271,7 @@ class Molecule(object):
         print(" Time  to build coordinate system= %.3f" % (t2-t1))
 
         #TODO
-        self.gradrms = 100.
+        self.gradrms = 0.
         self.isTSnode=False
         self.bdist =0.
 
@@ -514,6 +522,9 @@ class Molecule(object):
     @property
     def coordinates(self):
         return np.reshape(self.coord_obj.calculate(self.xyz),(-1,1))
+
+    def mult_bm(self,left,right):
+        return block_matrix.dot(left,right)
 
     #property
     #def der_coords

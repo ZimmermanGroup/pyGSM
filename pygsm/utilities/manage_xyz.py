@@ -7,7 +7,7 @@ import re
 
 def read_xyz(
     filename, 
-    scale=units.ANGSTROM_TO_AU):
+    scale=1.):
 
     """ Read xyz file
 
@@ -71,8 +71,9 @@ def read_xyzs(
     return geoms
 
 def get_atoms(
-        geom
+        geom,
         ):
+
     atoms=[]
     for atom in geom:
         atoms.append(atom[0])

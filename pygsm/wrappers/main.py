@@ -218,6 +218,7 @@ def main():
                 Form_Hessian=Form_Hessian,
                 node_id=inpfileq['num_nodes']-1,
                 top_settings = {'form_primitives': form_primitives},
+                copy_wavefunction= False,  
                 )
    
     # optimizer

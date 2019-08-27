@@ -185,7 +185,8 @@ class Base_Method(Print,Analyze,object):
         self.nP = 1        
         self.energies = np.asarray([0.]*self.nnodes)
         self.emax = 0.0
-        self.TSnode = 0 
+
+        # TSnode is now a property
         self.climb = False 
         self.find = False 
         self.ts_exsteps = 3 # multiplier for ts node
@@ -201,6 +202,27 @@ class Base_Method(Print,Analyze,object):
         self.finder=False   # is this string a finder?
         self.done_growing = False
         self.nodes[0].form_Primitive_Hessian()
+
+    @property
+    def TSnode(self):
+        return np.argmax(self.energies[:self.nnodes-1])
+    @property
+    def npeaks(self):
+        minnodes=[]
+        maxnodes=[]
+        if self.energies[1]>self.energies[0]:
+            minnodes.append(0)
+        if self.energies[self.nnodes-1]<self.energies[self.nnodes-2]:
+            minnodes.append(self.nnodes-1)
+        for n in range(self.n0,self.nnodes-1):
+            if self.energies[n+1]>self.energies[n]:
+                if self.energies[n]<self.energies[n-1]:
+                    minnodes.append(n)
+            if self.energies[n+1]<self.energies[n]:
+                if self.energies[n]>self.energies[n-1]:
+                    maxnodes.append(n)
+
+        return len(maxnodes)
 
 
     def store_energies(self):
@@ -218,7 +240,6 @@ class Base_Method(Print,Analyze,object):
 
         self.set_finder(rtype)
         self.store_energies()
-        self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         self.emax = self.energies[self.TSnode]
 
         # set convergence for nodes
@@ -264,7 +285,6 @@ class Base_Method(Print,Analyze,object):
             fp = self.find_peaks(2)
 
             # => get TS node <=
-            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
             print(" max E({}) {:5.4}".format(self.TSnode,self.emax))
 
@@ -285,7 +305,7 @@ class Base_Method(Print,Analyze,object):
             if isDone:
                 break
 
-            sum_conv_tol = (self.nn-2)*self.options['CONV_TOL'] + (self.nn-2)*self.options['CONV_TOL']/10
+            sum_conv_tol = (self.nnodes-2)*self.options['CONV_TOL'] 
             if not self.climber and not self.finder:
                 print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
                 print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
@@ -293,7 +313,7 @@ class Base_Method(Print,Analyze,object):
                     break
 
             # => set stage <= #
-            form_TS_hess = self.set_stage(totalgrad,ts_cgradq,ts_gradrms,fp)
+            form_TS_hess = self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
 
             # Modify TS Hess if necessary
             if form_TS_hess:
@@ -317,6 +337,11 @@ class Base_Method(Print,Analyze,object):
                     self.find=False
                     self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     self.nclimb=3
+
+            elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
+                 print(" nneg > 1 and close to converging -- reforming Hessian")                
+                 self.get_tangents_1e()                                                         
+                 self.get_eigenv_finite(self.TSnode)                    
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
 
@@ -326,7 +351,6 @@ class Base_Method(Print,Analyze,object):
 
             # store reparam energies
             self.store_energies()
-            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax= self.energies[self.TSnode]
             print(" V_profile (after reparam): ", end=' ')
             for n in range(self.nnodes):
@@ -555,7 +579,6 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(maxopt)
             self.store_energies()
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.TSnode = np.argmax(self.energies[:self.nnodes-1])
             self.emax = self.energies[self.TSnode]
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
             if self.check_if_grown(): 
@@ -688,11 +711,13 @@ class Base_Method(Print,Analyze,object):
                 optlastnode=True
 
 
-    def set_stage(self,totalgrad,ts_cgradq,ts_gradrms,fp):
+    def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
         form_TS_hess=False
 
+        sum_conv_tol = np.sum([self.optimizer[n].conv_grms for n in range(1,self.nnodes-1)])+ 0.0005
+
         #TODO totalgrad is not a good criteria for large systems
-        if totalgrad < 0.3 and fp>0: # extra criterion in og-gsm for added
+        if (totalgrad < 0.3 or sumgradrms<sum_conv_tol)  and fp>0: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
@@ -707,7 +732,8 @@ class Base_Method(Print,Analyze,object):
 
             elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
-                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) #or  #
+                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
+                    sumgradrms< sum_conv_tol
                     #(ts_gradrms<self.options['CONV_TOL']*5.))
                     )
                     ):
@@ -986,7 +1012,6 @@ class Base_Method(Print,Analyze,object):
                 if abs(rpmove[n])>0.:
                     #print "moving node %i %1.3f" % (n,rpmove[n])
                     self.newic.xyz = self.nodes[n].xyz
-                    opt_type=self.set_opt_type(n,quiet=True)
 
                     if rpmove[n] < 0.:
                         ictan[n] = np.copy(ictan0[n]) 
@@ -1007,7 +1032,6 @@ class Base_Method(Print,Analyze,object):
 
         for n in range(1,self.nnodes-1):
             self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
-        
 
         print(' spacings (end ic_reparam, steps: {}/{}):'.format(i+1,ic_reparam_steps))
         for n in range(1,self.nnodes):
@@ -1321,7 +1345,7 @@ class Base_Method(Print,Analyze,object):
         print(" initial energy is %3.4f" % self.nodes[0].energy)
 
         for struct in range(1,nstructs):
-            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct)
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct,copy_wavefunction=False)
             print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
             self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
             print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
@@ -1352,7 +1376,6 @@ class Base_Method(Print,Analyze,object):
         print()
 
         #tmp for testing
-        #self.TSnode = np.argmax(self.energies[:self.nnodes-1])
         #self.emax = self.energies[self.TSnode]
         #self.climb=True
         #self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
