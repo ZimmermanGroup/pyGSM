@@ -21,7 +21,7 @@ class CartesianX(object):
 
     @property
     def atoms(self):
-        return self.a
+        return [self.a]
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -58,7 +58,7 @@ class CartesianY(object):
 
     @property
     def atoms(self):
-        return self.a
+        return [self.a]
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -95,7 +95,7 @@ class CartesianZ(object):
 
     @property
     def atoms(self):
-        return self.a
+        return [self.a]
         
     def __eq__(self, other):
         if type(self) is not type(other): return False

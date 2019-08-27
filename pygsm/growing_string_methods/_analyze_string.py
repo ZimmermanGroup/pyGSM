@@ -184,7 +184,7 @@ class Analyze:
         nadded=0
         nbroken=0 
         nnR = self.nR-1
-        xyz = self.nodes[nnR-1].xyz
+        xyz = self.nodes[nnR].xyz
         atoms = self.nodes[nnR].atoms
 
         for i in self.driving_coords:
