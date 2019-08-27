@@ -28,19 +28,13 @@ class Avg_PES(PES):
             }))
         self._dE=1000.
         self.lot = lot
+        self.lot.do_coupling = True
+        self.lot.coupling_states = (PES1.ad_idx, PES2.ad_idx)
 
     @classmethod
-    def create_pes_from(cls,PES,options={}):
-        lot = type(PES.lot).copy(PES.lot,options)
+    def create_pes_from(cls,PES,options={},copy_wavefunction=True):
+        lot = type(PES.lot).copy(PES.lot,options,copy_wavefunction)
         return cls(PES.PES1,PES.PES2,lot)
-
-    @property
-    def dE(self):
-        return self._dE
-
-    @dE.setter
-    def dE(self,value):
-        self._dE = value
 
     def get_energy(self,xyz):
         if self.PES1.multiplicity==self.PES2.multiplicity:
@@ -91,13 +85,14 @@ class Avg_PES(PES):
         print(" dE is %5.4f" % self.dE)
 
         # non-adiabatic coupling is derivative coupling times dE
-        nac = dvec*self.dE
+        nac = dvec*self.dE/units.KCAL_MOL_PER_AU
         beta = get_beta(dgrad,nac)
         print(" beta = %1.6f" % beta)
         
         # rotate dvec and dgrad to be orthonormal
+        save_nac = nac.copy()
         nac = nac*np.cos(beta) - dgrad*np.sin(beta)
-        dgrad = dgrad*np.cos(beta) - nac*np.sin(beta)
+        dgrad = dgrad*np.cos(beta) - save_nac*np.sin(beta)
 
         norm_nac = np.linalg.norm(nac)
         norm_dg = np.linalg.norm(dgrad)
@@ -112,10 +107,11 @@ class Avg_PES(PES):
             dgrad_copy = dgrad.copy()
             dgrad = nac.copy()
             nac = dgrad_copy
+            asymmetry = calc_asymmetry(dgrad,nac)
 
         # discretize branching plane and find critical points
         #theta = np.linspace(0,2*np.pi,num_slices)
-        theta = [ i*2*np.pi/num_slices for i in xrange(num_slices)]
+        theta = [ i*2*np.pi/num_slices for i in range(num_slices)]
        
         dotx = np.dot(sab.T,dgrad)/norm_dg
         doty = np.dot(sab.T,nac)/norm_nac
@@ -138,18 +134,20 @@ class Avg_PES(PES):
 
         EA=[]
         EB=[]
-        for n in xrange(num_slices):
+        for n in range(num_slices):
             factorA = sigma*np.cos(theta[n] - theta_s) + np.sqrt(1.+asymmetry*np.cos(2*theta[n]))
             factorB = sigma*np.cos(theta[n] - theta_s) - np.sqrt(1.+asymmetry*np.cos(2*theta[n]))
             EA.append( float(pitch*radius*factorA)) #energy +
             EB.append( float(pitch*radius*factorB)) # energy +
        
-        #EA = np.asarray(EA)
-        #EB = np.asarray(EB)
-        for n in xrange(num_slices):
-            print(" EA[%2i] = %2.8f" %(n,EA[n]))
-        for n in xrange(num_slices):
-            print(" EB[%2i] = %2.8f" %(n,EB[n]))
+        EA = np.asarray(EA)
+        EB = np.asarray(EB)
+        np.savetxt('EA.txt',EA)
+        np.savetxt('EB.txt',EB)
+        #for n in range(num_slices):
+        #    print(" EA[%2i] = %2.8f" %(n,EA[n]))
+        #for n in range(num_slices):
+        #    print(" EB[%2i] = %2.8f" %(n,EB[n]))
 
         #plot(EA,theta)
 
@@ -193,6 +191,13 @@ class Avg_PES(PES):
             mxyz.append(xyz + radius*np.cos(theta[n])*dgrad/norm_dg + radius*np.cos(theta[n])*nac/norm_nac)
         
         return mxyz
+
+
+    def fill_energy_grid2d(self,xyz_grid):
+        E1 = self.PES1.fill_energy_grid2d(xyz_grid)
+        E2 = self.PES2.fill_energy_grid2d(xyz_grid)
+        return E1,E2
+
 
 if __name__ == '__main__':
 

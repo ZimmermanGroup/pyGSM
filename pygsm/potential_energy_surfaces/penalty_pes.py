@@ -33,13 +33,14 @@ class Penalty_PES(PES):
         print(' PES1 multiplicity: {} PES2 multiplicity: {} sigma: {}'.format(self.PES1.multiplicity,self.PES2.multiplicity,self.sigma))
 
     @classmethod
-    def create_pes_from(cls,PES,options={}):
-        lot = type(PES.lot).copy(PES.lot,options)
+    def create_pes_from(cls,PES,options={},copy_wavefunction=True):
+        lot = type(PES.lot).copy(PES.lot,options,copy_wavefunction)
         return cls(PES.PES1,PES.PES2,lot,PES.sigma,PES.alpha)
 
     def get_energy(self,geom):
         E1 = self.PES1.get_energy(geom)
         E2 = self.PES2.get_energy(geom)
+   
         #avgE = 0.5*(self.PES1.get_energy(geom) + self.PES2.get_energy(geom))
         avgE = 0.5*(E1+E2)
         #self.dE = self.PES2.get_energy(geom) - self.PES1.get_energy(geom)

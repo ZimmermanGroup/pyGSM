@@ -8,7 +8,7 @@ import numpy as np
 from numpy.linalg import multi_dot
 
 # local application imports
-from utilities import nifty 
+from utilities import nifty,manage_xyz
 
 
 """
@@ -577,6 +577,198 @@ def get_expmap_der(x,y):
                 FDiffV = (VPlus-VMinus)/(2*h)
                 nifty.logger.info(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
     return dvdx
+
+def eckart_frame(
+    geom,
+    masses,
+    ):
+
+    """ Moves the molecule to the Eckart frame
+
+    Params:
+        geom ((natoms,4) np.ndarray) - Contains atom symbol and xyz coordinates
+        masses ((natoms) np.ndarray) - Atom masses
+
+    Returns:
+        COM ((3), np.ndarray) - Molecule center of mess
+        L ((3), np.ndarray) - Principal moments
+        O ((3,3), np.ndarray)- Principle axes of inertial tensor
+        geom2 ((natoms,4 np.ndarray) - Contains new geometry (atom symbol and xyz coordinates)
+
+    """
+
+    # Center of mass
+    COM = np.sum(manage_xyz.xyz_to_np(geom) * np.outer(masses, [1.0]*3), 0) / np.sum(masses)
+    # Inertial tensor
+    I = np.zeros((3,3))
+    for atom, mass in zip(geom, masses): 
+        I[0,0] += mass * (atom[1] - COM[0]) * (atom[1] - COM[0])
+        I[0,1] += mass * (atom[1] - COM[0]) * (atom[2] - COM[1])
+        I[0,2] += mass * (atom[1] - COM[0]) * (atom[3] - COM[2])
+        I[1,0] += mass * (atom[2] - COM[1]) * (atom[1] - COM[0])
+        I[1,1] += mass * (atom[2] - COM[1]) * (atom[2] - COM[1])
+        I[1,2] += mass * (atom[2] - COM[1]) * (atom[3] - COM[2])
+        I[2,0] += mass * (atom[3] - COM[2]) * (atom[1] - COM[0])
+        I[2,1] += mass * (atom[3] - COM[2]) * (atom[2] - COM[1])
+        I[2,2] += mass * (atom[3] - COM[2]) * (atom[3] - COM[2])
+    I /= np.sum(masses)
+    # Principal moments/Principle axes of inertial tensor
+    L, O = np.linalg.eigh(I)
+    
+    # Eckart geometry
+    geom2 = manage_xyz.np_to_xyz(geom, np.dot((manage_xyz.xyz_to_np(geom) - np.outer(np.ones((len(masses),)), COM)), O))
+
+    return COM, L, O, geom2
+
+def eckart_align(geom1,geom2,masses,rfrac,max_iter=200):
+
+    COMreact = np.sum(manage_xyz.xyz_to_np(geom1) * np.outer(masses, [1.0]*3), 0) / np.sum(masses)
+
+    COMproduct = np.sum(manage_xyz.xyz_to_np(geom2) * np.outer(masses, [1.0]*3), 0) / np.sum(masses)
+
+    xyzreact = manage_xyz.xyz_to_np(geom1)
+    xyzproduct = manage_xyz.xyz_to_np(geom2)
+
+    # Convert to MW coordinates
+    mwcreact = xyzreact*units.ANGSTROM_TO_AU*np.outer(np.sqrt(masses),[1.0]*3)
+    mwcproduct = xyzproduct*units.ANGSTROM_TO_AU*np.outer(np.sqrt(masses),[1.0]*3)
+    thetas = np.zeros(3)
+    total_thetas = np.zeros(3)
+    rot_mat = np.zeros((3,3))
+
+    if rfrac < 1.:
+        max_iter=1
+
+    for i in range(maxiter):
+
+        # get gradmag
+        grad = np.zeros(3)
+        for atom1,atom2 in zip(mwcreact,mwcproduct):
+            grad[0] += 2*(atom1[1]*atom2[2]-atom1[2]*atom2[1])
+            grad[1] += 2*(atom1[2]*atom2[0]-atom1[0]*atom2[2])
+            grad[2] += 2*(atom1[0]*atom2[1]-atom1[1]*atom2[0])
+        gradmag = np.linalg(grad)
+        print(" the gradient of the Eckart distance is %5.4f" % gradmag)
+
+        # get hessian
+        dot = np.dot(mwcreact.flatten(),mwcproduct.flatten())
+        xd = np.zeros((3,3))
+        for atom1,atom2 in zip(mwcreact,mwcproduct):
+            xd[0,0] += atom1[0]*atom2[0]
+            xd[1,1] += atom1[1]*atom2[1]
+            xd[2,2] += atom1[2]*atom2[2]
+            xd[1,0] += atom1[1]*atom2[0]
+            xd[2,0] += atom1[2]*atom2[0]
+            xd[2,1] += atom1[2]*atom2[1]
+        xd[0,1] = xd[1,0]
+        xd[0,2] = xd[2,0]
+        xd[1,2] = xd[2,1]
+        hess = np.zeros((3,3))
+        hess[0,0] = 2*(dot-xd[0,0])
+        hess[1,1] = 2*(dot-xd[1,1])
+        hess[2,2] = 2*(dot-xd[2,2])
+        hess[1,0] = -2*xd[1,0]
+        hess[2,0] = -2*xd[2,0]
+        hess[2,1] = -2*xd[2,1]
+        hess[0,1] = hess[1,0]
+        hess[0,2] = hess[2,0]
+        hess[1,2] = hess[2,1]
+
+        hess_evals,hess_evecs = np.linalg.eigh(hess)
+
+        mag_thetas = np.linalg.norm(thetas)
+
+        if gradmag<tol and all(hess_evals>0.):
+            break
+        
+        temp=0.
+        vec_index=0
+        for j in range(3):
+            if hess_evals[j]<temp and abs(hess_evals[j])>0.01:
+                temp = hess_evals[j]
+                vec_index=j
+
+
+        if vec_index!=0:
+            # Rotate around structure
+            RotMat = np.zeros((3,3))
+            vec = hess_evecs[vec_index]
+            RotMat[0,0] = 2*vec[0]*vec[0] -1
+            RotMat[1,1] = 2*vec[1]*vec[1] -1
+            RotMat[2,2] = 2*vec[2]*vec[2] -1
+            RotMat[1,0] = 2*vec[0]*vec[1]
+            RotMat[2,0] = 2*vec[2]*vec[0]
+            RotMat[2,1] = 2*vec[2]*vec[1]
+            RotMat[0,1] = RotMat[1,0]
+            RotMat[0,2] = RotMat[2,0]
+            RotMat[1,2] = RotMat[2,1]
+
+            # rotate product
+            mwcprod = np.dot(mwcprod,RotMat)
+
+        hess_inverse = np.linalg.inv(hess)
+
+        thetas = np.dot(hess_inverse,grad)
+        thetas -= np.ones(3)*rfrac
+        total_thetas += thetas
+
+        x = thetas[0]
+        y= thetas[1]
+        z = thetas[2]
+        rot_mat[0,0] = np.cos(y)*np.cos(z)
+        rot_mat[0,1] = -np.cos(y)*np.sin(z)
+        rot_mat[0,2] = np.sin(y)
+        rot_mat[1,0] = np.sin(x)*np.sin(y)*np.cos(z) + np.cos(x)*np.sin(z)
+        rot_mat[1,1] = -np.sin(x)*np.sin(y)*np.sin(z) + np.cos(x)*np.cos(z)
+        rot_mat[1,2] = -np.sin(x)*np.cos(y)
+        rot_mat[2,0] = -np.cos(x)*np.sin(y)*np.cos(z) + np.sin(x)*np.sin(z)
+        rot_mat[2,1] = np.cos(x)*np.sin(y)*np.sin(z) + np.sin(x)*np.cos(z)
+        rot_mat[2,2] = np.cos(x)*np.cos(y)
+
+
+
+def vibrational_basis(
+    geom,
+    masses,
+    ):
+
+    """ Compute the vibrational basis in mass-weighted Cartesian coordinates.
+    This is the null-space of the translations and rotations in the Eckart frame.
+    
+    Params: 
+        geom (geometry struct) - minimimum geometry structure
+        masses (list of float) - masses for the geometry
+
+    Returns:
+        B ((3*natom, 3*natom-6) np.ndarray) - orthonormal basis for vibrations. Mass-weighted cartesians in rows, mass-weighted vibrations in columns. 
+
+    """
+
+    # Compute Eckart frame geometry
+    COM, L, O, geom2 = eckart_frame(geom, masses)
+    G = manage_xyz.xyz_to_np(geom2)
+
+    # Known basis functions for translations
+    TR = np.zeros((3*len(geom),6))
+    # Translations
+    TR[0::3,0] = np.sqrt(masses) # +X
+    TR[1::3,1] = np.sqrt(masses) # +Y
+    TR[2::3,2] = np.sqrt(masses) # +Z
+    # Rotations in the Eckart frame
+    for A, mass in enumerate(masses):
+        mass_12 = np.sqrt(mass)
+        for j in range(3):
+            TR[3*A+j,3] = + mass_12 * (G[A,1] * O[j,2] - G[A,2] * O[j,1]) # + Gy Oz - Gz Oy 
+            TR[3*A+j,4] = - mass_12 * (G[A,0] * O[j,2] - G[A,2] * O[j,0]) # - Gx Oz + Gz Ox 
+            TR[3*A+j,5] = + mass_12 * (G[A,0] * O[j,1] - G[A,1] * O[j,0]) # + Gx Oy - Gy Ox 
+
+    # Single Value Decomposition (review)        
+    U, s, V = np.linalg.svd(TR, full_matrices=True)
+
+    # The null-space of TR
+    B = U[:,6:]
+
+    return B
 
 def main():
     M = Molecule(sys.argv[1])
