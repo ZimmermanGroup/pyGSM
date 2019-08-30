@@ -33,7 +33,7 @@ class SE_GSM(Base_Method):
         print(" number of primitives is", self.nodes[0].num_primitives)
 
         # stash bdist for node 0
-        ictan,self.nodes[0].bdist = self.tangent(self.nodes[0],None)
+        ictan,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords)
         self.nodes[0].update_coordinate_basis(constraints=ictan)
         self.set_V0()
 
@@ -123,41 +123,6 @@ class SE_GSM(Base_Method):
 
         print("Finished GSM!")  
 
-    def add_node(self,nodeR,nodeP=None,stepsize=0.5,node_id=1):
-
-        if nodeP is None:
-            # nodeP is not used!
-            BDISTMIN=0.05
-            ictan,bdist =  self.tangent(nodeR,None)
-
-            if bdist<BDISTMIN:
-                print("bdist too small %.3f" % bdist)
-                return None
-            new_node = Molecule.copy_from_options(nodeR,new_node_id=node_id)
-            Vecs = new_node.update_coordinate_basis(constraints=ictan)
-            constraint = new_node.constraints[:,0]
-            sign=-1.
-
-            dqmag_scale=1.5
-            minmax = self.DQMAG_MAX - self.DQMAG_MIN
-            a = bdist/dqmag_scale
-            if a>1.:
-                a=1.
-            dqmag = sign*(self.DQMAG_MIN+minmax*a)
-            if dqmag > self.DQMAG_MAX:
-                dqmag = self.DQMAG_MAX
-            print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
-
-            dq0 = dqmag*constraint
-            print(" dq0[constraint]: %1.3f" % dqmag)
-
-            new_node.update_xyz(dq0)
-            new_node.bdist = bdist
-
-            return new_node
-        else:
-            return super(SE_GSM,self).add_node(nodeR,nodeP,stepsize,node_id)
-
 
     def add_last_node(self,rtype):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
@@ -241,160 +206,6 @@ class SE_GSM(Base_Method):
         nlist[2*ncurrent] = self.nR -1
         ncurrent += 1
         return ncurrent,nlist
-
-    def tangent(self,node1,node2):
-        if node2 == None or node2.node_id==node1.node_id:
-            print(" getting tangent from node ",node1.node_id)
-
-            c = Counter(elem[0] for elem in self.driving_coords)
-            nadds = c['ADD']
-            nbreaks = c['BREAK']
-            nangles = c['nangles']
-            ntorsions = c['ntorsions']
-
-            ictan = np.zeros((node1.num_primitives,1),dtype=float)
-            breakdq = 0.3
-            bdist=0.0
-            atoms = node1.atoms
-            xyz = node1.xyz
-
-            for i in self.driving_coords:
-                if "ADD" in i:
-                    index = [i[1]-1, i[2]-1]
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        #TODO why not just use the covalent radii?
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
-                    elif len(i)==4:
-                        d0=i[3]
-                    current_d =  bond.value(xyz)
-                    ictan[prim_idx] = -1*(d0-current_d)
-                    #if nbreaks>0:
-                    #    ictan[prim_idx] *= 2
-                    # => calc bdist <=
-                    if current_d>d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if self.print_level>0:
-                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-
-                if "BREAK" in i:
-                    index = [i[1]-1, i[2]-1]
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
-                    elif len(i)==4:
-                        d0=i[3]
-
-                    current_d =  bond.value(xyz)
-                    ictan[prim_idx] = -1*(d0-current_d) 
-
-                    # => calc bdist <=
-                    if current_d<d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-
-                    if self.print_level>0:
-                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-                if "ANGLE" in i:
-
-                    index = [i[1]-1, i[2]-1,i[3]-1]
-                    angle = Angle(index[0],index[1],index[2])
-                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
-                    anglet = i[4]
-                    ang_value = angle.value(xyz)
-                    ang_diff = anglet*np.pi/180. - ang_value
-                    #print(" angle: %s is index %i " %(angle,ang_idx))
-                    if self.print_level>0:
-                        print((" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff)))
-                    ictan[prim_idx] = -ang_diff
-                    #TODO need to come up with an adist
-                    #if abs(ang_diff)>0.1:
-                    #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
-                if "TORSION" in i:
-                    #torsion=(i[1],i[2],i[3],i[4])
-                    index = [i[1]-1, i[2]-1,i[3]-1,i[4]-1]
-                    torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
-                    tort = i[5]
-                    torv = torsion.value(xyz)
-                    tor_diff = tort - torv*180./np.pi
-                    if tor_diff>180.:
-                        tor_diff-=360.
-                    elif tor_diff<-180.:
-                        tor_diff+=360.
-                    ictan[prim_idx] = -tor_diff*np.pi/180.
-
-                    if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if self.print_level>0:
-                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
-
-                trans = ['TranslationX', 'TranslationY', 'TranslationZ']
-                if any(elem in trans for elem in i):
-                    fragid = i[1]
-                    destination = i[2]
-                    indices = node1.get_frag_atomic_index(fragid)
-                    atoms=range(indices[0]-1,indices[1])
-                    #print('indices of frag %i is %s' % (fragid,indices))
-                    T_class = getattr(sys.modules[__name__], i[0])
-                    translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
-                    prim_idx = node1.coord_obj.Prims.dof_index(translation)
-                    trans_curr = translation.value(xyz)
-                    trans_diff = destination-trans_curr
-                    ictan[prim_idx] = -trans_diff
-                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if self.print_level>0:
-                        print((" current trans: %4.3f align to %4.3f diff: %4.3f" %(trans_curr,destination,trans_diff)))
-
-                #TODO
-                rots = ['RotationA','RotationB','RotationC']
-                if any(elem in rots for elem in i):
-                    fragid = i[1]
-                    rot_angle = i[2]
-                    indices = node1.get_frag_atomic_index(fragid)
-                    atoms=range(indices[0]-1,indices[1])
-                    R_class = getattr(sys.modules[__name__], i[0])
-                    coords = node1.xyz
-                    sel = coords.reshape(-1,3)[atoms,:]
-                    sel -= np.mean(sel,axis=0)
-                    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                    rotation = R_class(atoms,coords,node1.coord_obj.Prims.Rotators,w=rg)
-                    prim_idx = node1.coord_obj.Prims.dof_index(rotation)
-                    rot_curr = rotation.value(xyz)
-                    rot_diff = rot_angle-rot_curr
-                    #print('rot_diff before periodic %.3f' % rot_diff)
-                    #if rot_diff > 2*np.pi:
-                    #    rot_diff -= 2*np.pi
-                    #elif rot_diff< -2*np.pi:
-                    #    rot_diff += 2*np.pi
-
-                    ictan[prim_idx] = -rot_diff
-                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if self.print_level>0:
-                        print((" current rot: %4.3f align to %4.3f diff: %4.3f" %(rot_curr,rot_angle,rot_diff)))
-
-            bdist = np.sqrt(bdist)
-            if np.all(ictan==0.0):
-                raise RuntimeError(" All elements are zero")
-            return ictan,bdist
-        else:
-            print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
-            assert node2!=None,'node n2 is None'
-            Q1 = node1.primitive_internal_values 
-            Q2 = node2.primitive_internal_values 
-            PMDiff = Q2-Q1
-            #for i in range(len(PMDiff)):
-            for k,prim in zip(list(range(len(PMDiff))),node1.primitive_internal_coordinates):
-                if prim.isPeriodic:
-                    Plus2Pi = PMDiff[k] + 2*np.pi
-                    Minus2Pi = PMDiff[k] - 2*np.pi
-                    if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                        PMDiff[k] = Plus2Pi
-                    if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                        PMDiff[k] = Minus2Pi
-            return np.reshape(PMDiff,(-1,1)),None
-
 
     def check_if_grown(self):
         self.pastts = self.past_ts()

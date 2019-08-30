@@ -140,23 +140,6 @@ class DE_GSM(Base_Method):
         return success
 
 
-    def tangent(self,node1,node2):
-        #if self.print_level>1:
-        #    print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
-        # this could have been done easier but it is nicer to do it this way
-        Q1 = node1.primitive_internal_values 
-        Q2 = node2.primitive_internal_values 
-        PMDiff = Q2-Q1
-        for k,prim in zip(list(range(len(PMDiff))),node1.primitive_internal_coordinates):
-            if prim.isPeriodic:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
-        return np.reshape(PMDiff,(-1,1)),None
-
     def make_nlist(self):
         ncurrent = 0
         nlist = [0]*(2*self.nnodes)
