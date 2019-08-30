@@ -353,6 +353,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # CRA 3/2019 NOT SURE WHY THIS IS DONE
             # couldn't Cn just be used?
 
+            ## TMP TRYING TO USE Cn
+            #cVecs = Cn
             cVecs = block_matrix.dot(block_matrix.dot(self.Vecs,block_matrix.transpose(self.Vecs)),Cn)
 
             # normalize C_U
@@ -506,4 +508,48 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Reset the reference geometries for calculating the orientational variables. """
         self.Prims.resetRotations(xyz)
 
+    def create2dxyzgrid(self,xyz,xvec,yvec,nx,ny,mag):
+        '''
+        xvec and yvec are some delocalized coordinate basis vector (or some linear combination of them)
+        nx and ny are the number of grid points
+        mag is the step along the delocalized coordinate basis. Don't recommend using greater than 0.5
+        
+        returns an xyz grid to calculate energies on (see potential_energy_surface modules).
 
+        '''
+
+        x=np.linspace(-mag,mag,nx)
+        y=np.linspace(-mag,mag,ny)
+        xv,yv = np.meshgrid(x,y)
+        xyz1 = xyz.flatten()
+        xyzgrid = np.zeros((xv.shape[0],xv.shape[1],xyz1.shape[0]))
+        print(self.Vecs.shape)
+        print(xvec.shape)
+
+        # find what linear combination of DLC basis xvec and yvec is
+        proj_xvec = block_matrix.dot(block_matrix.transpose(self.Vecs),xvec)
+        proj_yvec = block_matrix.dot(block_matrix.transpose(self.Vecs),yvec)
+
+        #proj_xvec = block_matrix.dot(self.Vecs,xvec)
+        #proj_yvec = block_matrix.dot(self.Vecs,yvec)
+
+        print(proj_xvec.T)
+        print(proj_yvec.T)
+        print(proj_xvec.shape)
+
+        rc=0
+        for xrow,yrow in zip(xv,yv):
+            cc=0
+            for xx,yy in zip(xrow,yrow):
+
+                # first form the vector in the grid as the linear comb of the projected vectors
+                dq = xx* proj_xvec + yy*proj_yvec
+                print(dq.T)
+                print(dq.shape)
+
+                # convert to xyz and save to xyzgrid
+                xyzgrid[rc,cc,:] = self.newCartesian(xyz,dq).flatten()
+                cc+=1
+            rc+=1
+        
+        return xyzgrid
