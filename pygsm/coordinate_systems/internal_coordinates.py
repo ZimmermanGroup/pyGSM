@@ -382,7 +382,7 @@ class InternalCoordinates(object):
         self.fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
         for g in self.fragments: g.__class__ = MyG
 
-    def build_topology(self, xyz, force_bonds=True, **kwargs):
+    def build_topology(self, xyz, force_bonds=True, bondlistfile=None, **kwargs):
         """
         Create self.topology and self.fragments; these are graph
         representations of the individual molecule fragments
@@ -408,6 +408,9 @@ class InternalCoordinates(object):
 
         if force_bonds:
             self.bonds = self.build_bonds(xyz)
+            assert bondlistfile is None
+        elif bondlistfile:
+            self.bonds = self.read_bonds_from_file(bondlistfile)
 
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -602,6 +605,25 @@ class InternalCoordinates(object):
         self.built_bonds = True
 
         return bonds
+
+    def read_bonds_from_file(self,filename):
+        print("reading bonds")
+        bondlist = np.loadtxt(filename)
+        
+        bonds=[]
+        for b in bondlist:
+            i = int(b[0])
+            j = int(b[1])
+            if i>j:
+                bonds.append((i,j))
+            else:
+                bonds.append((j,i))
+        
+        sorted_bonds = sorted(list(set(bonds)))
+        self.built_bonds = True
+        print(sorted_bonds[:10])
+
+        return sorted_bonds
 
    # # CRA  3/2019 these should be utils -- not part of the class
    # def measure_distances(self, i, j):

@@ -50,13 +50,21 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                              'radii' : extra_kwargs.get('radii', {})}
 
         xyz = options['xyz']
+        bondfile = extra_kwargs.get('bondfile',None)
 
         # setup
-
         if self.top_settings['make_primitives']:
             nifty.click()
-            self.build_topology(xyz)
+            force_bonds=True
+            if bondfile:
+                force_bonds=False
+            self.build_topology(
+                    xyz=xyz,
+                    force_bonds=force_bonds,
+                    bondlistfile=bondfile)
+            print(" done making topology")
             self.makePrimitives(xyz)
+            print(" done making primitives")
             time_build = nifty.click()
             print(" make prim %.3f" % time_build)
             # Reorder primitives for checking with cc's code in TC.
@@ -639,7 +647,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             start_atomidx=end_atomidx+1
 
         if len(newPrims) != len(self.Internals):
-            print(np.setdiff1d(self.Internals,newPrims))
+            #print(np.setdiff1d(self.Internals,newPrims))
             raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
         self.clearCache()
