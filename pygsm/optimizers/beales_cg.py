@@ -130,8 +130,10 @@ class beales_cg(base_optimizer):
                     nconstraints=1
                     g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
                     step=0.
+                    molecule = ls['molecule']
             else:
                 # get values from linesearch
+                molecule = ls['molecule']
                 x = ls['x']
                 fx = ls['fx']
                 g  = ls['g']

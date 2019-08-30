@@ -1440,7 +1440,8 @@ class Base_Method(Print,Analyze,object):
         if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-        if (self.find or self.climb) and n==self.TSnode: #multiplier for TS node during  should this be for climb too?
+            self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
+        if (self.find or self.climb) and n==self.TSnode: 
             #exsteps=3
             exsteps = self.ts_exsteps
             print(" multiplying steps for node %i by %i" % (n,exsteps))
