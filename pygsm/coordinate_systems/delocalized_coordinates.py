@@ -776,19 +776,76 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             tmpvecs.append( np.dot(np.dot(vt,G),v))
         return block_matrix(tmpvecs)
 
+    def MW_GMatrix(self,xyz,mass):
+        tmpvecs=[]
+        s3a=0
+        sp=0
+        Bp = self.Prims.wilsonB(xyz)
+        Vt = block_matrix.transpose(self.Vecs)
+
+        s3a = 0
+        for vt,b,v in zip(Vt.matlist,Bp.matlist,self.Vecs.matlist):
+            e3a = s3a + b.shape[1]
+            tmpvecs.append( np.linalg.multi_dot([vt,b/mass[s3a:e3a],b.T,v]))
+            s3a = e3a
+        return block_matrix(tmpvecs)
+
     def derivatives(self, coords):
         """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
         PrimDers = self.Prims.derivatives(coords)
-        # The following code does the same as "tensordot"
-        # print PrimDers.shape
-        # print self.Vecs.shape
-        # Answer = np.zeros((self.Vecs.shape[1], PrimDers.shape[1], PrimDers.shape[2]), dtype=float)
-        # for i in range(self.Vecs.shape[1]):
-        #     for j in range(self.Vecs.shape[0]):
-        #         Answer[i, :, :] += self.Vecs[j, i] * PrimDers[j, :, :]
-        # print Answer.shape
-        Answer1 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
-        return np.array(Answer1)
+        Answer = np.zeros((self.Vecs.shape[1], PrimDers.shape[1], PrimDers.shape[2]), dtype=float)
+
+        # block matrix tensor dot
+        count = 0
+        for block in self.Vecs.matlist:
+            for i in range(block.shape[1]):
+                for j in range(block.shape[0]):
+                    Answer[count, :, :] += block[j, i] * PrimDers[j, :, :]
+                count+=1
+        
+        #print(" block matrix way")
+        #print(Answer)
+        #tmp = block_matrix.full_matrix(self.Vecs)
+        #Answer1 = np.tensordot(tmp, PrimDers, axes=(0, 0))
+        #print(" np way")
+        #print(Answer1)
+        #return np.array(Answer1)
+
+        return Answer
+
+    def second_derivatives(self, coords):
+        """ Obtain the second derivatives of the DLCs with respect to the Cartesian coordinates. """
+        PrimDers = self.Prims.second_derivatives(coords)
+
+        # block matrix tensor dot
+        Answer = np.zeros((self.Vecs.shape[1],coords.shape[0],3,coords.shape[0],3))
+        count = 0
+        for block in self.Vecs.matlist:
+            for i in range(block.shape[1]):
+                for j in range(block.shape[0]):
+                    Answer[count, :, :, :, :] += block[j, i] * PrimDers[j, :, :, :, :]
+                count+=1
+
+        #print(" block matrix way.")
+        #print(Answer[0])
+    
+        #tmp = block_matrix.full_matrix(self.Vecs)
+        #Answer2 = np.tensordot(tmp, PrimDers, axes=(0, 0))
+        #print(" np tensor dot with full mat")
+        #print(Answer2[0])
+        #return np.array(Answer2)
+
+        return Answer
+
+    def MW_GInverse(self,xyz,mass):
+        xyz = xyz.reshape(-1,3)
+        #nifty.click()
+        G = self.MW_GMatrix(xyz,mass)
+        #time_G = nifty.click()
+        tmpGi = [ np.linalg.inv(g) for g in G.matlist ]
+        #time_inv = nifty.click()
+        # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+        return block_matrix(tmpGi)
 
     def GInverse(self, xyz):
         #return self.GInverse_diag(xyz)

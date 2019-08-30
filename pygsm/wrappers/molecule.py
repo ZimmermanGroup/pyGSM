@@ -337,6 +337,10 @@ class Molecule(object):
         return np.array([ele.mass_amu for ele in self.atoms])
 
     @property
+    def mass_amu_triples(self):
+        return np.array([[ele.mass_amu,ele.mass_amu,ele.mass_amu] for ele in self.atoms])
+
+    @property
     def atomic_num(self):
         return [ele.atomic_num for ele in self.atoms]
 
@@ -390,6 +394,10 @@ class Molecule(object):
     def energy(self):
         return self.PES.get_energy(self.xyz)
         #return 0.
+
+    @property
+    def gradx(self):
+        return np.reshape(self.PES.get_gradient(self.xyz),(-1,3))
 
     @property
     def gradient(self):
@@ -475,6 +483,10 @@ class Molecule(object):
             self.xyz = self.coord_obj.newCartesian(self.xyz,dq,verbose)
         return self.xyz
 
+    def update_MW_xyz(self,mass,dq,verbose=True):
+        self.xyz = self.coord_obj.massweighted_newCartesian(self.xyz,dq,mass,verbose)
+        return self.xyz
+
     @property
     def finiteDifferenceHessian(self):
         return self.PES.get_finite_difference_hessian(self.xyz)
@@ -525,6 +537,30 @@ class Molecule(object):
 
     def mult_bm(self,left,right):
         return block_matrix.dot(left,right)
+
+    @property
+    def prim_CMatrix(self):
+        Der = self.coord_obj.Prims.second_derivatives(self.xyz)
+        return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
+
+    @property
+    def CMatrix(self):
+        Der = self.coord_obj.second_derivatives(self.xyz)
+        return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
+        #return Der
+
+        #Answer = []
+        #for i in range(Der.shape[0]):
+        #    Answer.append(Der[i].flatten())
+        #return np.array(Answer)
+    
+    @property
+    def BMatrix(self):
+        return self.coord_obj.Prims.wilsonB(self.xyz)
+
+    @property
+    def WilsonB(self):
+        return self.coord_obj.wilsonB(self.xyz)
 
     #property
     #def der_coords

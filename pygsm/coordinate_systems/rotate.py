@@ -424,7 +424,7 @@ def get_F_der(x, y):
                 nifty.logger.info(u, w, np.max(np.abs(dF[u, w]-FDiffF)))
     return dF
 
-def get_q_der(x, y):
+def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
     """
     Calculate the derivatives of the quaternion with respect
     to the Cartesian coordinates.
@@ -435,6 +435,12 @@ def get_q_der(x, y):
         Trial coordinates, dimensionality (number of atoms) x 3
     y : numpy.ndarray
         Target coordinates, dimensionalty must match trial coordinates
+    second : bool
+        If true, return the second derivative matrix as well.
+    fdcheck : bool
+        If true, perform a finite difference check and return finite difference gradients
+    use_loops : bool
+        If true, use the slower reference implementation that uses for loops (only in second derivs)
 
     Returns
     -------
@@ -442,6 +448,10 @@ def get_q_der(x, y):
         u, w, i: 
         First two dimensions are (n_atoms, 3), the variables being differentiated
         Third dimension is 4, the elements of the quaternion derivatives with respect to atom u, dimension w
+    numpy.ndarray (if second=True)
+        u, w, a, b, i: 
+        First four dimensions are (n_atoms, 3, n_atoms, 3), the variables being differentiated
+        Fifth dimension is 4, the elements of the quaternion second derivatives with respect to atom u, dimension w, atom a, dimension b
     """
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
@@ -450,16 +460,50 @@ def get_q_der(x, y):
     dF = get_F_der(x, y)
     mat = np.eye(4)*l - F
     # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
-    pinv = nifty.invert_svd(np.eye(4)*l - F, thresh=1e-6)
+    Minv = nifty.invert_svd(np.eye(4)*l - F, thresh=1e-6)
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
-            # dquw = pinv*np.matrix(dF[u, w])*np.matrix(q).T
-            dquw = multi_dot([pinv,dF[u, w],q.T])
+            # dquw = Minv*np.matrix(dF[u, w])*np.matrix(q).T
+            dquw = multi_dot([Minv,dF[u, w],q.T])
             dq[u, w] = np.array(dquw).flatten()
-    fdcheck = False
+
+    if second:
+        if use_loops:
+            # Reference implementation using for loops
+            dl = np.zeros((x.shape[0], 3), dtype=float)
+            dM = np.zeros((x.shape[0], 3, 4, 4), dtype=float)
+            dq2 = np.zeros((x.shape[0], 3, x.shape[0], 3, 4), dtype=float)
+            dinv = np.zeros((x.shape[0], 3, 4, 4), dtype=float)
+            for u in range(x.shape[0]):
+                for w in range(3):
+                    dl[u, w] = multi_dot([q, dF[u, w], q.T])
+                    dM[u, w] = np.eye(4)*dl[u, w] - dF[u, w]
+                    term1 = -multi_dot([Minv, dM[u, w], Minv])
+                    term2 = multi_dot([Minv, Minv.T, dM[u, w].T, (np.eye(4)-np.dot(mat, Minv))])
+                    term3 = multi_dot([(np.eye(4)-np.dot(Minv, mat)), dM[u, w].T, Minv.T, Minv])
+                    dinv[u, w] = term1 + term2 + term3
+                    for a in range(x.shape[0]):
+                        for b in range(3):
+                            dq2[u, w, a, b] += multi_dot([dinv[u, w], dF[a, b], q])
+                            dq2[u, w, a, b] += multi_dot([Minv, dF[a, b], dq[u, w]])
+        else:
+            # t0 = time.time()
+            # LPW 2019-03-09: Setting optimize=True gives a 15x speedup for trp-cage (200 atoms, 0.02 vs. 0.3 s)
+            dl = np.einsum('p,uwpr,r->uw', q, dF, q, optimize=True)
+            dM = np.einsum('uw,pr->uwpr', dl, np.eye(4), optimize=True) - dF
+            dinv = -np.einsum('ps,uwst,tr->uwpr', Minv, dM, Minv, optimize=True)
+            dinv += np.einsum('ps,ts,uwvt,vr->uwpr', Minv, Minv, dM, np.eye(4)-np.dot(mat,Minv), optimize=True)
+            dinv += np.einsum('ps,uwts,vt,vr->uwpr', np.eye(4)-np.dot(Minv, mat), dM, Minv, Minv, optimize=True)
+            dq2 = np.einsum('uwpr,abrs,s->uwabp', dinv, dF, q, optimize=True)
+            dq2 += np.einsum('pr,abrs,uws->uwabp', Minv, dF, dq, optimize=True)
+            # print(time.time()-t0)
+            
     if fdcheck:
+        # If fdcheck = True, then return finite difference derivatives
         h = 1e-6
+        logger.info("-=# Now checking first derivatives of superposition quaternion w/r.t. Cartesians #=-\n")
+        FDiffQ = np.zeros((x.shape[0], 3, 4), dtype=float)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -467,13 +511,50 @@ def get_q_der(x, y):
                 x[u, w] -= 2*h
                 QMinus = get_quat(x, y)
                 x[u, w] += h
-                FDiffQ = (QPlus-QMinus)/(2*h)
-                nifty.logger.info(QPlus, QMinus)
-                nifty.logger.info(dq[u, w], FDiffQ)
-                nifty.logger.info(u, w, np.dot(QPlus, QMinus), np.max(np.abs(dq[u, w]-FDiffQ)))
-    return dq
+                FDiffQ[u, w] = (QPlus-QMinus)/(2*h)
+                maxerr = np.max(np.abs(dq[u, w]-FDiffQ[u, w]))
+                logger.info("atom %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], maxerr, 'X' if maxerr > 1e-6 else ''))
+        dq = FDiffQ
+        if second:
+            h = 1.0e-3
+            logger.info("-=# Now checking second derivatives of superposition quaternion w/r.t. Cartesians #=-\n")
+            Q0 = get_quat(x, y)
+            FDiffQ2 = np.zeros((x.shape[0], 3, y.shape[0], 3, 4), dtype=float)
+            for u in range(x.shape[0]):
+                for w in range(3):
+                    for a in range(x.shape[0]):
+                        for b in range(3):
+                            if a == u and b == w:
+                                x[u, w] += h
+                                QPlus = get_quat(x, y)
+                                x[u, w] -= 2*h
+                                QMinus = get_quat(x, y)
+                                x[u, w] += h
+                                FDiffQ2[u, w, a, b] = (QPlus+QMinus-2*Q0)/h**2
+                            else:
+                                x[u, w] += h
+                                x[a, b] += h   # (+, +)
+                                FDiffQ2[u, w, a, b] = get_quat(x, y)
+                                x[u, w] -= 2*h # (-, +)
+                                FDiffQ2[u, w, a, b] -= get_quat(x, y)
+                                x[a, b] -= 2*h # (-, -)
+                                FDiffQ2[u, w, a, b] += get_quat(x, y)
+                                x[u, w] += 2*h # (+, -)
+                                FDiffQ2[u, w, a, b] -= get_quat(x, y)
+                                x[u, w] -= h
+                                x[a, b] += h
+                                FDiffQ2[u, w, a, b] /= (4*h**2)
+                            maxerr = np.max(np.abs(dq2[u, w, a, b]-FDiffQ2[u, w, a, b]))
+                            if maxerr > 1e-8:
+                                logger.info("atom %3i %s, %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], a, 'xyz'[b], maxerr, 'X' if maxerr > 1e-6 else ''))
+            dq2 = FDiffQ2
+    if second:
+        return dq, dq2
+    else:
+        return dq
 
-def calc_fac_dfac(q0):
+
+def calc_fac_dfac(q0, second=False):
     """
     Calculate the prefactor mapping the quaternion to the exponential map
     and also its derivative. Takes the first element of the quaternion only
@@ -486,11 +567,20 @@ def calc_fac_dfac(q0):
     if np.abs(qm1) < 1e-8:
         fac = 2 - 2*qm1/3
         dfac = -2/3
+        if second: dfac2 = 0
     else:
-        fac = 2*np.arccos(q0)/np.sqrt(1-q0**2)
-        dfac = -2/(1-q0**2)
-        dfac += 2*q0*np.arccos(q0)/(1-q0**2)**1.5
-    return fac, dfac
+        s = np.sqrt(1-q0**2)
+        a = np.arccos(q0)
+        fac = 2*a/s
+        dfac = -2/s**2
+        dfac += 2*q0*a/s**3
+        dfac2  = -3*q0
+        dfac2 += (1+2*q0**2)*a/s
+        dfac2 *= (2/s**4)
+    if second:
+        return fac, dfac, dfac2
+    else:
+        return fac, dfac
 
 def get_expmap(x, y):
     """
@@ -515,7 +605,7 @@ def get_expmap(x, y):
     v = fac*q[1:]
     return v
 
-def get_expmap_der(x,y):
+def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
     """
     Given trial coordinates x and target coordinates y, 
     return the derivatives of the exponential map that brings
@@ -528,6 +618,12 @@ def get_expmap_der(x,y):
         Trial coordinates, dimensionality (number of atoms) x 3
     y : numpy.ndarray
         Target coordinates, dimensionalty must match trial coordinates
+    second : bool
+        If true, return the second derivative matrix as well.
+    fdcheck : bool
+        If true, perform a finite difference check and return finite difference gradients
+    use_loops : bool
+        If true, use the slower reference implementation that uses for loops
 
     Returns
     -------
@@ -535,38 +631,116 @@ def get_expmap_der(x,y):
         u, w, i: 
         First two dimensions are (n_atoms, 3), the variables being differentiated
         Third dimension is 3, the elements of the exponential map derivatives with respect to atom u, dimension w
+    numpy.ndarray (if second=True)
+        u, w, a, b, i: 
+        First four dimensions are (n_atoms, 3, n_atoms, 3), the variables being differentiated
+        Fifth dimension is 3, the elements of the exponential map second derivatives with respect to atom u, dimension w, atom a, dimension b
     """
+    # t0 = time.time()
     q = get_quat(x,y)
     v = get_expmap(x,y)
-    fac, dfac = calc_fac_dfac(q[0])
+    if second:
+        fac, dfac, dfac2 = calc_fac_dfac(q[0], second=True)
+    else:
+        fac, dfac = calc_fac_dfac(q[0])
     dvdq = np.zeros((4, 3), dtype=float)
     dvdq[0, :] = dfac*q[1:]
     for i in range(3):
         dvdq[i+1, i] = fac
-    fdcheck = False
+    if second:
+        dvdq2 = np.zeros((4, 4, 3), dtype=float)
+        dvdq2[0, 0, :] = dfac2*q[1:]
+        for i in range(3):
+            dvdq2[0, i+1, i] = dfac
+            dvdq2[i+1, 0, i] = dfac
     if fdcheck:
         h = 1e-6
         fac, _ = calc_fac_dfac(q[0])
-        VZero = fac*q[1:]
-        for i in range(4):
+        V0 = fac*q[1:]
+        logger.info("-=# Now checking first derivatives of exponential map w/r.t. quaternion #=-\n")
+        for p in range(4):
             # Do backwards difference only, because arccos of q[0] > 1 is undefined
-            q[i] -= h
+            q[p] -= h
             fac, _ = calc_fac_dfac(q[0])
             VMinus = fac*q[1:]
-            q[i] += h
-            FDiffV = (VZero-VMinus)/h
-            nifty.logger.info(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
+            q[p] += h
+            FDiffV = (V0-VMinus)/h
+            maxerr = np.max(np.abs(dvdq[p]-FDiffV))
+            logger.info("q %3i : maxerr = %.3e %s\n" % (i, maxerr, 'X' if maxerr > 1e-6 else ''))
+            # logger.info(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
+        if second:
+            h = 1e-5
+            logger.info("-=# Now checking second derivatives of exponential map w/r.t. quaternion #=-\n")
+            def V_(q_):
+                fac_, _ = calc_fac_dfac(q_[0])
+                return fac_*q_[1:]
+            for p in range(4):
+                for r in range(4):
+                    if p == r:
+                        FDiffV2 = V0.copy()
+                        q[p] -= h
+                        FDiffV2 -= 2*V_(q)
+                        q[p] -= h
+                        FDiffV2 += V_(q)
+                        q[p] += 2*h
+                    else:
+                        FDiffV2 = V0.copy()
+                        q[p] -= h
+                        q[r] -= h
+                        FDiffV2 += V_(q)
+                        q[r] += h
+                        FDiffV2 -= V_(q)
+                        q[r] -= h
+                        q[p] += h
+                        FDiffV2 -= V_(q)
+                        q[r] += h
+                    FDiffV2 /= h**2
+                    maxerr = np.max(np.abs(dvdq2[p, r]-FDiffV2))
+                    if maxerr > 1e-7:
+                        logger.info("q %3i %3i : maxerr = %.3e %s\n" % (p, r, maxerr, 'X' if maxerr > 1e-5 else ''))
+                    # logger.info("q %3i %3i : analytic %s numerical %s maxerr = %.3e %s" % (i, j, str(dvdq2[i, j]), str(FDiffV2), maxerr, 'X' if maxerr > 1e-4 else ''))
+                
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in q (4)
-    dqdx = get_q_der(x, y)
+    if second:
+        dqdx, dqdx2 = get_q_der(x, y, second=True)
+    else:
+        dqdx = get_q_der(x, y)
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in v (3)
     dvdx = np.zeros((x.shape[0], 3, 3), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
             dqdx_uw = dqdx[u, w]
-            for i in range(4):
-                dvdx[u, w, :] += dvdq[i, :] * dqdx[u, w, i]
+            for p in range(4):
+                dvdx[u, w, :] += dvdq[p, :] * dqdx[u, w, p]
+    if second:
+        if use_loops:
+            # Reference implementation using for loops
+            dvdx2 = np.zeros((x.shape[0], 3, x.shape[0], 3, 3), dtype=float)
+            dvdqx = np.zeros((4, x.shape[0], 3, 3), dtype=float)
+            for p in range(4):
+                for u in range(x.shape[0]):
+                    for w in range(3):
+                        for i in range(3):
+                            for r in range(4):
+                                dvdqx[p, u, w, i] += dvdq2[p, r, i] * dqdx[u, w, r]
+            for u in range(x.shape[0]):
+                for w in range(3):
+                    for a in range(x.shape[0]):
+                        for b in range(3):
+                            for i in range(3):
+                                for p in range(4):
+                                    dvdx2[u, w, a, b, i] += dvdqx[p, a, b, i] * dqdx[u, w, p]
+                                    dvdx2[u, w, a, b, i] += dvdq[p, i] * dqdx2[u, w, a, b, p]
+        else:
+            dvdqx = np.einsum('pri,uwr->puwi', dvdq2, dqdx, optimize=True)
+            dvdx2 = np.einsum('pabi,uwp->uwabi', dvdqx, dqdx, optimize=True)
+            dvdx2 += np.einsum('pi,uwabp->uwabi', dvdq, dqdx2, optimize=True)
+    # LPW 2019-03-09: Using einsum gives 166x speedup over for loops for trp-cage (200 atoms); 0.06 vs. 10.1 s
+    # print(time.time()-t0)
     if fdcheck:
         h = 1e-3
+        logger.info("-=# Now checking first derivatives of exponential map w/r.t. Cartesians #=-\n")
+        FDiffV = np.zeros((x.shape[0], 3, 3), dtype=float)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -574,9 +748,48 @@ def get_expmap_der(x,y):
                 x[u, w] -= 2*h
                 VMinus = get_expmap(x, y)
                 x[u, w] += h
-                FDiffV = (VPlus-VMinus)/(2*h)
-                nifty.logger.info(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
-    return dvdx
+                FDiffV[u, w] = (VPlus-VMinus)/(2*h)
+                maxerr = np.max(np.abs(dvdx[u, w]-FDiffV[u, w]))
+                logger.info("atom %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], maxerr, 'X' if maxerr > 1e-6 else ''))
+        dvdx = FDiffV
+        if second:
+            logger.info("-=# Now checking second derivatives of exponential map w/r.t. Cartesians #=-\n")
+            FDiffV2 = np.zeros((x.shape[0], 3, y.shape[0], 3, 3), dtype=float)
+            for u in range(x.shape[0]):
+                for w in range(3):
+                    for a in range(x.shape[0]):
+                        for b in range(3):
+                            if a == u and b == w:
+                                x[u, w] += h
+                                VPlus = get_expmap(x, y)
+                                x[u, w] -= 2*h
+                                VMinus = get_expmap(x, y)
+                                x[u, w] += h
+                                FDiffV2[u, w, a, b] = (VPlus+VMinus-2*V0)/h**2
+                            else:
+                                x[u, w] += h
+                                x[a, b] += h   # (+, +)
+                                FDiffV2[u, w, a, b] = get_expmap(x, y)
+                                x[u, w] -= 2*h # (-, +)
+                                FDiffV2[u, w, a, b] -= get_expmap(x, y)
+                                x[a, b] -= 2*h # (-, -)
+                                FDiffV2[u, w, a, b] += get_expmap(x, y)
+                                x[u, w] += 2*h # (+, -)
+                                FDiffV2[u, w, a, b] -= get_expmap(x, y)
+                                x[u, w] -= h
+                                x[a, b] += h
+                                FDiffV2[u, w, a, b] /= (4*h**2)
+                            maxerr = np.max(np.abs(dvdx2[u, w, a, b]-FDiffV2[u, w, a, b]))
+                            if maxerr > 1e-8:
+                                logger.info("atom %3i %s, %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], a, 'xyz'[b], maxerr, 'X' if maxerr > 1e-6 else ''))
+            dvdx2 = FDiffV2
+            
+    if second:
+        return dvdx, dvdx2
+    else:
+        return dvdx
+
+
 
 def eckart_frame(
     geom,

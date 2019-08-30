@@ -17,6 +17,7 @@ from .internal_coordinates import InternalCoordinates,AtomContact
 from .slots import *
 from utilities import *
 
+CacheWarning = False
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
 
@@ -293,7 +294,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         ans = block_matrix(Blist)
         self.stored_wilsonB[xhash] = ans
         if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
+            nifty.logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
             CacheWarning = True
         return ans
     
@@ -907,6 +908,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     new_xyz[a,:] = xyz[a,:]
             tot+=num_prim
         return new_xyz
+
+    def second_derivatives(self, xyz):
+        self.calculate(xyz)
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.second_derivative(xyz))
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        # 4) Number of atoms
+        # 5) 3
+        return np.array(answer)
 
 
 if __name__ =='__main__':

@@ -162,7 +162,7 @@ class InternalCoordinates(object):
         ans = np.array(WilsonB)
         return ans
 
-    def GMatrix(self, xyz):
+    def GMatrix(self, xyz,u=None):
         """
         Given Cartesian coordinates xyz, return the G-matrix
         given by G = BuBt where u is an arbitrary matrix (default to identity)
@@ -170,7 +170,11 @@ class InternalCoordinates(object):
         #t0 = time.time()
         Bmat = self.wilsonB(xyz)
         #t1 = time.time()
-        BuBt = np.dot(Bmat,Bmat.T)
+
+        if u is None:
+            BuBt = np.dot(Bmat,Bmat.T)
+        else:
+            BuBt = np.dot(Bmat,np.dot(u,Bmat.T))
         #t2 = time.time()
         #t10 = t1-t0
         #t21 = t2-t1
@@ -256,6 +260,62 @@ class InternalCoordinates(object):
                 nifty.logger.info("Max Error = %.5e" % maxerr)
         nifty.logger.info("Finite-difference Finished")
 
+    def checkFiniteDifferenceHess(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        Analytical = self.second_derivatives(xyz)
+        FiniteDifference = np.zeros_like(Analytical)
+        h = 1e-4
+        verbose = False
+        nifyt.logger.info("-=# Now checking second derivatives of internal coordinates w/r.t. Cartesians #=-\n")
+        for j in range(xyz.shape[0]):
+            for m in range(3):
+                for k in range(xyz.shape[0]):
+                    for n in range(3):
+                        x1 = xyz.copy()
+                        x2 = xyz.copy()
+                        x3 = xyz.copy()
+                        x4 = xyz.copy()
+                        x1[j, m] += h
+                        x1[k, n] += h # (+, +)
+                        x2[j, m] += h
+                        x2[k, n] -= h # (+, -)
+                        x3[j, m] -= h
+                        x3[k, n] += h # (-, +)
+                        x4[j, m] -= h
+                        x4[k, n] -= h # (-, -)
+                        PMDiff1 = self.calcDiff(x1, x2)
+                        PMDiff2 = self.calcDiff(x4, x3)
+                        FiniteDifference[:, j, m, k, n] += (PMDiff1+PMDiff2)/(4*h**2)
+        #                 print('\r%i %i' % (j, k), end='')
+        # print()
+        for i in range(Analytical.shape[0]):
+            title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
+            lines = [title]
+            if verbose: logger.info(title+'\n')
+            maxerr = 0.0
+            numerr = 0
+            for j in range(Analytical.shape[1]):
+                for m in range(Analytical.shape[2]):
+                    for k in range(Analytical.shape[3]):
+                        for n in range(Analytical.shape[4]):
+                            ana = Analytical[i,j,m,k,n]
+                            fin = FiniteDifference[i,j,m,k,n]
+                            error = ana - fin
+                            message = "Atom %i %s %i %s a: % 12.5e n: % 12.5e e: % 12.5e %s" % (j+1, 'xyz'[m], k+1, 'xyz'[n], ana, fin,
+                                                                                                error, 'X' if np.abs(error)>1e-5 else '')
+                            if np.abs(error)>1e-5:
+                                numerr += 1
+                            if (ana != 0.0 or fin != 0.0) and verbose:
+                                logger.info(message+'\n')
+                            lines.append(message)
+                            if maxerr < np.abs(error):
+                                maxerr = np.abs(error)
+            if maxerr > 1e-5 and not verbose:
+                logger.info('\n'.join(lines)+'\n')
+            logger.info("%s : Max Error = % 12.5e (%i above threshold)\n" % (title, maxerr, numerr))
+        logger.info("Finite-difference Finished\n")
+        return FiniteDifference
+
     def calcGrad(self, xyz, gradx):
         #q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
@@ -264,6 +324,22 @@ class InternalCoordinates(object):
         # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
         Gq = multi_dot([Ginv, Bmat, gradx])
         return Gq
+
+    def calcHess(self, xyz, gradx, hessx):
+         """
+         Compute the internal coordinate Hessian. 
+         Expects Cartesian coordinates to be provided in a.u.
+         """
+         xyz = xyz.flatten()
+         q0 = self.calculate(xyz)
+         Ginv = self.GInverse(xyz)
+         Bmat = self.wilsonB(xyz)
+         Gq = self.calcGrad(xyz, gradx)
+         deriv2 = self.second_derivatives(xyz)
+         Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+         Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
+         Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+         return Hq
 
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
@@ -282,6 +358,87 @@ class InternalCoordinates(object):
         self.stored_xyz = xyz.copy()
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
+
+    
+    #TODO this does not work!!! 8/29/2019
+    def massweighted_newCartesian(self,xyz,dQ,mass,verbose=True):
+        cached = self.readCache(xyz, dQ)
+        if cached is not None:
+            #print "Returning cached result"
+            return cached
+        xyz1 = xyz.copy()
+        dQ1 = dQ.flatten()
+        mass = mass.flatten()
+        # Iterate until convergence:
+        microiter = 0
+        ndqs = []
+        rmsds = []
+        self.bork = False
+        # Damping factor
+        damp = 1.0
+        # Function to exit from loop
+        def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
+            if ndqt > 1e-1:
+                if verbose: nifty.logger.info(" Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                self.bork = True
+                self.writeCache(xyz, dQ, xyz_iter1)
+                return xyzsave.reshape((-1,3))
+            elif ndqt > 1e-3:
+                if verbose: nifty.logger.info(" Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+            else:
+                if verbose: nifty.logger.info(" Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+            self.writeCache(xyz, dQ, xyzsave)
+            return xyzsave.reshape((-1,3))
+        fail_counter = 0
+
+        while True:
+            microiter += 1
+            BT = block_matrix.transpose(self.wilsonB(xyz1))
+
+            # need the mass weighted Ginv
+            Ginv = self.MW_GInverse(xyz1,mass)
+
+            # Get new Cartesian coordinates
+            dxyz = damp*block_matrix.dot(BT/mass,block_matrix.dot(Ginv,dQ1))
+
+            xyz2 = xyz1 + dxyz.reshape((-1,3))
+            if microiter == 1:
+                xyzsave = xyz2.copy()
+                xyz_iter1 = xyz2.copy()
+            # Calculate the actual change in internal coordinates
+            dQ_actual = self.calcDiff(xyz2, xyz1)
+            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            ndq = np.linalg.norm(dQ1-dQ_actual)
+            if len(ndqs) > 0:
+                if ndq > ndqt:
+                    if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    damp /= 2
+                    fail_counter += 1
+                    # xyz2 = xyz1.copy()
+                else:
+                    if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    fail_counter = 0
+                    damp = min(damp*1.2, 1.0)
+                    rmsdt = rmsd
+                    ndqt = ndq
+                    xyzsave = xyz2.copy()
+            else:
+                if verbose: nifty.logger.info(" Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
+                rmsdt = rmsd
+                ndqt = ndq
+            ndqs.append(ndq)
+            rmsds.append(rmsd)
+            # Check convergence / fail criteria
+            if rmsd < 1e-6 or ndq < 1e-6:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            if fail_counter >= 5:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            if microiter == 50:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            # Figure out the further change needed
+            dQ1 = dQ1 - dQ_actual
+            xyz1 = xyz2.copy()
+
 
     def newCartesian(self, xyz, dQ, verbose=True):
         cached = self.readCache(xyz, dQ)
