@@ -98,6 +98,71 @@ def d_nucross(a, b):
     return np.dot(d_unit_vector(a), d_ncross(ev, b))
 ## End vector calculus functions
 
+
+#8/10/2019
+# LPW wrote a way to perform conjugate orthogonalization
+# here is my own implementation which is similar to the orthogonalize  
+# GS algorithm. Also different is that LPW algorithm does not
+# normalize the basis vectors -- they are simply the 
+# orthogonalized projection on the G surface.
+# Here I think the DLC vectors are orthonormalized
+# on the G surface.
+
+def conjugate_orthogonalize(vecs,G,numCvecs=0):
+    """
+    vecs contains some set of vectors 
+    we want to orthogonalize them on the surface G
+    numCvecs is the number of vectors that should be linearly dependent 
+    after the gram-schmidt process is applied
+    """
+    rows=vecs.shape[0]
+    cols=vecs.shape[1]
+    Expect = cols - numCvecs
+
+    # basis holds the Gram-schmidt orthogonalized DLCs
+    basis=np.zeros((rows,Expect))
+    norms = np.zeros(Expect,dtype=float)
+
+    def ov(vi, vj):
+        return np.linalg.multi_dot([vi, G, vj])
+
+    # first orthogonalize the Cvecs
+    for ic in range(numCvecs):  # orthogonalize with respect to these
+        basis[:,ic]= vecs[:,ic].copy()
+        ui = basis[:,ic]
+        norms[ic] = np.sqrt(ov(ui,ui))
+
+        # Project out newest basis column from all remaining vecs columns.
+        for jc in range(ic+1, cols):
+            vj = vecs[:, jc]
+            vj -= ui * ov(ui, vj)/norms[ic]**2
+
+    count=numCvecs
+    for v in vecs[:,numCvecs:].T:
+        #w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
+        w = v - np.sum( ov(v,b)*b/ov(b,b)  for b in basis[:,:count].T)
+        #A =np.linalg.multi_dot([w[:,np.newaxis].T,G,w[:,np.newaxis]])
+        #wnorm = np.sqrt(ov(w[:,np.newaxis],w[:,np.newaxis]))
+        wnorm = np.sqrt(ov(w,w))
+        if wnorm > 1e-5 and (abs(w) > 1e-6).any():
+            try:
+                basis[:,count]=w/wnorm
+                count+=1
+            except:
+                print("this vector should be vanishing, exiting")
+                print("norm=",wnorm)
+                print(w)
+                exit(1)
+    dots = np.linalg.multi_dot([basis.T,G,basis])
+    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
+        print("np.dot(b.T,b)")
+        print(dots)
+        raise RuntimeError("error in orthonormality")
+    return basis
+
+
+#TODO cVecs can be orthonormalized first to make it less confusing 
+# since they are being added to basis before being technically orthonormal
 def orthogonalize(vecs,numCvecs=0):
     """
     """

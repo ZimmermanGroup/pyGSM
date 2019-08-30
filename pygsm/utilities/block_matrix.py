@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import block_diag
 from .nifty import printcool,pvec1d
 import sys
-from .math_utils import orthogonalize
+from .math_utils import orthogonalize,conjugate_orthogonalize
 
 
 class block_matrix(object):
@@ -32,6 +32,95 @@ class block_matrix(object):
     def num_blocks(self):
         return len(self.matlist)
 
+    # IDEA: everywhere a dot product of DLC is done, use the conjugate 
+    # dot product, also use the conjugate_orthogonalize to orthogonalize
+    @staticmethod
+    def project_conjugate_constraint(BM,constraints,G):
+        def ov(vi, vj):
+            return np.linalg.multi_dot([vi, G, vj])
+
+        # the constraints need to be orthonormalized on G
+        constraints = conjugate_orthogonalize(constraints,G)
+
+        # (a) need to zero some segments (corresponding to the blocks of Vecs) of the constraints if their magnitude is small
+        s=0
+        for block in BM.matlist:
+            size=len(block)
+            e=s+size
+            for constraint in constraints.T:
+                if (constraint[s:e]==0.).all():
+                    pass
+                elif np.linalg.norm(constraint[s:e])<1.0e-3:
+                    constraint[s:e] = np.zeros(size)
+            s=e
+
+        # (b) renormalizing the constraints on the surface G
+        norms = np.sqrt((ov(constraints.T,constraints).sum(axis=0,keepdims=True)))
+        constraints = constraints/norms
+        #print('constraints after renormalizing')
+        #print(constraints.T)
+
+        # (c) need to save the magnitude of the constraints in each segment since they 
+        # will be renormalized for each block
+        cnorms = np.zeros((BM.shape[1],constraints.shape[1]))
+        sr=0
+        sc=0
+        newblocks=[]
+        for block in BM.matlist:
+            size_r=block.shape[0]
+            size_c=block.shape[1]
+            er=sr+size_r
+            ec=sc+size_c
+            flag=False
+            tmpc = []
+            for count,constraint in enumerate(constraints.T):
+
+                # CRA 81219 what to do here? mag of real or g-space?
+                #mag = np.linalg.norm(constraint[sr:er])
+                mag = np.sqrt(np.linalg.multi_dot([constraint[sr:er],G[sr:er,sr:er],constraint[sr:er]]))
+
+                # concatenating the block to each constraint if the constraint is greater than parameter
+                if mag>1.e-3: 
+                    cnorms[sc+count,count]=mag
+                    tmpc.append(constraint[sr:er]/mag)
+                    flag=True
+            if flag:
+                tmpc = np.asarray(tmpc).T
+                if len(tmpc)!=len(block):
+                    raise RuntimeError
+                newblocks.append(np.hstack((tmpc,block)))
+            else:
+                newblocks.append(block)
+            sr=er
+            sc=ec
+
+        # (d) orthogonalize each block
+        ans=[]
+        sr=0
+        sc=0
+        count=0
+        for nb,ob in zip(newblocks,BM.matlist):
+            size_c=ob.shape[1]
+            size_r=block.shape[0]
+            er=sr+size_r
+            ec=sc+size_c
+            num_c=0
+            flag=False
+            for c in cnorms.T:
+                if any(c[sc:ec]!=0.):
+                    num_c +=1
+                    flag=True
+            if flag:
+                ans.append(conjugate_orthogonalize(nb,G[sr:er,sr:er],num_c))
+            else:
+                ans.append(conjugate_orthogonalize(nb,G[sr:er,sr:er]))
+                #ans.append(ob)
+            sc=ec
+            sr=er
+            count+=1
+        return block_matrix(ans,cnorms)
+
+    #TODO 8/10/2019 write a detailed explanation for this method
     @staticmethod
     def project_constraint(BM,constraints):
         assert( len(constraints) == len(BM) )
@@ -50,9 +139,6 @@ class block_matrix(object):
 
         # (b) renormalizing the constraints
         norms = np.sqrt((constraints*constraints).sum(axis=0,keepdims=True))
-        #if norms<=0.:
-        #    print(norms)
-        #    raise RuntimeError
         #print('norms')
         #print(norms)
         constraints = constraints/norms
@@ -223,6 +309,7 @@ class block_matrix(object):
 
     
     def __add__(self,rhs):
+        print("adding")
         if isinstance(rhs, self.__class__):
             print("adding block matrices!")
             assert(self.shape == rhs.shape)
@@ -249,6 +336,24 @@ class block_matrix(object):
 
     def __len__(self):  #size along first axis
         return np.sum([len(A) for A in self.matlist])
+
+    def __truediv__(self,rhs):
+        if isinstance(rhs, self.__class__):
+            assert(self.shape == rhs.shape)
+            return block_matrix( [A/B for A,B in zip(self.matlist,rhs.matlist)] )
+        elif isinstance(rhs,float) or isinstance(rhs,int):
+            return block_matrix( [A/rhs for A in self.matlist ])
+        elif isinstance(rhs,np.ndarray):
+            answer = []
+            s=0
+            for block in self.matlist:
+                e=block.shape[1]+s
+                answer.append(block/rhs[s:e])
+                s=e
+            return block_matrix(answer)
+        else: 
+            raise NotImplementedError
+
 
     @property
     def shape(self):
