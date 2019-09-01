@@ -975,7 +975,15 @@ class Base_Method(Print,Analyze,object):
             else:
                 stepsize = 0.5
 
-            self.nodes[self.nR] = Base_Method.add_node(self.nodes[iR],self.nodes[iP],stepsize,iN,self.DQMAG_MAX,self.DQMAG_MIN)
+            self.nodes[self.nR] = Base_Method.add_node(
+                    self.nodes[iR],
+                    self.nodes[iP],
+                    stepsize,
+                    iN,
+                    DQMAG_MAX = self.DQMAG_MAX,
+                    DQMAG_MIN = self.DQMAG_MIN,
+                    driving_corods = self.driving_coords
+                    )
 
             if self.nodes[self.nR]==None:
                 success= False
@@ -1039,14 +1047,18 @@ class Base_Method(Print,Analyze,object):
             nodeP,
             stepsize,
             node_id,
-            DQMAG_MAX=0.8,
-            DQMAG_MIN=0.2,
+            **kwargs,
             ):
+
+        #get driving coord
+        driving_coords  = kwargs.get('driving_coords',None)
+        DQMAG_MAX       =kwargs.get('DQMAG_MAX',0.8)
+        DQMAG_MIN       =kwargs.get('DQMAG_MIN',0.2)
 
         if nodeP is None:
             # nodeP is not used!
             BDISTMIN=0.05
-            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=self.driving_coords)
+            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords)
 
             if bdist<BDISTMIN:
                 print("bdist too small %.3f" % bdist)
