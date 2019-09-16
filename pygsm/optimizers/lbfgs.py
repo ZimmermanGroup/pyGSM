@@ -59,7 +59,7 @@ class lbfgs(base_optimizer):
         constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
         molecule.update_coordinate_basis(constraints=constraints)
 
-        if opt_type=='SEAM':
+        if opt_type=='SEAM' or opt_type=='MECI':
             self.opt_cross=True
 
         # get coordinates 

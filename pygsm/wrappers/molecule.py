@@ -256,15 +256,18 @@ class Molecule(object):
         if self.Data['coord_obj'] is not None:
             print(" getting coord_object from options")
             self.coord_obj = self.Data['coord_obj']
-        elif self.Data['coordinate_type'] == "Cartesian":
-            self.coord_obj = CartesianCoordinates.from_options(xyz=self.xyz,atoms=self.atoms)
-        elif self.Data['coordinate_type'] == "DLC":
-            print(" building coordinate object")
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True,extra_kwargs =self.Data['top_settings'])
-        elif self.Data['coordinate_type'] == "HDLC":
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True,extra_kwargs =self.Data['top_settings']) 
-        elif self.Data['coordinate_type'] == "TRIC":
-            self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addtr=True,extra_kwargs =self.Data['top_settings']) 
+        else:
+            print(" Disabling this feature, Molecule cannot create coordinate system")
+            raise NotImplementedError
+        #elif self.Data['coordinate_type'] == "Cartesian":
+        #    self.coord_obj = CartesianCoordinates.from_options(xyz=self.xyz,atoms=self.atoms)
+        #elif self.Data['coordinate_type'] == "DLC":
+        #    print(" building coordinate object")
+        #    self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,connect=True,extra_kwargs =self.Data['top_settings'])
+        #elif self.Data['coordinate_type'] == "HDLC":
+        #    self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addcart=True,extra_kwargs =self.Data['top_settings']) 
+        #elif self.Data['coordinate_type'] == "TRIC":
+        #    self.coord_obj = DelocalizedInternalCoordinates.from_options(xyz=self.xyz,atoms=self.atoms,addtr=True,extra_kwargs =self.Data['top_settings']) 
         self.Data['coord_obj']=self.coord_obj
 
         t2 = time() 
@@ -577,12 +580,12 @@ class Molecule(object):
     def num_coordinates(self):
         return len(self.coordinates)
 
-    @property
-    def frag_atomic_indices(self):
-        return self.coord_obj.Prims.frag_atomic_indices
+    #@property
+    #def frag_atomic_indices(self):
+    #    return self.coord_obj.Prims.frag_atomic_indices
 
-    def get_frag_atomic_index(self,fragid):
-        return self.frag_atomic_indices[fragid]
+    #def get_frag_atomic_index(self,fragid):
+    #    return self.frag_atomic_indices[fragid]
 
     @property
     def node_id(self):

@@ -21,6 +21,7 @@ from potential_energy_surfaces import Penalty_PES
 from wrappers import Molecule
 from optimizers import *
 from growing_string_methods import *
+from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates
 
 
 
@@ -68,6 +69,7 @@ def main():
     parser.add_argument('-restart_file',help='restart file',type=str)
     parser.add_argument('-use_multiprocessing',action='store_true',help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
     parser.add_argument('-dont_analyze_ICs',action='store_false',help="Don't post-print the internal coordinates primitives and values") #defaults to true
+    parser.add_argument('-hybrid_coord_idx_file',type=str,help="A filename containing a list of  indices to use in hybrid coordinates. 0-Based indexed")
 
 
     args = parser.parse_args()
@@ -118,6 +120,7 @@ def main():
 
               #molecule
               'coordinate_type' : args.coordinate_type,
+              'hybrid_coord_idx_file' : args.hybrdi_coord_idx_file,
 
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
@@ -199,14 +202,136 @@ def main():
     # Molecule
     nifty.printcool("Building the reactant object with {}".format(inpfileq['coordinate_type']))
     Form_Hessian = True if inpfileq['optimizer']=='eigenvector_follow' else False
-    form_primitives = True if inpfileq['gsm_type']!='DE_GSM' else False
+    #form_primitives = True if inpfileq['gsm_type']!='DE_GSM' else False
 
+    # hybrid coordinates
+    if inpfileq['hybrid_coord_idx_file'] is not None:
+        nifty.printcool(" Using Hybrid COORDINATES :)"
+        assert inpfileq['coordinate_type']=="TRIC", "hybrid indices won't work (currently) with other coordinate systems"
+        with open(inpfileq['hybrid_coord_idx_file']) as f:
+            hybrid_indices = f.read().splitlines()
+        hybrid_indices = [int(x) for x in hybrid_indices]
+    else:
+        hybrid_indices = None
+
+
+    # Build the topology
+    nifty.printcool("Building the topology")
+    atom_symbols  = manage_xyz.get_atoms(geoms[0])
+    ELEMENT_TABLE = elements.ElementData()
+    atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
+    xyz1 = manage_xyz.xyz_to_np(geoms[0])
+    top1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
+
+    if inpfileq['gsm_type'] == 'DE_GSM':
+        # find union bonds
+        xyz2 = manage_xyz.xyz_to_np(geoms[-1])
+        top2 = Topology.build_topology(xyz2,atoms,hybrid_indices=hybrid_indices)
+
+        # Add bonds to top1 that are present in top2
+        # It's not clear if we should form the topology so the bonds
+        # are the same since this might affect the Primitives of the xyz1 (slightly)
+        # Later we stil need to form the union of bonds, angles and torsions
+        # However, I think this is important, the way its formulated, for identifiyin 
+        # the number of fragments and blocks, which is used in hybrid TRIC. 
+        for bond in top2.edges():
+            if bond in top1.edges:
+                pass
+            elif (bond[1],bond[0]) in top1.edges():
+                pass
+            else:
+                print(" Adding bond {} to top1".format(bond))
+                if bond[0]>bond[1]:
+                    top1.add_edge(bond[0],bond[1])
+                else:
+                    top1.add_edge(bond[1],bond[0])
+    elif inpfileq['gsm_type'] == 'SE_GSM' or inpfileq['gsm_type']=='SE_Cross':
+        driving_coordinates = read_isomers_file(inpfileq['isomers_file'])
+
+        driving_coord_prims=[]
+        for dc in driving_coordinates:
+            driving_coord_prims.append(get_driving_coord_prim(dc))
+
+        for prim in driving_coord_prims:
+            if type(prim)=="Distance":
+                atoms = prim.atoms
+                bond = (atoms[0],atoms[1])
+                if bond in top1.edges:
+                    pass
+                elif (bond[1],bond[0]) in top1.edges():
+                    pass
+                else:
+                    print(" Adding bond {} to top1".format(bond))
+                    top1.add_edge(bond[0],bond[1])
+
+    nifyt.printcool("Building Primitive Internal Coordinates")
+    connect=False
+    addtr = False
+    addcart=False
+    if inpfileq['cordinate_type']=="DLC":
+        connect=True
+    elif inpfileq['cordinate_type']=="TRIC":
+        addtr=True
+    elif inpfileq['cordinate_type']=="HDLC":
+        addcart=True
+    p1 = PrimitiveInternalCoordinates.from_options(
+            xyz=xyz1,
+            atoms=atoms,
+            connect=connect,
+            addtr=addtr,
+            addcart=addcart,
+            topology=top1,
+            )
+
+    if inpfileq['gsm_type'] == 'DE_GSM':
+        p2 = PrimitiveInternalCoordinates.from_options(
+                xyz=xyz2,
+                atoms=atoms,
+                addtr = True,
+                addcart=addcart,
+                connect=connect,
+                topology=top1,  # Use the topology of 1 because we fixed it above
+                ) 
+        # Form the union of primitives
+        p1.add_union_primitives(p2)
+    elif inpfileq['gsm_type'] == 'SE_GSM' or inpfileq['gsm_type']=='SE_Cross':
+        for dc in driving_coord_prims:
+            if type(dc)!="Distance": # Already handled in topology
+                if dc not in p1.Internals:
+                    print("Adding driving coord prim {} to Internals".format(i))
+                    p1.append_prim_block(dc)
+
+    nifyt.printcool("Building Delocalized Internal Coordinates")
+    coord_obj1 = DelocalizedInternalCoordinates.from_options(
+            xyz=xyz1,
+            atoms=atoms,
+            addtr = True,
+            addcart=addcart,
+            connect=connect,
+            primitives=p1,
+            ) 
+    if inpfileq['gsm_type'] == 'DE_GSM':
+        coord_obj2 = DelocalizedInternalCoordinates.from_options(
+                xyz=xyz2,
+                atoms=atoms,
+                addtr = True,
+                addcart=addcart,
+                connect=connect,
+                primitives=p1,
+                ) 
+
+    nifty.printcool("Building the reactant")
     reactant = Molecule.from_options(
             geom=geoms[0],
             PES=pes,
-            coordinate_type=inpfileq['coordinate_type'],
+            coord_obj = coord_obj1,
+            #coordinate_type=inpfileq['coordinate_type'],
+            coordinate_object = coordinate_object,
             Form_Hessian=Form_Hessian,
-            top_settings = {'form_primitives': form_primitives},
+            #top_settings = {
+            #    'form_primitives': form_primitives,
+            #    'hybrid_indices' : hybrid_indices,
+                },
             )
 
     if inpfileq['gsm_type']=='DE_GSM':
@@ -214,10 +339,14 @@ def main():
         product = Molecule.from_options(
                 geom=geoms[1],
                 PES=pes,
-                coordinate_type=inpfileq['coordinate_type'],
+                coord_obj = coord_obj2,
+                #coordinate_type=inpfileq['coordinate_type'],
                 Form_Hessian=Form_Hessian,
                 node_id=inpfileq['num_nodes']-1,
-                top_settings = {'form_primitives': form_primitives},
+                #top_settings = {
+                #    'form_primitives': form_primitives,
+                #    'hybrid_indices' : hybrid_indices,
+                #    },
                 copy_wavefunction= False,  
                 )
    
@@ -244,7 +373,6 @@ def main():
                 use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
     else:
-        driving_coordinates = read_isomers_file(inpfileq['isomers_file'])
         gsm = gsm_class.from_options(
                 reactant=reactant,
                 nnodes=inpfileq['num_nodes'],
@@ -357,6 +485,31 @@ def read_isomers_file(isomers_file):
 
     nifty.printcool("driving coordinates {}".format(driving_coordinates))
     return driving_coordinates
+
+
+def get_driving_coord_prim(driving_coords):
+    if "ADD" in i or "BREAK" in dc:
+        if dc[1]<dc[2]:
+            prim = Distance(dc[1]-1,dc[2]-1)
+        else:
+            prim = Distance(dc[2]-1,dc[1]-1)
+    elif "ANGLE" in dc:
+        if dc[1]<dc[3]:
+            prim = Angle(dc[1]-1,dc[2]-1,dc[3]-1)
+        else:
+            prim = Angle(dc[3]-1,dc[2]-1,dc[1]-1)
+    elif "TORSION" in dc:
+        if dc[1]<dc[4]:
+            prim = Dihedral(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
+        else:
+            prim = Dihedral(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
+    elif "OOP" in dc:
+        if dc[1]<dc[4]:
+            prim = OutOfPlane(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
+        else:
+            prim = OutOfPlane(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
+    return prim
+
 
 def read_force_file(force_file):
     raise NotImplementedError

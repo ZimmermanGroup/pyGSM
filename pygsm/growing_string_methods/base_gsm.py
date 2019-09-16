@@ -7,6 +7,7 @@ from os import path
 # third party
 import numpy as np
 import multiprocessing as mp
+from collections import Counter
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -19,6 +20,7 @@ from ._print_opt import Print
 from ._analyze_string import Analyze
 from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
+from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
@@ -139,7 +141,7 @@ class Base_Method(Print,Analyze,object):
                 key='ID',
                 value=0,
                 required=False,
-                doc='A Unique ID'
+                doc='A number for identification'
                 )
 
         Base_Method._default_options = opt
@@ -409,6 +411,12 @@ class Base_Method(Print,Analyze,object):
 
             constraint = self.newic.constraints[:,0]
             prim_constraint = block_matrix.dot(Vecs,constraint)
+
+            for prim in self.newic.primitive_internal_coordinates:
+                if type(prim) is Distance:
+                    index = self.newic.coord_obj.Prims.dof_index(prim)
+                    prim_constraint[index] *= 2.5
+
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             if dqmaga[n]<0.:
                 raise RuntimeError
@@ -492,6 +500,13 @@ class Base_Method(Print,Analyze,object):
 
             constraint = self.nodes[n].constraints[:,0]
             prim_constraint = block_matrix.dot(Vecs,constraint)
+
+            # mult bonds
+            for prim in self.newic.primitive_internal_coordinates:
+                if type(prim) is Distance:
+                    index = self.newic.coord_obj.Prims.dof_index(prim)
+                    prim_constraint[index] *= 2.5
+
             dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
             #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
             #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
@@ -504,6 +519,7 @@ class Base_Method(Print,Analyze,object):
             print('------------printing ictan[:]-------------')
             for n in range(n0+1,self.nnodes):
                 print(self.ictan[n].T)
+        if self.print_level>0:
             print('------------printing dqmaga---------------')
             print(dqmaga)
         self.dqmaga = dqmaga
@@ -523,7 +539,10 @@ class Base_Method(Print,Analyze,object):
             print(nlist)
 
         for n in range(ncurrent):
-            self.ictan[nlist[2*n]],_ = Base_Method.tangent(self.nodes[nlist[2*n]],self.nodes[nlist[2*n+1]])
+            self.ictan[nlist[2*n]],_ = Base_Method.tangent(
+                    node1=self.nodes[nlist[2*n]],
+                    node2=self.nodes[nlist[2*n+1]],
+                    driving_coords=self.driving_coords)
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
@@ -587,7 +606,12 @@ class Base_Method(Print,Analyze,object):
             success = self.check_add_node()
             if not success:
                 print("can't add anymore nodes, bdist too small")
-                if self.__class__.__name__=="SE_GSM":
+                if self.__class__.__name__!="DE_GSM":
+                    if self.nodes[self.nR-1].PES.lot.do_coupling:
+                        opt_type='MECI'
+                    else:
+                        opt_type='UNCONSTRAINED'
+
                     print(" optimizing last node")
                     self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
                     print(self.optimizer[self.nR-1].conv_grms)
@@ -595,9 +619,14 @@ class Base_Method(Print,Analyze,object):
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
                             opt_steps=50,
+                            opt_type=opt_type,
                             )
+                else:
+                    raise RuntimeError
+
                 self.check_if_grown()
                 break
+
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
@@ -765,7 +794,9 @@ class Base_Method(Print,Analyze,object):
 
         print_level = 1
 
-        if len(kwargs)==0:
+        #if len(kwargs)==0:
+        #if node1.node_id != node2.node_id:
+        if node2 is not None and node1.node_id!=node2.node_id:
             print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
             assert node2!=None,'node n2 is None'
             Q1 = node1.primitive_internal_values 
@@ -800,7 +831,13 @@ class Base_Method(Print,Analyze,object):
 
             for i in driving_coords:
                 if "ADD" in i:
-                    index = [i[1]-1, i[2]-1]
+
+                    #order indices to avoid duplicate bonds
+                    if i[1]<i[2]:
+                        index = [i[1]-1, i[2]-1]
+                    else:
+                        index = [i[2]-1, i[1]-1]
+
                     bond = Distance(index[0],index[1])
                     prim_idx = node1.coord_obj.Prims.dof_index(bond)
                     if len(i)==3:
@@ -819,7 +856,11 @@ class Base_Method(Print,Analyze,object):
                         print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
 
                 if "BREAK" in i:
-                    index = [i[1]-1, i[2]-1]
+                    #order indices to avoid duplicate bonds
+                    if i[1]<i[2]:
+                        index = [i[1]-1, i[2]-1]
+                    else:
+                        index = [i[2]-1, i[1]-1]
                     bond = Distance(index[0],index[1])
                     prim_idx = node1.coord_obj.Prims.dof_index(bond)
                     if len(i)==3:
@@ -838,7 +879,11 @@ class Base_Method(Print,Analyze,object):
                         print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
                 if "ANGLE" in i:
 
-                    index = [i[1]-1, i[2]-1,i[3]-1]
+                    if i[1]<i[3]:
+                        index = [i[1]-1, i[2]-1,i[3]-1]
+                    else:
+                        index = [i[3]-1, i[2]-1,i[1]-1]
+
                     angle = Angle(index[0],index[1],index[2])
                     prim_idx = node1.coord_obj.Prims.dof_index(angle)
                     anglet = i[4]
@@ -852,8 +897,11 @@ class Base_Method(Print,Analyze,object):
                     #if abs(ang_diff)>0.1:
                     #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
                 if "TORSION" in i:
-                    #torsion=(i[1],i[2],i[3],i[4])
-                    index = [i[1]-1, i[2]-1,i[3]-1,i[4]-1]
+
+                    if i[1]<i[4]:
+                        index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
+                    else:
+                        index = [i[4]-1,i[3]-1,i[2]-1,i[1]-1]
                     torsion = Dihedral(index[0],index[1],index[2],index[3])
                     prim_idx = node1.coord_obj.Prims.dof_index(torsion)
                     tort = i[5]
@@ -982,7 +1030,7 @@ class Base_Method(Print,Analyze,object):
                     iN,
                     DQMAG_MAX = self.DQMAG_MAX,
                     DQMAG_MIN = self.DQMAG_MIN,
-                    driving_corods = self.driving_coords
+                    driving_coords = self.driving_coords
                     )
 
             if self.nodes[self.nR]==None:
@@ -1117,6 +1165,10 @@ class Base_Method(Print,Analyze,object):
         h2dqmag = 0.0
         dE = np.zeros(ictalloc)
         edist = np.zeros(ictalloc)
+    
+        # align first and last nodes
+        self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes,self.nnodes-1)
+
         for n in range(1,self.nnodes-1):
             self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
 
@@ -1240,7 +1292,7 @@ class Base_Method(Print,Analyze,object):
                     constraint = self.newic.constraints[:,0]
                     dq = rpmove[n]*constraint
                     self.newic.update_xyz(dq,verbose=True)
-                    self.nodes[n].xyz = self.newic.xyz
+                    self.nodes[n].xyz = self.newic.xyz.copy()
 
                     # new 6/7/2019
                     if self.nodes[n].newHess==0:
@@ -1464,7 +1516,7 @@ class Base_Method(Print,Analyze,object):
         return exsteps*opt_steps
 
     def set_opt_type(self,n,quiet=False):
-        #TODO
+        #TODO error for seam climb
         opt_type='ICTAN' 
         if self.climb and n==self.TSnode and not self.find:
             #opt_type='CLIMB'
@@ -1606,33 +1658,24 @@ class Base_Method(Print,Analyze,object):
 
         xyz0 = self.nodes[iR].xyz.copy()
         xyz1 = self.nodes[iN].xyz.copy()
+        com0 = self.nodes[iR].center_of_mass
+        com1 = self.nodes[iN].center_of_mass
+
+        # rotate to be in maximal coincidence with 0
+        # assumes iP i.e. 2 is also in maximal coincidence
+        U = rotate.get_rot(xyz0,xyz1)
+        new_xyz = np.dot(xyz1,U)
+
+        # align 
         if self.nodes[iP] != None:
             xyz2 = self.nodes[iP].xyz.copy()
             com2 = self.nodes[iP].center_of_mass
+            avg_com = mfrac*(com2+com0)
+            dist = avg_com - com1  #final minus initial
+            new_xyz += dist
         else:
-            xyz2 = self.nodes[0].xyz.copy()
-            com2 = self.nodes[0].center_of_mass
-
-        #print("non-rotated coordinates")
-        #print(xyz0)
-        #print(xyz1)
-        #print(xyz2)
-
-        com0 = self.nodes[iR].center_of_mass
-        xyz1 += (com2 - com0)*mfrac
-
-        #print('translated xyz1')
-        #print(xyz1)
-        #print("doing rotation")
-
-        U = rotate.get_rot(xyz1,xyz0)
-        #print(U)
-        #print(U.shape)
-
-        #new_xyz = np.dot(xyz1,U)
-        new_xyz = np.dot(U,xyz1.T).T
-        #print(' rotated and translated xyz1')
-        #print(new_xyz)
+            dist = com0 - com1  #final minus initial
+            new_xyz += dist
 
         return new_xyz
 

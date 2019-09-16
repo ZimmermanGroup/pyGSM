@@ -20,6 +20,9 @@ from utilities import *
 '''
 Unfortunately TC calculates one gradient at time. THis makes it difficult to calculate multiple states since two calculations need to be done per state. 
 When doing excited-state calculations e.g. s1 RP, this becomes a pain. 
+
+08/26 -- Note to self. there is something significantly wrong with how the energies and gradients are calculated -- some refactoring is necessary to make this work as desired.
+Don't forget to go back and try to fix this . . .
 '''
 
 class TeraChem(Lot):

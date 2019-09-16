@@ -55,6 +55,8 @@ class eigenvector_follow(base_optimizer):
 
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
+        if opt_type=='SEAM' or opt_type=='MECI':
+            self.opt_cross=True
 
         # TODO are these used? -- n is used for gradrms,linesearch
         if molecule.coord_obj.__class__.__name__=='CartesianCoordinates':

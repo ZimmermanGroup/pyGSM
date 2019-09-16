@@ -133,7 +133,7 @@ class block_matrix(object):
             for constraint in constraints.T:
                 if (constraint[s:e]==0.).all():
                     pass
-                elif np.linalg.norm(constraint[s:e])<1.0e-3:
+                elif np.linalg.norm(constraint[s:e])<1.0e-2:
                     constraint[s:e] = np.zeros(size)
             s=e
 
@@ -142,8 +142,6 @@ class block_matrix(object):
         #print('norms')
         #print(norms)
         constraints = constraints/norms
-        #print('constraints after renormalizing')
-        #print(constraints.T)
         
         # (c) need to save the magnitude of the constraints in each segment since they 
         # will be renormalized for each block
@@ -161,8 +159,7 @@ class block_matrix(object):
             for count,constraint in enumerate(constraints.T):
                 mag = np.linalg.norm(constraint[sr:er])
                 # (d) concatenating the block to each constraint if the constraint is greater than parameter
-                if mag>1.e-3: 
-                    #cnorms[sc]=mag
+                if mag>1.e-2: 
                     cnorms[sc+count,count]=mag
                     tmpc.append(constraint[sr:er]/mag)
                     flag=True
@@ -185,30 +182,104 @@ class block_matrix(object):
         #            #print(c[np.nonzero(c[sc:ec])[0]])
         #            print(c[sc:ec])
         #    sc=ec
-        
+
+        # TMP print out
+        #print(" printing cnorms")
+        #np.savetxt('cnorms.txt',cnorms.T)
+        #sc=0
+        #only_tan=[]
+        #only_dg=[]
+        #only_dv=[]
+        #if cnorms.shape[1]==3:
+        #    for b in BM.matlist:
+        #        ec=sc+b.shape[1]
+
+        #        #HACK FOR dpb
+        #        for i in range(30):
+        #            only_tan.append(cnorms[sc,0])
+        #            only_dg.append(cnorms[sc+1,1])
+        #            only_dv.append(cnorms[sc+2,2])
+        #        sc=ec
+        #    vals = np.hstack((only_tan,only_dg,only_dv))
+        #    np.savetxt('vals.txt',vals,fmt='%1.2f')
+
+        #print(cnorms.T)
+        #check = np.sqrt((cnorms*cnorms).sum(axis=0,keepdims=True))
+        #print(" Check normality of cnorms")
+        #print(check)
+        #print("done")
+
+        #print(" printing out blocks")
+        #sc=0
+        #count=0
+        #for b in BM.matlist:
+        #    ec = sc+b.shape[1]
+        #    for c in cnorms.T:
+        #        if any(c[sc:ec]!=0.):
+        #            print('block %d mag %.4f' %(count,np.linalg.norm(c[sc:ec])))
+        #            print(c[sc:ec])
+        #        else:
+        #            print('block %d mag %.4f' %(count,np.linalg.norm(c[sc:ec])))
+        #    sc=ec
+        #    count+=1
+        #print(" done")
+       
+        assert len(newblocks) == len(BM.matlist), "not proper lengths for zipping"
+
+        #print(" len of nb = {}".format(len(newblocks)))
+        #print(" len of ob = {}".format(len(BM.matlist)))
+        #count=0
+        #for nb,ob in zip(newblocks,BM.matlist):
+        #    print(count)
+        #    print(nb.shape)
+        #    print(ob.shape)
+        #    count+=1
+
         # NEW
+        # orthogonalize each sub block
+        #print(" Beginning to orthogonalize each sub block")
         ans=[]
         sc=0
-        #for i,block in enumerate(newblocks):
         count=0
         for nb,ob in zip(newblocks,BM.matlist):
+            #print("On block %d" % count)
             size_c=ob.shape[1]
             ec=sc+size_c
             num_c=0
             flag=False
             for c in cnorms.T:
+                #if (c[sc:ec]!=0.).any():
                 if any(c[sc:ec]!=0.):
                     num_c +=1
                     #print('block %d mag %.4f' %(count,np.linalg.norm(c[sc:ec])))
                     #print(c[sc:ec])
                     #print('num_c=%d' %num_c)
                     flag=True
+            #print(flag)
             if flag:
-                ans.append(orthogonalize(nb,num_c))
+                #print(" orthogonalizing sublock {} with {} constraints".format(count,num_c))
+                #print(ob.shape)
+                #print(nb.shape)
+                try:
+                    a = orthogonalize(nb,num_c)
+                    #print("result {}".format(a.shape))
+                except:
+                    print(" what is happening")
+                    print("nb")
+                    print(nb)
+                    print(nb.shape)
+                    print(num_c)
+                    print("ob")
+                    print(ob)
+                ans.append(a)
+                #ans.append(orthogonalize(nb,num_c))
             else:
+                #print(" appending old block without constraints")
                 ans.append(ob)
             sc=ec
             count+=1
+
+            
         return block_matrix(ans,cnorms)
 
 

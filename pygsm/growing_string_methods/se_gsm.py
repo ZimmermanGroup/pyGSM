@@ -6,7 +6,6 @@ from os import path
 
 # third party
 import numpy as np
-from collections import Counter
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -24,7 +23,9 @@ class SE_GSM(Base_Method):
             ):
         super(SE_GSM,self).__init__(options)
         self.nn=1
-        self.isomer_init()
+
+        print(" Assuming the isomers are initialized!")
+        #self.isomer_init()
 
         print(" Done initializing isomer")
         self.nodes[0].form_Primitive_Hessian()
@@ -43,22 +44,46 @@ class SE_GSM(Base_Method):
         self.nodes[0].gradrms = 0.
 
     def isomer_init(self):
+        '''
+        The purpose of this function is to add to the primitives the driving coordinate prims if 
+        they dont exist.
+        This is depracated because it's better to build the topology properly before initializing
+        GSM. See main.py
+        '''
+
         #TODO ANGLE, TORSION or OOP between fragments will not work if using TRIC with BLOCK LA
         changed_top = False
+
+        #TODO first check if there is any add/break then rebuild topology and makePrimitives
+
         for i in self.driving_coords:
             if "ADD" in i or "BREAK" in i:
-                bond = Distance(i[1]-1,i[2]-1)
+                # order 
+                if i[1]<i[2]:
+                    bond = Distance(i[1]-1,i[2]-1)
+                else:
+                    bond = Distance(i[2]-1,i[1]-1)
                 self.nodes[0].coord_obj.Prims.add(bond,verbose=True)
                 changed_top =True
             if "ANGLE" in i:
-                angle = Angle(i[1]-1,i[2]-1,i[3]-1)
+                if i[1]<i[3]:
+                    angle = Angle(i[1]-1,i[2]-1,i[3]-1)
+                else:
+                    angle = Angle(i[3]-1,i[2]-1,i[1]-1)
                 self.nodes[0].coord_obj.Prims.add(angle,verbose=True)
             if "TORSION" in i:
-                torsion = Dihedral(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                if i[1]<i[4]:
+                    torsion = Dihedral(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                else:
+                    torsion = Dihedral(i[4]-1,i[3]-1,i[2]-1,i[1]-1)
                 self.nodes[0].coord_obj.Prims.add(torsion,verbose=True)
             if "OOP" in i:
-                oop = OutOfPlane(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                if i[1]<i[4]:
+                    oop = OutOfPlane(i[1]-1,i[2]-1,i[3]-1,i[4]-1)
+                else:
+                    oop = OutOfPlane(i[4]-1,i[3]-1,i[2]-1,i[1]-1)
                 self.nodes[0].coord_obj.Prims.add(oop,verbose=True)
+
         self.nodes[0].coord_obj.Prims.clearCache()
         if changed_top:
             self.nodes[0].coord_obj.Prims.rebuild_topology_from_prim_bonds(self.nodes[0].xyz)
@@ -94,7 +119,6 @@ class SE_GSM(Base_Method):
             for n in range(self.nnodes):
                 tmp.append(self.energies[n])
             self.energies = np.asarray(tmp)
-            #self.TSnode = np.argmax(self.energies)
             self.emax = self.energies[self.TSnode]
 
             if self.TSnode == self.nR:
@@ -112,12 +136,23 @@ class SE_GSM(Base_Method):
             print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
+            self.active[self.nnodes-1] = False
+            self.active[0] = False
 
         if not self.isRestarted:
             print(" initial ic_reparam")
             self.ic_reparam(25)
+            self.store_energies()
+            print(" V_profile (after reparam): ", end=' ')
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+            print()
+            self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
+
         if self.tscontinue:
-            self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3
+            if rtype!=0:
+                opt_steps=3
+            self.opt_iters(max_iter=max_iters,optsteps=opt_steps,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
         else:
             print("Exiting early")
 
@@ -128,6 +163,11 @@ class SE_GSM(Base_Method):
         assert rtype==1 or rtype==2, "rtype must be 1 or 2"
         samegeom=False
         noptsteps=100
+        if self.nodes[self.nR-1].PES.lot.do_coupling:
+            opt_type='MECI'
+        else:
+            opt_type='UNCONSTRAINED'
+
         if rtype==1:
             print(" copying last node, opting")
             #self.nodes[self.nR] = DLC.copy_node(self.nodes[self.nR-1],self.nR)
@@ -138,6 +178,7 @@ class SE_GSM(Base_Method):
                         molecule=self.nodes[self.nR],
                         refE=self.nodes[0].V0,
                         opt_steps=noptsteps,
+                        opt_type=opt_type,
                         )
             self.active[self.nR]=True
             if (self.nodes[self.nR].xyz == self.nodes[self.nR-1].xyz).all():
@@ -150,11 +191,10 @@ class SE_GSM(Base_Method):
                         molecule=self.nodes[self.nR-1],
                         refE=self.nodes[0].V0,
                         opt_steps=noptsteps,
+                        opt_type=opt_type,
                         )
-
         print(" Aligning")
         self.nodes[self.nR-1].xyz = self.com_rotate_move(self.nR-2,self.nR,self.nR-1) 
-
         return
 
     def check_add_node(self):
@@ -221,6 +261,7 @@ class SE_GSM(Base_Method):
                 print(" The highest energy node is the last")
                 print(" not continuing with TS optimization.")
                 self.tscontinue=False
+            nifty.printcool("Over the hill")
             isDone=True
         elif fp==-1 and self.energies[self.nR-1]>200. and self.nodes[self.nR-1].gradrms>self.options['CONV_TOL']*5:
             print("growth_iters over: all uphill and high energy")

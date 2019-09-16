@@ -1,12 +1,20 @@
 
 # standard library imports
+import sys
+import os
+from os import path
 
 # third party
 import numpy as np
 
 # local application imports
+sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import nifty,math_utils
-from .rotate import get_expmap, get_expmap_der, is_linear
+
+try:
+    from .rotate import get_expmap, get_expmap_der, is_linear
+except:
+    from rotate import get_expmap, get_expmap_der, is_linear
 
 class CartesianX(object):
     __slots__ = ['a','w','isAngular','isPeriodic']
@@ -38,10 +46,15 @@ class CartesianX(object):
         a = self.a
         return xyz[a][0]*self.w
         
-    def derivative(self, xyz):
+    def derivative(self, xyz, start_idx=0):
+        '''
+        start idx is used for fragments, in that case pass in only the xyz of the fragment 
+        Expecting shape of xyz to be (N,3)
+        '''
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][0] = self.w
+        relative_a = self.a - start_idx
+        derivatives[relative_a][0] = self.w
         return derivatives
 
     def second_derivative(self, xyz):
@@ -80,10 +93,15 @@ class CartesianY(object):
         a = self.a
         return xyz[a][1]*self.w
         
-    def derivative(self, xyz):
+    def derivative(self, xyz, start_idx=0):
+        '''
+        start idx is used for fragments, in that case pass in only the xyz of the fragment 
+        Expecting shape of xyz to be (N,3)
+        '''
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][1] = self.w
+        relative_a = self.a - start_idx
+        derivatives[relative_a][1] = self.w
         return derivatives
 
     def second_derivative(self, xyz):
@@ -122,10 +140,15 @@ class CartesianZ(object):
         a = self.a
         return xyz[a][2]*self.w
         
-    def derivative(self, xyz):
+    def derivative(self, xyz, start_idx=0):
+        '''
+        start idx is used for fragments, in that case pass in only the xyz of the fragment 
+        Expecting shape of xyz to be (N,3)
+        '''
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][2] = self.w
+        relative_a = self.a - start_idx
+        derivatives[relative_a][2] = self.w
         return derivatives
 
     def second_derivative(self, xyz):
@@ -166,10 +189,11 @@ class TranslationX(object):
         a = np.array(self.a)
         return np.sum(xyz[a,0]*self.w)
         
-    def derivative(self, xyz):
+    def derivative(self, xyz, start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i, a in enumerate(self.a):
+        relative_a = [ a-start_idx for a in self.a]
+        for i, a in enumerate(relative_a):
             derivatives[a][0] = self.w[i]
         return derivatives
 
@@ -211,10 +235,11 @@ class TranslationY(object):
         a = np.array(self.a)
         return np.sum(xyz[a,1]*self.w)
         
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i, a in enumerate(self.a):
+        relative_a = [ a-start_idx for a in self.a]
+        for i, a in enumerate(relative_a):
             derivatives[a][1] = self.w[i]
         return derivatives
 
@@ -256,10 +281,11 @@ class TranslationZ(object):
         a = np.array(self.a)
         return np.sum(xyz[a,2]*self.w)
         
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i, a in enumerate(self.a):
+        relative_a = [ a-start_idx for a in self.a]
+        for i, a in enumerate(relative_a):
             derivatives[a][2] = self.w[i]
         return derivatives
 
@@ -370,13 +396,14 @@ class Rotator(object):
             self.stored_value = answer
             return answer
 
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1, 3)
-        if np.max(np.abs(xyz-self.stored_derxyz)) < 1e-12:
-            return self.stored_deriv
+        relative_a = [ a-start_idx for a in self.a]
+        if np.max(np.abs(xyz-self.stored_derxyz[relative_a])) < 1e-12:
+            return self.stored_deriv[relative_a]
         else:
-            xsel = xyz[self.a, :]
-            ysel = self.x0[self.a, :]
+            xsel = xyz[relative_a, :]
+            ysel = self.x0[relative_a, :]
             xmean = np.mean(xsel,axis=0)
             ymean = np.mean(ysel,axis=0)
             if not self.linear and is_linear(xsel, ysel):
@@ -423,7 +450,8 @@ class Rotator(object):
                 deriv_raw[-2] += np.dot(dexdum, deriv_raw[-1])
                 deriv_raw = deriv_raw[:-1]
             derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
-            for i, a in enumerate(self.a):
+            #for i, a in enumerate(self.a):
+            for i, a in enumerate(relative_a):
                 derivatives[a, :, :] = deriv_raw[i, :, :]
             self.stored_derxyz = xyz.copy()
             self.stored_deriv = derivatives
@@ -550,8 +578,8 @@ class RotationA(object):
     def value(self, xyz):
         return self.Rotator.value(xyz)[0]*self.w
         
-    def derivative(self, xyz):
-        der_all = self.Rotator.derivative(xyz)
+    def derivative(self, xyz,start_idx=0):
+        der_all = self.Rotator.derivative(xyz,start_idx)
         derivatives = der_all[:, :, 0]*self.w
         return derivatives
 
@@ -595,8 +623,8 @@ class RotationB(object):
     def value(self, xyz):
         return self.Rotator.value(xyz)[1]*self.w
         
-    def derivative(self, xyz):
-        der_all = self.Rotator.derivative(xyz)
+    def derivative(self, xyz,start_idx=0):
+        der_all = self.Rotator.derivative(xyz,start_idx)
         derivatives = der_all[:, :, 1]*self.w
         return derivatives
 
@@ -640,8 +668,8 @@ class RotationC(object):
     def value(self, xyz):
         return self.Rotator.value(xyz)[2]*self.w
         
-    def derivative(self, xyz):
-        der_all = self.Rotator.derivative(xyz)
+    def derivative(self, xyz,start_idx=0):
+        der_all = self.Rotator.derivative(xyz,start_idx)
         derivatives = der_all[:, :, 2]*self.w
         return derivatives
 
@@ -686,11 +714,11 @@ class Distance(object):
         b = self.b
         return np.sqrt(np.sum((xyz[a]-xyz[b])**2))
         
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        m = self.a
-        n = self.b
+        m = self.a-start_idx
+        n = self.b-start_idx
         u = (xyz[m] - xyz[n]) / np.linalg.norm(xyz[m] - xyz[n])
         derivatives[m, :] = u
         derivatives[n, :] = -u
@@ -782,12 +810,12 @@ class Angle(object):
         crs /= np.linalg.norm(crs)
         return crs
         
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        m = self.a
-        o = self.b
-        n = self.c
+        m = self.a-start_idx
+        o = self.b-start_idx
+        n = self.c-start_idx
         # Unit displacement vectors
         u_prime = (xyz[m] - xyz[o])
         u_norm = np.linalg.norm(u_prime)
@@ -939,11 +967,11 @@ class LinearAngle(object):
             answer = np.dot(eba, e2) + np.dot(ebc, e2)
         return answer
 
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
-        a = self.a
-        b = self.b
-        c = self.c
+        a = self.a-start_idx
+        b = self.b-start_idx
+        c = self.c-start_idx
         derivatives = np.zeros_like(xyz)
         ## Finite difference derivatives
         ## fderivatives = np.zeros_like(xyz)
@@ -1179,13 +1207,13 @@ class Dihedral(object):
         answer = np.arctan2(arg1, arg2)
         return answer
         
-    def derivative(self, xyz):
+    def derivative(self, xyz, start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        m = self.a
-        o = self.b
-        p = self.c
-        n = self.d
+        m = self.a-start_idx
+        o = self.b-start_idx
+        p = self.c-start_idx
+        n = self.d-start_idx
         u_prime = (xyz[m] - xyz[o])
         w_prime = (xyz[p] - xyz[o])
         v_prime = (xyz[n] - xyz[p])
@@ -1427,12 +1455,12 @@ class OutOfPlane(object):
     def __ne__(self, other):
         return not self.__eq__(other)
         
-    def value(self, xyz):
+    def value(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
-        a = self.a
-        b = self.b
-        c = self.c
-        d = self.d
+        a = self.a-start_idx
+        b = self.b-start_idx
+        c = self.c-start_idx
+        d = self.d-start_idx
         vec1 = xyz[b] - xyz[a]
         vec2 = xyz[c] - xyz[b]
         vec3 = xyz[d] - xyz[c]
@@ -1444,13 +1472,13 @@ class OutOfPlane(object):
         answer = np.arctan2(arg1, arg2)
         return answer
         
-    def derivative(self, xyz):
+    def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        m = self.a
-        o = self.b
-        p = self.c
-        n = self.d
+        m = self.a-start_idx
+        o = self.b-start_idx
+        p = self.c-start_idx
+        n = self.d-start_idx
         u_prime = (xyz[m] - xyz[o])
         w_prime = (xyz[p] - xyz[o])
         v_prime = (xyz[n] - xyz[p])

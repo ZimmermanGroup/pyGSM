@@ -22,15 +22,19 @@ class DE_GSM(Base_Method):
 
         super(DE_GSM,self).__init__(options)
 
-        print(" Forming Union of primitive coordinates")
-        self.nodes[0].coord_obj = self.nodes[0].coord_obj.make_union_primitives(self.nodes[-1].coord_obj,self.nodes[0].xyz)
+        #print(" Forming Union of primitive coordinates")
+        #self.nodes[0].coord_obj = self.nodes[0].coord_obj.make_union_primitives(self.nodes[-1].coord_obj,self.nodes[0].xyz)
 
-        print('coordinates')
-        print(self.nodes[0].coord_obj.Prims.Internals[:100])
+        #print('coordinates')
+        #print(self.nodes[0].coord_obj.Prims.Internals[:100])
+        #self.nodes[0].form_Primitive_Hessian()
+        #print(" Done forming union")
+        #self.nodes[-1].PES.lot.node_id = self.nnodes-1
+        #self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
+        #self.nodes[-1].form_Primitive_Hessian()
+
+        print(" Assuming primitives are union!")
         self.nodes[0].form_Primitive_Hessian()
-        print(" Done forming union")
-        self.nodes[-1].PES.lot.node_id = self.nnodes-1
-        self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
         self.nodes[-1].form_Primitive_Hessian()
 
         # this tests if the primitives are the same

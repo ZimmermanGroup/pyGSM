@@ -13,9 +13,15 @@ import numpy as np
 np.set_printoptions(precision=4,suppress=True)
 
 # local application imports
-from .internal_coordinates import InternalCoordinates
-from .primitive_internals import PrimitiveInternalCoordinates
-from .slots import *
+try:
+    from .internal_coordinates import InternalCoordinates
+    from .primitive_internals import PrimitiveInternalCoordinates
+    from .slots import *
+except:
+    from internal_coordinates import InternalCoordinates
+    from primitive_internals import PrimitiveInternalCoordinates
+    from slots import *
+
 from utilities import *
    
 
@@ -44,7 +50,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             self.options['primitives'] = self.Prims
         else:
             print(" setting primitives from options!")
-            self.Prims=self.options['primitives']
+            #print(" warning: not sure if a deep copy prims")
+            #self.Prims=self.options['primitives']
+            self.Prims = PrimitiveInternalCoordinates.copy(self.options['primitives'])
             self.Prims.clearCache()
         #print "in constructor",len(self.Prims.Internals)
 
@@ -80,21 +88,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         
     def join(self, other):
         return self.Prims.join(other.Prims)
-
-    def make_union_primitives(self,other,xyz):  #xyz is DLC1 xyz
-        for bond in other.Prims.bonds:
-            if bond in self.Prims.bonds:
-                pass
-            elif (bond[1],bond[0]) in self.Prims.bonds:
-                pass
-            else:
-                self.Prims.bonds.append(bond)
-        self.Prims.bonds = sorted(list(set(self.Prims.bonds)))
-        self.Prims.build_topology(xyz,force_bonds=False)
-
-        self.Prims.makePrimitives(xyz)
-        self.Prims.reorderPrimitives()
-        return type(self)(self.options.copy().set_values({'primitives':self.Prims}))
 
     def copy(self,xyz):
         return type(self)(self.options.copy().set_values({'xyz':xyz}))
@@ -313,8 +306,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """
 
         nifty.click()
+        print(" Beginning to build G Matrix")
         G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = nifty.click()
+        print(" Timings: Build G: %.3f " % (time_G))
 
         tmpvecs=[]
         for A in G.matlist:
@@ -329,11 +324,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #print()
             #print("LargeVals %i" % LargeVals)
             tmpvecs.append(Q[:,LargeIdx])
-        self.Vecs = block_matrix(tmpvecs)
-        time_eig = nifty.click()
-        #print(" Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig))
 
-        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+        self.Vecs = block_matrix(tmpvecs)
+        #print(" shape of DLC")
+        #print(self.Vecs.shape)
+
+        time_eig = nifty.click()
+        print(" Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig))
+
+        #self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+        self.Internals = ["DLC %i" % (i+1) for i in range(self.Vecs.shape[0])]
 
         # Vecs has number of rows equal to the number of primitives, and
         # number of columns equal to the number of delocalized internal coordinates.
@@ -409,9 +409,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 Float array containing difference in primitive coordinates
         """
 
+        print(" starting to build G prim")
         nifty.click()
         G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = nifty.click()
+        print(" Timings: Build G: %.3f " % (time_G))
 
         tmpvecs=[]
         for A in G.matlist:
@@ -931,3 +933,65 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             rc+=1
         
         return xyzgrid
+
+if __name__ =='__main__' and __package__ is None:
+    from os import sys, path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+    #filepath='../../data/butadiene_ethene.xyz'
+    #filepath='crystal.xyz'
+    filepath='test.xyz'
+
+    geom = manage_xyz.read_xyz(filepath)
+    atom_symbols  = manage_xyz.get_atoms(geom)
+
+    xyz = manage_xyz.xyz_to_np(geom)
+
+    ELEMENT_TABLE = elements.ElementData()
+    atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
+
+    hybrid_indices = list(range(0,10)) + list(range(21,26))
+    #hybrid_indices = list(range(0,74)) + list(range(3348, 3358))
+    #hybrid_indices = None
+    #print(hybrid_indices)
+    #with open('frozen.txt') as f:
+    #    hybrid_indices = f.read().splitlines()
+    #hybrid_indices = [int(x) for x in hybrid_indices]
+    #print(hybrid_indices)
+
+    print(xyz.shape) 
+    print(" Making prim")
+    #p = PrimitiveInternalCoordinates.from_options(
+
+    p = DelocalizedInternalCoordinates.from_options(
+            xyz=xyz,
+            atoms=atoms,
+            addtr = True,
+            extra_kwargs = {  'hybrid_indices' : hybrid_indices},
+            ) 
+
+    #print(" Len p.prims")
+    #print(len(p.Prims.Internals))
+    #
+    #print(" Len prim vals")
+    #prim_vals = p.Prims.calculate(xyz)
+    #print(prim_vals)
+    #print(len(prim_vals))
+
+    #print(" Len dlc")
+    q = p.calculate(xyz)
+    #print(len(q))
+
+    dQ = np.zeros(q.shape)
+    dQ[0] = 0.1
+
+    new_xyz = p.newCartesian(xyz,dQ,verbose=True)
+
+    new_geom = manage_xyz.np_to_xyz(geom,new_xyz)
+
+    both = [geom,new_geom]
+    manage_xyz.write_xyzs('check.xyz',both,scale=1.)
+
+    #print(p.Internals)
+
+

@@ -166,30 +166,35 @@ def conjugate_orthogonalize(vecs,G,numCvecs=0):
 def orthogonalize(vecs,numCvecs=0):
     """
     """
+
+    #print("in orthogonalize")
     rows=vecs.shape[0]
     cols=vecs.shape[1]
     basis=np.zeros((rows,cols-numCvecs))
 
-    for i in range(numCvecs):  # orthogonalize with respect to these
-        basis[:,i]= vecs[:,i]
+    #for i in range(numCvecs):  # orthogonalize with respect to these
+    #    basis[:,i]= vecs[:,i]
 
-    count=numCvecs
+    #count=numCvecs-1
+    count=0
     for v in vecs.T:
         w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
         wnorm = np.linalg.norm(w)
-        if wnorm > 1e-5 and (abs(w) > 1e-6).any():
+        #print("wnorm {} count {}".format(wnorm,count))
+        if wnorm > 1e-3 and (abs(w) > 1e-6).any():
             try:
                 basis[:,count]=w/wnorm
                 count+=1
             except:
                 print("this vector should be vanishing, exiting")
                 print("norm=",wnorm)
-                print(w)
+                #print(w)
                 exit(1)
     dots = np.matmul(basis.T,basis)
-    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float))):
+    if not (np.allclose(dots,np.eye(dots.shape[0],dtype=float),atol=1e-4)):
         print("np.dot(b.T,b)")
-        print(dots)
+        #print(dots)
+        print(dots - np.eye(dots.shape[0],dtype=float))
         raise RuntimeError("error in orthonormality")
     return basis
 

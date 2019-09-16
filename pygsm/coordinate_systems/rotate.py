@@ -240,6 +240,7 @@ def calc_rmsd(x, y):
     rmsd = np.sqrt((np.sum(x**2) + np.sum(y**2) - 2*lmax)/N)
     return rmsd
 
+
 def is_linear(x, y):
     """
     Returns True if molecule is linear 
