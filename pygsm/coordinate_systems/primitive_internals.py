@@ -42,7 +42,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # Cache some useful attributes
         self.options = options
         self.atoms = options['atoms']
-        extra_kwargs=options['extra_kwargs']
+        #extra_kwargs=options['extra_kwargs']
 
         # initialize 
         self.Internals = []
@@ -62,15 +62,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         xyz = options['xyz']
         self.topology = self.options['topology']
-        make_prims = self.top_settings['make_primitives']
+        #make_prims = self.top_settings['make_primitives']
 
         # setup
         if self.options['form_primitives']:
             if self.topology is None:
-                print(" Warning it's better to build the topology before calling PrimitiveInternals\n \
-                        Only the most basic option is enabled here \n \
-                        You get better control of the topology by controlling extra bonds, angles etc.")
-                self.topology = Topology.build_topology(xyz)
+                print(" Warning it's better to build the topology before calling PrimitiveInternals\n Only the most basic option is enabled here \n You get better control of the topology by controlling extra bonds, angles etc.")
+                self.topology = Topology.build_topology(xyz,self.atoms)
                 print(" done making topology")
     
             self.fragments = [self.topology.subgraph(c).copy() for c in nx.connected_components(self.topology)]

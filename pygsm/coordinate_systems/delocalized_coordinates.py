@@ -16,10 +16,12 @@ np.set_printoptions(precision=4,suppress=True)
 try:
     from .internal_coordinates import InternalCoordinates
     from .primitive_internals import PrimitiveInternalCoordinates
+    from .topology import Topology
     from .slots import *
 except:
     from internal_coordinates import InternalCoordinates
     from primitive_internals import PrimitiveInternalCoordinates
+    from topology import Topology
     from slots import *
 
 from utilities import *
@@ -940,17 +942,17 @@ if __name__ =='__main__' and __package__ is None:
 
     #filepath='../../data/butadiene_ethene.xyz'
     #filepath='crystal.xyz'
-    filepath='test.xyz'
+    filepath='multi1.xyz'
 
-    geom = manage_xyz.read_xyz(filepath)
-    atom_symbols  = manage_xyz.get_atoms(geom)
+    geom1 = manage_xyz.read_xyz(filepath)
+    atom_symbols  = manage_xyz.get_atoms(geom1)
 
-    xyz = manage_xyz.xyz_to_np(geom)
+    xyz1 = manage_xyz.xyz_to_np(geom1)
 
     ELEMENT_TABLE = elements.ElementData()
     atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
 
-    hybrid_indices = list(range(0,10)) + list(range(21,26))
+    hybrid_indices = list(range(0,5)) + list(range(21,26))
     #hybrid_indices = list(range(0,74)) + list(range(3348, 3358))
     #hybrid_indices = None
     #print(hybrid_indices)
@@ -959,16 +961,21 @@ if __name__ =='__main__' and __package__ is None:
     #hybrid_indices = [int(x) for x in hybrid_indices]
     #print(hybrid_indices)
 
-    print(xyz.shape) 
+    print(" Making topology")
+    G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
+
+    print(xyz1.shape) 
     print(" Making prim")
-    #p = PrimitiveInternalCoordinates.from_options(
+
+    G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
 
     p = DelocalizedInternalCoordinates.from_options(
-            xyz=xyz,
+            xyz=xyz1,
             atoms=atoms,
             addtr = True,
-            extra_kwargs = {  'hybrid_indices' : hybrid_indices},
+            topology=G1,
             ) 
+
 
     #print(" Len p.prims")
     #print(len(p.Prims.Internals))
@@ -979,17 +986,17 @@ if __name__ =='__main__' and __package__ is None:
     #print(len(prim_vals))
 
     #print(" Len dlc")
-    q = p.calculate(xyz)
+    q = p.calculate(xyz1)
     #print(len(q))
 
     dQ = np.zeros(q.shape)
     dQ[0] = 0.1
 
-    new_xyz = p.newCartesian(xyz,dQ,verbose=True)
+    new_xyz = p.newCartesian(xyz1,dQ,verbose=True)
 
-    new_geom = manage_xyz.np_to_xyz(geom,new_xyz)
+    new_geom = manage_xyz.np_to_xyz(geom1,new_xyz)
 
-    both = [geom,new_geom]
+    both = [geom1,new_geom]
     manage_xyz.write_xyzs('check.xyz',both,scale=1.)
 
     #print(p.Internals)
