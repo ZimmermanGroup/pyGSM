@@ -97,9 +97,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims.hybrid_idx_start_stop = Prims.hybrid_idx_start_stop
         newPrims.topology = deepcopy(Prims.topology)
         newPrims.Internals = deepcopy(Prims.Internals)
+        newPrims.block_info = deepcopy(Prims.block_info)
+        newPrims.atoms = newPrims.options['atoms']
+
+        print(newPrims.atoms)
 
         newPrims.fragments = [Prims.topology.subgraph(c).copy() for c in nx.connected_components(Prims.topology)]
         for g in newPrims.fragments: g.__class__ = MyG
+
         return newPrims
 
     def makePrimitives(self, xyz):
@@ -341,8 +346,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         ans = block_matrix(Blist)
         #print(block_matrix.full_matrix(ans))
-        print("total B shape ",ans.shape)
-        print(" num blocks ",ans.num_blocks)
+        #print("total B shape ",ans.shape)
+        #print(" num blocks ",ans.num_blocks)
         #for block in ans.matlist:
         #    print(block)
         #    print(block.shape)
@@ -733,9 +738,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # sort the blocks
         tmp_block_info.sort(key=lambda tup: tup[0])
-        print("block info")
-        print(tmp_block_info)
-        print("Done creating block info, Ordering Primitives by block")
+        #print("block info")
+        #print(tmp_block_info)
+        print("Done creating block info, Now Making Primitives by block")
 
         sp=0
         for info in tmp_block_info:
@@ -943,7 +948,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #    #print(np.setdiff1d(self.Internals,newPrims))
         #    raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
 
-        print(self.Internals)
+        print(" Done making primitives")
+        #print(self.Internals)
         print(len(self.Internals))
         self.clearCache()
         return
@@ -996,7 +1002,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # sort the blocks
         tmp_block_info.sort(key=lambda tup: tup[0])
 
-        print("Done creating block info, Ordering Primitives by block")
+        print("Done creating block info,\n Now Ordering Primitives by block")
 
         # Order primitives by block
         # probably faster to just reform the primitives!!!!
@@ -1023,9 +1029,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.block_info.append((info[0],info[1],sp,ep))
             sp = ep
 
-        print(" block info")
-        print(self.block_info)
-        print("num blocks ",len(self.block_info))
+        #print(" block info")
+        #print(self.block_info)
+        #print(" Done Ordering prims by block")
+        #print("num blocks ",len(self.block_info))
 
         #if len(newPrims) != len(self.Internals):
         #    #print(np.setdiff1d(self.Internals,newPrims))

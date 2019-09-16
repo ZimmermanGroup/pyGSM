@@ -11,6 +11,7 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 import numpy as np
 import itertools
 from pkg_resources import parse_version
+from collections import OrderedDict, defaultdict
 
 try:
     import networkx as nx
@@ -282,6 +283,7 @@ class Topology():
         sn = top_settings['topframe']
         toppbc = top_settings['toppbc']
         Fac = top_settings['Fac']
+        natoms = len(xyz)
 
         mindist = 1.0 # Any two atoms that are closer than this distance are bonded.
         # Create an atom-wise list of covalent radii.
@@ -402,7 +404,6 @@ class Topology():
             # This is much faster than using itertools.combinations.
             # TODO 9/2019 build-bonds only for non-cartesian indices
             num_atoms_nc = len(primitive_indices)
-            natoms = len(xyz)
 
             # the original version
             # AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(natoms-i-1) for i in range(natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,natoms)) for i in range(natoms)]),dtype=np.int32))).T)
@@ -505,8 +506,8 @@ class Topology():
         bonds = sorted(list(set(bondlist)))
         built_bonds = True
 
-        print('bond list')
-        print(bondlist)
+        #print('bond list')
+        #print(bondlist)
 
         return bonds
 

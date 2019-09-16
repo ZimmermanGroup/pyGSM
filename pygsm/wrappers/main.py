@@ -21,7 +21,7 @@ from potential_energy_surfaces import Penalty_PES
 from wrappers import Molecule
 from optimizers import *
 from growing_string_methods import *
-from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates
+from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
 
@@ -120,7 +120,7 @@ def main():
 
               #molecule
               'coordinate_type' : args.coordinate_type,
-              'hybrid_coord_idx_file' : args.hybrdi_coord_idx_file,
+              'hybrid_coord_idx_file' : args.hybrid_coord_idx_file,
 
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
@@ -206,7 +206,7 @@ def main():
 
     # hybrid coordinates
     if inpfileq['hybrid_coord_idx_file'] is not None:
-        nifty.printcool(" Using Hybrid COORDINATES :)"
+        nifty.printcool(" Using Hybrid COORDINATES :)")
         assert inpfileq['coordinate_type']=="TRIC", "hybrid indices won't work (currently) with other coordinate systems"
         with open(inpfileq['hybrid_coord_idx_file']) as f:
             hybrid_indices = f.read().splitlines()
@@ -253,9 +253,8 @@ def main():
             driving_coord_prims.append(get_driving_coord_prim(dc))
 
         for prim in driving_coord_prims:
-            if type(prim)=="Distance":
-                atoms = prim.atoms
-                bond = (atoms[0],atoms[1])
+            if type(prim)==Distance:
+                bond = (prim.atoms[0],prim.atoms[1])
                 if bond in top1.edges:
                     pass
                 elif (bond[1],bond[0]) in top1.edges():
@@ -264,15 +263,15 @@ def main():
                     print(" Adding bond {} to top1".format(bond))
                     top1.add_edge(bond[0],bond[1])
 
-    nifyt.printcool("Building Primitive Internal Coordinates")
+    nifty.printcool("Building Primitive Internal Coordinates")
     connect=False
     addtr = False
     addcart=False
-    if inpfileq['cordinate_type']=="DLC":
+    if inpfileq['coordinate_type']=="DLC":
         connect=True
-    elif inpfileq['cordinate_type']=="TRIC":
+    elif inpfileq['coordinate_type']=="TRIC":
         addtr=True
-    elif inpfileq['cordinate_type']=="HDLC":
+    elif inpfileq['coordinate_type']=="HDLC":
         addcart=True
     p1 = PrimitiveInternalCoordinates.from_options(
             xyz=xyz1,
@@ -287,7 +286,7 @@ def main():
         p2 = PrimitiveInternalCoordinates.from_options(
                 xyz=xyz2,
                 atoms=atoms,
-                addtr = True,
+                addtr = addtr,
                 addcart=addcart,
                 connect=connect,
                 topology=top1,  # Use the topology of 1 because we fixed it above
@@ -296,16 +295,16 @@ def main():
         p1.add_union_primitives(p2)
     elif inpfileq['gsm_type'] == 'SE_GSM' or inpfileq['gsm_type']=='SE_Cross':
         for dc in driving_coord_prims:
-            if type(dc)!="Distance": # Already handled in topology
+            if type(dc)!=Distance: # Already handled in topology
                 if dc not in p1.Internals:
-                    print("Adding driving coord prim {} to Internals".format(i))
-                    p1.append_prim_block(dc)
+                    print("Adding driving coord prim {} to Internals".format(dc))
+                    p1.append_prim_to_block(dc)
 
-    nifyt.printcool("Building Delocalized Internal Coordinates")
+    nifty.printcool("Building Delocalized Internal Coordinates")
     coord_obj1 = DelocalizedInternalCoordinates.from_options(
             xyz=xyz1,
             atoms=atoms,
-            addtr = True,
+            addtr = addtr,
             addcart=addcart,
             connect=connect,
             primitives=p1,
@@ -326,12 +325,11 @@ def main():
             PES=pes,
             coord_obj = coord_obj1,
             #coordinate_type=inpfileq['coordinate_type'],
-            coordinate_object = coordinate_object,
             Form_Hessian=Form_Hessian,
             #top_settings = {
             #    'form_primitives': form_primitives,
             #    'hybrid_indices' : hybrid_indices,
-                },
+            #    },
             )
 
     if inpfileq['gsm_type']=='DE_GSM':
@@ -487,8 +485,8 @@ def read_isomers_file(isomers_file):
     return driving_coordinates
 
 
-def get_driving_coord_prim(driving_coords):
-    if "ADD" in i or "BREAK" in dc:
+def get_driving_coord_prim(dc):
+    if "ADD" in dc or "BREAK" in dc:
         if dc[1]<dc[2]:
             prim = Distance(dc[1]-1,dc[2]-1)
         else:
