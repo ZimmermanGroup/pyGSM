@@ -99,9 +99,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims.Internals = deepcopy(Prims.Internals)
         newPrims.block_info = deepcopy(Prims.block_info)
         newPrims.atoms = newPrims.options['atoms']
-
-        print(newPrims.atoms)
-
         newPrims.fragments = [Prims.topology.subgraph(c).copy() for c in nx.connected_components(Prims.topology)]
         for g in newPrims.fragments: g.__class__ = MyG
 
@@ -740,14 +737,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         tmp_block_info.sort(key=lambda tup: tup[0])
         #print("block info")
         #print(tmp_block_info)
-        print("Done creating block info, Now Making Primitives by block")
+        print(" Done creating block info,\n Now Making Primitives by block")
 
         sp=0
         for info in tmp_block_info:
             nprims=0
-            frag = info[2]
             if info[-1]=='reg':
-
+                frag = info[2]
                 noncov = []
                 # Connect all non-bonded fragments together
                 if connect:
@@ -931,26 +927,40 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                         nprims+=1
 
             else:   # THIS ELSE CORRESPONS TO FRAGMENTS BUILT WITH THE HYBRID REGION
-                self.add(CartesianX(info[0], w=1.0))
-                self.add(CartesianY(info[0], w=1.0))
-                self.add(CartesianZ(info[0], w=1.0))
+                #self.add(CartesianX(info[0], w=1.0))
+                #self.add(CartesianY(info[0], w=1.0))
+                #self.add(CartesianZ(info[0], w=1.0))
                 nprims=3
 
             ep = sp+nprims
             self.block_info.append((info[0],info[1],sp,ep))
             sp = ep
 
+
+        #print(self.Internals)
+        for info1,info2 in zip(tmp_block_info,self.block_info):
+            if info1[-1]=='hyb':
+                #for i in range(info2[2],info2[3]):
+                i=info2[2]
+                j=i+1
+                k=i+2
+                #print(" Inserting Cart at elements {} {} {}".format(i,j,k))
+                self.Internals.insert(i,CartesianX(info1[0], w=1.0))
+                self.Internals.insert(j,CartesianY(info1[0], w=1.0))
+                self.Internals.insert(k,CartesianZ(info1[0], w=1.0))
+
+        print(" Done making primitives")
+        print(" Made a total of {} primitives".format(len(self.Internals)))
+        #print(self.Internals)
         #print(" block info")
         #print(self.block_info)
-        #print("num blocks ",len(self.block_info))
+        print(" num blocks ",len(self.block_info))
+
 
         #if len(newPrims) != len(self.Internals):
         #    #print(np.setdiff1d(self.Internals,newPrims))
         #    raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
 
-        print(" Done making primitives")
-        #print(self.Internals)
-        print(len(self.Internals))
         self.clearCache()
         return
 
@@ -1002,7 +1012,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # sort the blocks
         tmp_block_info.sort(key=lambda tup: tup[0])
 
-        print("Done creating block info,\n Now Ordering Primitives by block")
+        print(" Done creating block info,\n Now Ordering Primitives by block")
 
         # Order primitives by block
         # probably faster to just reform the primitives!!!!

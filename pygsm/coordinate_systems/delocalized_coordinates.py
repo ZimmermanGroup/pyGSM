@@ -335,7 +335,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         print(" Timings: Build G: %.3f Eig: %.3f" % (time_G, time_eig))
 
         #self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
-        self.Internals = ["DLC %i" % (i+1) for i in range(self.Vecs.shape[0])]
+        self.Internals = ["DLC %i" % (i+1) for i in range(self.Vecs.shape[1])]
 
         # Vecs has number of rows equal to the number of primitives, and
         # number of columns equal to the number of delocalized internal coordinates.
@@ -961,14 +961,10 @@ if __name__ =='__main__' and __package__ is None:
     #hybrid_indices = [int(x) for x in hybrid_indices]
     #print(hybrid_indices)
 
-    print(" Making topology")
+    nifty.printcool(" Making topology")
     G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
 
-    print(xyz1.shape) 
-    print(" Making prim")
-
-    G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
-
+    nifty.printcool(" Making prim")
     p = DelocalizedInternalCoordinates.from_options(
             xyz=xyz1,
             atoms=atoms,
@@ -985,15 +981,13 @@ if __name__ =='__main__' and __package__ is None:
     #print(prim_vals)
     #print(len(prim_vals))
 
-    #print(" Len dlc")
     q = p.calculate(xyz1)
-    #print(len(q))
+    print(" Len dlc {}".format(len(q)))
 
     dQ = np.zeros(q.shape)
     dQ[0] = 0.1
 
     new_xyz = p.newCartesian(xyz1,dQ,verbose=True)
-
     new_geom = manage_xyz.np_to_xyz(geom1,new_xyz)
 
     both = [geom1,new_geom]

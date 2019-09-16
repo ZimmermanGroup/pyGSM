@@ -277,15 +277,13 @@ class Molecule(object):
         self.gradrms = 0.
         self.isTSnode=False
         self.bdist =0.
-
-        self.newHess = 10
-        ###
-        if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
-            self.form_Primitive_Hessian()
-        t3 = time()
-        print(" Time to build Prim Hessian %.3f" % (t3-t2))
+        self.newHess = 5
 
         if self.Data['Hessian'] is None and self.Data['Form_Hessian']:
+            if self.Data['Primitive_Hessian'] is None and type(self.coord_obj) is not CartesianCoordinates:
+                self.form_Primitive_Hessian()
+            t3 = time()
+            print(" Time to build Prim Hessian %.3f" % (t3-t2))
             if self.Data['Primitive_Hessian'] is not None:
                 print(" forming Hessian in basis")
                 self.form_Hessian_in_basis()

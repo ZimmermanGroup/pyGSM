@@ -188,7 +188,7 @@ class Topology():
                         hybrid_idx_start_stop.append((start,end))
 
         if force_bonds:
-            print("building bonds")
+            nifty.printcool(" building bonds")
             bonds = Topology.build_bonds(xyz,atoms,primitive_indices)
             assert bondlistfile is None
         elif bondlistfile:
@@ -198,7 +198,7 @@ class Topology():
             print(" adding extra bonds")
             for bond in add_bond:
                 bonds.append(bond)
-            print(bonds)
+            #print(bonds)
 
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -272,6 +272,7 @@ class Topology():
     def build_bonds(xyz,atoms,primitive_indices,**kwargs):
         """ Build the bond connectivity graph. """
 
+        print(" In build bonds")
         top_settings = {
                             'toppbc' : kwargs.get('toppbc', False),
                             'topframe' : kwargs.get('topframe', 0),
@@ -412,8 +413,7 @@ class Topology():
             #first_o =np.fromiter(itertools.chain(*[[i]*(natoms-i-1) for i in range(natoms)]),dtype=np.int32)
 
 
-            print(" In build bonds")
-            print("prim indices")
+            #print("prim indices")
             # need the primitive start and stop indices
             prim_idx_start_stop = []
             new=True
@@ -428,7 +428,7 @@ class Topology():
                         new=True
                         prim_idx_start_stop.append((start,end))
 
-            print(prim_idx_start_stop)
+            #print(prim_idx_start_stop)
             first_list =[]
             for tup in prim_idx_start_stop:
                 for i in range(tup[0],tup[1]):
