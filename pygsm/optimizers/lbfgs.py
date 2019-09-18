@@ -179,6 +179,15 @@ class lbfgs(base_optimizer):
             fx = ls['fx']
             g  = ls['g']
 
+            if ls['step'] > self.options['DMAX']:
+                if ls['step']< 0.4:     # absolute max
+                    print(" Increasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+            elif ls['step']<step:
+                if ls['step']>0.05:     # absolute min
+                    print(" Decreasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+
             dEstep = fx - fxp
             dq = x-xp
             dEpre = np.dot(gc.T,dq)*units.KCAL_MOL_PER_AU

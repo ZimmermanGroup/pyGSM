@@ -96,8 +96,8 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
             print(' [INFO] the linesearch step is too small')
             return result
         if step > parameters['max_step']:
-            result = {'status':-1, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
-            print(' [INFO] the linesearch step is too large')
+            print(' [INFO] the linesearch step is too large, returning with step {}'.format(step))
+            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result
         if parameters['max_linesearch'] <= count:
             print(' [INFO] the iteration of linesearch is many')

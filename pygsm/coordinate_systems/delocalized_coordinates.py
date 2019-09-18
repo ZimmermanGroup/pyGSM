@@ -54,7 +54,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             print(" setting primitives from options!")
             #print(" warning: not sure if a deep copy prims")
             #self.Prims=self.options['primitives']
+            t0 = time()
             self.Prims = PrimitiveInternalCoordinates.copy(self.options['primitives'])
+            dt = time() - t0
+            print(" Time to copy prims %.3f" % dt)
             self.Prims.clearCache()
         #print "in constructor",len(self.Prims.Internals)
 

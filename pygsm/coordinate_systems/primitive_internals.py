@@ -723,7 +723,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             nodes = frag.L()
             tmp_block_info.append((nodes[0],nodes[-1]+1,frag,'reg'))
             #TODO can assert blocks are contiguous here
-
+        print(" number of primitive blocks is ",len(self.fragments))
+        
         # get hybrid blocks
         for tup in self.hybrid_idx_start_stop:
             # Add primitive Cartesians for each atom in hybrid block

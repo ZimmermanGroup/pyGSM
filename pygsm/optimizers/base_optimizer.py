@@ -119,7 +119,7 @@ class base_optimizer(object):
                 'wolfe':0.9,
                 'max_linesearch':3,
                 'min_step':self.DMIN,
-                'max_step':0.5,
+                'max_step':0.4,
         }
         return
 
