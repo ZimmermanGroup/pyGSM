@@ -49,8 +49,6 @@ class lbfgs(base_optimizer):
         energies=[]
         geoms.append(molecule.geometry)
         energies.append(molecule.energy-refE)
-        self.disp = 1000.
-        self.Ediff = 1000.
         self.check_inputs(molecule,opt_type,ictan)
         nconstraints=self.get_nconstraints(opt_type)
         self.buf = StringIO()
@@ -82,15 +80,16 @@ class lbfgs(base_optimizer):
 
         # primitive constraint step
         self.cstep_prim = np.zeros_like(g_prim)
-
         dE = molecule.difference_energy
-        if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
-            if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
-                print(" converged")
-                return geoms,energies
-        elif molecule.gradrms < self.conv_grms:
-            print(" converged")
-            return geoms,energies
+
+        # Not checking convergence here anymore ...
+        #if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
+        #    if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
+        #        print(" converged")
+        #        return geoms,energies
+        #elif molecule.gradrms < self.conv_grms:
+        #    print(" converged")
+        #    return geoms,energies
         
         # reset k in principle k does not have to reset but . . . 
         self.k = 0
@@ -155,13 +154,13 @@ class lbfgs(base_optimizer):
 
             # line search  
             #print(" Linesearch")
-            ls = self.Linesearch(nconstraints, x, fx, gc, d, step, xp,constraint_steps,self.linesearch_parameters,molecule)
+            ls = self.Linesearch(nconstraints, x, fx, gc, d, step, xp,constraint_steps,self.linesearch_parameters,molecule,verbose)
             #print(" Done linesearch")
             
             # revert to the privious point
             if ls['status'] < 0:
                 x = xp.copy()
-                molecule.xyz = xyzp
+                molecule.xyz = self.xyzp
                 g = gp.copy()
                 print('[ERROR] the point return to the previous point')
                 self.lm = []
@@ -235,12 +234,24 @@ class lbfgs(base_optimizer):
                         geoms.append(molecule.geometry)
                         energies.append(molecule.energy-refE)
                     break
-            elif molecule.gradrms < self.conv_grms:
-                print(" converged")
-                if ostep % xyzframerate!=0:
-                    geoms.append(molecule.geometry)
-                    energies.append(molecule.energy-refE)
-                break
+            # Check for  normal convergence
+            else:
+                gmax = float(np.max(g))
+                disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
+                
+                try:
+                    #print(" gmax {:5.4} disp {:5.4} Ediff {:5.4} gradrms {:5.4}".format(gmax,disp,dEstep,molecule.gradrms))
+                    print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f" % (gmax,disp,dEstep,molecule.gradrms))
+                except:
+                    print(gmax)
+                    print(disp)
+                if molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                    print(" converged")
+                    if ostep % xyzframerate!=0:
+                        geoms.append(molecule.geometry)
+                        energies.append(molecule.energy-refE)
+                        manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                    break
             #print " ########## DONE WITH TOTAL STEP #########"
 
             #update DLC  --> this changes q, g, Hint

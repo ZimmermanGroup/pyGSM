@@ -30,7 +30,31 @@ class base_optimizer(object):
                 value=0.0005,
                 required=False,
                 allowed_types=[float],
-                doc='Convergence threshold'
+                doc='Gradrms convergence threshold'
+                )
+
+        opt.add_option(
+                key='conv_Ediff',
+                value=100.,
+                required=False,
+                allowed_types=[float],
+                doc='Energy difference convergence'
+                )
+
+        opt.add_option(
+                key='conv_gmax',
+                value=100.,
+                required=False,
+                allowed_types=[float],
+                doc='max gradient convergence threshold',
+                )
+
+        opt.add_option(
+                key='conv_disp',
+                value=100.,
+                required=False,
+                allowed_types=[float],
+                doc='max atomic displacement threshold',
                 )
 
         opt.add_option(
@@ -94,9 +118,9 @@ class base_optimizer(object):
 
         
         # additional convergence criterion (default parameters for Q-Chem)
-        self.conv_disp = 12e-4 #max atomic displacement
-        self.conv_gmax = 3e-4 #max gradient
-        self.conv_Ediff = 1e-6 #E diff
+        self.conv_disp =options['conv_disp']  #12e-4 #max atomic displacement
+        self.conv_gmax = options['conv_gmax'] #3e-4 #max gradient
+        self.conv_Ediff = options['conv_Ediff'] #1e-6 #E diff
         self.conv_grms = options['OPTTHRESH']
 
         # TS node properties
