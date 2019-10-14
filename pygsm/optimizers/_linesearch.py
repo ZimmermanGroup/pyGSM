@@ -55,13 +55,14 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
     while True:
         x = xp
         x = x + d * step  + constraint_step 
-        xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
+        xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=verbose)
 
         # Evaluate the function and gradient values. 
         # use these so molecule xyz doesn't change
         fx = molecule.PES.get_energy(xyz)
         gx = molecule.PES.get_gradient(xyz)
         g = molecule.coord_obj.calcGrad(xyz,gx)
+        width = 1.
 
         # project out the constraint
         gc = g.copy()
@@ -70,6 +71,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
 
         count = count + 1
+
         # check the sufficient decrease condition (Armijo condition).
         if fx > finit + (step * dgtest) and np.all(constraint_step==0):  #+ np.dot(g.T,constraint_step): # doesn't work with constraint :(
             print(" [INFO] not satisfy sufficient decrease condition.")
@@ -91,21 +93,29 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
                 else:
                     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
                     return result
-        if step < parameters['min_step']:
-            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
-            print(' [INFO] the linesearch step is too small')
-            return result
-        if step > parameters['max_step']:
-            print(' [INFO] the linesearch step is too large, returning with step {}'.format(step))
-            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
-            return result
         if parameters['max_linesearch'] <= count:
             print(' [INFO] the iteration of linesearch is many')
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result	
 
+        if step <= parameters['min_step']:
+            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
+            print(' [INFO] the linesearch step is too small')
+            return result
+        if step >= parameters['max_step'] and width>1.: # otherwise step will decrease next step
+            print(' [INFO] the linesearch step is too large, returning with step {}'.format(step))
+            result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
+            return result
+
         # update the step		
         step = step * width
+
+        # make sure step isn't too large
+        if step > parameters['max_step']:
+            print(step)
+            print(" Manually decreasing step size")
+            step = parameters['max_step']
+
 
 def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     print("in")

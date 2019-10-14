@@ -180,19 +180,22 @@ class lbfgs(base_optimizer):
             g  = ls['g']
 
             if ls['step'] > self.options['DMAX']:
-                if ls['step']< 0.4:     # absolute max
+                if ls['step']<= 0.4:     # absolute max
                     print(" Increasing DMAX to {}".format(ls['step']))
                     self.options['DMAX'] = ls['step']
-            elif ls['step']<step:
+            elif ls['step']<self.options['DMAX']:
                 if ls['step']>0.05:     # absolute min
                     print(" Decreasing DMAX to {}".format(ls['step']))
                     self.options['DMAX'] = ls['step']
 
             dEstep = fx - fxp
             dq = x-xp
+
+            # dEpre is missing second order effects or is it?
             dEpre = np.dot(gc.T,dq)*units.KCAL_MOL_PER_AU
             constraint_energy = np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  
-            print("constraint_energy: %1.4f" % constraint_energy)
+            if opt_type not in ['UNCONSTRAINED','ICTAN']:
+                print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
 
             if abs(dEpre)<0.05:
@@ -203,6 +206,13 @@ class lbfgs(base_optimizer):
             print(" dEstep=%5.4f" %dEstep)
             print(" dEpre=%5.4f" %dEpre)
             print(" ratio=%5.4f" %ratio)
+
+            # if ratio is less than 0.3 than reduce DMAX
+            if ratio<0.3:
+                print(" Reducing DMAX")
+                self.options['DMAX'] /= 1.5
+                if self.options['DMAX'] < self.DMIN:
+                    self.options['DMAX'] = self.DMIN
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)
