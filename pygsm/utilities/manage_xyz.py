@@ -83,7 +83,7 @@ def write_xyz(
     filename, 
     geom, 
     charge=0,
-    scale=(1.0/units.ANGSTROM_TO_AU),
+    scale=1.0 #(1.0/units.ANGSTROM_TO_AU),
     ):
 
     """ Writes xyz file with single frame
@@ -152,7 +152,7 @@ def write_xyzs_w_comments(
     filename, 
     geoms,
     comments,
-    scale=(1.0/units.ANGSTROM_TO_AU),
+    scale=1.0 #(1.0/units.ANGSTROM_TO_AU),
     ):
 
     """ Writes xyz trajectory file with multiple frames
