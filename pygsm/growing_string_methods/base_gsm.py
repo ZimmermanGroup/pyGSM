@@ -203,7 +203,7 @@ class Base_Method(Print,Analyze,object):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
-        self.nodes[0].form_Primitive_Hessian()
+        #self.nodes[0].form_Primitive_Hessian()
 
     @property
     def TSnode(self):
@@ -1065,13 +1065,18 @@ class Base_Method(Print,Analyze,object):
             n1=self.nnodes-self.nP
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
-            print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n2))
+            print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
             if self.nnodes - self.nn > 1:
                 stepsize = 1./float(self.nnodes-self.nn)
             else:
                 stepsize = 0.5
 
-            self.nodes[-self.nP-1] = Base_Method.add_node(self.nodes[n1],self.nodes[n3],stepsize,n2)
+            self.nodes[-self.nP-1] = Base_Method.add_node(
+                    self.nodes[n1],
+                    self.nodes[n3],
+                    stepsize,
+                    n2
+                    )
             if self.nodes[-self.nP-1]==None:
                 success= False
                 break
