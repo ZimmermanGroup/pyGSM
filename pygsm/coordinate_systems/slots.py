@@ -403,7 +403,10 @@ class Rotator(object):
             return self.stored_deriv[relative_a]
         else:
             xsel = xyz[relative_a, :]
-            ysel = self.x0[relative_a, :]
+            # x0 is the full size. . . 
+            # need absolute indices of fragment
+            absolute_a = list(range(start_idx,start_idx+len(relative_a)))
+            ysel = self.x0[absolute_a, :]
             xmean = np.mean(xsel,axis=0)
             ymean = np.mean(ysel,axis=0)
             if not self.linear and is_linear(xsel, ysel):
