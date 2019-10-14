@@ -275,7 +275,7 @@ class Topology():
         for g in fragments: g.__class__ = MyG
 
     @staticmethod
-    def build_bonds(xyz,atoms,primitive_indices,**kwargs):
+    def build_bonds(xyz,atoms,primitive_indices,prim_idx_start_stop=None,**kwargs):
         """ Build the bond connectivity graph. """
 
         print(" In build bonds")
@@ -339,7 +339,8 @@ class Topology():
         # Run algorithm to determine bonds.
         # Decide if we want to use the grid algorithm.
         use_grid = toppbc or (np.min([xext, yext, zext]) > 2.0*gsz)
-        if use_grid:
+        if use_grid and prim_idx_start_stop is None:
+            #print(" Using grid")
             # Inside the grid algorithm.
             # 1) Determine the left edges of the grid cells.
             # Note that we leave out the rightmost grid cell,
@@ -421,18 +422,22 @@ class Topology():
 
             #print("prim indices")
             # need the primitive start and stop indices
-            prim_idx_start_stop = []
-            new=True
-            for i in range(natoms+1):
-                if i in primitive_indices:
-                    if new==True:
-                        start=i
-                        new=False
-                else:
-                    if new==False:
-                        end=i-1
-                        new=True
-                        prim_idx_start_stop.append((start,end))
+
+            if prim_idx_start_stop is None:
+                prim_idx_start_stop = []
+                new=True
+                for i in range(natoms+1):
+                    if i in primitive_indices:
+                        if new==True:
+                            start=i
+                            new=False
+                    else:
+                        if new==False:
+                            end=i-1
+                            new=True
+                            prim_idx_start_stop.append((start,end))
+            else:
+                print(" using user defined values")
 
             #print(prim_idx_start_stop)
             first_list =[]
