@@ -1316,8 +1316,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #print(self.Internals)
 
         new_block_info = []
-        for info in self.block_info:
-            new_block_info.append((info[0],info[1],info[2]+1,info[3]+1))
+        for i,info in enumerate(self.block_info):
+            if i < count:
+                # sa,ea,sp,ep --> therefore all sps before count are unaffected
+                new_block_info.append((info[0],info[1],info[2],info[3]))
+            elif i==count:
+                new_block_info.append((info[0],info[1],info[2],info[3]+1))
+            else:
+                new_block_info.append((info[0],info[1],info[2]+1,info[3]+1))
         #print(new_block_info)
         self.block_info = new_block_info
 
