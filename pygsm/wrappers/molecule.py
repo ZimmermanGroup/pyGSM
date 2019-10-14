@@ -368,7 +368,8 @@ class Molecule(object):
     @property
     def center_of_mass(self):
         M = self.total_mass_au
-        return np.sum([self.xyz[i,:]*self.atomic_mass[i]/M for i in range(self.natoms)],axis=0)
+        atomic_masses = self.atomic_mass
+        return np.sum([self.xyz[i,:]*atomic_masses[i]/M for i in range(self.natoms)],axis=0)
 
     @property
     def mass_weighted_cartesians(self):
