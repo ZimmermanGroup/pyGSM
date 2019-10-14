@@ -1330,14 +1330,39 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         return
 
     def add_union_primitives(self,other):  
-        for i in other.Internals:
-            if i not in self.Internals:
+
+        # Can make this faster if only check primitive indices
+        # Need the primitive internal coordinates -- not the Cartesian internal coordinates
+        print(" Number of primitives before {}".format(len(self.Internals)))
+        #print(' block info before')
+        #print(self.block_info)
+
+        prim_idx1 =[]
+        for count,prim in enumerate(self.Internals):
+            if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
+                prim_idx1.append(count)
+
+        prim_idx2 =[]
+        for count,prim in enumerate(other.Internals):
+            if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
+                prim_idx2.append(count)
+
+        tmp_internals1 = [self.Internals[i] for i in prim_idx1]
+        tmp_internals2 = [other.Internals[i] for i in prim_idx1]
+
+        #for i in other.Internals:
+        #    if i not in self.Internals:
+        for i in tmp_internals2:
+            if i not in tmp_internals1:
                 #print("this prim is in p2 but not p1",i)
                 print("Adding prim {} that is in Other to Internals".format(i))
                 self.append_prim_to_block(i)
 
-        print(self.Internals)
-        print(len(self.Internals))
+        #print(self.Internals)
+        #print(len(self.Internals))
+        print(" Number of primitives after {}".format(len(self.Internals)))
+        #print(' block info after')
+        #print(self.block_info)
 
 
 if __name__ =='__main__' and __package__ is None:
