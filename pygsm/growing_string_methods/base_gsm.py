@@ -1167,7 +1167,7 @@ class Base_Method(Print,Analyze,object):
         edist = np.zeros(ictalloc)
     
         # align first and last nodes
-        self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes,self.nnodes-1)
+        self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes-1,self.nnodes-2)
 
         for n in range(1,self.nnodes-1):
             self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
@@ -1663,6 +1663,8 @@ class Base_Method(Print,Analyze,object):
 
         # rotate to be in maximal coincidence with 0
         # assumes iP i.e. 2 is also in maximal coincidence
+
+        # align xyz1 to xyz0?
         U = rotate.get_rot(xyz0,xyz1)
         new_xyz = np.dot(xyz1,U)
 
@@ -1670,7 +1672,11 @@ class Base_Method(Print,Analyze,object):
         if self.nodes[iP] != None:
             xyz2 = self.nodes[iP].xyz.copy()
             com2 = self.nodes[iP].center_of_mass
-            avg_com = mfrac*(com2+com0)
+
+            if abs(iN-iR) > abs(iN-iP):
+                avg_com = mfrac*com2 + (1.-mfrac)*com0
+            else:
+                avg_com = mfrac*com0 + (1.-mfrac)*com2
             dist = avg_com - com1  #final minus initial
             new_xyz += dist
         else:
