@@ -139,6 +139,7 @@ def main():
               'use_multiprocessing': args.use_multiprocessing,
               }
 
+    nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
 
     #LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
@@ -283,6 +284,7 @@ def main():
             )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
+        nifty.printcool("Building Primitive Internal Coordinates 2")
         p2 = PrimitiveInternalCoordinates.from_options(
                 xyz=xyz2,
                 atoms=atoms,
@@ -291,8 +293,11 @@ def main():
                 connect=connect,
                 topology=top1,  # Use the topology of 1 because we fixed it above
                 ) 
+        nifty.printcool("Forming Union of Primitives")
         # Form the union of primitives
         p1.add_union_primitives(p2)
+
+        print("check {}".format(len(p1.Internals)))
     elif inpfileq['gsm_type'] == 'SE_GSM' or inpfileq['gsm_type']=='SE_Cross':
         for dc in driving_coord_prims:
             if type(dc)!=Distance: # Already handled in topology
