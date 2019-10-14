@@ -4,10 +4,10 @@ from utilities import manage_xyz
 
 #TODO remove unecessary arguments: nconstraints, xp, ,...
 
-def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule):
+def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule,verbose=False):
 
     x = x + d * step  + constraint_step  # 
-    xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=False)
+    xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=verbose)
 
     # use these so molecule xyz doesn't change
     print(" evaluate fx in linesearch")
@@ -24,7 +24,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule)
 # TODO might be wise to add to backtrack a condition that says if 
 # the number of iterations was many and the energy increased
 # just return the initial point
-def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule):
+def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule, verbose=False):
     print(" In backtrack")
 
     # n is the non-constrained
