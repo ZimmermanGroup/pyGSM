@@ -132,7 +132,7 @@ class Topology():
         return
 
     @staticmethod
-    def build_topology( xyz, atoms, add_bond=None,hybrid_indices=None, force_bonds=True, bondlistfile=None, **kwargs):
+    def build_topology( xyz, atoms, add_bond=None,hybrid_indices=None, bondlistfile=None,prim_idx_start_stop=None, **kwargs):
         """
         Create topology and fragments; these are graph
         representations of the individual molecule fragments
@@ -162,7 +162,6 @@ class Topology():
         # Get hybrid indices
         hybrid_indices=hybrid_indices
         hybrid_idx_start_stop = []
-        prim_idx_start_stop = []
         if hybrid_indices ==None:
             primitive_indices = range(len(atoms))
         else:
@@ -187,12 +186,19 @@ class Topology():
                         new=True
                         hybrid_idx_start_stop.append((start,end))
 
-        if force_bonds:
+        if not bondlistfile:
             nifty.printcool(" building bonds")
-            bonds = Topology.build_bonds(xyz,atoms,primitive_indices)
+            print(prim_idx_start_stop)
+            bonds = Topology.build_bonds(xyz,atoms,primitive_indices,prim_idx_start_stop)
+            print("done")
             assert bondlistfile is None
-        elif bondlistfile:
-            bonds = read_bonds_from_file(bondlistfile)
+        else: 
+            #bondlistfile:
+            #prim_idx_start_stop = kwargs.get('prim_idx_start_stop',None)
+            try:
+                bonds = Topology.read_bonds_from_file(bondlistfile,prim_idx_start_stop)
+            except:
+                raise RuntimeError
 
         if add_bond:
             print(" adding extra bonds")
@@ -511,6 +517,7 @@ class Topology():
 
         return bonds
 
+    @staticmethod
     def read_bonds_from_file(filename):
         print("reading bonds")
         bondlist = np.loadtxt(filename)
