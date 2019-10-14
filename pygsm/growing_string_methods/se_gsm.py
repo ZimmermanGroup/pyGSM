@@ -28,10 +28,12 @@ class SE_GSM(Base_Method):
         #self.isomer_init()
 
         print(" Done initializing isomer")
-        self.nodes[0].form_Primitive_Hessian()
+        #self.nodes[0].form_Primitive_Hessian()
         print(" Primitive Internal Coordinates")
         print(self.nodes[0].primitive_internal_coordinates[0:50])
         print(" number of primitives is", self.nodes[0].num_primitives)
+
+        sys.stdout.flush()
 
         # stash bdist for node 0
         ictan,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords)

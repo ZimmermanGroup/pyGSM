@@ -34,11 +34,11 @@ class DE_GSM(Base_Method):
         #self.nodes[-1].form_Primitive_Hessian()
 
         print(" Assuming primitives are union!")
-        self.nodes[0].form_Primitive_Hessian()
-        self.nodes[-1].form_Primitive_Hessian()
+        #self.nodes[0].form_Primitive_Hessian()
+        #self.nodes[-1].form_Primitive_Hessian()
 
         # this tests if the primitives are the same
-        assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
+        #assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
 
         #print(" Primitive Internal Coordinates")
         #print(self.nodes[0].primitive_internal_coordinates)
