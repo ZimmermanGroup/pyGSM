@@ -234,7 +234,7 @@ class lbfgs(base_optimizer):
                 manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
 
             if self.options['print_level']>0:
-                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
 
@@ -250,13 +250,7 @@ class lbfgs(base_optimizer):
             else:
                 gmax = float(np.max(g))
                 disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
-                
-                try:
-                    #print(" gmax {:5.4} disp {:5.4} Ediff {:5.4} gradrms {:5.4}".format(gmax,disp,dEstep,molecule.gradrms))
-                    print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f" % (gmax,disp,dEstep,molecule.gradrms))
-                except:
-                    print(gmax)
-                    print(disp)
+                print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
                 if molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                     print(" converged")
                     if ostep % xyzframerate!=0:
@@ -265,6 +259,7 @@ class lbfgs(base_optimizer):
                         manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
                     break
             #print " ########## DONE WITH TOTAL STEP #########"
+            print("\n")
 
             #update DLC  --> this changes q, g, Hint
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
