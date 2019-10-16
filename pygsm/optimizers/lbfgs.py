@@ -180,11 +180,13 @@ class lbfgs(base_optimizer):
             g  = ls['g']
 
             if ls['step'] > self.options['DMAX']:
-                if ls['step']<= 0.4:     # absolute max
+                if ls['step']<= self.options['abs_max_step']:     # absolute max
                     print(" Increasing DMAX to {}".format(ls['step']))
                     self.options['DMAX'] = ls['step']
+                else:
+                    self.options['DMAX'] =self.options['abs_max_step']
             elif ls['step']<self.options['DMAX']:
-                if ls['step']>0.05:     # absolute min
+                if ls['step']>=self.DMIN:     # absolute min
                     print(" Decreasing DMAX to {}".format(ls['step']))
                     self.options['DMAX'] = ls['step']
 
@@ -224,7 +226,7 @@ class lbfgs(base_optimizer):
             g_prim = block_matrix.dot(molecule.coord_basis,gc)
 
             dE = molecule.difference_energy
-            if dE is not 1000.:
+            if dE < 100.:
                 print(" difference energy is %5.4f" % dE)
             molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
 
@@ -237,29 +239,23 @@ class lbfgs(base_optimizer):
                 print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
+            gmax = float(np.max(g))
+            disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
+            print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
+            converged=False
+            if self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                converged=True
+            elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                converged=True
 
-            # Check for MECI convergence
-            if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
-                if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
-                    print(" converged")
-                    if ostep % xyzframerate!=0:
-                        geoms.append(molecule.geometry)
-                        energies.append(molecule.energy-refE)
-                    break
-            # Check for  normal convergence
-            else:
-                gmax = float(np.max(g))
-                disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
-                print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
-                if molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                    print(" converged")
-                    if ostep % xyzframerate!=0:
-                        geoms.append(molecule.geometry)
-                        energies.append(molecule.energy-refE)
-                        manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
-                    break
+            if converged:
+                print(" converged")
+                if ostep % xyzframerate!=0:
+                    geoms.append(molecule.geometry)
+                    energies.append(molecule.energy-refE)
+                    manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                break
             #print " ########## DONE WITH TOTAL STEP #########"
-            print("\n")
 
             #update DLC  --> this changes q, g, Hint
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':

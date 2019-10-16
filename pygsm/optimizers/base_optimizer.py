@@ -60,7 +60,12 @@ class base_optimizer(object):
         opt.add_option(
                 key='DMAX',
                 value=0.1,
-                doc='max step size',
+                doc='step size controller, this changes depending on the performance of the optimization',
+                )
+        opt.add_option(
+                key='abs_max_step',
+                value=0.4,
+                doc='the absolute max step allowed in optimization, a hard cutoff is required because converting internal coordinates becomes pathological'
                 )
 
         opt.add_option(
@@ -143,7 +148,7 @@ class base_optimizer(object):
                 'wolfe':0.9,
                 'max_linesearch':3,
                 'min_step':self.DMIN,
-                'max_step':0.4,
+                'max_step': options['abs_max_step'],
         }
         return
 
