@@ -81,7 +81,9 @@ class SE_Cross(SE_GSM):
             # unconstrained penalty optimization
             #TODO make unctonstrained "CROSSING" which checks for dE convergence
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
+            self.nodes[self.nR].PES.sigma = 10.0
             print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
+            self.optimizer[self.nR].opt_cross=True
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
             self.optimizer[self.nR].optimize(
                     molecule=self.nodes[self.nR],
