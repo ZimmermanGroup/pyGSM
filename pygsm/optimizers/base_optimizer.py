@@ -42,6 +42,13 @@ class base_optimizer(object):
                 )
 
         opt.add_option(
+                key='conv_dE',
+                value=1.,
+                required=False,
+                allowed_types=[float],
+                doc='State difference Energy convergence'
+                )
+        opt.add_option(
                 key='conv_gmax',
                 value=100.,
                 required=False,
@@ -58,6 +65,13 @@ class base_optimizer(object):
                 )
 
         opt.add_option(
+                key='opt_cross',
+                value=False,
+                allowed_types=[bool],
+                doc='used for state crossing calculations',
+                )
+
+        opt.add_option(
                 key='DMAX',
                 value=0.1,
                 doc='step size controller, this changes depending on the performance of the optimization',
@@ -69,9 +83,22 @@ class base_optimizer(object):
                 )
 
         opt.add_option(
+                key='ftol',
+                value=1e-4,
+                doc='used for the strong armijo condition to determine if energy decreased enough',
+                )
+
+        opt.add_option(
                 key='SCALEQN',
                 value=1,
                 )
+
+        opt.add_option(
+                key='update_hess_in_bg',
+                value=True,
+                doc='For optimizers not bfgs keep track of Hessian in back ground',
+                )
+
         opt.add_option(
                 key='SCALEW',
                 value=1.,
@@ -126,6 +153,7 @@ class base_optimizer(object):
         self.conv_disp =options['conv_disp']  #12e-4 #max atomic displacement
         self.conv_gmax = options['conv_gmax'] #3e-4 #max gradient
         self.conv_Ediff = options['conv_Ediff'] #1e-6 #E diff
+        self.conv_dE = options['conv_dE'] 
         self.conv_grms = options['OPTTHRESH']
 
         # TS node properties
@@ -133,7 +161,10 @@ class base_optimizer(object):
         self.DMIN = self.options['DMAX']/20.
 
         #MECI 
-        self.opt_cross = False
+        self.opt_cross = self.options['opt_cross']
+
+        # Hessian
+        self.update_hess_in_bg = self.options['update_hess_in_bg']
 
         # Hessian
         self.Hint=None
@@ -144,12 +175,16 @@ class base_optimizer(object):
         # additional parameters needed by linesearch
         self.linesearch_parameters = {
                 'epsilon':1e-5,
-                'ftol':1e-4,
+                'ftol':options['ftol'], #1e-4,
                 'wolfe':0.9,
                 'max_linesearch':3,
                 'min_step':self.DMIN,
                 'max_step': options['abs_max_step'],
         }
+
+        # Converged
+        self.converged=False
+
         return
 
     @property
@@ -159,6 +194,14 @@ class base_optimizer(object):
     @conv_grms.setter
     def conv_grms(self,value):
         self.options['OPTTHRESH']=value
+
+    @property
+    def opt_cross(self):
+        return self.options['opt_cross']
+
+    @opt_cross.setter
+    def opt_cross(self,value):
+        self.options['opt_cross']=value
 
     def get_nconstraints(self,opt_type):
         if opt_type in ["ICTAN", "CLIMB"]:
