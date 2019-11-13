@@ -70,6 +70,11 @@ def main():
     parser.add_argument('-use_multiprocessing',action='store_true',help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
     parser.add_argument('-dont_analyze_ICs',action='store_false',help="Don't post-print the internal coordinates primitives and values") #defaults to true
     parser.add_argument('-hybrid_coord_idx_file',type=str,help="A filename containing a list of  indices to use in hybrid coordinates. 0-Based indexed")
+    parser.add_argument('-frozen_coord_idx_file',type=str,help="A filename containing a list of  indices to be frozen. 0-Based indexed")
+    parser.add_argument('-conv_Ediff',default=100.,type=float,help='')
+    parser.add_argument('-conv_dE',default=1.,type=float,help='')
+    parser.add_argument('-conv_gmax',default=100.,type=float,help='')
+    parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
 
 
     args = parser.parse_args()
@@ -121,6 +126,7 @@ def main():
               #molecule
               'coordinate_type' : args.coordinate_type,
               'hybrid_coord_idx_file' : args.hybrid_coord_idx_file,
+              'frozen_coord_idx_file' : args.frozen_coord_idx_file,
 
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
@@ -128,6 +134,9 @@ def main():
               'isomers_file': args.isomers,
               'ADD_NODE_TOL': args.ADD_NODE_TOL,
               'CONV_TOL': args.CONV_TOL,
+              'conv_Ediff': args.conv_Ediff,
+              'conv_dE': args.conv_dE,
+              'conv_gmax': args.conv_gmax,
               'BDIST_RATIO':args.BDIST_RATIO,
               'DQMAG_MAX': args.DQMAG_MAX,
               'growth_direction': args.growth_direction,
@@ -137,6 +146,7 @@ def main():
               'max_gsm_iters' : args.max_gsm_iters,
               'max_opt_steps' : args.max_opt_steps,
               'use_multiprocessing': args.use_multiprocessing,
+              'sigma'   :   args.sigma,
               }
 
     nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
@@ -160,11 +170,13 @@ def main():
         else:
             inpfileq['num_nodes']=20
     do_coupling = True if inpfileq['PES_type']=="Avg_PES" else False
+    coupling_states = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)] if inpfileq['PES_type']=="Avg_PES" else []
     
     lot = lot_class.from_options(
             ID = inpfileq['ID'],
             lot_inp_file=inpfileq['lot_inp_file'],
             states=inpfileq['states'],
+            coupling_states=coupling_states,
             geom=geoms[0],
             nproc=nproc,
             charge=args.charge,
@@ -174,6 +186,7 @@ def main():
     #PES
     if inpfileq['gsm_type'] == "SE_Cross":
         if inpfileq['PES_type']!="Penalty_PES":
+            print(" setting PES type to Penalty")
             inpfileq['PES_type']="Penalty_PES"
     if args.optimize_mesx or args.optimize_meci  or inpfileq['gsm_type']=="SE_Cross":
         assert inpfileq['PES_type'] == "Penalty_PES", "Need penalty pes for optimizing MESX/MECI"
@@ -198,7 +211,12 @@ def main():
                 ad_idx=inpfileq['states'][1][1],
                 FORCE=inpfileq['FORCE']
                 )
-        pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)
+        if inpfileq['PES_type']=="Avg_PES":
+            pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)
+        elif inpfileq['PES_type']=="Penalty_PES": 
+            pes = pes_class(PES1=pes1,PES2=pes2,lot=lot,sigma=inpfileq['sigma'])
+        else:
+            raise NotImplementedError
 
     # Molecule
     nifty.printcool("Building the reactant object with {}".format(inpfileq['coordinate_type']))
@@ -214,6 +232,12 @@ def main():
         hybrid_indices = [int(x) for x in hybrid_indices]
     else:
         hybrid_indices = None
+    if inpfileq['frozen_coord_idx_file'] is not None:
+        with open(inpfileq['frozen_coord_idx_file']) as f:
+            frozen_indices = f.read().splitlines()
+        frozen_indices = [int(x) for x in frozen_indices]
+    else:
+        frozen_indices = None
 
 
     # Build the topology
@@ -281,6 +305,7 @@ def main():
             addtr=addtr,
             addcart=addcart,
             topology=top1,
+            frozen_atoms=frozen_indices,
             )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
@@ -313,6 +338,7 @@ def main():
             addcart=addcart,
             connect=connect,
             primitives=p1,
+            frozen_atoms=frozen_indices,
             ) 
     if inpfileq['gsm_type'] == 'DE_GSM':
         coord_obj2 = DelocalizedInternalCoordinates.from_options(
@@ -322,6 +348,7 @@ def main():
                 addcart=addcart,
                 connect=connect,
                 primitives=p1,
+                frozen_atoms=frozen_indices,
                 ) 
 
     nifty.printcool("Building the reactant")
@@ -355,8 +382,18 @@ def main():
    
     # optimizer
     nifty.printcool("Building the Optimizer object")
+    update_hess_in_bg = True
+    if args.only_climb or inpfileq['optimizer']=="lbfgs":
+        update_hess_in_bg = False
     opt_class = getattr(sys.modules[__name__], inpfileq['optimizer'])
-    optimizer = opt_class.from_options(print_level=inpfileq['opt_print_level'],Linesearch=inpfileq['linesearch'])
+    optimizer = opt_class.from_options(
+            print_level=inpfileq['opt_print_level'],
+            Linesearch=inpfileq['linesearch'],
+            update_hess_in_bg = update_hess_in_bg,
+            conv_Ediff = inpfileq['conv_Ediff'],
+            conv_dE = inpfileq['conv_dE'],
+            conv_gmax = inpfileq['conv_gmax'],
+            )
 
     # GSM
     nifty.printcool("Building the GSM object")
@@ -389,6 +426,11 @@ def main():
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
+
+
+    # For seam calculation
+    if inpfileq['gsm_type']=="DE_GSM" and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
+        optimizer.opt_cross = True
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
         nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
