@@ -7,6 +7,10 @@ import numpy as np
 import simtk.unit as openmm_units
 import simtk.openmm.app as openmm_app
 import simtk.openmm as openmm
+import json
+
+
+from parmed import load_file, unit as u
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -14,19 +18,84 @@ from .base_lot import Lot
 from utilities import *
 
 class OpenMM(Lot):
+    def __init__(self,options):
+        super(OpenMM,self).__init__(options)
+        if self.lot_inp_file is not None and self.simulation is None:
+            self.build_simulation_from_dictionary()
    
+    def build_simulation_from_dictionary(self):
+        d = {}
+        d = json.load(open(self.lot_inp_file))
+        print(d)
+
+        # crystal
+        use_crystal = d.get('use_crystal','no')
+
+        # PME
+        use_pme = d.get('use_pme','no')
+        cutoff = d.get('cutoff',1.0)
+
+        # prmtop, inpcrd
+        prmtopfile = d.get('prmtop',None)
+        inpcrdfile = d.get('inpcrd',None)
+
+        # Integrator will never be used (Simulation requires one)
+        integrator = openmm.VerletIntegrator(1.0)
+
+        # create simulation object
+        if use_crystal=='yes':
+            crystal = load_file(prmtopfile,inpcrdfile)
+
+            if use_pme=='yes':
+                system = crystal.createSystem(
+                    nonbondedMethod=openmm_app.PME,
+                    nonbondedCutoff=cutoff*openmm_units.nanometer,
+                    )
+            else:
+                system = crystal.createSystem(
+                    nonbondedMethod=openmm_app.NoCutoff,
+                    )
+            self.simulation = openmm_app.Simulation(crystal.topology, system, integrator)
+            # set the box vectors
+            inpcrd = openmm_app.AmberInpcrdFile(inpcrdfile)
+            if inpcrd.boxVectors is not None:
+                print(" setting box vectors")
+                print(inpcrd.boxVectors)
+                self.simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+        else:
+            prmtop = openmm_app.AmberPrmtopFile(prmtopfile)
+            if use_pme=='yes':
+                system = prmtop.createSystem(
+                    nonbondedMethod=openmm_app.PME,
+                    nonbondedCutoff=cutoff*openmm_units.nanometer,
+                    )
+            else:
+                system = prmtop.createSystem(
+                    nonbondedMethod=openmm_app.NoCutoff,
+                    )
+            self.simulation = openmm_app.Simulation(
+                prmtop.topology,
+                system,
+                integrator,
+                )
+
+
     @property
     def simulation(self):
         return self.options['job_data']['simulation']
+
+    @simulation.setter
+    def simulation(self,value):
+        self.options['job_data']['simulation'] = value
   
     def get_energy(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             self.run(coords)
         return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
 
     def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             self.run(coords)
         return self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
