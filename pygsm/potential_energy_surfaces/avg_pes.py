@@ -60,7 +60,9 @@ class Avg_PES(PES):
             assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
         return 0.5*(self.PES2.get_gradient(xyz) + self.PES1.get_gradient(xyz))
 
-    def critical_points_bp(self,xyz,radius=0.2,num_slices=40):
+
+    # http://pubs.acs.org/doi/abs/10.1021/acs.jctc.6b00384
+    def symmetric_orthogonalization(self,xyz):
         def get_beta(g,h):
             gdoth = np.dot(g.T,h)
             print(" g*h = %1.4f" % gdoth)
@@ -79,7 +81,7 @@ class Avg_PES(PES):
 
         # get vectors
         energy = self.get_energy(xyz)
-        dgrad = self.get_dgrad(xyz)
+        dgrad = 0.5*self.get_dgrad(xyz)
         dvec = self.get_coupling(xyz)
         sab = self.get_average_gradient(xyz)
         print(" dE is %5.4f" % self.dE)
@@ -89,49 +91,88 @@ class Avg_PES(PES):
         beta = get_beta(dgrad,nac)
         print(" beta = %1.6f" % beta)
         
-        # rotate dvec and dgrad to be orthonormal
+        # rotate nac and dgrad to be orthonormal
         save_nac = nac.copy()
         nac = nac*np.cos(beta) - dgrad*np.sin(beta)
         dgrad = dgrad*np.cos(beta) - save_nac*np.sin(beta)
 
         norm_nac = np.linalg.norm(nac)
         norm_dg = np.linalg.norm(dgrad)
-        print(" norm x %2.5f" % norm_dg)
-        print(" norm y %2.5f" % norm_nac)
+        #print(" norm x %2.5f" % norm_dg)
+        #print(" norm y %2.5f" % norm_nac)
 
         pitch = calc_pitch(dgrad,nac)
-        print(" pitch %1.6f" % pitch)
+        #print(" pitch %1.6f" % pitch)
         asymmetry = calc_asymmetry(dgrad,nac)
         if asymmetry<0.:
-            # swap dvec and dgrad
+            # swap nac and dgrad
             dgrad_copy = dgrad.copy()
             dgrad = nac.copy()
             nac = dgrad_copy
+            norm_nac = np.linalg.norm(nac)
+            norm_dg = np.linalg.norm(dgrad)
             asymmetry = calc_asymmetry(dgrad,nac)
 
-        # discretize branching plane and find critical points
-        #theta = np.linspace(0,2*np.pi,num_slices)
-        theta = [ i*2*np.pi/num_slices for i in range(num_slices)]
-       
         dotx = np.dot(sab.T,dgrad)/norm_dg
         doty = np.dot(sab.T,nac)/norm_nac
         sab_x = dotx/pitch
         sab_y = doty/pitch
 
-        # flip dgrad,dvec
+        # flip direction of dgrad,nac
+        print(" sab_x %1.2f sab_y %1.2f" % (sab_x,sab_y))
         if sab_x < 0. and sab_y > 0.:
+            print(" flipping dgrad")
             dgrad = -dgrad
             dotx = np.dot(sab.T,dgrad)/norm_dg
             sab_x = dotx/pitch
         elif sab_x > 0. and sab_y < 0.:
-            dvec = -dvec
+            print(" flipping nac")
+            nac = -nac
             doty = np.dot(sab.T,nac)/norm_nac
             sab_y = doty/pitch
 
         sigma = np.sqrt(sab_x*sab_x + sab_y*sab_y)
         theta_s = np.arctan(sab_y/sab_x)
-        print(" asymmetry %1.5f, sigma %1.5f theta_s %1.5f sx %1.2f sy %1.2f" %(asymmetry,sigma,theta_s,sab_x,sab_y))
+        print(" pitch  %1.5f, asymmetry %1.5f, sigma %1.5f theta_s %1.5f sx %1.2f sy %1.2f" %(pitch,asymmetry,sigma,theta_s,sab_x,sab_y))
 
+        
+        P = ((sigma**2.)/(1.-asymmetry**2.))*(1.-asymmetry*np.cos(2*theta_s))
+        B = ((sigma**2) / (4*asymmetry**2))**(1./3) * (((1.+asymmetry)*(np.cos(theta_s))**2)**(1./3) + ((1-asymmetry)*(np.sin(theta_s))**2)**(1./3))
+        print(" P %2.5f B %2.5f" % (P,B))
+
+        if P< 1.:
+            print(" Your conical intersection is peaked")
+        elif P>1.:
+            print(" Your conical intersection is sloped")
+        if B<1.:
+            print(" Your conical intersection is bifurcating")
+        if B>1.:
+            print(" Your conical intersection is single path")
+
+        return {'x':dgrad/norm_dg,
+                'y':nac/norm_nac,
+                'pitch':pitch,
+                'asymmetry':asymmetry,
+                'sigma':sigma,
+                'theta_s':theta_s,
+                'sab_x':sab_x,
+                'sab_y':sab_y}
+
+    def critical_points_bp(self,xyz,radius=0.2,num_slices=40):
+
+        # get data
+        data = symmetric_orthogonalization(xyz)
+        theta_s = data['theta_s']
+        asymmetry = data['asymmetry']
+        pitch = data['pitch']
+        x = data['x']
+        y = data['y']
+
+
+        # discretize branching plane and find critical points
+        #theta = np.linspace(0,2*np.pi,num_slices)
+        theta = [ i*2*np.pi/num_slices for i in range(num_slices)]
+       
         EA=[]
         EB=[]
         for n in range(num_slices):
@@ -142,8 +183,8 @@ class Avg_PES(PES):
        
         EA = np.asarray(EA)
         EB = np.asarray(EB)
-        np.savetxt('EA.txt',EA)
-        np.savetxt('EB.txt',EB)
+        np.savetxt('model_EA.txt',EA)
+        np.savetxt('model_EB.txt',EB)
         #for n in range(num_slices):
         #    print(" EA[%2i] = %2.8f" %(n,EA[n]))
         #for n in range(num_slices):
@@ -188,14 +229,33 @@ class Avg_PES(PES):
         dgrad = np.reshape(dgrad,(-1,3))
         nac = np.reshape(nac,(-1,3))
         for n in theta_list:
-            mxyz.append(xyz + radius*np.cos(theta[n])*dgrad/norm_dg + radius*np.cos(theta[n])*nac/norm_nac)
+            mxyz.append(xyz + radius*np.cos(theta[n])*x + radius*np.cos(theta[n])*y)
         
         return mxyz
 
 
     def fill_energy_grid2d(self,xyz_grid):
-        E1 = self.PES1.fill_energy_grid2d(xyz_grid)
-        E2 = self.PES2.fill_energy_grid2d(xyz_grid)
+        #E1 = self.PES1.fill_energy_grid2d(xyz_grid)
+        #E2 = self.PES2.fill_energy_grid2d(xyz_grid)
+        #return E1,E2
+        assert xyz_grid.shape[-1] == len(self.lot.geom)*3, "xyz nneds to be 3*natoms long"
+        assert xyz_grid.ndim == 3, " xyzgrid needs to be a tensor with 3 dimensions"
+
+        E1 = np.zeros((xyz_grid.shape[0],xyz_grid.shape[1]))
+        E2 = np.zeros((xyz_grid.shape[0],xyz_grid.shape[1]))
+
+        rc=0
+        for mat in xyz_grid:
+            cc=0
+            for row in mat:
+                xyz = np.reshape(row,(-1,3))
+                E1[rc,cc] = self.PES1.get_energy(xyz)
+                E2[rc,cc] = self.PES2.get_energy(xyz)
+                #E1[rc,cc] = self.lot.get_energy(xyz,self.PES1.multiplicity,self.PES1.ad_idx)
+                #E2[rc,cc] = self.lot.get_energy(xyz,self.PES2.multiplicity,self.PES2.ad_idx)
+                cc+=1
+            rc+=1
+         
         return E1,E2
 
 
