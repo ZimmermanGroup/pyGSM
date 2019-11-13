@@ -27,6 +27,14 @@ from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,T
 
 # TODO nconstraints in ic_reparam and write_iters is irrelevant
 
+# THis can help us parallelize things
+def worker(arg):
+    obj, methname = arg[:2]
+    return getattr(obj, methname)(*arg[2:])
+
+# e.g. list_of_results = pool.map(worker, ((obj, "my_process", 100, 1) for obj in list_of_objects))
+
+
 
 class Base_Method(Print,Analyze,object):
 
@@ -311,7 +319,13 @@ class Base_Method(Print,Analyze,object):
             if not self.climber and not self.finder:
                 print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
                 print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
-                if sum_gradrms<sum_conv_tol: #Break even if not climb/find
+                all_conv=True
+                for  n in range(1,self.nnodes-1):
+                    if not self.optimizer[n].converged:
+                        all_conv=False
+                        break
+
+                if sum_gradrms<sum_conv_tol and all_conv: #Break even if not climb/find
                     break
 
             # => set stage <= #
@@ -494,11 +508,13 @@ class Base_Method(Print,Analyze,object):
             
             dqmaga[n]=0.0
             ictan0 = np.copy(self.ictan[n])
+
+            # update newic coordinate basis
             self.newic.xyz = self.nodes[newic_n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan0)
             nbonds=self.nodes[0].num_bonds
-
-            constraint = self.nodes[n].constraints[:,0]
+            #constraint = self.nodes[n].constraints[:,0]
+            constraint = self.newic.constraints[:,0]
             prim_constraint = block_matrix.dot(Vecs,constraint)
 
             # mult bonds
@@ -521,7 +537,10 @@ class Base_Method(Print,Analyze,object):
                 print(self.ictan[n].T)
         if self.print_level>0:
             print('------------printing dqmaga---------------')
-            print(dqmaga)
+            for n in range(n0+1,self.nnodes-1):
+                print(" {:5.4}".format(dqmaga[n]),end='')
+            print()
+            #print(dqmaga)
         self.dqmaga = dqmaga
 
     def get_tangents_1g(self):
@@ -686,22 +705,35 @@ class Base_Method(Print,Analyze,object):
         if self.use_multiprocessing:
             cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc
             print(" Parallelizing over {} processes".format(cpus))
-            pool = mp.Pool(processes=cpus)
-            print("Created the pool")
-            results=pool.map(
-                    run, 
-                    [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
-                    )
+            out_queue = mp.Queue()
 
-            pool.close()
-            print("Calling join()...")
-            sys.stdout.flush()
-            pool.join()
-            print("Joined")
+            workers = [ mp.Process(target=mod, args=(node, 'some', out_queue) ) for node in self.nodes ]
 
-            for (node,optimizer,n) in results:
-                self.nodes[n]=node
-                self.optimizer[n]=optimizer
+            for work in workers: work.start()
+
+            for work in workers: work.join()
+
+            res_lst = []
+            for j in range(len(workers)):
+                res_lst.append(out_queue.get())
+
+
+            #pool = mp.Pool(processes=cpus)
+            #print("Created the pool")
+            #results=pool.map(
+            #        run, 
+            #        [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
+            #        )
+
+            #pool.close()
+            #print("Calling join()...")
+            #sys.stdout.flush()
+            #pool.join()
+            #print("Joined")
+
+            #for (node,optimizer,n) in results:
+            #    self.nodes[n]=node
+            #    self.optimizer[n]=optimizer
         else:
             #results=[]
             #run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
@@ -979,6 +1011,8 @@ class Base_Method(Print,Analyze,object):
         nR = 1
         nP = 1
         nn = nR + nP
+        #E0=start_node.energy
+
         for n in range(num_interp):
             if num_nodes - nn > 1:
                 stepsize = 1./float(num_nodes - nn)
@@ -992,6 +1026,8 @@ class Base_Method(Print,Analyze,object):
                 nodes[nR] = Base_Method.add_node(nodes[iR],nodes[iP],stepsize,iN)
                 if nodes[nR] == None:
                     raise RuntimeError
+
+                #print(" Energy of node {} is {:5.4}".format(nR,nodes[nR].energy-E0))
                 nR +=1 
                 nn += 1
 
@@ -1002,6 +1038,7 @@ class Base_Method(Print,Analyze,object):
                 nodes[n2] = Base_Method.add_node(nodes[n1],nodes[n3],stepsize,n2)
                 if nodes[n2] == None:
                     raise RuntimeError
+                #print(" Energy of node {} is {:5.4}".format(nR,nodes[nR].energy-E0))
                 nP +=1 
                 nn += 1
             sign *= -1
@@ -1172,7 +1209,8 @@ class Base_Method(Print,Analyze,object):
         edist = np.zeros(ictalloc)
     
         # align first and last nodes
-        self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes-1,self.nnodes-2)
+        # assuming they are aligned
+        #self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes-1,self.nnodes-2)
 
         for n in range(1,self.nnodes-1):
             self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
@@ -1292,6 +1330,10 @@ class Base_Method(Print,Analyze,object):
                         ictan[n] = np.copy(ictan0[n]) 
                     else:
                         ictan[n] = np.copy(ictan0[n+1]) 
+
+                    # TODO
+                    # it would speed things up a lot if we don't reform  coordinate basis
+                    # perhaps check if similarity between old ictan and new ictan is close?
                     self.newic.update_coordinate_basis(ictan[n])
 
                     constraint = self.newic.constraints[:,0]
@@ -1619,19 +1661,25 @@ class Base_Method(Print,Analyze,object):
         self.energies[0] = 0.
         print(" initial energy is %3.4f" % self.nodes[0].energy)
 
-        for struct in range(1,nstructs):
+        self.nnodes=self.nR=nstructs
+        self.isRestarted=True
+        self.done_growing=True
+        for struct in range(1,nstructs-1):
             self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct,copy_wavefunction=False)
-            print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
-            self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
-            print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
             #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
             #self.nodes[struct].gradrms=grmss[struct]
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
 
-        self.nnodes=self.nR=nstructs
-        self.isRestarted=True
-        self.done_growing=True
+        print(" doing one-time ic_reparam REMOVE ME")
+        self.get_tangents_1()
+        self.ic_reparam(ic_reparam_steps=8)
+
+        for struct in range(1,nstructs-1):
+            print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
+            self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
+            print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
@@ -1731,6 +1779,14 @@ def run(args):
         RuntimeError
 
     return node,optimizer,n
+
+def mod(test,nn,out_queue):
+    print(test.num)
+    test.num = np.random.randn()
+    print(test.num)
+    test.name = nn
+    out_queue.put(test)
+
 
 
 if __name__=='__main__':
