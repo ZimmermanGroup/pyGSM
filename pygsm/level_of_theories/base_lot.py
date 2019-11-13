@@ -45,8 +45,15 @@ class Lot(object):
             doc='list of states 0-indexed')
 
         opt.add_option(
+                key='gradient_states',
+                value=[],
+                required=False,
+                doc='list of states to calculate gradients for, will assume same as states if not given'
+                )
+
+        opt.add_option(
                 key='coupling_states',
-                value=None,
+                value=[],
                 required=False,
                 doc='states to calculate derivative coupling. Currently only one coupling can be calculated per level of theory object.'
                 )
@@ -153,6 +160,26 @@ class Lot(object):
         """ Constructor """
         self.options = options
 
+        # count number of states
+        singlets=self.search_tuple(self.states,1)
+        triplets=self.search_tuple(self.states,3)
+        len_singlets= max(singlets,key=lambda x: x[1])[1]+1
+        len_triplets=len(triplets)
+
+        if len(self.states)<len_singlets+len_triplets:
+            print('fixing states to be proper length')
+            tmp = []
+            for i in range(len_singlets):
+                tmp.append((1,i))
+            for i in range(len_triplets):
+                tmp.append((3,i))
+            self.states = tmp
+            print(' New states ',self.states)
+
+        if not self.options['gradient_states']:
+            print(" Assuming gradient states are ",self.states)
+            self.options['gradient_states']=self.options['states']
+
         self.geom=self.options['geom']
         if self.geom is not None:
             print(" initializing LOT from geom")
@@ -167,7 +194,6 @@ class Lot(object):
 
         # Cache some useful atributes
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
-        self.states =self.options['states']
         self.atoms = manage_xyz.get_atoms(self.geom)
         self.ID = self.options['ID']
 
@@ -208,8 +234,26 @@ class Lot(object):
 
     @coupling_states.setter
     def coupling_states(self,value):
-        assert type(value)==tuple, "incorrect type for coupling"
+        assert type(value)==list or type(value)==tuple, "incorrect type for coupling"
         self.options['coupling_states']=value
+
+    @property
+    def gradient_states(self):
+        return self.options['gradient_states']
+
+    @gradient_states.setter
+    def gradient_states(self,value):
+        assert type(value)==list, "incorrect type for gradient"
+        self.options['gradient_states']=value
+
+    @property
+    def states(self):
+        return self.options['states']
+
+    @states.setter
+    def states(self,value):
+        assert type(value)==list, "incorrect type for gradient"
+        self.options['states']=value
 
     @property
     def calc_grad(self):
