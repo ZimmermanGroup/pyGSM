@@ -16,7 +16,6 @@ from ._linesearch import backtrack,NoLineSearch,golden_section
 from .base_optimizer import base_optimizer
 from utilities import *
 
-
 class eigenvector_follow(base_optimizer):
 
     def optimize(
@@ -26,7 +25,9 @@ class eigenvector_follow(base_optimizer):
             opt_type='UNCONSTRAINED',
             opt_steps=3,
             ictan=None,
-            xyzframerate=4):
+            xyzframerate=4,
+            verbose=False,
+            ):
 
         #print " refE %5.4f" % refE
         print(" initial E %5.4f" % (molecule.energy - refE))
@@ -37,8 +38,6 @@ class eigenvector_follow(base_optimizer):
         energies.append(molecule.energy-refE)
 
         # stash/initialize some useful attributes
-        self.disp = 1000.
-        self.Ediff = 1000.
         self.check_inputs(molecule,opt_type,ictan)
         nconstraints=self.get_nconstraints(opt_type)
         self.buf = StringIO()
@@ -77,16 +76,7 @@ class eigenvector_follow(base_optimizer):
             gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
-        print(molecule.gradrms)
         dE = molecule.difference_energy
-        if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
-            if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
-                print(" converged")
-                return geoms,energies
-        elif molecule.gradrms < self.conv_grms:
-            print(" converged")
-            return geoms,energies
-
         update_hess=False
 
         # ====>  Do opt steps <======= #
@@ -137,19 +127,26 @@ class eigenvector_follow(base_optimizer):
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
         
             #print(" ### Starting  line search ###")
-            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp,constraint_steps,self.linesearch_parameters,molecule)
-            if ls['status'] ==-2:
-                x = xp.copy()
-                print('[ERROR] the point return to the privious point')
-                return ls['status']
-            #print(" ## Done line search")
-        
+            ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp,constraint_steps,self.linesearch_parameters,molecule,verbose)
+
+
             # get values from linesearch
             molecule = ls['molecule']
             step = ls['step']
             x = ls['x']
             fx = ls['fx']
             g  = ls['g']
+
+            if ls['status'] ==-2:
+                print('[ERROR] the point return to the privious point')
+                x = xp.copy()
+                molecule.xyz = self.xyzp
+                g = gp.copy()
+                fx = fxp
+                ratio=0.
+
+                molecule.newHess=5
+                #return ls['status']
 
             # calculate predicted value from Hessian, gp is previous constrained gradient
             scaled_dq = dq*step
@@ -174,19 +171,13 @@ class eigenvector_follow(base_optimizer):
             ratio = dEstep/dEpre
             molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
             self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
-            # report the progress 
-            #TODO make these lists and check last element for convergene
-            self.disp = np.max(x - xp)/units.ANGSTROM_TO_AU
-            self.Ediff = (fx -fxp) / units.KCAL_MOL_PER_AU
-            xnorm = np.sqrt(np.dot(x.T, x))
-            gnorm = np.sqrt(np.dot(g.T, g)) 
-            if xnorm < 1.0:
-            	xnorm = 1.0
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)
-            geoms.append(molecule.geometry)
-            energies.append(molecule.energy-refE)
+            if ostep % xyzframerate==0:
+                geoms.append(molecule.geometry)
+                energies.append(molecule.energy-refE)
+                manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
 
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
@@ -212,21 +203,28 @@ class eigenvector_follow(base_optimizer):
             # check for convergence TODO
             fx = molecule.energy
             dE = molecule.difference_energy
-            if dE != 1000.:
+            if dE< 1000.:
                 print(" difference energy is %5.4f" % dE)
+            gmax = float(np.max(g))
+            disp = float(np.linalg.norm((xyz-xyzp).flatten()))
+            xnorm = np.sqrt(np.dot(x.T, x))
+            gnorm = np.sqrt(np.dot(g.T, g)) 
+            if xnorm < 1.0:
+            	xnorm = 1.0
 
-            if molecule.PES.__class__.__name__!="PES" and self.opt_cross:
-                if molecule.gradrms < self.conv_grms and abs(dE)<1.0:
-                    print(" converged")
-                    if ostep % xyzframerate!=0:
-                        geoms.append(molecule.geometry)
-                        energies.append(molecule.energy-refE)
-                    break
-            elif molecule.gradrms < self.conv_grms:
+            print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
+            self.converged=False
+            if self.opt_cross and abs(dE)<1.0 and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                self.converged=True
+            elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                self.converged=True
+
+            if self.converged:
                 print(" converged")
                 if ostep % xyzframerate!=0:
                     geoms.append(molecule.geometry)
                     energies.append(molecule.energy-refE)
+                    manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
                 break
 
             #update DLC  --> this changes q, g, Hint
