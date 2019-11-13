@@ -50,16 +50,28 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
 
     # The initial value of the objective function. 
     finit = fx
+
+    #print(molecule.coord_obj.frozen_atoms)
+
     dgtest = parameters['ftol'] * dginit
+    #print('dginit %9.7f' % dginit)
+    #print('dgtest %9.7f' % dgtest)
+
+    #with np.printoptions(threshold=np.inf):
+    #    print(d.T)
+
+    #print(step)
     
     while True:
         x = xp
         x = x + d * step  + constraint_step 
+        xyzp = molecule.xyz.copy()
         xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=verbose)
-
         # Evaluate the function and gradient values. 
         # use these so molecule xyz doesn't change
         fx = molecule.PES.get_energy(xyz)
+
+        #print('new fx %11.9f' % fx)
         gx = molecule.PES.get_gradient(xyz)
         g = molecule.coord_obj.calcGrad(xyz,gx)
         width = 1.
@@ -74,6 +86,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
 
         # check the sufficient decrease condition (Armijo condition).
         if fx > finit + (step * dgtest) and np.all(constraint_step==0):  #+ np.dot(g.T,constraint_step): # doesn't work with constraint :(
+            #print(" %5.4f %5.4f" % ((finit+step*dgtest),fx))
             print(" [INFO] not satisfy sufficient decrease condition.")
             width = dec
             print(" step %1.2f" % (step*width))
@@ -85,11 +98,13 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
                 print(" [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit))
                 print(" [INFO] not satisfy wolf condition.")
                 width = inc
+                print(" step %1.2f" % (step*width))
             else:
                 # check the strong wolfe condition
                 if dg > -parameters['wolfe'] * dginit:
-                	print(" [INFO] not satisfy strong wolf condition.")
-                	width = dec
+                    print(" [INFO] not satisfy strong wolf condition.")
+                    width = dec
+                    print(" step %1.2f" % (step*width))
                 else:
                     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
                     return result
@@ -98,7 +113,7 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result	
 
-        if step <= parameters['min_step']:
+        if step <= parameters['min_step'] and width>1.:
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             print(' [INFO] the linesearch step is too small')
             return result
