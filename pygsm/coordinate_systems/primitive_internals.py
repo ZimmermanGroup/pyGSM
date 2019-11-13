@@ -301,6 +301,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         xhash = hash(xyz.tostring())
         ht = time.time() - t0
         if xhash in self.stored_wilsonB:
+            #print(" returning stored")
             ans = self.stored_wilsonB[xhash]
             return ans
         xyz = xyz.reshape(-1,3)
@@ -442,15 +443,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         return Gt
 
-    def calcGrad(self, xyz, gradx):
-        #q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
-        #Gq = multi_dot([Ginv, Bmat, gradx])
-        #return Gq
-        return block_matrix.dot( Ginv,block_matrix.dot(Bmat,gradx) )
+    #def calcGrad(self, xyz, gradx):
+    #    #q0 = self.calculate(xyz)
+    #    Ginv = self.GInverse(xyz)
+    #    Bmat = self.wilsonB(xyz)
+    #    # Internal coordinate gradient
+    #    # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
+    #    #Gq = multi_dot([Ginv, Bmat, gradx])
+    #    #return Gq
+    #    return block_matrix.dot( Ginv,block_matrix.dot(Bmat,gradx) )
 
     def makeConstraints(self, xyz, constraints, cvals=None):
         # Add the list of constraints. 
@@ -776,6 +777,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             nprims+=3
                     elif addtr:
                         nodes=frag.nodes()
+                        #print(" Nodes")
+                        #print(nodes)
                         if len(nodes) >= 2:
                             self.add(TranslationX(nodes, w=np.ones(len(nodes))/len(nodes)))
                             self.add(TranslationY(nodes, w=np.ones(len(nodes))/len(nodes)))
@@ -1255,24 +1258,42 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         natoms = len(xyz)
 
+        #print("fragments")
+
         # need the primitive start and stop indices
         prim_idx_start_stop=[]
         new=True
         for frag in self.fragments:
             nodes=frag.L()
+            #print(nodes)
             prim_idx_start_stop.append((nodes[0],nodes[-1]))
         #print("prim start stop")
         #print(prim_idx_start_stop)
 
         prim_idx =[]
         for info in prim_idx_start_stop:
-            prim_idx += list(range(info[0],info[1]+1))
+            prim_idx += list(range(int(info[0]),int(info[1]+1)))
         #print('prim indices')
         #print(prim_idx)
 
-        new_hybrid_indices=list(range(natoms))
+        #print(natoms)
+        new_hybrid_indices=list(range(int(natoms)))
+        #print(new_hybrid_indices)
+        #for count,i in enumerate(prim_idx):
+        #    print(i,end=' ')
+        #    if (count+1) %20==0:
+        #        print('')
+        #print()
+
+        #print(type(new_hybrid_indices[0]))
         for elem in prim_idx:
-            new_hybrid_indices.remove(elem)
+            try:
+                new_hybrid_indices.remove(elem)
+            except:
+                #break
+                print(elem)
+                print(type(elem))
+                raise RuntimeError
         #print('hybrid indices')
         #print(new_hybrid_indices)
 

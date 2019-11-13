@@ -29,4 +29,4 @@ fail_quotes = [
     '"If you spend too much time thinking about a thing, you\'ll never get it done. " ~ Bruce Lee',
         ]
 
-print random.choice(fail_quotes)
+print(random.choice(fail_quotes))

@@ -44,7 +44,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # The DLC contains an instance of primitive internal coordinates.
         if self.options['primitives'] is None:
-            print(" making primitives from options")
+            print(" making primitives ")
             t1 = time()
             self.Prims = PrimitiveInternalCoordinates(options.copy())
             dt = time() - t1
@@ -56,6 +56,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #self.Prims=self.options['primitives']
             t0 = time()
             self.Prims = PrimitiveInternalCoordinates.copy(self.options['primitives'])
+
+            print(" num of primitives {}".format(len(self.Prims.Internals)))
             dt = time() - t0
             print(" Time to copy prims %.3f" % dt)
             self.Prims.clearCache()
@@ -78,8 +80,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             pass
 
         self.build_dlc(xyz)
-        #print "vecs after build"
-        #print self.Vecs
+        #print("vecs after build")
+        #print(self.Vecs)
 
     def clearCache(self):
         super(DelocalizedInternalCoordinates, self).clearCache()
@@ -241,20 +243,25 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         #return block_matrix.dot(Vt,block_matrix.dot(Bp,self.Vecs))
         return block_matrix.dot(block_matrix.transpose(self.Vecs),Bp)
 
-    def calcGrad(self, xyz, gradx):
-        #q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
-        nifty.click()
-        #Gq = multi_dot([Ginv, Bmat, gradx])
-        Bg = block_matrix.dot(Bmat,gradx)
-        Gq = block_matrix.dot( Ginv, Bg)
-        #print("time to do block mult %.3f" % nifty.click())
-        #Gq = np.dot(np.multiply(np.diag(Ginv)[:,None],Bmat),gradx)
-        #print("time to do efficient mult %.3f" % nifty.click())
-        return Gq
+    #def calcGrad(self, xyz, gradx):
+    #    #q0 = self.calculate(xyz)
+    #    Ginv = self.GInverse(xyz)
+    #    Bmat = self.wilsonB(xyz)
+
+    #    if self.frozen_atoms is not None:
+    #        for a in [3*i for i in self.frozen_atoms]:
+    #            gradx[a:a+3,0]=0.
+
+    #    # Internal coordinate gradient
+    #    # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
+    #    nifty.click()
+    #    #Gq = multi_dot([Ginv, Bmat, gradx])
+    #    Bg = block_matrix.dot(Bmat,gradx)
+    #    Gq = block_matrix.dot( Ginv, Bg)
+    #    #print("time to do block mult %.3f" % nifty.click())
+    #    #Gq = np.dot(np.multiply(np.diag(Ginv)[:,None],Bmat),gradx)
+    #    #print("time to do efficient mult %.3f" % nifty.click())
+    #    return Gq
     
     def calcGradProj(self, xyz, gradx):
         """
@@ -326,7 +333,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 if np.abs(value) > 1e-6:
                     LargeVals += 1
                     LargeIdx.append(ival)
-            #print()
+            #print('\n')
             #print("LargeVals %i" % LargeVals)
             tmpvecs.append(Q[:,LargeIdx])
 
@@ -384,6 +391,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             #project constraints into vectors
             self.Vecs = block_matrix.project_constraint(self.Vecs,cVecs)
             #overDeterminedVecs = block_matrix.project_constraint(self.Vecs,cVecs)
+            #print(" shape of DLC")
+            #print(self.Vecs.shape)
             #print("shape overdetermined %s" %(overDeterminedVecs.shape,))
             #self.Vecs = block_matrix.gram_schmidt(overDeterminedVecs)
 
@@ -877,7 +886,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         #Gi = np.linalg.inv(G)
         tmpGi = [ np.linalg.inv(g) for g in G.matlist ]
         time_inv = nifty.click()
-        # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+        #print("G-time: %.3f Inv-time: %.3f" % (time_G, time_inv))
         return block_matrix(tmpGi)
 
     def repr_diff(self, other):
@@ -943,59 +952,109 @@ if __name__ =='__main__' and __package__ is None:
     from os import sys, path
     sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
-    #filepath='../../data/butadiene_ethene.xyz'
-    #filepath='crystal.xyz'
-    filepath='multi1.xyz'
-
+    filepath = 'two_CO2.xyz'
+    filepath2 = 'two_CO2_RX.xyz'
+    filepath3 = 'two_CO2_RY.xyz'
+    filepath4 = 'two_CO2_RZ.xyz'
     geom1 = manage_xyz.read_xyz(filepath)
+    geom2 = manage_xyz.read_xyz(filepath2)
+    geom3 = manage_xyz.read_xyz(filepath3)
+    geom4 = manage_xyz.read_xyz(filepath4)
     atom_symbols  = manage_xyz.get_atoms(geom1)
 
     xyz1 = manage_xyz.xyz_to_np(geom1)
+    xyz2 = manage_xyz.xyz_to_np(geom2)
+    xyz3 = manage_xyz.xyz_to_np(geom3)
+    xyz4 = manage_xyz.xyz_to_np(geom4)
 
     ELEMENT_TABLE = elements.ElementData()
     atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
 
-    hybrid_indices = list(range(0,5)) + list(range(21,26))
-    #hybrid_indices = list(range(0,74)) + list(range(3348, 3358))
-    #hybrid_indices = None
-    #print(hybrid_indices)
-    #with open('frozen.txt') as f:
-    #    hybrid_indices = f.read().splitlines()
-    #hybrid_indices = [int(x) for x in hybrid_indices]
-    #print(hybrid_indices)
+    G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=None)
 
-    nifty.printcool(" Making topology")
-    G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
-
-    nifty.printcool(" Making prim")
-    p = DelocalizedInternalCoordinates.from_options(
+    p1 = DelocalizedInternalCoordinates.from_options(
             xyz=xyz1,
             atoms=atoms,
             addtr = True,
             topology=G1,
             ) 
+    print(p1.Prims)
+    print(p1.Prims.calcDiff(xyz1,xyz2))
+    print(p1.Prims.calcDiff(xyz1,xyz3))
+    print(p1.Prims.calcDiff(xyz1,xyz4))
+
+    #filepath='../../data/butadiene_ethene.xyz'
+    #filepath='crystal.xyz'
+    #filepath='multi1.xyz'
+
+    #geom1 = manage_xyz.read_xyz(filepath)
+    #atom_symbols  = manage_xyz.get_atoms(geom1)
+
+    #xyz1 = manage_xyz.xyz_to_np(geom1)
+
+    #ELEMENT_TABLE = elements.ElementData()
+    #atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
+
+    ##hybrid_indices = list(range(0,5)) + list(range(21,26))
+    #hybrid_indices=None
+    ##hybrid_indices = list(range(0,74)) + list(range(3348, 3358))
+    ##hybrid_indices = None
+    ##print(hybrid_indices)
+    ##with open('frozen.txt') as f:
+    ##    hybrid_indices = f.read().splitlines()
+    ##hybrid_indices = [int(x) for x in hybrid_indices]
+    ##print(hybrid_indices)
+
+    #nifty.printcool(" Making topology")
+    #G1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
+
+    #nifty.printcool(" Making prim")
+    #p = DelocalizedInternalCoordinates.from_options(
+    #        xyz=xyz1,
+    #        atoms=atoms,
+    #        addtr = True,
+    #        topology=G1,
+    #        ) 
 
 
-    #print(" Len p.prims")
-    #print(len(p.Prims.Internals))
-    #
-    #print(" Len prim vals")
-    #prim_vals = p.Prims.calculate(xyz)
-    #print(prim_vals)
-    #print(len(prim_vals))
+    ##print(" Prims")
+    ##print(p.Prims.Internals)
+    ##print(" Len p.prims")
+    ##print(len(p.Prims.Internals))
 
-    q = p.calculate(xyz1)
-    print(" Len dlc {}".format(len(q)))
+    ##for count,b in enumerate(p.Vecs.matlist):
+    ##    print('block {} shape is {}'.format(count,b.shape))
 
-    dQ = np.zeros(q.shape)
-    dQ[0] = 0.1
+    ##print("Prims values")
+    ##print(p.Prims.calculate(xyz1))
 
-    new_xyz = p.newCartesian(xyz1,dQ,verbose=True)
-    new_geom = manage_xyz.np_to_xyz(geom1,new_xyz)
+    ##print(" prim B")
+    ##Bp = p.Prims.wilsonB(xyz1)
+    ##for count,b in enumerate(Bp.matlist):
+    ##    print("Block {} of B".format(count))
+    ##    print(b)
+    ###print(p.Prims.wilsonB(xyz1))
 
-    both = [geom1,new_geom]
-    manage_xyz.write_xyzs('check.xyz',both,scale=1.)
+    #q = p.calculate(xyz1)
+    ##print("q")
+    ##print(q.T)
+    ##print(" Len dlc {}".format(len(q)))
 
-    #print(p.Internals)
+    #dQ = np.zeros(q.shape)
+    #dQ[15] = 0.1
+
+    #new_xyz = p.newCartesian(xyz1,dQ,verbose=True)
+    #new_geom = manage_xyz.np_to_xyz(geom1,new_xyz)
+
+    #q1 = p.calculate(new_xyz)
+    #print(q1.T)
+
+    #print("difference")
+    #print((q1-q).T)
+
+    #both = [geom1,new_geom]
+    #manage_xyz.write_xyzs('check.xyz',both,scale=1.)
+
+    ##print(p.Internals)
 
 

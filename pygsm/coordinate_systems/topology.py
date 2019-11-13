@@ -340,7 +340,7 @@ class Topology():
         # Decide if we want to use the grid algorithm.
         use_grid = toppbc or (np.min([xext, yext, zext]) > 2.0*gsz)
         if use_grid and prim_idx_start_stop is None:
-            #print(" Using grid")
+            print(" Using grid")
             # Inside the grid algorithm.
             # 1) Determine the left edges of the grid cells.
             # Note that we leave out the rightmost grid cell,
