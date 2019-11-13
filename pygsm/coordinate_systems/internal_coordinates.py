@@ -139,6 +139,10 @@ class InternalCoordinates(object):
         self.options = options
         self.stored_wilsonB = OrderedDict()
 
+    @property
+    def frozen_atoms(self):
+        return self.options['frozen_atoms']
+
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
 
@@ -335,10 +339,20 @@ class InternalCoordinates(object):
         #q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
         Bmat = self.wilsonB(xyz)
+      
+        #with np.printoptions(threshold=np.inf):
+        #    print(gradx.T)
+        if self.frozen_atoms is not None:
+            for a in [3*i for i in self.frozen_atoms]:
+                gradx[a:a+3,0]=0.
+        #with np.printoptions(threshold=np.inf):
+        #    print(gradx.T)
+
         # Internal coordinate gradient
         # Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx)
-        Gq = multi_dot([Ginv, Bmat, gradx])
-        return Gq
+        #Gq = multi_dot([Ginv, Bmat, gradx])
+        #return Gq
+        return block_matrix.dot( Ginv,block_matrix.dot(Bmat,gradx) )
 
     def calcHess(self, xyz, gradx, hessx):
          """
@@ -491,6 +505,10 @@ class InternalCoordinates(object):
             # Get new Cartesian coordinates
             dxyz = damp*block_matrix.dot(block_matrix.transpose(Bmat),block_matrix.dot(Ginv,dQ1))
 
+            if self.frozen_atoms is not None:
+                for a in [3*i for i in self.frozen_atoms]:
+                    dxyz[a:a+3]=0.
+
             xyz2 = xyz1 + dxyz.reshape((-1,3))
             if microiter == 1:
                 xyzsave = xyz2.copy()
@@ -504,7 +522,7 @@ class InternalCoordinates(object):
                     if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
-                    # xyz2 = xyz1.copy()
+                    #xyz2 = xyz1.copy()
                 else:
                     if verbose: nifty.logger.info(" Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
@@ -520,6 +538,10 @@ class InternalCoordinates(object):
             rmsds.append(rmsd)
             # Check convergence / fail criteria
             if rmsd < 1e-6 or ndq < 1e-6:
+                #print("rmsds")
+                #print(rmsds)
+                #print("ndqs")
+                #print(ndqs)
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             if fail_counter >= 5:
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
