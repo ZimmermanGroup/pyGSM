@@ -904,11 +904,11 @@ class LinearAngle(object):
     def atoms(self):
         return [self.a,self.b,self.c]
 
-    def reset(self, xyz):
+    def reset(self, xyz,start_idx):
         xyz = xyz.reshape(-1,3)
-        a = self.a
-        b = self.b
-        c = self.c
+        a = self.a-start_idx
+        b = self.b-start_idx
+        c = self.c-start_idx
         # Unit vector pointing from a to c.
         v = xyz[c] - xyz[a]
         ev = v / np.linalg.norm(v)
@@ -990,7 +990,7 @@ class LinearAngle(object):
         # Unit vector pointing from a to c.
         v = xyz[c] - xyz[a]
         ev = v / np.linalg.norm(v)
-        if self.e0 is None: self.reset(xyz)
+        if self.e0 is None: self.reset(xyz,start_idx)
         e0 = self.e0
         c1 = np.cross(ev, e0)
         e1 = c1 / np.linalg.norm(c1)
