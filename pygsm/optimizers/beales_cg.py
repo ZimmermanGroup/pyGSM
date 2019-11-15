@@ -178,7 +178,7 @@ class beales_cg(base_optimizer):
             # check for convergence TODO
             molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
             gmax = float(np.max(g))
-            disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
+            disp = float(np.linalg.norm((xyz-xyzp).flatten()))
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
 
             self.converged=False

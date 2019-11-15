@@ -113,11 +113,11 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result	
 
-        if step <= parameters['min_step'] and width>1.:
+        if step <= parameters['min_step'] and width<=1.:
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             print(' [INFO] the linesearch step is too small')
             return result
-        if step >= parameters['max_step'] and width>1.: # otherwise step will decrease next step
+        if step >= parameters['max_step'] and width>=1.: # otherwise step will decrease next step
             print(' [INFO] the linesearch step is too large, returning with step {}'.format(step))
             result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
             return result
