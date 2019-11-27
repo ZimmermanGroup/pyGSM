@@ -7,6 +7,7 @@ from os import path
 # third party
 import numpy as np
 import multiprocessing as mp
+from multiprocessing import Process 
 from collections import Counter
 
 # local application imports
@@ -21,6 +22,7 @@ from ._analyze_string import Analyze
 from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
+from coordinate_systems.rotate import get_quat,calc_fac_dfac
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
@@ -211,7 +213,6 @@ class Base_Method(Print,Analyze,object):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
-        #self.nodes[0].form_Primitive_Hessian()
 
     @property
     def TSnode(self):
@@ -410,15 +411,17 @@ class Base_Method(Print,Analyze,object):
         dqmaga = [0.]*self.nnodes
         dqa = np.zeros((self.nnodes+1,self.nnodes))
         ictan = [[]]*self.nnodes
-        #print "getting tangents for nodes 0 to ",self.nnodes
-        for n in range(n0+1,self.nnodes):
-            #print "getting tangent between %i %i" % (n,n-1)
+
+        def get_tangent(n):
             assert self.nodes[n]!=None,"n is bad"
             assert self.nodes[n-1]!=None,"n-1 is bad"
-            ictan[n],_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
-            dqmaga[n] = 0.
-            ictan0= np.copy(ictan[n])
-            ictan[n] /= np.linalg.norm(ictan[n])
+            tangent,_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
+            return tangent
+
+        def get_dqmag(ictan,n):
+            dqmag = 0.
+            ictan0= np.copy(ictan)
+            ictan /= np.linalg.norm(ictan)
 
             self.newic.xyz = self.nodes[n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan0)
@@ -431,9 +434,45 @@ class Base_Method(Print,Analyze,object):
                     index = self.newic.coord_obj.Prims.dof_index(prim)
                     prim_constraint[index] *= 2.5
 
-            dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
+            dqmag = np.dot(prim_constraint.T,ictan0) 
+            if dqmag<0.:
+                raise RuntimeError
+            dqmag = float(np.sqrt(dqmag))
+            return dqmag
+
+
+        #print "getting tangents for nodes 0 to ",self.nnodes
+        for n in range(n0+1,self.nnodes):
+            #print "getting tangent between %i %i" % (n,n-1)
+            assert self.nodes[n]!=None,"n is bad"
+            assert self.nodes[n-1]!=None,"n-1 is bad"
+            ictan[n],_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
+            dqmaga[n] = 0.
+            ictan0= np.copy(ictan[n])
+            
+            ictan[n] /= np.linalg.norm(ictan[n])
+             
+            self.newic.xyz = self.nodes[n].xyz
+            Vecs = self.newic.update_coordinate_basis(ictan[n])
+
+            # cnorms
+            constraint = self.newic.constraints[:,0]
+            print(ictan0.T)
+            # just a fancy way to get the normalized tangent vector
+            prim_constraint = block_matrix.dot(Vecs,constraint)
+
+            #assert np.isclose([np.linalg.norm(prim_constraint)],[1.0]), "This should be 1"
+
+            for prim in self.newic.primitive_internal_coordinates:
+                if type(prim) is Distance:
+                    index = self.newic.coord_obj.Prims.dof_index(prim)
+                    prim_constraint[index] *= 2.5
+           
+            dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
             if dqmaga[n]<0.:
                 raise RuntimeError
+
+            # should I do this?  TURN off 11/22/19
             dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
             # note: C++ gsm modifies tangent here
@@ -441,7 +480,11 @@ class Base_Method(Print,Analyze,object):
             #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
             #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
             #print('dqmaga[n] %.3f' % dqmaga[n])
-        
+      
+        #ictan = [0.]
+        #ictan += [ Process(target=get_tangent,args=(n,)) for n in range(n0+1,self.nnodes)]
+        #dqmaga = [ Process(target=get_dqmag,args=(n,ictan[n])) for n in range(n0+1,self.nnodes)]
+
         self.dqmaga = dqmaga
         self.ictan = ictan
 
@@ -450,7 +493,11 @@ class Base_Method(Print,Analyze,object):
             for n in range(n0+1,self.nnodes):
                 print("ictan[%i]" %n)
                 print(ictan[n].T)
-                print(self.dqmaga[n])
+        #if self.print_level>0:
+        #    print('------------printing dqmaga---------------')
+        #    for n in range(n0+1,self.nnodes-1):
+        #        print(" {:5.4}".format(dqmaga[n]),end='')
+        #    print()
 
 
     # for some reason this fxn doesn't work when called outside gsm
@@ -507,14 +554,14 @@ class Base_Method(Print,Analyze,object):
             self.ictan[n] = ictan0/np.linalg.norm(ictan0)
             
             dqmaga[n]=0.0
-            ictan0 = np.copy(self.ictan[n])
 
             # update newic coordinate basis
             self.newic.xyz = self.nodes[newic_n].xyz
-            Vecs = self.newic.update_coordinate_basis(ictan0)
+            Vecs = self.newic.update_coordinate_basis(self.ictan[n])
             nbonds=self.nodes[0].num_bonds
-            #constraint = self.nodes[n].constraints[:,0]
+            # cnorms
             constraint = self.newic.constraints[:,0]
+            # just a fancy way to get the tangent vector
             prim_constraint = block_matrix.dot(Vecs,constraint)
 
             # mult bonds
@@ -537,7 +584,7 @@ class Base_Method(Print,Analyze,object):
                 print(self.ictan[n].T)
         if self.print_level>0:
             print('------------printing dqmaga---------------')
-            for n in range(n0+1,self.nnodes-1):
+            for n in range(n0+1,self.nnodes):
                 print(" {:5.4}".format(dqmaga[n]),end='')
             print()
             #print(dqmaga)
@@ -561,7 +608,8 @@ class Base_Method(Print,Analyze,object):
             self.ictan[nlist[2*n]],_ = Base_Method.tangent(
                     node1=self.nodes[nlist[2*n]],
                     node2=self.nodes[nlist[2*n+1]],
-                    driving_coords=self.driving_coords)
+                    driving_coords=self.driving_coords,
+                    reference_xyz = self.reference_xyz)
 
             #save copy to get dqmaga
             ictan0 = np.copy(self.ictan[nlist[2*n]])
@@ -581,7 +629,7 @@ class Base_Method(Print,Analyze,object):
             norm = np.linalg.norm(ictan0)  
             self.ictan[nlist[2*n]] /= norm
            
-            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=ictan0)
+            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
             #constraint = self.nodes[nlist[2*n+1]].constraints
             #prim_constraint = block_matrix.dot(Vecs,constraint)
             #print(" norm of ictan %5.4f" % norm)
@@ -594,6 +642,12 @@ class Base_Method(Print,Analyze,object):
             #print(" dqmaga %5.4f" %dqmaga[nlist[2*n]])
 
         self.dqmaga = dqmaga
+
+        if self.print_level>0:
+            print('------------printing dqmaga---------------')
+            for n in range(1,ncurrent):
+                print(" {:5.4}".format(dqmaga[n]),end='')
+            print()
        
         if False:
             for n in range(ncurrent):
@@ -703,21 +757,20 @@ class Base_Method(Print,Analyze,object):
             gp_prim=None
 
         if self.use_multiprocessing:
-            cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc
-            print(" Parallelizing over {} processes".format(cpus))
+            cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc                                  
+            print(" Parallelizing over {} processes".format(cpus))                             
             out_queue = mp.Queue()
 
-            workers = [ mp.Process(target=mod, args=(node, 'some', out_queue) ) for node in self.nodes ]
-
-            for work in workers: work.start()
-
-            for work in workers: work.join()
-
+            workers = [ mp.Process(target=mod, args=(self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim, out_queue) ) for n in range(self.nnodes) if self.nodes[n] and self.active[n] ]
+            
+            for work in workers: work.start()                                                  
+            
+            for work in workers: work.join()                                                   
+            
             res_lst = []
             for j in range(len(workers)):
-                res_lst.append(out_queue.get())
-
-
+                res_lst.append(out_queue.get())                                                
+                                             
             #pool = mp.Pool(processes=cpus)
             #print("Created the pool")
             #results=pool.map(
@@ -831,6 +884,7 @@ class Base_Method(Print,Analyze,object):
         if node2 is not None and node1.node_id!=node2.node_id:
             print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
             assert node2!=None,'node n2 is None'
+
             Q1 = node1.primitive_internal_values 
             Q2 = node2.primitive_internal_values 
             PMDiff = Q2-Q1
@@ -878,6 +932,8 @@ class Base_Method(Print,Analyze,object):
                     elif len(i)==4:
                         d0=i[3]
                     current_d =  bond.value(xyz)
+
+                    #TODO don't set tangent if value is too small
                     ictan[prim_idx] = -1*(d0-current_d)
                     #if nbreaks>0:
                     #    ictan[prim_idx] *= 2
@@ -950,49 +1006,124 @@ class Base_Method(Print,Analyze,object):
                     if print_level>0:
                         print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
 
-                trans = ['TranslationX', 'TranslationY', 'TranslationZ']
-                if any(elem in trans for elem in i):
-                    fragid = i[1]
-                    destination = i[2]
-                    indices = node1.get_frag_atomic_index(fragid)
-                    atoms=range(indices[0]-1,indices[1])
-                    #print('indices of frag %i is %s' % (fragid,indices))
-                    T_class = getattr(sys.modules[__name__], i[0])
-                    translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
-                    prim_idx = node1.coord_obj.Prims.dof_index(translation)
-                    trans_curr = translation.value(xyz)
-                    trans_diff = destination-trans_curr
-                    ictan[prim_idx] = -trans_diff
-                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current trans: %4.3f align to %4.3f diff: %4.3f" %(trans_curr,destination,trans_diff)))
 
-                #TODO
-                rots = ['RotationA','RotationB','RotationC']
-                if any(elem in rots for elem in i):
-                    fragid = i[1]
-                    rot_angle = i[2]
-                    indices = node1.get_frag_atomic_index(fragid)
-                    atoms=range(indices[0]-1,indices[1])
-                    R_class = getattr(sys.modules[__name__], i[0])
-                    coords = node1.xyz
-                    sel = coords.reshape(-1,3)[atoms,:]
-                    sel -= np.mean(sel,axis=0)
-                    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                    rotation = R_class(atoms,coords,node1.coord_obj.Prims.Rotators,w=rg)
-                    prim_idx = node1.coord_obj.Prims.dof_index(rotation)
-                    rot_curr = rotation.value(xyz)
-                    rot_diff = rot_angle-rot_curr
-                    #print('rot_diff before periodic %.3f' % rot_diff)
-                    #if rot_diff > 2*np.pi:
-                    #    rot_diff -= 2*np.pi
-                    #elif rot_diff< -2*np.pi:
-                    #    rot_diff += 2*np.pi
+                if "ROTATE" in i:
+                    frag = i[1]
+                    a1 = i[2]  #atom 1
+                    a2 = i[3]  #atom 2
+                    theta_target = i[4]*np.pi/180.    # degree
 
-                    ictan[prim_idx] = -rot_diff
-                    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current rot: %4.3f align to %4.3f diff: %4.3f" %(rot_curr,rot_angle,rot_diff)))
+                    # Need to retrieve reference fragment and reference axis of rotation
+                    # Need rotational coordinates of fragment
+                    # 2) align reference axis of rotation to new axis of rotation with rotation matrix
+                    # 3) rotate reference fragment using the same rotation matrix 
+                    # 4) Calculate theta of rotation from reference to current
+                    # 5) calculate dtheta as target_theta - theta
+
+                    reference_xyz = kwargs.get('reference_xyz',None)
+                    #print(reference_xyz)
+                    # block
+                    info = node1.coord_obj.Prims.block_info[frag]
+                    #print(info)
+                    sp,ep,sa,ea = info
+
+                    xyz_frag = node1.xyz[sa:ea]
+                    axis = node1.xyz[a2] - xyz_frag[a1]
+                    axis /= np.linalg.norm(axis)
+
+                    # only want the fragment of interest
+                    ref_xyz = reference_xyz[sa:ea]
+                    ref_axis = reference_xyz[a2] - reference_xyz[a1]
+                    ref_axis /= np.linalg.norm(ref_axis)
+                    #print('axis')
+                    #print(axis)
+                    #print('ref-axis')
+                    #print(ref_axis)
+
+                    print(' Rotating reference axis to current axis')
+                    I = np.eye(3)
+                    v = np.cross(ref_axis,axis)
+
+                    if v.all()==0.:
+                        R=I
+                    else:
+                        vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+                        c = np.dot(ref_axis,axis)
+                        s = np.linalg.norm(v)
+                        R = I + vx + np.dot(vx,vx) * (1. - c)/(s**2)
+                    new_ref_axis = np.dot(ref_axis,R.T)
+                    print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
+                    new_ref_xyz = np.dot(ref_xyz,R.T)
+                    
+                    # Calculate theta from ref_xyz to current xyz
+                    qnew = get_quat(new_ref_xyz,xyz_frag)
+                    theta_actual = np.arccos(qnew[0])*2
+                    print('theta around u1 from (rotated) reference to current')
+                    print(theta_actual)
+                    dtheta = theta_target - theta_actual
+                    print(' Still need to twist %4.3f' %dtheta)
+
+                    # TODO  Check if rotation is less than 0.9 pi
+                    if theta_actual < 0.9*np.pi:
+                        
+                        # First calculate reference v
+                        sel_ref = ref_xyz.reshape(-1,3)
+                        sel_ref -= np.mean(sel_ref, axis=0)
+                        rg = np.sqrt(np.mean(np.sum(sel_ref**2, axis=1)))
+                        c = np.cos(0./2.0)
+                        s = np.sin(0./2.0)
+                        q_ref = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
+                        fac, _ = calc_fac_dfac(c)
+
+                        # Create tangent with dtheta 
+                        sel = xyz_frag.reshape(-1,3)
+                        sel -= np.mean(sel, axis=0)
+                        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+                        c = np.cos(dtheta/2.0)
+                        s = np.sin(dtheta/2.0)
+                        q = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
+                        fac, _ = calc_fac_dfac(c)
+
+
+                        # Try difference
+                        v1 = fac*rg*(q[1] - q_ref[1])
+                        v2 = fac*rg*(q[2] - q_ref[1])
+                        v3 = fac*rg*(q[3] - q_ref[1])
+
+                        print(' v: %3.2f %3.2f %3.2f' % (v1,v2,v3))
+                        #v1 = fac*q[1]*rg
+                        #v2 = fac*q[2]*rg
+                        #v3 = fac*q[3]*rg
+
+                        # rotational coordinates should be the third in the list of primitives
+                        ictan[sp+3] = v1
+                        ictan[sp+4] = v2
+                        ictan[sp+5] = v3
+
+                        # THIS DOESN"T WORK
+                        bdist += np.dot(ictan[sp+3],ictan[sp+3])
+                        bdist += np.dot(ictan[sp+4],ictan[sp+4])
+                        bdist += np.dot(ictan[sp+5],ictan[sp+5])
+                        #bdist += dtheta
+
+
+                #trans = ['TranslationX', 'TranslationY', 'TranslationZ']
+                #if any(elem in trans for elem in i):
+                #    fragid = i[1]
+                #    destination = i[2]
+                #    indices = node1.get_frag_atomic_index(fragid)
+                #    atoms=range(indices[0]-1,indices[1])
+                #    #print('indices of frag %i is %s' % (fragid,indices))
+                #    T_class = getattr(sys.modules[__name__], i[0])
+                #    translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
+                #    prim_idx = node1.coord_obj.Prims.dof_index(translation)
+                #    trans_curr = translation.value(xyz)
+                #    trans_diff = destination-trans_curr
+                #    ictan[prim_idx] = -trans_diff
+                #    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                #    if print_level>0:
+                #        print((" current trans: %4.3f align to %4.3f diff: %4.3f" %(trans_curr,destination,trans_diff)))
+
 
             bdist = np.sqrt(bdist)
             if np.all(ictan==0.0):
@@ -1067,7 +1198,8 @@ class Base_Method(Print,Analyze,object):
                     iN,
                     DQMAG_MAX = self.DQMAG_MAX,
                     DQMAG_MIN = self.DQMAG_MIN,
-                    driving_coords = self.driving_coords
+                    driving_coords = self.driving_coords,
+                    reference_xyz = self.reference_xyz,
                     )
 
             if self.nodes[self.nR]==None:
@@ -1075,7 +1207,7 @@ class Base_Method(Print,Analyze,object):
                 break
 
             if self.__class__.__name__!="DE_GSM":
-                ictan,bdist =  Base_Method.tangent(self.nodes[self.nR],None,driving_coords=self.driving_coords)
+                ictan,bdist =  Base_Method.tangent(self.nodes[self.nR],None,driving_coords=self.driving_coords,reference_xyz=self.reference_xyz)
                 self.nodes[self.nR].bdist = bdist
 
             self.nn+=1
@@ -1085,6 +1217,7 @@ class Base_Method(Print,Analyze,object):
 
             # align center of mass  and rotation
             #print("%i %i %i" %(iR,iP,iN))
+
             print(" Aligning")
             self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
             print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
@@ -1142,13 +1275,14 @@ class Base_Method(Print,Analyze,object):
 
         #get driving coord
         driving_coords  = kwargs.get('driving_coords',None)
+        reference_xyz  = kwargs.get('reference_xyz',None)
         DQMAG_MAX       =kwargs.get('DQMAG_MAX',0.8)
         DQMAG_MIN       =kwargs.get('DQMAG_MIN',0.2)
 
         if nodeP is None:
             # nodeP is not used!
             BDISTMIN=0.05
-            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords)
+            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords,reference_xyz=reference_xyz)
 
             if bdist<BDISTMIN:
                 print("bdist too small %.3f" % bdist)
@@ -1548,16 +1682,18 @@ class Base_Method(Print,Analyze,object):
 
     def mult_steps(self,n,opt_steps):
         exsteps=1
-        if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=self.TSnode:  #
+        tsnode = int(self.TSnode)
+
+        if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
-        if (self.find or self.climb) and n==self.TSnode: 
-            #exsteps=3
-            exsteps = self.ts_exsteps
+        if (self.find or self.climb) and n==tsnode: 
+            exsteps=3
+            #exsteps = self.ts_exsteps
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
-        elif not (self.find or self.climb) and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode-1] and self.energies[self.TSnode] > 1.75*self.energies[self.TSnode+1] and self.done_growing and n==self.TSnode: 
+        elif not (self.find or self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode: 
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
         return exsteps*opt_steps
@@ -1674,6 +1810,7 @@ class Base_Method(Print,Analyze,object):
         print(" doing one-time ic_reparam REMOVE ME")
         self.get_tangents_1()
         self.ic_reparam(ic_reparam_steps=8)
+        self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
         for struct in range(1,nstructs-1):
             print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
@@ -1778,7 +1915,32 @@ def run(args):
     except:
         RuntimeError
 
-    return node,optimizer,n
+#def mod(
+#        node,
+#        optimizer,
+#        ictan,
+#        steps,
+#        opt_type,
+#        refE,
+#        n,
+#        s,
+#        gp_prim,
+#        out_queue,
+#        )
+#
+#    optimizer.optimize(
+#            molecule = node,
+#            s0=s,
+#            gp_prim=gp_prim,
+#            refE = refE,
+#            opt_type=opt_type,
+#            opt_steps=steps,
+#            ictan=ictan,
+#            )
+#
+#    out_queue.put(test)
+
+
 
 def mod(test,nn,out_queue):
     print(test.num)

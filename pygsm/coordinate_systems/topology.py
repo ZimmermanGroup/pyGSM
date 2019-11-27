@@ -437,7 +437,7 @@ class Topology():
                             new=True
                             prim_idx_start_stop.append((start,end))
             else:
-                print(" using user defined values")
+                print(" using user defined primitive start stop values")
 
             #print(prim_idx_start_stop)
             first_list =[]

@@ -323,25 +323,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 WilsonB.append(Der[i].flatten())
             Blist.append(np.asarray(WilsonB))
 
-            #if info[-1]=="P":
-            #    #TODO 9/2019 this is not efficient because it forms the derivative for the entire system
-            #    # each derivative is (N,3) dimensional so that is why we only take the sa:ea atoms
-            #    Der = np.array([ p.derivative(xyz)[sa:ea,:] for p in self.Internals[sp:ep] ])
-            #    for i in range(Der.shape[0]):
-            #        WilsonB.append(Der[i].flatten())
-            #    Blist.append(np.asarray(WilsonB))
-            #else:
-            #    # derivative of hybrid region is the identity
-            #    # should only append diagonal elements -- means more blocks but minimizes energy and N^2 multiplication
-            #    #Blist.append(np.eye(3*leng))
-            #    #leng = 3*(ea - sa)
-            #    #for elem in range(leng):
-            #    #    Blist.append(np.asarray([[1]],dtype=int))
-            #    #Blist.append(np.asarray([[1]],dtype=int))
-            #    Blist.append(np.eye(3,dtype=int))
-            ##sp=ep
-
-
         ans = block_matrix(Blist)
         #print(block_matrix.full_matrix(ans))
         #print("total B shape ",ans.shape)
@@ -1369,7 +1350,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 prim_idx2.append(count)
 
         tmp_internals1 = [self.Internals[i] for i in prim_idx1]
-        tmp_internals2 = [other.Internals[i] for i in prim_idx1]
+        tmp_internals2 = [other.Internals[i] for i in prim_idx2]
 
         #for i in other.Internals:
         #    if i not in self.Internals:

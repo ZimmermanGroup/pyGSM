@@ -75,6 +75,7 @@ def main():
     parser.add_argument('-conv_dE',default=1.,type=float,help='')
     parser.add_argument('-conv_gmax',default=100.,type=float,help='')
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
+    parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
 
 
     args = parser.parse_args()
@@ -127,6 +128,7 @@ def main():
               'coordinate_type' : args.coordinate_type,
               'hybrid_coord_idx_file' : args.hybrid_coord_idx_file,
               'frozen_coord_idx_file' : args.frozen_coord_idx_file,
+              'prim_idx_file' : args.prim_idx_file,
 
               # GSM
               'gsm_type': args.mode, # SE_GSM, SE_Cross
@@ -240,18 +242,44 @@ def main():
         frozen_indices = None
 
 
+    # prim internal coordinates
+    # The start and stop indexes of the primitive internal region, this defines the "fragments" so no large molecule is built        
+    if inpfileq['prim_idx_file'] is not None:
+        nifty.printcool(" Defining primitive internal region :)")
+        assert inpfileq['coordinate_type']=="TRIC", "won't work (currently) with other coordinate systems"
+        prim_indices = np.loadtxt(inpfileq['prim_idx_file'])
+        prim_indices = [ (int(prim_indices[i,0]), int(prim_indices[i,1])-1) for i in range(len(prim_indices))]
+        print(prim_indices)
+        #with open(inpfileq['prim_idx_file']) as f:
+        #    prim_indices = f.read().splitlines()
+        #prim_indices = [int(x) for x in prim_indices]
+    else:
+        prim_indices = None
+
+
+
     # Build the topology
     nifty.printcool("Building the topology")
     atom_symbols  = manage_xyz.get_atoms(geoms[0])
     ELEMENT_TABLE = elements.ElementData()
     atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
     xyz1 = manage_xyz.xyz_to_np(geoms[0])
-    top1 = Topology.build_topology(xyz1,atoms,hybrid_indices=hybrid_indices)
+    top1 = Topology.build_topology(
+            xyz1,
+            atoms,
+            hybrid_indices=hybrid_indices,
+            prim_idx_start_stop=prim_indices,
+            )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
         # find union bonds
         xyz2 = manage_xyz.xyz_to_np(geoms[-1])
-        top2 = Topology.build_topology(xyz2,atoms,hybrid_indices=hybrid_indices)
+        top2 = Topology.build_topology(
+                xyz2,
+                atoms,
+                hybrid_indices=hybrid_indices,
+                prim_idx_start_stop=prim_indices,
+                )
 
         # Add bonds to top1 that are present in top2
         # It's not clear if we should form the topology so the bonds
@@ -275,7 +303,9 @@ def main():
 
         driving_coord_prims=[]
         for dc in driving_coordinates:
-            driving_coord_prims.append(get_driving_coord_prim(dc))
+            prim = get_driving_coord_prim(dc)
+            if prim is not None:
+                driving_coord_prims.append(prim)
 
         for prim in driving_coord_prims:
             if type(prim)==Distance:
@@ -341,15 +371,18 @@ def main():
             frozen_atoms=frozen_indices,
             ) 
     if inpfileq['gsm_type'] == 'DE_GSM':
-        coord_obj2 = DelocalizedInternalCoordinates.from_options(
-                xyz=xyz2,
-                atoms=atoms,
-                addtr = True,
-                addcart=addcart,
-                connect=connect,
-                primitives=p1,
-                frozen_atoms=frozen_indices,
-                ) 
+        # TMP 
+        pass
+        #coord_obj2 = DelocalizedInternalCoordinates.from_options(
+        #        xyz=xyz2,
+        #        atoms=atoms,
+        #        addtr = True,
+        #        addcart=addcart,
+        #        connect=connect,
+        #        primitives=p1,
+        #        frozen_atoms=frozen_indices,
+        #        ) 
+
 
     nifty.printcool("Building the reactant")
     reactant = Molecule.from_options(
@@ -369,7 +402,8 @@ def main():
         product = Molecule.from_options(
                 geom=geoms[1],
                 PES=pes,
-                coord_obj = coord_obj2,
+                #coord_obj = coord_obj2,
+                coord_obj = coord_obj1,
                 #coordinate_type=inpfileq['coordinate_type'],
                 Form_Hessian=Form_Hessian,
                 node_id=inpfileq['num_nodes']-1,
@@ -426,7 +460,6 @@ def main():
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
-
 
     # For seam calculation
     if inpfileq['gsm_type']=="DE_GSM" and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
@@ -515,6 +548,8 @@ def read_isomers_file(isomers_file):
                     threeInts =True
                 elif elem=="TORSION" or elem=="OOP":
                     fourInts =True
+                elif elem=="ROTATE":
+                    threeInts =True
             else:
                 if twoInts and i>2:
                     dc.append(float(elem))
@@ -533,6 +568,7 @@ def read_isomers_file(isomers_file):
 
 
 def get_driving_coord_prim(dc):
+    prim=None
     if "ADD" in dc or "BREAK" in dc:
         if dc[1]<dc[2]:
             prim = Distance(dc[1]-1,dc[2]-1)

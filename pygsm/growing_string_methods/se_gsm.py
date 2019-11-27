@@ -34,11 +34,19 @@ class SE_GSM(Base_Method):
         print(" number of primitives is", self.nodes[0].num_primitives)
 
         sys.stdout.flush()
+        
+        #self.reference_frag_xyz = []
+        self.reference_xyz = None
+        for i in self.driving_coords:
+            if "ROTATE" in i:
+                self.reference_xyz = self.nodes[0].xyz
+                break
 
         # stash bdist for node 0
-        ictan,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords)
+        ictan,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords,reference_xyz=self.reference_xyz)
         self.nodes[0].update_coordinate_basis(constraints=ictan)
         self.set_V0()
+
 
     def set_V0(self):
         self.nodes[0].V0 = self.nodes[0].energy
@@ -195,8 +203,8 @@ class SE_GSM(Base_Method):
                         opt_steps=noptsteps,
                         opt_type=opt_type,
                         )
-        print(" Aligning")
-        self.nodes[self.nR-1].xyz = self.com_rotate_move(self.nR-2,self.nR,self.nR-1) 
+        #print(" Aligning")
+        #self.nodes[self.nR-1].xyz = self.com_rotate_move(self.nR-2,self.nR,self.nR-1) 
         return
 
     def check_add_node(self):
