@@ -23,7 +23,7 @@ class beales_cg(base_optimizer):
     def optimize(
             self,
             molecule,
-            s0,
+            s0_prim,
             gp_prim,
             refE=0.,
             opt_type="BEALES_CG",
@@ -59,13 +59,15 @@ class beales_cg(base_optimizer):
         fx = molecule.energy
         g = molecule.gradient
 
-        if np.all(s0==0.):
-            print(" already at TS")
-            nconstraints=1
-            s0_prim = 0.*gp_prim
-            g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-        else:
-            s0_prim = block_matrix.dot(molecule.coord_basis,s0)
+        #if np.all(s0==0.):
+        ##if np.all(s0_prim==0.) or s0_prim==None:
+        #    print(" already at TS")
+        #    nconstraints=1
+        #    s0_prim = 0.*gp_prim
+        #    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+        #else:
+        #    s0_prim = block_matrix.dot(molecule.coord_basis,s0)
+        
         molecule.gradrms = np.sqrt(np.dot(g.T,g)/n)
         g_prim = block_matrix.dot(molecule.coord_basis,g)
 
@@ -82,10 +84,12 @@ class beales_cg(base_optimizer):
             update_hess = True
 
             if ostep==0:
+
+                # IF USE BEALES CG
                 if nconstraints<1:
                     dg = g_prim - gp_prim
                     h = dg/np.dot(s0_prim.T,dg)
-                else:
+                else: # DONT USE BG
                     h = 0.*g_prim
                 d_prim = -g_prim + np.dot(h.T,g_prim)*s0_prim   # the search direction
             else:
@@ -121,10 +125,41 @@ class beales_cg(base_optimizer):
             sys.stdout.flush()
             ls = self.Linesearch(n, x, fx, g, d, stepsize, xp, constraint_steps,self.linesearch_parameters,molecule,verbose)
             print(" Done linesearch")
-            
+
+
+            molecule = ls['molecule']
+            x = ls['x']
+            fx = ls['fx']
+            g  = ls['g']
+            step = ls['step']
+            if nconstraints>0:
+                g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+
+
+            if ls['step'] > self.options['DMAX']:
+                if ls['step']<= self.options['abs_max_step']:     # absolute max
+                    print(" Increasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+                else:
+                    self.options['DMAX'] =self.options['abs_max_step']
+            elif ls['step']<self.options['DMAX']:
+                if ls['step']>=self.DMIN:     # absolute min
+                    print(" Decreasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+                elif ls['step']<=self.DMIN:
+                    self.options['DMAX'] = self.DMIN
+                    print(" Decreasing DMAX to {}".format(self.DMIN))
+           
+            # dE 
+            dEstep = fx - fxp
+            print(" dEstep=%5.4f" %dEstep)
+
             # revert to the previous point
-            if ls['status'] < 0:
+            if ls['status'] < 0 or dEstep>0.:
                 x = xp.copy()
+                molecule.xyz = xyzp
+                g = gp.copy()
+                fx = fxp
                 print('[ERROR] the point return to the previous point')
                 if nconstraints==1:
                     return geoms,energies
@@ -133,19 +168,6 @@ class beales_cg(base_optimizer):
                     g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
                     step=0.
                     molecule = ls['molecule']
-            else:
-                # get values from linesearch
-                molecule = ls['molecule']
-                x = ls['x']
-                fx = ls['fx']
-                g  = ls['g']
-                step = ls['step']
-                if nconstraints>0:
-                    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
-
-            # dE 
-            dEstep = fx - fxp
-            print(" dEstep=%5.4f" %dEstep)
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)

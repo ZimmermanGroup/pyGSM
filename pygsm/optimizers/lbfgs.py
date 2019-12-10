@@ -205,6 +205,7 @@ class lbfgs(base_optimizer):
                 g = gp.copy()
                 fx = fxp
                 ratio=0.
+                dEstep=0.
                 print('[ERROR] the point return to the previous point')
                 self.lm = []
                 for i in range(0, maxcor):
@@ -250,7 +251,7 @@ class lbfgs(base_optimizer):
                 print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
             self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
 
-            gmax = float(np.max(gc))
+            gmax = float(np.max(np.absolute(gc)))
             disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
             self.converged=False

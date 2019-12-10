@@ -157,8 +157,8 @@ class eigenvector_follow(base_optimizer):
             constraint_energy = np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  
             #print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
-            if abs(dEpre)<0.05:
-                dEpre = np.sign(dEpre)*0.05
+            if abs(dEpre)<0.01:
+                dEpre = np.sign(dEpre)*0.01
 
             # project out the constraint
             gc = g.copy()
@@ -205,7 +205,7 @@ class eigenvector_follow(base_optimizer):
             dE = molecule.difference_energy
             if dE< 1000.:
                 print(" difference energy is %5.4f" % dE)
-            gmax = float(np.max(g))
+            gmax = float(np.max(np.absolute(gc)))
             disp = float(np.linalg.norm((xyz-xyzp).flatten()))
             xnorm = np.sqrt(np.dot(x.T, x))
             gnorm = np.sqrt(np.dot(g.T, g)) 

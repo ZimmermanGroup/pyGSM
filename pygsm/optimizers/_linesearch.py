@@ -142,6 +142,8 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     x = x.flatten()
     xyz4 = molecule.xyz.copy()
     f4 = molecule.energy
+
+    refE = f4
    
     # stash coordinates for 4
     xyz = molecule.xyz.copy()
@@ -169,7 +171,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     f3 = molecule.PES.get_energy(xyz3)
     f5 = molecule.PES.get_energy(xyz5)
     f6 = molecule.PES.get_energy(xyz6)
-    print(" %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f" % (f1,f2,f3,f4,f5,f6,f7))
+    print(" %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f kcal/mol" % (f1-refE,f2-refE,f3-refE,f4-refE,f5-refE,f6-refE,f7-refE))
     l = [f1, f2, f3, f4, f5, f6, f7 ]
     sys.stdout.flush()
     
@@ -225,12 +227,11 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         xyz3 = xyz1  + (xyz4 - xyz1)/z
         f2 = molecule.PES.get_energy(xyz2)
         f3 = molecule.PES.get_energy(xyz3)
-        print(" f1: %5.4f f2: %5.4f f3: %5.4f f4: %5.4f " % (f1,f2,f3,f4))
+        print(" f1: %5.4f f2: %5.4f f3: %5.4f f4: %5.4f " % (f1-refE,f2-refE,f3-refE,f4-refE))
 
     
     TOLF = 0.1 # kcal/mol
     TOLC = 1.e-3 #
-    print('entering while loop')
     sys.stdout.flush()
     count=0
     dxyz = np.linalg.norm(xyz2.flatten()-xyz3.flatten())
@@ -248,7 +249,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         xyz3 = xyz1 + (xyz4-xyz1)/z
         f2 = molecule.PES.get_energy(xyz2)
         f3 = molecule.PES.get_energy(xyz3)
-        print("f2: %5.4f f3: %5.4f" %(f2,f3))
+        print("f2: %5.4f f3: %5.4f" %(f2-refE,f3-refE))
         print(abs(f2-f3))
         dxyz = np.linalg.norm(xyz2.flatten()-xyz3.flatten())
         print(dxyz)
@@ -263,7 +264,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     xyznew = 0.5*(xyz1+xyz4)
     fnew = molecule.PES.get_energy(xyznew)
     xnew = molecule.coord_obj.calculate(xyznew)
-    print(" GS: %5.4f" % fnew)
+    print(" GS found structure this higher : %5.4f" % (fnew-refE))
     
     step = xnew - x
     result = {'status':True,'fx':fnew,'step':step,'xyz':xyznew}

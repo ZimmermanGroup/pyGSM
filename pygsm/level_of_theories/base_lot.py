@@ -166,6 +166,13 @@ class Lot(object):
         len_singlets= max(singlets,key=lambda x: x[1])[1]+1
         len_triplets=len(triplets)
 
+        # DO this before fixing states
+        # THIS is wrong if you set gradient states to [] to purposefully prevent gradients
+        # will none work? use calc_grad?
+        if not self.options['gradient_states'] and self.calc_grad:
+            print(" Assuming gradient states are ",self.states)
+            self.options['gradient_states']=self.options['states']
+
         if len(self.states)<len_singlets+len_triplets:
             print('fixing states to be proper length')
             tmp = []
@@ -175,10 +182,6 @@ class Lot(object):
                 tmp.append((3,i))
             self.states = tmp
             print(' New states ',self.states)
-
-        if not self.options['gradient_states']:
-            print(" Assuming gradient states are ",self.states)
-            self.options['gradient_states']=self.options['states']
 
         self.geom=self.options['geom']
         if self.geom is not None:

@@ -213,6 +213,7 @@ class Base_Method(Print,Analyze,object):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
+        self.reference_xyz = None
 
     @property
     def TSnode(self):
@@ -457,7 +458,6 @@ class Base_Method(Print,Analyze,object):
 
             # cnorms
             constraint = self.newic.constraints[:,0]
-            print(ictan0.T)
             # just a fancy way to get the normalized tangent vector
             prim_constraint = block_matrix.dot(Vecs,constraint)
 
@@ -679,11 +679,15 @@ class Base_Method(Print,Analyze,object):
             success = self.check_add_node()
             if not success:
                 print("can't add anymore nodes, bdist too small")
-                if self.__class__.__name__!="DE_GSM":
+
+                # why not for SE_Cross too?
+                if self.__class__.__name__=="SE_GSM":
                     if self.nodes[self.nR-1].PES.lot.do_coupling:
                         opt_type='MECI'
                     else:
-                        opt_type='UNCONSTRAINED'
+                       opt_type='UNCONSTRAINED'
+
+                    ictan,_ = Base_Method.tangent(self.nodes[self.nR-1],self.nodes[self.nR-2])
 
                     print(" optimizing last node")
                     self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
@@ -692,7 +696,9 @@ class Base_Method(Print,Analyze,object):
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
                             opt_steps=50,
-                            opt_type=opt_type,
+                            #opt_type=opt_type,
+                            opt_type='ICTAN',
+                            ictan=ictan,
                             )
                 else:
                     raise RuntimeError
@@ -750,10 +756,16 @@ class Base_Method(Print,Analyze,object):
 
             if not status:
                 print("same geometry from golden section")
-            self.nodes[self.TSnode].xyz = result['xyz']
-            s = result['step']
+            else:
+                self.nodes[self.TSnode].xyz = result['xyz']
+                self.get_tangents_1e()
+        
+            # NEW 12/2019
+            s0_prim = self.ictan[self.TSnode]
+            #s = result['step']
         else:
-            s = None
+            #s = None
+            s0_prim = None
             gp_prim=None
 
         if self.use_multiprocessing:
@@ -812,7 +824,8 @@ class Base_Method(Print,Analyze,object):
                     else:
                         self.optimizer[n].optimize(
                                 molecule=self.nodes[n],
-                                s0=s,
+                                #s0=s,
+                                s0_prim=s0_prim,
                                 gp_prim=gp_prim,
                                 refE=refE,
                                 opt_type=opt_type,
@@ -848,10 +861,9 @@ class Base_Method(Print,Analyze,object):
             elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
-                    sumgradrms< sum_conv_tol
-                    #(ts_gradrms<self.options['CONV_TOL']*5.))
-                    )
-                    ):
+                    (sumgradrms< sum_conv_tol) or
+                    (ts_gradrms<self.options['CONV_TOL']*2.)  #  used to be 5
+                    )):
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True

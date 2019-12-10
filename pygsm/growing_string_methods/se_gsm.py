@@ -160,9 +160,7 @@ class SE_GSM(Base_Method):
             self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
         if self.tscontinue:
-            if rtype!=0:
-                opt_steps=3
-            self.opt_iters(max_iter=max_iters,optsteps=opt_steps,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
+            self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
         else:
             print("Exiting early")
 
@@ -197,6 +195,7 @@ class SE_GSM(Base_Method):
                 self.nR+=1
         elif rtype==2:
             print(" already created node, opting")
+            self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
             self.optimizer[self.nR-1].optimize(
                         molecule=self.nodes[self.nR-1],
                         refE=self.nodes[0].V0,
@@ -210,7 +209,8 @@ class SE_GSM(Base_Method):
     def check_add_node(self):
         success=True
         #if self.nodes[self.nR-1].gradrms < self.gaddmax:
-        if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
+        #if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
+        if self.optimizer[self.nR-1].converged:
             if self.nR == self.nnodes:
                 print(" Ran out of nodes, exiting GSM")
                 raise ValueError

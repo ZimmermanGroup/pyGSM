@@ -318,10 +318,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """
 
         nifty.click()
-        print(" Beginning to build G Matrix")
+        #print(" Beginning to build G Matrix")
         G = self.Prims.GMatrix(xyz)  # in primitive coords
         time_G = nifty.click()
-        print(" Timings: Build G: %.3f " % (time_G))
+        #print(" Timings: Build G: %.3f " % (time_G))
 
         tmpvecs=[]
         for A in G.matlist:
