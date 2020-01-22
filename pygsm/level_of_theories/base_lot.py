@@ -162,9 +162,20 @@ class Lot(object):
 
         # count number of states
         singlets=self.search_tuple(self.states,1)
+        doublets=self.search_tuple(self.states,2)
         triplets=self.search_tuple(self.states,3)
-        len_singlets= max(singlets,key=lambda x: x[1])[1]+1
+        quartets=self.search_tuple(self.states,4)
+        quintets=self.search_tuple(self.states,5)
+
+        #TODO do this for all states, since it catches if states are put in lazy
+        if singlets:
+            len_singlets= max(singlets,key=lambda x: x[1])[1]+1
+        else:
+            len_singlets=0
+        len_doublets=len(doublets)
         len_triplets=len(triplets)
+        len_quartets=len(quartets)
+        len_quintets=len(quintets)
 
         # DO this before fixing states
         # THIS is wrong if you set gradient states to [] to purposefully prevent gradients
@@ -173,9 +184,10 @@ class Lot(object):
             print(" Assuming gradient states are ",self.states)
             self.options['gradient_states']=self.options['states']
 
-        if len(self.states)<len_singlets+len_triplets:
+        if len(self.states)<len_singlets+len_doublets+len_triplets+len_quartets+len_quintets:
             print('fixing states to be proper length')
             tmp = []
+            # TODO put in rest of fixed states 
             for i in range(len_singlets):
                 tmp.append((1,i))
             for i in range(len_triplets):

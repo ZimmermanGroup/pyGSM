@@ -20,16 +20,17 @@ class QChem(Lot):
             tempfolder = qcscratch + '/string_{:03d}/{}.{}/'.format(self.ID,self.node_id,state[0])
             print(" making temp folder {}".format(tempfolder))
             os.system('mkdir -p {}'.format(tempfolder))
-    
-    def run(self,geom,multiplicity):
 
-        qcscratch = os.environ['QCSCRATCH']
-        tempfilename = qcscratch + '/string_{:03d}/{}.{}/tempQCinp'.format(self.ID,self.node_id,multiplicity)
+        copy_input_file = os.getcwd() + "/QChem_input.txt"
+        print(copy_input_file)
+        self.write_preamble(self.geom,self.states[0][0],copy_input_file)
+
+    def write_preamble(self,geom,multiplicity,tempfilename,jobtype='FORCE'):
 
         tempfile = open(tempfilename,'w')
         if not self.lot_inp_file:
             tempfile.write(' $rem\n')
-            tempfile.write(' JOBTYPE FORCE\n')
+            tempfile.write(' JOBTYPE {}\n'.format(jobtype))
             tempfile.write(' EXCHANGE {}\n'.format(self.functional))
             tempfile.write(' SCF_ALGORITHM rca_diis\n')
             tempfile.write(' SCF_MAX_CYCLES 300\n')
@@ -67,37 +68,53 @@ class QChem(Lot):
                 tempfile.write('\n')
         tempfile.write('$end')
         tempfile.close()
+    
+    def run(self,geom,multiplicity):
+
+        qcscratch = os.environ['QCSCRATCH']
+        tempfilename = qcscratch + '/string_{:03d}/{}.{}/tempQCinp'.format(self.ID,self.node_id,multiplicity)
+
+        if self.calc_grad:
+           self.write_preamble(geom,multiplicity,tempfilename)
+        else:
+           self.write_preamble(geom,multiplicity,tempfilename,jobtype='SP')
         
         cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
         #print(cmd)
 
         os.system(cmd)
-        
-        efilepath = qcscratch + '/string_{:03d}/{}.{}/GRAD'.format(self.ID,self.node_id,multiplicity)
-        with open(efilepath) as efile:
-            elines = efile.readlines()
-        
-        temp = 0
-        for lines in elines:
-            if temp == 1:
-                self.E.append((multiplicity,float(lines.split()[0])))
-                break
-            if "$" in lines:
-                temp += 1
+       
+        # PARSE OUTPUT #
+        if self.calc_grad:
+            efilepath = qcscratch + '/string_{:03d}/{}.{}/GRAD'.format(self.ID,self.node_id,multiplicity)
+            with open(efilepath) as efile:
+                elines = efile.readlines()
+            
+            temp = 0
+            for lines in elines:
+                if temp == 1:
+                    self.E.append((multiplicity,float(lines.split()[0])))
+                    break
+                if "$" in lines:
+                    temp += 1
 
-        with open(efilepath) as efile:
-            gradlines = efile.readlines()
-        temp = 0
-        tmp=[]
-        for lines in gradlines:
-            if '$' in lines:
-                temp+=1
-            elif temp == 2:
-                tmpline = lines.split()
-                tmp.append([float(i) for i in tmpline])
-            elif temp == 3:
-                break
-        self.grada.append((multiplicity,tmp))
+            with open(efilepath) as efile:
+                gradlines = efile.readlines()
+            temp = 0
+            tmp=[]
+            for lines in gradlines:
+                if '$' in lines:
+                    temp+=1
+                elif temp == 2:
+                    tmpline = lines.split()
+                    tmp.append([float(i) for i in tmpline])
+                elif temp == 3:
+                    break
+            self.grada.append((multiplicity,tmp))
+        else:
+            raise NotImplementedError
+
+
 
         return 
 
@@ -107,10 +124,15 @@ class QChem(Lot):
         #        self.get_nelec(geom,i[0])
         #    self.has_nelectrons==True
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            #print(" Running calculation!")
+            #print(coords.flatten())
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
+            #print(geom)
             self.runall(geom)
             self.hasRanForCurrentCoords=True
+        #else:
+        #    print(" Returning memoization!")
         tmp = self.search_tuple(self.E,multiplicity)
         return np.asarray(tmp[state][1])*units.KCAL_MOL_PER_AU
 
