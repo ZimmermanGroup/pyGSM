@@ -51,8 +51,6 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
     # The initial value of the objective function. 
     finit = fx
 
-    #print(molecule.coord_obj.frozen_atoms)
-
     dgtest = parameters['ftol'] * dginit
     #print('dginit %9.7f' % dginit)
     #print('dgtest %9.7f' % dgtest)
@@ -171,7 +169,7 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
     f3 = molecule.PES.get_energy(xyz3)
     f5 = molecule.PES.get_energy(xyz5)
     f6 = molecule.PES.get_energy(xyz6)
-    print(" %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f kcal/mol" % (f1-refE,f2-refE,f3-refE,f4-refE,f5-refE,f6-refE,f7-refE))
+    print(" Initial Double Golden Section %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f kcal/mol" % (f1-refE,f2-refE,f3-refE,f4-refE,f5-refE,f6-refE,f7-refE))
     l = [f1, f2, f3, f4, f5, f6, f7 ]
     sys.stdout.flush()
     
@@ -187,64 +185,72 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         #xyz4,f4 = xyz3,f3
         xyz1,f1 = xyz2,f2
         left=True
-    elif ismax(l,f5):
-        print(" 5")
-        #xyz4,f4 = xyz5,f5
-        xyz7,f7 = xyz6,f6
-        right=True
     elif ismax(l,f2):
         print(" 2")
         #xyz1,f1 = xyz2,f2
         xyz4,f4 = xyz3,f3
         left=True
+    elif ismax(l,f5):
+        print(" 5")
+        ##xyz4,f4 = xyz5,f5
+        #xyz7,f7 = xyz6,f6
+        right=True
     elif ismax(l,f6):
         print(" 6")
-        #xyz7,f7 = xyz6,f6
-        xyz4,f4 = xyz5,f5
+        ##xyz7,f7 = xyz6,f6
+        #xyz4,f4 = xyz5,f5
         right=True
     elif ismax(l,f4):
-        print(" 4")
-        print(" Center")
         center=True
         #result = {'status':False,'fx':f4,'step': 0.*x,'xyz':xyz}
         #return result
+    elif ismax(l,f1):
+        print(" initial point is TSnode")
+        xnew = molecule.coord_obj.calculate(xyz1)
+        step = xnew - x
+        result = {'status':True,'fx':f1,'step':step,'xyz':xyz1}
+        return result
+    elif ismax(l,f7):
+        print(" End point is TSnode")
+        xnew = molecule.coord_obj.calculate(xyz7)
+        step = xnew - x
+        result = {'status':True,'fx':f7,'step':step,'xyz':xyz7}
+        return result
     else:
         #something is wrong with TSnode
-        print(" End point is TSnode")
         raise RuntimeError
     
     
     # rearrange right to be in canonical order
     if right:
+        print('right')
         xyz1,f1 = xyz4,f4
         xyz2,f2 = xyz5,f5
         xyz3,f3 = xyz6,f6
         xyz4,f4 = xyz7,f7
     if center:
+        print(" Center")
         xyz1,f1 = xyz3,f3
         xyz4,f4 = xyz5,f5
         xyz2 = xyz4  - (xyz4 - xyz1)/z
         xyz3 = xyz1  + (xyz4 - xyz1)/z
         f2 = molecule.PES.get_energy(xyz2)
         f3 = molecule.PES.get_energy(xyz3)
-        print(" f1: %5.4f f2: %5.4f f3: %5.4f f4: %5.4f " % (f1-refE,f2-refE,f3-refE,f4-refE))
+    print(" Rearranged Canonical Golden Section f1: %5.4f f2: %5.4f f3: %5.4f f4: %5.4f " % (f1-refE,f2-refE,f3-refE,f4-refE))
 
     
     TOLF = 0.1 # kcal/mol
     TOLC = 1.e-3 #
     sys.stdout.flush()
+
+    #fnew,xyznew = golden_section(molecule.PES.get_energy,xyz1,xyz4,maximize=True)
     count=0
     dxyz = np.linalg.norm(xyz2.flatten()-xyz3.flatten())
     while abs(f2-f3)>TOLF and dxyz>TOLC:
         if f2>f3:
-            #x4,f4 = x3,f3
             xyz4,f4 = xyz3,f3
         else:
             xyz1,f1 = xyz2,f2
-        #x2 = x4 - (x4 - x1)/z
-        #x3 = x1 + (x4 - x1)/z
-        #xyz2 = molecule.coord_obj.newCartesian(xyz,x2-x)
-        #xyz3 = molecule.coord_obj.newCartesian(xyz,x3-x)
         xyz2 = xyz4 - (xyz4-xyz1)/z
         xyz3 = xyz1 + (xyz4-xyz1)/z
         f2 = molecule.PES.get_energy(xyz2)
@@ -258,12 +264,10 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
         count+=1
         if count>3:
             break
-        
-    #xnew = 0.5*(x1+x4)
-    #xyznew = molecule.coord_obj.newCartesian(xyz,xnew-x)
-    xyznew = 0.5*(xyz1+xyz4)
-    fnew = molecule.PES.get_energy(xyznew)
+
+    xyznew = 0.5*(xyz2+xyz3)
     xnew = molecule.coord_obj.calculate(xyznew)
+    fnew = molecule.PES.get_energy(xyznew)
     print(" GS found structure this higher : %5.4f" % (fnew-refE))
     
     step = xnew - x
@@ -271,71 +275,128 @@ def double_golden_section(x,xyz1,xyz7,f1,f7,molecule):
 
     return result
 
-
-def golden_section(x, g, d, step, molecule,maximize=False):
+def golden_section(f,x1,x4,maximize=False,TOLC=0.1,TOLF=0.1):
 
     z = (1 + np.sqrt(5))/2
-    x1 = x.copy()
-    x4 = x + d*step
     x2 = x4 - (x4-x1)/z
     x3 = x1 + (x4-x1)/z
-
-    xyz1 = molecule.coord_obj.newCartesian(molecule.xyz, x1-x,verbose=False)
-    xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
-    xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
-    xyz4 = molecule.coord_obj.newCartesian(molecule.xyz, x4-x,verbose=False)
 
     sign=1.
     if maximize:
         sign=-1.
 
-    f1 = sign*molecule.PES.get_energy(xyz1)
-    f2 = sign*molecule.PES.get_energy(xyz2)
-    f3 = sign*molecule.PES.get_energy(xyz3)
-    f4 = sign*molecule.PES.get_energy(xyz4)
+    f1 = sign*f(x1)
+    f2 = sign*f(x2)
+    f3 = sign*f(x3)
+    f4 = sign*f(x4)
+    refE=f1
+
+    print(sign*(f1-refE),sign*(f2-refE),sign*(f3-refE),sign*(f4-refE))
 
     #check that a min exists
     min_exists=False
-    if f2>f1 and f2>f4 and f3>f1 and f3>f4:
+    if f2<f1 and f2<f4 and f3<f1 and f3<f4:
         min_exists=True
     
     if not min_exists:
         print(" no minimum exists")
         if f1<f4:
             print(" returning initial point")
-            return {'status':0,'fx':sign*f1,'step':step*0.,'x':x1, 'g':g,'xyznew':xyz1}
+            return f1,x1
         else:
             print(" returning endpoint")
-            return {'status':0,'fx':sign*f4,'step':x4-x1,'x':x4, 'g':g,'xyznew':xyz4}
+            return f2,x2
 
-    accuracy = 1.0e-3
     count=0
-    while x4-x1>accuracy:
+    dx = np.linalg.norm(x2.flatten()-x3.flatten())
+    while dx>TOLC and abs(f2-f3)>TOLF:
         if f2<f3:
             x4,f4 = x3,f3
-            x3,f3 = x2,f2
-            x2 = x4-(x4-x1)/z
-            xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
-            f2 = sign*molecule.PES.get_energy(xyz2)
         else:
             x1,f1 = x2,f2
-            x2,f2 = x3,f3
-            x3 = x1 + (x4-x1)/z
-            xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
-            f3 = sign*molecule.PES.get_energy(xyz3)
+        x2 = x4 - (x4-x1)/z
+        x3 = x1 + (x4-x1)/z
+        f2 = sign*f(x2)
+        f3 = sign*f(x3)
+        print("f2: %5.4f f3: %5.4f" %(sign*(f2-refE),sign*(f3-refE)))
+        print(abs(f2-f3))
+        dx = np.linalg.norm(x2.flatten()-x3.flatten())
+        print(dx)
 
         count+=1
         if count>10:
             break
+    xfinal = 0.5*(x2+x3)
+    ffinal = f(xfinal)
 
-    xnew = 0.5*(x1+x4)
-    xyznew = molecule.coord_obj.newCartesian(molecule.xyz, xnew-x,verbose=False)
-    fx = molecule.PES.get_energy(xyxznew)
-    g = molecule.PES.get_gradient(xyznew)
-    step = x - x1
-    result = {'status':0,'fx':fx,'step':step,'x':xnew, 'g':g, 'xyznew':xyznew}
-    
-    return result
+    print(ffinal-refE*sign)
+
+    return ffinal,xfinal
+
+#def golden_section(x, g, d, step, molecule,maximize=False):
+#
+#    z = (1 + np.sqrt(5))/2
+#    x1 = x.copy()
+#    x4 = x + d*step
+#    x2 = x4 - (x4-x1)/z
+#    x3 = x1 + (x4-x1)/z
+#
+#    xyz1 = molecule.coord_obj.newCartesian(molecule.xyz, x1-x,verbose=False)
+#    xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
+#    xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
+#    xyz4 = molecule.coord_obj.newCartesian(molecule.xyz, x4-x,verbose=False)
+#
+#    sign=1.
+#    if maximize:
+#        sign=-1.
+#
+#    f1 = sign*molecule.PES.get_energy(xyz1)
+#    f2 = sign*molecule.PES.get_energy(xyz2)
+#    f3 = sign*molecule.PES.get_energy(xyz3)
+#    f4 = sign*molecule.PES.get_energy(xyz4)
+#
+#    #check that a min exists
+#    min_exists=False
+#    if f2>f1 and f2>f4 and f3>f1 and f3>f4:
+#        min_exists=True
+#    
+#    if not min_exists:
+#        print(" no minimum exists")
+#        if f1<f4:
+#            print(" returning initial point")
+#            return {'status':0,'fx':sign*f1,'step':step*0.,'x':x1, 'g':g,'xyznew':xyz1}
+#        else:
+#            print(" returning endpoint")
+#            return {'status':0,'fx':sign*f4,'step':x4-x1,'x':x4, 'g':g,'xyznew':xyz4}
+#
+#    accuracy = 1.0e-3
+#    count=0
+#    while x4-x1>accuracy:
+#        if f2<f3:
+#            x4,f4 = x3,f3
+#            x3,f3 = x2,f2
+#            x2 = x4-(x4-x1)/z
+#            xyz2 = molecule.coord_obj.newCartesian(molecule.xyz, x2-x,verbose=False)
+#            f2 = sign*molecule.PES.get_energy(xyz2)
+#        else:
+#            x1,f1 = x2,f2
+#            x2,f2 = x3,f3
+#            x3 = x1 + (x4-x1)/z
+#            xyz3 = molecule.coord_obj.newCartesian(molecule.xyz, x3-x,verbose=False)
+#            f3 = sign*molecule.PES.get_energy(xyz3)
+#
+#        count+=1
+#        if count>10:
+#            break
+#
+#    xnew = 0.5*(x1+x4)
+#    xyznew = molecule.coord_obj.newCartesian(molecule.xyz, xnew-x,verbose=False)
+#    fx = molecule.PES.get_energy(xyxznew)
+#    g = molecule.PES.get_gradient(xyznew)
+#    step = x - x1
+#    result = {'status':0,'fx':fx,'step':step,'x':xnew, 'g':g, 'xyznew':xyznew}
+#    
+#    return result
 
 def secant_method(nconstraints, x, fx, gc, d, step, xp,constraint_step, parameters,molecule):
     raise NotImplementedError

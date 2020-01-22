@@ -129,7 +129,6 @@ class eigenvector_follow(base_optimizer):
             #print(" ### Starting  line search ###")
             ls = self.Linesearch(nconstraints, x, fx, g, dq, step, xp,constraint_steps,self.linesearch_parameters,molecule,verbose)
 
-
             # get values from linesearch
             molecule = ls['molecule']
             step = ls['step']

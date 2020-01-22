@@ -127,6 +127,7 @@ class beales_cg(base_optimizer):
             print(" Done linesearch")
 
 
+            # save new values from linesearch
             molecule = ls['molecule']
             x = ls['x']
             fx = ls['fx']
@@ -162,23 +163,33 @@ class beales_cg(base_optimizer):
                 fx = fxp
                 print('[ERROR] the point return to the previous point')
                 if nconstraints==1:
+                    print(" opt-summary")
+                    print(self.buf.getvalue())
                     return geoms,energies
                 else:
                     nconstraints=1
-                    g = g - np.dot(g.T,molecule.constraints)*molecule.constraints
+                    constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
+                    molecule.update_coordinate_basis(constraints=constraints)
+                    x = np.copy(molecule.coordinates)
+                    g = molecule.gradient.copy()
+                    # project out the constraint
+                    for c in molecule.constraints.T:
+                        g -= np.dot(g.T,c[:,np.newaxis])*c[:,np.newaxis]
                     step=0.
-                    molecule = ls['molecule']
+                    g_prim = block_matrix.dot(molecule.coord_basis,g)
+                    h = 0.*g_prim
+            else:
+                # update molecule xyz
+                xyz = molecule.update_xyz(x-xp)
+                g_prim = block_matrix.dot(molecule.coord_basis,g)
 
-            # update molecule xyz
-            xyz = molecule.update_xyz(x-xp)
             if ostep % xyzframerate==0:
                 geoms.append(molecule.geometry)
                 energies.append(molecule.energy-refE)
                 manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
 
             # save variables for update Hessian! 
-            if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
-                g_prim = block_matrix.dot(molecule.coord_basis,g)
+            if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates' or self.options['update_hess_in_bg']:
                 self.dx_prim = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
                 self.dx_prim = np.reshape(self.dx_prim,(-1,1))
                 self.dg_prim = g_prim - gp_prim

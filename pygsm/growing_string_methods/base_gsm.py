@@ -353,7 +353,7 @@ class Base_Method(Print,Analyze,object):
                 else:
                     print(" Hessian consistently bad, going back to climb (for 3 iterations)")
                     self.find=False
-                    self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
+                    #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     self.nclimb=3
 
             elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
@@ -376,8 +376,8 @@ class Base_Method(Print,Analyze,object):
             print()
 
             if self.pTSnode!=self.TSnode and self.climb:
-                self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy())
-                self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
+                #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy())
+                #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
 
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
@@ -391,8 +391,8 @@ class Base_Method(Print,Analyze,object):
                     self.find = False
                     self.nclimb=1
                     print(" Find bad, going back to climb")
-                    self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
-                    self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
+                    #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
+                    #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
                     #self.get_tangents_1e()
                     #self.get_eigenv_finite(self.TSnode)
 
@@ -738,30 +738,37 @@ class Base_Method(Print,Analyze,object):
 
         refE=self.nodes[0].energy
         if self.climb and not self.find:
-            nm1 = self.TSnode-1
-            np1 = self.TSnode+1
+            pass
+            #nm1 = self.TSnode-1
+            #np1 = self.TSnode+1
 
-            # interpolate closer to the TS node for the GS search
-            xyz = self.nodes[self.TSnode].xyz 
-            xyz1 = Base_Method.interpolate_xyz(self.nodes[nm1],self.nodes[self.TSnode],0.9)
-            xyz7 = Base_Method.interpolate_xyz(self.nodes[np1],self.nodes[self.TSnode],0.9)
+            ## interpolate closer to the TS node for the GS search
+            #xyz = self.nodes[self.TSnode].xyz 
+            ##xyz1 = Base_Method.interpolate_xyz(self.nodes[nm1],self.nodes[self.TSnode],0.9)
+            ##xyz7 = Base_Method.interpolate_xyz(self.nodes[np1],self.nodes[self.TSnode],0.9)
+            #xyz1 = self.nodes[nm1].xyz
+            #xyz7 = self.nodes[np1].xyz
 
-            # linear approximation
-            f1 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[nm1].energy 
-            f7 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[np1].energy 
+            ## linear approximation
+            ##f1 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[nm1].energy 
+            ##f7 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[np1].energy 
+            ##f1=self.nodes[nm1].PES.get_energy(xyz1)
+            ##f7=self.nodes[np1].PES.get_energy(xyz7)
+            #f1=self.nodes[nm1].energy
+            #f7=self.nodes[np1].energy
 
-            gp_prim = block_matrix.dot(self.nodes[self.TSnode].coord_basis,self.nodes[self.TSnode].gradient)
-            result = double_golden_section(self.nodes[self.TSnode].coordinates,xyz1,xyz7,f1,f7,self.nodes[self.TSnode])
-            status = result['status']
+            #gp_prim = block_matrix.dot(self.nodes[self.TSnode].coord_basis,self.nodes[self.TSnode].gradient)
+            #result = double_golden_section(self.nodes[self.TSnode].coordinates,xyz1,xyz7,f1,f7,self.nodes[self.TSnode])
+            #status = result['status']
 
-            if not status:
-                print("same geometry from golden section")
-            else:
-                self.nodes[self.TSnode].xyz = result['xyz']
-                self.get_tangents_1e()
+            #if not status:
+            #    print("same geometry from golden section")
+            #else:
+            #    self.nodes[self.TSnode].xyz = result['xyz']
+            #    self.get_tangents_1e()
         
-            # NEW 12/2019
-            s0_prim = self.ictan[self.TSnode]
+            ## NEW 12/2019
+            #s0_prim = self.ictan[self.TSnode]
             #s = result['step']
         else:
             #s = None
@@ -852,7 +859,7 @@ class Base_Method(Print,Analyze,object):
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
        
                 # set to beales
-                self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
+                #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                 #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
 
                 # overwrite this here just in case TSnode changed wont cause slow down climb  
@@ -1714,8 +1721,8 @@ class Base_Method(Print,Analyze,object):
         #TODO error for seam climb
         opt_type='ICTAN' 
         if self.climb and n==self.TSnode and not self.find:
-            #opt_type='CLIMB'
-            opt_type='BEALES_CG'
+            opt_type='CLIMB'
+            #opt_type='BEALES_CG'
         elif self.find and n==self.TSnode:
             opt_type='TS'
         elif self.nodes[n].PES.lot.do_coupling:
