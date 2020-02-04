@@ -146,6 +146,19 @@ class eigenvector_follow(base_optimizer):
 
                 molecule.newHess=5
                 #return ls['status']
+            if ls['step'] > self.options['DMAX']:
+                if ls['step']<= self.options['abs_max_step']:     # absolute max
+                    print(" Increasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+                else:
+                    self.options['DMAX'] =self.options['abs_max_step']
+            elif ls['step']<self.options['DMAX']:
+                if ls['step']>=self.DMIN:     # absolute min
+                    print(" Decreasing DMAX to {}".format(ls['step']))
+                    self.options['DMAX'] = ls['step']
+                elif ls['step']<=self.DMIN:
+                    self.options['DMAX'] = self.DMIN
+                    print(" Decreasing DMAX to {}".format(self.DMIN))
 
             # calculate predicted value from Hessian, gp is previous constrained gradient
             scaled_dq = dq*step

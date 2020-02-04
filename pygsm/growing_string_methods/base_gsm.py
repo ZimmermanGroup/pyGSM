@@ -842,6 +842,7 @@ class Base_Method(Print,Analyze,object):
 
         optlastnode=False
         if self.product_geom_fixed==False:
+            #BUUUUGG 1/24/2020
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
                 optlastnode=True
 

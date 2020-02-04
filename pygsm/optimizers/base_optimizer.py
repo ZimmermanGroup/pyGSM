@@ -302,6 +302,7 @@ class base_optimizer(object):
             print(" gts %1.4f" % gts)
             if stepsize > 0.05:
                 constraint_steps = constraint_steps*0.05/stepsize
+            constraint_steps = constraint_steps[:,np.newaxis]
         # => MECI
         elif opt_type=='MECI': 
             dq = self.dgrad_step(molecule)
