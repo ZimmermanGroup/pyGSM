@@ -289,7 +289,7 @@ class SE_GSM(Base_Method):
         # ADD extra criteria here to check if TS is higher energy than product
         return isDone
 
-    def check_opt(self,totalgrad,fp,rtype):
+    def check_opt(self,totalgrad,fp,rtype,ts_cgradq):
         isDone=False
         added=False
         if self.TSnode == self.nnodes-2 and (self.find or totalgrad<0.2) and fp==1:
@@ -352,7 +352,7 @@ class SE_GSM(Base_Method):
             TS_conv = self.options['CONV_TOL']/2.
         self.optimizer[self.TSnode].conv_grms = TS_conv
 
-        if (rtype == 2 and self.find ) or (rtype==1 and self.climb):
+        if (rtype == 2 and self.find ):
             if self.nodes[self.TSnode].gradrms< TS_conv:
                 self.tscontinue=False
                 isDone=True
@@ -362,7 +362,10 @@ class SE_GSM(Base_Method):
                 self.tscontinue=False
                 isDone=True
                 #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-                return isDone
+        if rtype==1 and self.climb:
+            if self.nodes[self.TSnode].gradrms<TS_conv and ts_cgradq < self.options['CONV_TOL']: 
+                isDone=True
+        return isDone
 
 if __name__=='__main__':
     from .qchem import QChem

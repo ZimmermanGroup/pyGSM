@@ -427,6 +427,7 @@ def main():
             conv_Ediff = inpfileq['conv_Ediff'],
             conv_dE = inpfileq['conv_dE'],
             conv_gmax = inpfileq['conv_gmax'],
+            opt_climb = True if args.only_climb else False,
             )
 
     # GSM
@@ -462,7 +463,7 @@ def main():
                 )
 
     # For seam calculation
-    if inpfileq['gsm_type']=="DE_GSM" and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
+    if inpfileq['gsm_type']!='SE_Cross' and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
         optimizer.opt_cross = True
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':

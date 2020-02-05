@@ -176,7 +176,7 @@ class DE_GSM(Base_Method):
 
         return ncurrent,nlist
 
-    def check_opt(self,totalgrad,fp,rtype):
+    def check_opt(self,totalgrad,fp,rtype,ts_cgradq):
         isDone=False
         #if rtype==self.stage: 
         # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
@@ -188,7 +188,7 @@ class DE_GSM(Base_Method):
             TS_conv = self.options['CONV_TOL']/2.
         self.optimizer[self.TSnode].conv_grms = TS_conv
 
-        if (rtype == 2 and self.find) or (rtype==1 and self.climb):
+        if (rtype == 2 and self.find):
             if self.nodes[self.TSnode].gradrms<TS_conv: 
                 isDone=True
                 #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
@@ -197,6 +197,11 @@ class DE_GSM(Base_Method):
                 #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
                 isDone=True
                 self.tscontinue=False
+
+        if rtype==1 and self.climb:
+            if self.nodes[self.TSnode].gradrms<TS_conv and ts_cgradq < self.options['CONV_TOL']: 
+                isDone=True
+
         return isDone
 
     def set_V0(self):

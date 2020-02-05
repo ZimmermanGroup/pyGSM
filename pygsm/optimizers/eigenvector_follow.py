@@ -229,7 +229,12 @@ class eigenvector_follow(base_optimizer):
             if self.opt_cross and abs(dE)<1.0 and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 self.converged=True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                self.converged=True
+                if self.opt_climb and opt_type=="CLIMB":
+                    gts = np.dot(g.T,molecule.constraints[:,0])
+                    if gts<self.conv_grms:
+                        self.converged=True
+                else:
+                    self.converged=True
 
             if self.converged:
                 print(" converged")

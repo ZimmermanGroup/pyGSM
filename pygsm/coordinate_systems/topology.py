@@ -211,7 +211,7 @@ class Topology():
 
         for i in primitive_indices:
             element = atoms[i]
-            a = element.name
+            a = element.symbol
             G.add_node(i)
             if parse_version(nx.__version__) >= parse_version('2.0'):
                 nx.set_node_attributes(G,{i:a}, name='e')
@@ -257,7 +257,7 @@ class Topology():
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
         for i, a_dict in enumerate(atoms):
-            a = a_dict.name
+            a = a_dict.symbol
             G.add_node(i)
             if parse_version(nx.__version__) >= parse_version('2.0'):
                 nx.set_node_attributes(G,{i:a}, name='e')

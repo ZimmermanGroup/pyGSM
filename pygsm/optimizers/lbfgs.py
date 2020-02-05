@@ -92,9 +92,11 @@ class lbfgs(base_optimizer):
         #    print(" converged")
         #    return geoms,energies
         
-        # reset k in principle k does not have to reset but . . . 
-        self.k = 0
-        self.end=0
+        ## reset k in principle k does not have to reset but . . . 
+        # TRY Turning off Feb 2020
+        if opt_type != 'CLIMB':
+            self.k = 0
+            self.end=0
 
         # initialize the iteration data list
         if self.k==0:
@@ -152,6 +154,7 @@ class lbfgs(base_optimizer):
             gp = g.copy()
             self.gp_prim = block_matrix.dot(molecule.coord_basis,gc)
             fxp = fx
+            pgradrms = molecule.gradrms
 
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(molecule,opt_type,g)
@@ -198,6 +201,7 @@ class lbfgs(base_optimizer):
             print(" dEpre=%5.4f" %dEpre)
             print(" ratio=%5.4f" %ratio)
 
+
             # revert to the privious point
             if ls['status'] < 0 or ratio<0.:
                 x = xp.copy()
@@ -219,8 +223,9 @@ class lbfgs(base_optimizer):
                 # update molecule xyz
                 xyz = molecule.update_xyz(x-xp)
 
+
             # if ratio is less than 0.3 than reduce DMAX
-            if ratio<0.1 or ls['status']>0: #and abs(dEpre)>0.05:
+            if ratio<0.3 or ls['status']<0: #and abs(dEpre)>0.05:
                 print(" Reducing DMAX")
                 self.options['DMAX'] /= 1.5
                 if self.options['DMAX'] < self.DMIN:
@@ -242,6 +247,21 @@ class lbfgs(base_optimizer):
                 print(" difference energy is %5.4f" % dE)
             molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
 
+
+            # control step size  NEW FEB 2020
+            if ls['status']==0:
+                #self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
+                dgradrms = molecule.gradrms - pgradrms
+                print("dgradrms ",dgradrms)
+                if ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<0.00005:
+                    print(" HERE increasing DMAX")
+                    self.options['DMAX'] *= 1.1
+                    if self.options['DMAX']>self.options['abs_max_step']:
+                        self.options['DMAX']=self.options['abs_max_step']
+            else:
+                print("status not zero")
+
+
             if ostep % xyzframerate==0:
                 geoms.append(molecule.geometry)
                 energies.append(molecule.energy-refE)
@@ -258,7 +278,12 @@ class lbfgs(base_optimizer):
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp and ls['status']==0:
                 self.converged=True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                self.converged=True
+                if self.opt_climb and opt_type=="CLIMB":
+                    gts = np.dot(g.T,molecule.constraints[:,0])
+                    if gts<self.conv_grms:
+                        self.converged=True
+                else:
+                    self.converged=True
 
             if self.converged:
                 print(" converged")

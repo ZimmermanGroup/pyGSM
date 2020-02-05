@@ -72,8 +72,20 @@ class base_optimizer(object):
                 )
 
         opt.add_option(
+                key='opt_climb',
+                value=False,
+                allowed_types=[bool],
+                doc='Optimize TS with climbing criterion',
+                )
+
+        opt.add_option(
                 key='DMAX',
                 value=0.1,
+                doc='step size controller, this changes depending on the performance of the optimization',
+                )
+        opt.add_option(
+                key='DMIN',
+                value=0.0001,
                 doc='step size controller, this changes depending on the performance of the optimization',
                 )
         opt.add_option(
@@ -158,10 +170,11 @@ class base_optimizer(object):
 
         # TS node properties
         self.nneg = 0  # number of negative eigenvalues
-        self.DMIN = self.options['DMAX']/20.
+        self.DMIN = self.options['DMIN']
 
         #MECI 
         self.opt_cross = self.options['opt_cross']
+        self.opt_climb = self.options['opt_climb']
 
         # Hessian
         self.update_hess_in_bg = self.options['update_hess_in_bg']
@@ -176,7 +189,7 @@ class base_optimizer(object):
         self.linesearch_parameters = {
                 'epsilon':1e-5,
                 'ftol':options['ftol'], #1e-4,
-                'wolfe':0.9,
+                'wolfe':0.9, 
                 'max_linesearch':3,
                 'min_step':self.DMIN,
                 'max_step': options['abs_max_step'],
@@ -356,7 +369,7 @@ class base_optimizer(object):
     def step_controller(self,step,ratio,gradrms,pgradrms,dEpre,opt_type,dE_iter):
         # => step controller controls DMAX/DMIN <= #
 
-        if opt_type=="TS":
+        if opt_type in ["TS","CLIMB"]:
             if ratio<0. and abs(dEpre)>0.05:
                 print("sign problem, decreasing DMAX")
                 self.options['DMAX'] /= 1.35
@@ -374,6 +387,8 @@ class base_optimizer(object):
                 self.options['DMAX']=0.15
         else:
             if dE_iter > 0.001 and opt_type in ['UNCONSTRAINED','ICTAN']:
+                if self.options['print_level']>0:
+                    print(" decreasing DMAX")
                 if step<self.options['DMAX']:
                     self.options['DMAX'] = step/1.5
                 else:

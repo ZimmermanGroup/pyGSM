@@ -313,7 +313,7 @@ class Base_Method(Print,Analyze,object):
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
 
             # => Check Convergence <= #
-            isDone = self.check_opt(totalgrad,fp,rtype)
+            isDone = self.check_opt(totalgrad,fp,rtype,ts_cgradq)
             if isDone:
                 break
 
@@ -737,43 +737,6 @@ class Base_Method(Print,Analyze,object):
     def opt_steps(self,opt_steps):
 
         refE=self.nodes[0].energy
-        if self.climb and not self.find:
-            pass
-            #nm1 = self.TSnode-1
-            #np1 = self.TSnode+1
-
-            ## interpolate closer to the TS node for the GS search
-            #xyz = self.nodes[self.TSnode].xyz 
-            ##xyz1 = Base_Method.interpolate_xyz(self.nodes[nm1],self.nodes[self.TSnode],0.9)
-            ##xyz7 = Base_Method.interpolate_xyz(self.nodes[np1],self.nodes[self.TSnode],0.9)
-            #xyz1 = self.nodes[nm1].xyz
-            #xyz7 = self.nodes[np1].xyz
-
-            ## linear approximation
-            ##f1 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[nm1].energy 
-            ##f7 = 0.9* self.nodes[self.TSnode].energy + 0.1*self.nodes[np1].energy 
-            ##f1=self.nodes[nm1].PES.get_energy(xyz1)
-            ##f7=self.nodes[np1].PES.get_energy(xyz7)
-            #f1=self.nodes[nm1].energy
-            #f7=self.nodes[np1].energy
-
-            #gp_prim = block_matrix.dot(self.nodes[self.TSnode].coord_basis,self.nodes[self.TSnode].gradient)
-            #result = double_golden_section(self.nodes[self.TSnode].coordinates,xyz1,xyz7,f1,f7,self.nodes[self.TSnode])
-            #status = result['status']
-
-            #if not status:
-            #    print("same geometry from golden section")
-            #else:
-            #    self.nodes[self.TSnode].xyz = result['xyz']
-            #    self.get_tangents_1e()
-        
-            ## NEW 12/2019
-            #s0_prim = self.ictan[self.TSnode]
-            #s = result['step']
-        else:
-            #s = None
-            s0_prim = None
-            gp_prim=None
 
         if self.use_multiprocessing:
             cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc                                  
@@ -842,7 +805,7 @@ class Base_Method(Print,Analyze,object):
 
         optlastnode=False
         if self.product_geom_fixed==False:
-            #BUUUUGG 1/24/2020
+            #BUG 1/24/2020
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
                 optlastnode=True
 
@@ -1497,7 +1460,8 @@ class Base_Method(Print,Analyze,object):
 
                     # new 6/7/2019
                     if self.nodes[n].newHess==0:
-                        self.nodes[n].newHess=2
+                        if not (n==self.TSnode and (self.climb or self.find)):
+                            self.nodes[n].newHess=2
 
                 #TODO might need to recalculate energy here for seam? 
 
@@ -1704,7 +1668,7 @@ class Base_Method(Print,Analyze,object):
         exsteps=1
         tsnode = int(self.TSnode)
 
-        if self.find and self.energies[n]+1.5 > self.energies[self.TSnode] and n!=tsnode:  #
+        if (self.find or self.climb) and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
