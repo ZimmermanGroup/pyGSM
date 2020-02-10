@@ -215,6 +215,12 @@ class Base_Method(Print,Analyze,object):
         self.done_growing = False
         self.reference_xyz = None
 
+        self.nclimb=0
+        self.nhessreset=10  # are these used??? TODO 
+        self.hessrcount=0   # are these used?!  TODO
+        self.newclimbscale=2.
+
+
     @property
     def TSnode(self):
         return np.argmax(self.energies[:self.nnodes-1])
@@ -558,6 +564,7 @@ class Base_Method(Print,Analyze,object):
             # update newic coordinate basis
             self.newic.xyz = self.nodes[newic_n].xyz
             Vecs = self.newic.update_coordinate_basis(self.ictan[n])
+            self.nodes[n].coord_basis = Vecs
             nbonds=self.nodes[0].num_bonds
             # cnorms
             constraint = self.newic.constraints[:,0]
@@ -1673,7 +1680,7 @@ class Base_Method(Print,Analyze,object):
             print(" multiplying steps for node %i by %i" % (n,exsteps))
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
         if (self.find or self.climb) and n==tsnode: 
-            exsteps=3
+            exsteps=2
             #exsteps = self.ts_exsteps
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
@@ -1717,7 +1724,7 @@ class Base_Method(Print,Analyze,object):
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
    
-    def restart_string(self,xyzfile='restart.xyz'):
+    def restart_string(self,xyzfile='restart.xyz',rtype=2):
         nifty.printcool("Restarting string from file")
         self.growth_direction=0
         with open(xyzfile) as f:
@@ -1791,10 +1798,10 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
 
-        print(" doing one-time ic_reparam REMOVE ME")
-        self.get_tangents_1()
-        self.ic_reparam(ic_reparam_steps=8)
-        self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
+        #print(" doing one-time ic_reparam REMOVE ME")
+        #self.get_tangents_1()
+        #self.ic_reparam(ic_reparam_steps=8)
+        #self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
         for struct in range(1,nstructs-1):
             print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
@@ -1818,6 +1825,32 @@ class Base_Method(Print,Analyze,object):
         for n in range(self.nnodes):
             print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
         print()
+
+
+        if self.__class__.__name__!="SE_Cross":
+            self.set_finder(rtype)
+
+            self.get_tangents_1e()
+            num_coords =  self.nodes[0].num_coordinates - 1
+
+            # project out the constraint
+            for n in range(0,self.nnodes):
+                gc=self.nodes[n].gradient.copy()
+                for c in self.nodes[n].constraints.T:
+                    gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
+                self.nodes[n].gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
+
+            fp = self.find_peaks(2)
+            totalgrad,gradrms,sumgradrms = self.calc_grad()
+            self.emax = self.energies[self.TSnode]
+            print(" totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
+
+            ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
+            print(" ts_cgradq %5.4f" % ts_cgradq)
+            ts_gradrms=self.nodes[self.TSnode].gradrms
+
+            self.set_stage(totalgrad,sumgradrms,ts_cgradq,ts_gradrms,fp)
+
 
         #tmp for testing
         #self.emax = self.energies[self.TSnode]

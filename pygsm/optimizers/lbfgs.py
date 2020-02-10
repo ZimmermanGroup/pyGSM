@@ -140,11 +140,11 @@ class lbfgs(base_optimizer):
 
             # normalize the direction
             actual_step = np.linalg.norm(d)
-            print(" actual_step= %1.2f"% actual_step)
+            print(" actual_step= %1.5f"% actual_step)
             d = d/actual_step #normalize
             if actual_step>self.options['DMAX']:
                 step=self.options['DMAX']
-                print(" reducing step, new step = %1.2f" %step)
+                print(" reducing step, new step = %1.5f" %step)
             else:
                 step=actual_step
 
@@ -170,20 +170,6 @@ class lbfgs(base_optimizer):
             fx = ls['fx']
             g  = ls['g']
 
-            if ls['step'] > self.options['DMAX']:
-                if ls['step']<= self.options['abs_max_step']:     # absolute max
-                    print(" Increasing DMAX to {}".format(ls['step']))
-                    self.options['DMAX'] = ls['step']
-                else:
-                    self.options['DMAX'] =self.options['abs_max_step']
-            elif ls['step']<self.options['DMAX']:
-                if ls['step']>=self.DMIN:     # absolute min
-                    print(" Decreasing DMAX to {}".format(ls['step']))
-                    self.options['DMAX'] = ls['step']
-                elif ls['step']<=self.DMIN:
-                    self.options['DMAX'] = self.DMIN
-                    print(" Decreasing DMAX to {}".format(self.DMIN))
-
             dEstep = fx - fxp
             dq = x-xp
 
@@ -205,9 +191,10 @@ class lbfgs(base_optimizer):
             # revert to the privious point
             if ls['status'] < 0 or ratio<0.:
                 x = xp.copy()
-                molecule.xyz = self.xyzp
+                molecule.xyz = self.xyzp.copy()
                 g = gp.copy()
                 fx = fxp
+                #fx = molecule.energy
                 ratio=0.
                 dEstep=0.
                 print('[ERROR] the point return to the previous point')
@@ -250,10 +237,22 @@ class lbfgs(base_optimizer):
 
             # control step size  NEW FEB 2020
             if ls['status']==0:
-                #self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
                 dgradrms = molecule.gradrms - pgradrms
                 print("dgradrms ",dgradrms)
-                if ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<0.00005:
+                if ls['step'] > self.options['DMAX']:
+                    if ls['step']<= self.options['abs_max_step']:     # absolute max
+                        print(" Increasing DMAX to {}".format(ls['step']))
+                        self.options['DMAX'] = ls['step']
+                    else:
+                        self.options['DMAX'] =self.options['abs_max_step']
+                elif ls['step']<self.options['DMAX']:
+                    if ls['step']>=self.DMIN:     # absolute min
+                        print(" Decreasing DMAX to {}".format(ls['step']))
+                        self.options['DMAX'] = ls['step']
+                    elif ls['step']<=self.DMIN:
+                        self.options['DMAX'] = self.DMIN
+                        print(" Decreasing DMAX to {}".format(self.DMIN))
+                elif ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<-0.00005:
                     print(" HERE increasing DMAX")
                     self.options['DMAX'] *= 1.1
                     if self.options['DMAX']>self.options['abs_max_step']:
@@ -280,7 +279,7 @@ class lbfgs(base_optimizer):
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if self.opt_climb and opt_type=="CLIMB":
                     gts = np.dot(g.T,molecule.constraints[:,0])
-                    if gts<self.conv_grms:
+                    if abs(gts)<self.conv_grms:
                         self.converged=True
                 else:
                     self.converged=True

@@ -178,6 +178,7 @@ def main():
             ID = inpfileq['ID'],
             lot_inp_file=inpfileq['lot_inp_file'],
             states=inpfileq['states'],
+            gradient_states=inpfileq['states'],
             coupling_states=coupling_states,
             geom=geoms[0],
             nproc=nproc,
@@ -501,7 +502,7 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.restart_string(args.restart_file)
+        gsm.restart_string(args.restart_file,rtype)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

@@ -189,7 +189,7 @@ class DE_GSM(Base_Method):
         self.optimizer[self.TSnode].conv_grms = TS_conv
 
         if (rtype == 2 and self.find):
-            if self.nodes[self.TSnode].gradrms<TS_conv: 
+            if self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff: 
                 isDone=True
                 #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
                 self.tscontinue=False
@@ -199,7 +199,7 @@ class DE_GSM(Base_Method):
                 self.tscontinue=False
 
         if rtype==1 and self.climb:
-            if self.nodes[self.TSnode].gradrms<TS_conv and ts_cgradq < self.options['CONV_TOL']: 
+            if self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']: 
                 isDone=True
 
         return isDone

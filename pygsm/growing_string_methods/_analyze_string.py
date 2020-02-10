@@ -241,7 +241,7 @@ class Analyze:
         sum_gradrms = 0.0
         for i,ico in zip(list(range(1,self.nnodes-1)),self.nodes[1:self.nnodes-1]):
             if ico!=None:
-                print(" node: {:2} gradrms: {:1.4}".format(i,float(ico.gradrms)),end='')
+                print(" node: {:02d} gradrms: {:.6f}".format(i,float(ico.gradrms)),end='')
                 if i%5 == 0:
                     print()
                 totalgrad += ico.gradrms*self.rn3m6

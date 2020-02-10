@@ -85,9 +85,9 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         # check the sufficient decrease condition (Armijo condition).
         if fx > finit + (step * dgtest) and np.all(constraint_step==0):  #+ np.dot(g.T,constraint_step): # doesn't work with constraint :(
             #print(" %5.4f %5.4f" % ((finit+step*dgtest),fx))
-            print(" [INFO] not satisfy sufficient decrease condition.")
+            print(" [INFO] decreasing step: does not satisfy sufficient decrease condition.")
             width = dec
-            print(" step %1.2f" % (step*width))
+            print(" step %1.5f" % (step*width))
         else:
             # check the wolfe condition
             # now g is the gradient of f(xk + step * d)
@@ -96,13 +96,13 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
                 print(" [INFO] dg = %r < parameters.wolfe * dginit = %r" %(dg, parameters['wolfe'] * dginit))
                 print(" [INFO] not satisfy wolf condition.")
                 width = inc
-                print(" step %1.2f" % (step*width))
+                print(" increasing step to step %1.5f" % (step*width))
             else:
                 # check the strong wolfe condition
                 if dg > -parameters['wolfe'] * dginit:
                     print(" [INFO] not satisfy strong wolf condition.")
                     width = dec
-                    print(" step %1.2f" % (step*width))
+                    print(" decreasing step to %1.5f" % (step*width))
                 else:
                     result = {'status':0, 'fx':fx, 'g':g, 'step':step, 'x':x,'molecule':molecule}
                     return result

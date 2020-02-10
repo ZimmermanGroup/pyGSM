@@ -518,6 +518,11 @@ class Molecule(object):
     def coord_basis(self):
         return self.coord_obj.Vecs
 
+    @coord_basis.setter
+    def coord_basis(self,value):
+        self.coord_obj.Vecs = value
+
+
     def update_coordinate_basis(self,constraints=None):
         if self.coord_obj.__class__.__name__=='CartesianCoordinates':
             return
