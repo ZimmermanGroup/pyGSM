@@ -223,7 +223,17 @@ class Base_Method(Print,Analyze,object):
 
     @property
     def TSnode(self):
-        return np.argmax(self.energies[:self.nnodes-1])
+        # Treat GSM with penalty a little different since penalty will increase energy based on energy 
+        # differences, which might not be great for Climbing Image
+        if self.__class__.__name__ != "SE_Cross" and self.nodes[0].PES.__class__.__name__ =="Penalty_PES":
+            energies = np.asarray([0.]*self.nnodes)
+            for i,node in enumerate(self.nodes):
+                if node!=None:
+                    energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
+            return np.argmax(energies)
+        else:
+            return np.argmax(self.energies[:self.nnodes-1])
+
     @property
     def npeaks(self):
         minnodes=[]
@@ -389,6 +399,8 @@ class Base_Method(Print,Analyze,object):
                     print(" slowing down climb optimization")
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
                     self.optimizer[self.TSnode].options['SCALEQN'] = 2.
+                    if self.optimizer[self.TSnode].SCALE_CLIMB <5.:
+                        self.optimizer[self.TSnode].SCALE_CLIMB +=1.
                     self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
                     self.ts_exsteps=1
                     if self.newclimbscale<5.0:

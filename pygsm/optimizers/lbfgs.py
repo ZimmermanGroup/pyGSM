@@ -190,6 +190,8 @@ class lbfgs(base_optimizer):
 
             # revert to the privious point
             if ls['status'] < 0 or ratio<0.:
+                if ratio<0.:
+                    ls['status']=-1
                 x = xp.copy()
                 molecule.xyz = self.xyzp.copy()
                 g = gp.copy()
@@ -197,6 +199,9 @@ class lbfgs(base_optimizer):
                 #fx = molecule.energy
                 ratio=0.
                 dEstep=0.
+                if self.SCALE_CLIMB<5.:
+                    self.SCALE_CLIMB+=1.
+                    print('print SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
                 print('[ERROR] the point return to the previous point')
                 self.lm = []
                 for i in range(0, maxcor):
@@ -206,20 +211,21 @@ class lbfgs(base_optimizer):
                 self.k = 0
                 self.end =0
                 molecule.newHess=5
+                self.options['DMAX'] = ls['step']
             else:
                 # update molecule xyz
                 xyz = molecule.update_xyz(x-xp)
 
 
             # if ratio is less than 0.3 than reduce DMAX
-            if ratio<0.3 or ls['status']<0: #and abs(dEpre)>0.05:
+            if ratio<0.3 and ratio>0.: #and abs(dEpre)>0.05:
                 print(" Reducing DMAX")
                 self.options['DMAX'] /= 1.5
                 if self.options['DMAX'] < self.DMIN:
                     self.options['DMAX'] = self.DMIN
                 if molecule.newHess<5:
                     molecule.newHess+=1
-            elif ratio>0.:
+            elif ratio>0.3:
                 molecule.newHess-=1
 
 
@@ -243,6 +249,8 @@ class lbfgs(base_optimizer):
                     if ls['step']<= self.options['abs_max_step']:     # absolute max
                         print(" Increasing DMAX to {}".format(ls['step']))
                         self.options['DMAX'] = ls['step']
+                        if self.SCALE_CLIMB>1.:
+                            self.SCALE_CLIMB -=1.
                     else:
                         self.options['DMAX'] =self.options['abs_max_step']
                 elif ls['step']<self.options['DMAX']:

@@ -106,6 +106,12 @@ class base_optimizer(object):
                 )
 
         opt.add_option(
+                key='SCALE_CLIMB',
+                value=1.,
+                doc='Used to scale the climbing image search'
+                )
+
+        opt.add_option(
                 key='update_hess_in_bg',
                 value=True,
                 doc='For optimizers not bfgs keep track of Hessian in back ground',
@@ -216,6 +222,14 @@ class base_optimizer(object):
     def opt_cross(self,value):
         self.options['opt_cross']=value
 
+    @property
+    def SCALE_CLIMB(self):
+        return self.options['SCALE_CLIMB']
+
+    @SCALE_CLIMB.setter
+    def SCALE_CLIMB(self,value):
+        self.options['SCALE_CLIMB']=value
+
     def get_nconstraints(self,opt_type):
         if opt_type in ["ICTAN", "CLIMB"]:
             nconstraints = 1
@@ -310,11 +324,13 @@ class base_optimizer(object):
         # => ictan climb
         if opt_type=="CLIMB": 
             gts = np.dot(g.T,molecule.constraints[:,0])
-            constraint_steps = gts*molecule.constraints[:,0]
-            stepsize=np.linalg.norm(constraint_steps)
+            #stepsize=np.linalg.norm(constraint_steps)
             print(" gts %1.4f" % gts)
-            if stepsize > 0.05:
-                constraint_steps = constraint_steps*0.05/stepsize
+            max_step = 0.05/self.SCALE_CLIMB
+            if gts > max_step:
+                gts = max_step
+                #constraint_steps = constraint_steps*max_step/stepsize
+            constraint_steps = gts*molecule.constraints[:,0]
             constraint_steps = constraint_steps[:,np.newaxis]
         # => MECI
         elif opt_type=='MECI': 
