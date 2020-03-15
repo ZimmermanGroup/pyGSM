@@ -68,6 +68,9 @@ class Penalty_PES(PES):
         #print "factor is %1.4f" % factor
         return avg_grad + factor*dgrad
 
+    def get_avg_gradient(self,xyz):
+        return 0.5*(self.PES1.get_gradient(xyz) + self.PES2.get_gradient(xyz))
+
 if __name__ == '__main__':
 
     from level_of_theories.pytc import PyTC 

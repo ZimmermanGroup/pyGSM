@@ -1,6 +1,6 @@
 import sys
 import numpy as np 
-from utilities import manage_xyz
+from utilities import *
 
 #TODO remove unecessary arguments: nconstraints, xp, ,...
 

@@ -52,8 +52,12 @@ class TeraChem(Lot):
         os.system('mkdir -p scratch/{}'.format(node_id))
 
         if node_id != lot.node_id and copy_wavefunction:
-            old_path = 'scratch/{}/c0.casscf'.format(lot.node_id)
-            new_path = 'scratch/{}/'.format(node_id)
+            if lot.tc_options['casscf']=='yes':
+                old_path = 'scratch/{}/c0.casscf'.format(lot.node_id)
+                new_path = 'scratch/{}/'.format(node_id)
+            else:
+                old_path = 'scratch/{}/c0'.format(lot.node_id)
+                new_path = 'scratch/{}/'.format(node_id)
             cmd = 'cp -r ' + old_path +' ' + new_path
             print(" copying scr files\n {}".format(cmd))
             os.system(cmd)

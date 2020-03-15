@@ -49,7 +49,5 @@ https://github.com/leeping/geomeTRIC/blob/master/LICENSE
 
 ## Contributors: 
 Cody Aldaz (lead author) \
-Khoi Dang \
 Prof. Paul Zimmerman \
-Josh Kammeraad \
-Prof. Todd Martinez Group 
+Prof. Todd Martinez \

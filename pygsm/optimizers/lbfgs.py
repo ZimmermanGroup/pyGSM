@@ -199,7 +199,7 @@ class lbfgs(base_optimizer):
                 #fx = molecule.energy
                 ratio=0.
                 dEstep=0.
-                if self.SCALE_CLIMB<5.:
+                if self.SCALE_CLIMB<5. and opt_type=='CLIMB':
                     self.SCALE_CLIMB+=1.
                     print('print SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
                 print('[ERROR] the point return to the previous point')
@@ -215,7 +215,6 @@ class lbfgs(base_optimizer):
             else:
                 # update molecule xyz
                 xyz = molecule.update_xyz(x-xp)
-
 
             # if ratio is less than 0.3 than reduce DMAX
             if ratio<0.3 and ratio>0.: #and abs(dEpre)>0.05:

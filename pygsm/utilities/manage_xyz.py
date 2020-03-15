@@ -248,3 +248,36 @@ def combine_atom_xyz(
             ))
     return geom2
 
+def write_fms90(
+    filename,
+    geomx,  
+    geomp=None,
+    ):
+
+    """ Write fms90 geometry file with position and velocities
+
+    Params:
+        filename (str) - name of fms90 geometry file to write
+        geomx ((natoms,4) np.ndarray) - system positions (atom symbol, x,y,z)
+        geomp ((natoms,4) np.ndarray) - system momenta (atom symbol, px, py, pz)
+
+    """
+
+    fh = open(filename,'w')
+    fh.write('UNITS=BOHR\n')
+    fh.write('%d\n' % len(geomx))
+    for atom in geomx:
+        fh.write('%-2s %14.6f %14.6f %14.6f\n' % (
+            atom[0],
+            atom[1],
+            atom[2],
+            atom[3],
+            ))
+    if geomp:
+        fh.write('# momenta\n')
+        for atom in geomp:
+            fh.write('  %14.6f %14.6f %14.6f\n' % (
+                atom[1],
+                atom[2],
+                atom[3],
+                ))

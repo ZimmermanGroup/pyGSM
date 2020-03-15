@@ -22,6 +22,10 @@ ANGSTROM_TO_AU = 1.0E-10*M_TO_AU            # (a_0 / A)
 DEBYE_TO_AU = 0.393430307
 AU_TO_DEBYE = 1.0 / DEBYE_TO_AU
 
+# couloumb
+ELECTRON_TO_COULOMB = 6.24150907E18
+
+
 # Mass
 KG_PER_AU = 9.10938356E-31                  # (kg / m_e)
 KG_TO_AU = 1.0/KG_PER_AU                    # (m_e / kg)
