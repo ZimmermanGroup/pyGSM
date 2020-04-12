@@ -629,7 +629,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #return self.GInverse_SVD(xyz)
 
     def add(self, dof,verbose=False):
-        if dof not in self.Internals:
+        if dof.__class__.__name__ in ['CartesianX', 'CartesianY','CartesianZ']:
+            if verbose:
+                print((" adding ",dof))
+            self.Internals.append(dof)
+        elif dof not in self.Internals:
             if verbose:
                 print((" adding ",dof))
             self.Internals.append(dof)
@@ -829,7 +833,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                         for i in np.argsort(dots)[:2]:
                                             if self.add(trans[i]([a, b, c], w=w)):
                                                 nprims+=1
-                                    
+                            
+                # Make Dihedrals
                 for b in frag.nodes():
                     for a in frag.neighbors(b):
                         for c in frag.neighbors(b):
@@ -1218,18 +1223,42 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     #        tot+=num_prim
     #    return new_xyz
 
-    def second_derivatives(self, xyz):
+    #def second_derivatives(self, xyz):
+    #    self.calculate(xyz)
+    #    answer = []
+    #    for Internal in self.Internals:
+    #        answer.append(Internal.second_derivative(xyz))
+    #    # This array has dimensions:
+    #    # 1) Number of internal coordinates
+    #    # 2) Number of atoms
+    #    # 3) 3
+    #    # 4) Number of atoms
+    #    # 5) 3
+    #    return np.array(answer)
+
+    def second_derivatives(self,xyz):
         self.calculate(xyz)
-        answer = []
-        for Internal in self.Internals:
-            answer.append(Internal.second_derivative(xyz))
+        c_list = []
+        for info in self.block_info:
+            sa = info[0]
+            ea = info[1]
+            sp = info[2]
+            ep = info[3]
+            na = ea - sa
+            SDer = np.array( 
+                    [ np.reshape(p.second_derivative(xyz[sa:ea,:],start_idx=sa),(3*na,3*na)) for p in self.Internals[sp:ep] ]
+                    )
+
+            c_list.append(SDer)
+        
+        answer = block_tensor(c_list)
         # This array has dimensions:
         # 1) Number of internal coordinates
         # 2) Number of atoms
         # 3) 3
         # 4) Number of atoms
         # 5) 3
-        return np.array(answer)
+        return answer
 
 
     def get_hybrid_indices(self,xyz):

@@ -553,13 +553,15 @@ class Molecule(object):
 
     @property
     def prim_CMatrix(self):
-        Der = self.coord_obj.Prims.second_derivatives(self.xyz)
-        return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
+        return self.coord_obj.Prims.second_derivatives(self.xyz)
+        #Der = self.coord_obj.Prims.second_derivatives(self.xyz)
+        #return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
 
     @property
     def CMatrix(self):
-        Der = self.coord_obj.second_derivatives(self.xyz)
-        return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
+        return self.coord_obj.second_derivatives(self.xyz)
+        #Der = self.coord_obj.second_derivatives(self.xyz)
+        #return Der.reshape(Der.shape[0],3*self.xyz.shape[0],3*self.xyz.shape[0])
         #return Der
 
         #Answer = []

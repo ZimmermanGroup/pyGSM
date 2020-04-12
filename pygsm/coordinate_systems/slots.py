@@ -57,7 +57,11 @@ class CartesianX(object):
         derivatives[relative_a][0] = self.w
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -104,7 +108,11 @@ class CartesianY(object):
         derivatives[relative_a][1] = self.w
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -151,7 +159,11 @@ class CartesianZ(object):
         derivatives[relative_a][2] = self.w
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -197,7 +209,11 @@ class TranslationX(object):
             derivatives[a][0] = self.w[i]
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -243,7 +259,11 @@ class TranslationY(object):
             derivatives[a][1] = self.w[i]
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -289,7 +309,11 @@ class TranslationZ(object):
             derivatives[a][2] = self.w[i]
         return derivatives
 
-    def second_derivative(self, xyz):
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1,3)
+    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #    return deriv2
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
@@ -399,152 +423,256 @@ class Rotator(object):
     def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1, 3)
         relative_a = [ a-start_idx for a in self.a]
-        if np.max(np.abs(xyz-self.stored_derxyz[relative_a])) < 1e-12:
-            return self.stored_deriv[relative_a]
-        else:
-            xsel = xyz[relative_a, :]
-            # x0 is the full size. . . 
-            # need absolute indices of fragment
-            absolute_a = list(range(start_idx,start_idx+len(relative_a)))
-            ysel = self.x0[absolute_a, :]
-            xmean = np.mean(xsel,axis=0)
-            ymean = np.mean(ysel,axis=0)
-            if not self.linear and is_linear(xsel, ysel):
-                # print "Setting linear flag for", self
-                self.linear = True
-            if self.linear:
-                vx = xsel[-1]-xsel[0]
-                vy = ysel[-1]-ysel[0]
-                if self.e0 is None: self.calc_e0()
-                xdum = np.cross(vx, self.e0)
-                ydum = np.cross(vy, self.e0)
-                exdum = xdum / np.linalg.norm(xdum)
-                eydum = ydum / np.linalg.norm(ydum)
-                xsel = np.vstack((xsel, exdum+xmean))
-                ysel = np.vstack((ysel, eydum+ymean))
-            deriv_raw = get_expmap_der(xsel, ysel)
-            if self.linear:
-                # Chain rule is applied to get terms from
-                # dummy atom derivatives
-                nxdum = np.linalg.norm(xdum)
-                dxdum = math_utils.d_cross(vx, self.e0)
-                dnxdum = math_utils.d_ncross(vx, self.e0)
-                # Derivative of dummy atom position w/r.t. molecular axis vector
-                dexdum = (dxdum*nxdum - np.outer(dnxdum,xdum))/nxdum**2
-                # Here we may compute finite difference derivatives to check
-                # h = 1e-6
-                # fdxdum = np.zeros((3, 3), dtype=float)
-                # for i in range(3):
-                #     vx[i] += h
-                #     dPlus = np.cross(vx, self.e0)
-                #     dPlus /= np.linalg.norm(dPlus)
-                #     vx[i] -= 2*h
-                #     dMinus = np.cross(vx, self.e0)
-                #     dMinus /= np.linalg.norm(dMinus)
-                #     vx[i] += h
-                #     fdxdum[i] = (dPlus-dMinus)/(2*h)
-                # if np.linalg.norm(dexdum - fdxdum) > 1e-6:
-                #     print dexdum - fdxdum
-                #     raise Exception()
-                # Apply terms from chain rule
-                deriv_raw[0]  -= np.dot(dexdum, deriv_raw[-1])
-                for i in range(len(self.a)):
-                    deriv_raw[i]  += np.dot(np.eye(3), deriv_raw[-1])/len(self.a)
-                deriv_raw[-2] += np.dot(dexdum, deriv_raw[-1])
-                deriv_raw = deriv_raw[:-1]
-            derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
-            #for i, a in enumerate(self.a):
-            for i, a in enumerate(relative_a):
-                derivatives[a, :, :] = deriv_raw[i, :, :]
-            self.stored_derxyz = xyz.copy()
-            self.stored_deriv = derivatives
-            return derivatives
 
-    def second_derivative(self, xyz):
+        # NOTE 3/2020 CRA stored_der does not currently work in block-matrix formulism
+        #if np.max(np.abs(xyz-self.stored_derxyz[relative_a])) < 1e-12:
+        #    return self.stored_deriv[relative_a]
+        #else:
+        ####
+
+        xsel = xyz[relative_a, :]
+        # x0 is the full size. . . 
+        # need absolute indices of fragment
+        absolute_a = list(range(start_idx,start_idx+len(relative_a)))
+        ysel = self.x0[absolute_a, :]
+        xmean = np.mean(xsel,axis=0)
+        ymean = np.mean(ysel,axis=0)
+        if not self.linear and is_linear(xsel, ysel):
+            # print "Setting linear flag for", self
+            self.linear = True
+        if self.linear:
+            vx = xsel[-1]-xsel[0]
+            vy = ysel[-1]-ysel[0]
+            if self.e0 is None: self.calc_e0()
+            xdum = np.cross(vx, self.e0)
+            ydum = np.cross(vy, self.e0)
+            exdum = xdum / np.linalg.norm(xdum)
+            eydum = ydum / np.linalg.norm(ydum)
+            xsel = np.vstack((xsel, exdum+xmean))
+            ysel = np.vstack((ysel, eydum+ymean))
+        deriv_raw = get_expmap_der(xsel, ysel)
+        if self.linear:
+            # Chain rule is applied to get terms from
+            # dummy atom derivatives
+            nxdum = np.linalg.norm(xdum)
+            dxdum = math_utils.d_cross(vx, self.e0)
+            dnxdum = math_utils.d_ncross(vx, self.e0)
+            # Derivative of dummy atom position w/r.t. molecular axis vector
+            dexdum = (dxdum*nxdum - np.outer(dnxdum,xdum))/nxdum**2
+            # Here we may compute finite difference derivatives to check
+            # h = 1e-6
+            # fdxdum = np.zeros((3, 3), dtype=float)
+            # for i in range(3):
+            #     vx[i] += h
+            #     dPlus = np.cross(vx, self.e0)
+            #     dPlus /= np.linalg.norm(dPlus)
+            #     vx[i] -= 2*h
+            #     dMinus = np.cross(vx, self.e0)
+            #     dMinus /= np.linalg.norm(dMinus)
+            #     vx[i] += h
+            #     fdxdum[i] = (dPlus-dMinus)/(2*h)
+            # if np.linalg.norm(dexdum - fdxdum) > 1e-6:
+            #     print dexdum - fdxdum
+            #     raise Exception()
+            # Apply terms from chain rule
+            deriv_raw[0]  -= np.dot(dexdum, deriv_raw[-1])
+            #for i in range(len(self.a)):
+            for i in range(len(relative_a)):
+                deriv_raw[i]  += np.dot(np.eye(3), deriv_raw[-1])/len(self.a)
+            deriv_raw[-2] += np.dot(dexdum, deriv_raw[-1])
+            deriv_raw = deriv_raw[:-1]
+        derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
+        #for i, a in enumerate(self.a):
+        for i, a in enumerate(relative_a):
+            derivatives[a, :, :] = deriv_raw[i, :, :]
+        #self.stored_derxyz = xyz.copy()
+        #self.stored_deriv = derivatives
+
+        return derivatives
+
+    #def second_derivative(self, xyz):
+    #    xyz = xyz.reshape(-1, 3)
+    #    if np.max(np.abs(xyz-self.stored_deriv2xyz)) < 1e-12:
+    #        return self.stored_deriv2
+    #    else:
+    #        xsel = xyz[self.a, :]
+    #        ysel = self.x0[self.a, :]
+    #        xmean = np.mean(xsel,axis=0)
+    #        ymean = np.mean(ysel,axis=0)
+    #        if not self.linear and is_linear(xsel, ysel):
+    #            # print "Setting linear flag for", self
+    #            self.linear = True
+    #        if self.linear:
+    #            vx = xsel[-1]-xsel[0]
+    #            vy = ysel[-1]-ysel[0]
+    #            if self.e0 is None: self.calc_e0()
+    #            xdum = np.cross(vx, self.e0)
+    #            ydum = np.cross(vy, self.e0)
+    #            exdum = xdum / np.linalg.norm(xdum)
+    #            eydum = ydum / np.linalg.norm(ydum)
+    #            xsel = np.vstack((xsel, exdum+xmean))
+    #            ysel = np.vstack((ysel, eydum+ymean))
+
+    #        deriv_raw, deriv2_raw = get_expmap_der(xsel, ysel, second=True)
+    #        if self.linear:
+    #            # Chain rule is applied to get terms from dummy atom derivatives
+    #            def dexdum_(vx_):
+    #                xdum_ = np.cross(vx_, self.e0)
+    #                nxdum_ = np.linalg.norm(xdum_)
+    #                dxdum_ = math_utils.d_cross(vx_, self.e0)
+    #                dnxdum_ = math_utils.d_ncross(vx_, self.e0)
+    #                dexdum_ = (dxdum_*nxdum_ - np.outer(dnxdum_,xdum_))/nxdum_**2
+    #                return dexdum_.copy()
+
+    #            # First indices: elements of vx that are being differentiated w/r.t.
+    #            # Last index: elements of exdum itself
+    #            dexdum = dexdum_(vx)
+    #            dexdum2 = np.zeros((3, 3, 3), dtype=float)
+    #            h = 1.0e-3
+    #            for i in range(3):
+    #                vx[i] += h
+    #                dPlus = dexdum_(vx)
+    #                vx[i] -= 2*h
+    #                dMinus = dexdum_(vx)
+    #                vx[i] += h
+    #                dexdum2[i] = (dPlus-dMinus)/(2*h)
+    #            # Build arrays that contain derivative of dummy atom position
+    #            # w/r.t. real atom positions
+    #            ddum1 = np.zeros((len(self.a), 3, 3), dtype=float)
+    #            ddum1[0] = -dexdum
+    #            ddum1[-1] = dexdum
+    #            for i in range(len(self.a)):
+    #                ddum1[i] += np.eye(3)/len(self.a)
+    #            ddum2 = np.zeros((len(self.a), 3, len(self.a), 3, 3), dtype=float)
+    #            ddum2[ 0, : , 0, :] =  dexdum2
+    #            ddum2[-1, : , 0, :] = -dexdum2
+    #            ddum2[ 0, :, -1, :] = -dexdum2
+    #            ddum2[-1, :, -1, :] =  dexdum2
+    #            # =====
+
+    #            # Do not delete - reference codes using loops for chain rule terms
+    #            # for j in range(len(self.a)): # Loop over atom 1
+    #            #     for m in range(3):       # Loop over xyz of atom 1
+    #            #         for k in range(len(self.a)): # Loop over atom 2
+    #            #             for n in range(3):       # Loop over xyz of atom 2
+    #            #                 for i in range(3):   # Loop over elements of exponential map
+    #            #                     for p in range(3): # Loop over xyz of dummy atom
+    #            #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[j, m, -1, p, i] * ddum1[k, n, p]
+    #            #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, k, n, i] * ddum1[j, m, p]
+    #            #                         deriv2_raw[j, m, k, n, i] += deriv_raw[-1, p, i] * ddum2[j, m, k, n, p]
+    #            #                         for q in range(3):
+    #            #                             deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, -1, q, i] * ddum1[j, m, p] * ddum1[k, n, q]
+    #            # =====
+
+    #            deriv2_raw[:-1, :, :-1, :] += np.einsum('jmpi,knp->jmkni', deriv2_raw[:-1, :, -1, :, :], ddum1, optimize=True)
+    #            deriv2_raw[:-1, :, :-1, :] += np.einsum('pkni,jmp->jmkni', deriv2_raw[-1, :, :-1, :, :], ddum1, optimize=True)
+    #            deriv2_raw[:-1, :, :-1, :] += np.einsum('pi,jmknp->jmkni', deriv_raw[-1, :, :], ddum2, optimize=True)
+    #            deriv2_raw[:-1, :, :-1, :] += np.einsum('pqi,jmp,knq->jmkni', deriv2_raw[-1, :, -1, :, :], ddum1, ddum1, optimize=True)
+    #            deriv2_raw = deriv2_raw[:-1, :, :-1, :, :]
+    #        second_derivatives = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3, 3), dtype=float)
+
+    #        for i, a in enumerate(self.a):
+    #            for j, b in enumerate(self.a):
+    #                second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
+    #        return second_derivatives
+
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1, 3)
-        if np.max(np.abs(xyz-self.stored_deriv2xyz)) < 1e-12:
-            return self.stored_deriv2
-        else:
-            xsel = xyz[self.a, :]
-            ysel = self.x0[self.a, :]
-            xmean = np.mean(xsel,axis=0)
-            ymean = np.mean(ysel,axis=0)
-            if not self.linear and is_linear(xsel, ysel):
-                # print "Setting linear flag for", self
-                self.linear = True
-            if self.linear:
-                vx = xsel[-1]-xsel[0]
-                vy = ysel[-1]-ysel[0]
-                if self.e0 is None: self.calc_e0()
-                xdum = np.cross(vx, self.e0)
-                ydum = np.cross(vy, self.e0)
-                exdum = xdum / np.linalg.norm(xdum)
-                eydum = ydum / np.linalg.norm(ydum)
-                xsel = np.vstack((xsel, exdum+xmean))
-                ysel = np.vstack((ysel, eydum+ymean))
+        relative_a = [ a-start_idx for a in self.a]
 
-            deriv_raw, deriv2_raw = get_expmap_der(xsel, ysel, second=True)
-            if self.linear:
-                # Chain rule is applied to get terms from dummy atom derivatives
-                def dexdum_(vx_):
-                    xdum_ = np.cross(vx_, self.e0)
-                    nxdum_ = np.linalg.norm(xdum_)
-                    dxdum_ = math_utils.d_cross(vx_, self.e0)
-                    dnxdum_ = math_utils.d_ncross(vx_, self.e0)
-                    dexdum_ = (dxdum_*nxdum_ - np.outer(dnxdum_,xdum_))/nxdum_**2
-                    return dexdum_.copy()
+        # Does not work with BM
+        #if np.max(np.abs(xyz-self.stored_deriv2xyz[relative_a])) < 1e-12:
+        #    return self.stored_deriv2[relative_a]
+        #else:
+        ##
 
-                # First indices: elements of vx that are being differentiated w/r.t.
-                # Last index: elements of exdum itself
-                dexdum = dexdum_(vx)
-                dexdum2 = np.zeros((3, 3, 3), dtype=float)
-                h = 1.0e-3
-                for i in range(3):
-                    vx[i] += h
-                    dPlus = dexdum_(vx)
-                    vx[i] -= 2*h
-                    dMinus = dexdum_(vx)
-                    vx[i] += h
-                    dexdum2[i] = (dPlus-dMinus)/(2*h)
-                # Build arrays that contain derivative of dummy atom position
-                # w/r.t. real atom positions
-                ddum1 = np.zeros((len(self.a), 3, 3), dtype=float)
-                ddum1[0] = -dexdum
-                ddum1[-1] = dexdum
-                for i in range(len(self.a)):
-                    ddum1[i] += np.eye(3)/len(self.a)
-                ddum2 = np.zeros((len(self.a), 3, len(self.a), 3, 3), dtype=float)
-                ddum2[ 0, : , 0, :] =  dexdum2
-                ddum2[-1, : , 0, :] = -dexdum2
-                ddum2[ 0, :, -1, :] = -dexdum2
-                ddum2[-1, :, -1, :] =  dexdum2
-                # =====
+        xsel = xyz[relative_a, :]
+        absolute_a = list(range(start_idx,start_idx+len(relative_a)))
+        ysel = self.x0[absolute_a, :]
+        xmean = np.mean(xsel,axis=0)
+        ymean = np.mean(ysel,axis=0)
 
-                # Do not delete - reference codes using loops for chain rule terms
-                # for j in range(len(self.a)): # Loop over atom 1
-                #     for m in range(3):       # Loop over xyz of atom 1
-                #         for k in range(len(self.a)): # Loop over atom 2
-                #             for n in range(3):       # Loop over xyz of atom 2
-                #                 for i in range(3):   # Loop over elements of exponential map
-                #                     for p in range(3): # Loop over xyz of dummy atom
-                #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[j, m, -1, p, i] * ddum1[k, n, p]
-                #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, k, n, i] * ddum1[j, m, p]
-                #                         deriv2_raw[j, m, k, n, i] += deriv_raw[-1, p, i] * ddum2[j, m, k, n, p]
-                #                         for q in range(3):
-                #                             deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, -1, q, i] * ddum1[j, m, p] * ddum1[k, n, q]
-                # =====
+        if not self.linear and is_linear(xsel, ysel):
+            # print "Setting linear flag for", self
+            self.linear = True
+        if self.linear:
+            vx = xsel[-1]-xsel[0]
+            vy = ysel[-1]-ysel[0]
+            if self.e0 is None: self.calc_e0()
+            xdum = np.cross(vx, self.e0)
+            ydum = np.cross(vy, self.e0)
+            exdum = xdum / np.linalg.norm(xdum)
+            eydum = ydum / np.linalg.norm(ydum)
+            xsel = np.vstack((xsel, exdum+xmean))
+            ysel = np.vstack((ysel, eydum+ymean))
 
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('jmpi,knp->jmkni', deriv2_raw[:-1, :, -1, :, :], ddum1, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pkni,jmp->jmkni', deriv2_raw[-1, :, :-1, :, :], ddum1, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pi,jmknp->jmkni', deriv_raw[-1, :, :], ddum2, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pqi,jmp,knq->jmkni', deriv2_raw[-1, :, -1, :, :], ddum1, ddum1, optimize=True)
-                deriv2_raw = deriv2_raw[:-1, :, :-1, :, :]
-            second_derivatives = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3, 3), dtype=float)
+        deriv_raw, deriv2_raw = get_expmap_der(xsel, ysel, second=True)
+        if self.linear:
+            # Chain rule is applied to get terms from dummy atom derivatives
+            def dexdum_(vx_):
+                xdum_ = np.cross(vx_, self.e0)
+                nxdum_ = np.linalg.norm(xdum_)
+                dxdum_ = math_utils.d_cross(vx_, self.e0)
+                dnxdum_ = math_utils.d_ncross(vx_, self.e0)
+                dexdum_ = (dxdum_*nxdum_ - np.outer(dnxdum_,xdum_))/nxdum_**2
+                return dexdum_.copy()
 
-            for i, a in enumerate(self.a):
-                for j, b in enumerate(self.a):
-                    second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
-            return second_derivatives
+            # First indices: elements of vx that are being differentiated w/r.t.
+            # Last index: elements of exdum itself
+            dexdum = dexdum_(vx)
+            dexdum2 = np.zeros((3, 3, 3), dtype=float)
+            h = 1.0e-3
+            for i in range(3):
+                vx[i] += h
+                dPlus = dexdum_(vx)
+                vx[i] -= 2*h
+                dMinus = dexdum_(vx)
+                vx[i] += h
+                dexdum2[i] = (dPlus-dMinus)/(2*h)
+            # Build arrays that contain derivative of dummy atom position
+            # w/r.t. real atom positions
+            #ddum1 = np.zeros((len(self.a), 3, 3), dtype=float)
+            ddum1 = np.zeros((len(relative_a),3,3),dtype=float)
+            ddum1[0] = -dexdum
+            ddum1[-1] = dexdum
+            #for i in range(len(self.a)):
+            for i in range(len(relative_a)):
+                ddum1[i] += np.eye(3)/len(self.a)
+            #ddum2 = np.zeros((len(self.a), 3, len(self.a), 3, 3), dtype=float)
+            ddum2 = np.zeros((len(relative_a), 3, len(relative_a), 3, 3), dtype=float)
+            ddum2[ 0, : , 0, :] =  dexdum2
+            ddum2[-1, : , 0, :] = -dexdum2
+            ddum2[ 0, :, -1, :] = -dexdum2
+            ddum2[-1, :, -1, :] =  dexdum2
+            # =====
+
+            # Do not delete - reference codes using loops for chain rule terms
+            # for j in range(len(self.a)): # Loop over atom 1
+            #     for m in range(3):       # Loop over xyz of atom 1
+            #         for k in range(len(self.a)): # Loop over atom 2
+            #             for n in range(3):       # Loop over xyz of atom 2
+            #                 for i in range(3):   # Loop over elements of exponential map
+            #                     for p in range(3): # Loop over xyz of dummy atom
+            #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[j, m, -1, p, i] * ddum1[k, n, p]
+            #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, k, n, i] * ddum1[j, m, p]
+            #                         deriv2_raw[j, m, k, n, i] += deriv_raw[-1, p, i] * ddum2[j, m, k, n, p]
+            #                         for q in range(3):
+            #                             deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, -1, q, i] * ddum1[j, m, p] * ddum1[k, n, q]
+            # =====
+
+            deriv2_raw[:-1, :, :-1, :] += np.einsum('jmpi,knp->jmkni', deriv2_raw[:-1, :, -1, :, :], ddum1, optimize=True)
+            deriv2_raw[:-1, :, :-1, :] += np.einsum('pkni,jmp->jmkni', deriv2_raw[-1, :, :-1, :, :], ddum1, optimize=True)
+            deriv2_raw[:-1, :, :-1, :] += np.einsum('pi,jmknp->jmkni', deriv_raw[-1, :, :], ddum2, optimize=True)
+            deriv2_raw[:-1, :, :-1, :] += np.einsum('pqi,jmp,knq->jmkni', deriv2_raw[-1, :, -1, :, :], ddum1, ddum1, optimize=True)
+            deriv2_raw = deriv2_raw[:-1, :, :-1, :, :]
+        second_derivatives = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3, 3), dtype=float)
+
+        #for i, a in enumerate(self.a):
+        #    for j, b in enumerate(self.a):
+        for i, a in enumerate(relative_a):
+            for j, b in enumerate(relative_a):
+                second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
+        return second_derivatives
 
 class RotationA(object):
     __slots__=['a','x0','w','Rotator','isAngular','isPeriodic']
@@ -586,8 +714,8 @@ class RotationA(object):
         derivatives = der_all[:, :, 0]*self.w
         return derivatives
 
-    def second_derivative(self, xyz):
-        deriv2_all = self.Rotator.second_derivative(xyz)
+    def second_derivative(self, xyz, start_idx=0):
+        deriv2_all = self.Rotator.second_derivative(xyz,start_idx)
         second_derivatives = deriv2_all[:, :, :, :, 0]*self.w
         return second_derivatives
 
@@ -631,8 +759,8 @@ class RotationB(object):
         derivatives = der_all[:, :, 1]*self.w
         return derivatives
 
-    def second_derivative(self, xyz):
-        deriv2_all = self.Rotator.second_derivative(xyz)
+    def second_derivative(self, xyz, start_idx=0):
+        deriv2_all = self.Rotator.second_derivative(xyz,start_idx)
         second_derivatives = deriv2_all[:, :, :, :, 1]*self.w
         return second_derivatives
 
@@ -676,8 +804,8 @@ class RotationC(object):
         derivatives = der_all[:, :, 2]*self.w
         return derivatives
 
-    def second_derivative(self, xyz):
-        deriv2_all = self.Rotator.second_derivative(xyz)
+    def second_derivative(self, xyz, start_idx=0):
+        deriv2_all = self.Rotator.second_derivative(xyz,start_idx)
         second_derivatives = deriv2_all[:, :, :, :, 2]*self.w
         return second_derivatives
 
@@ -727,19 +855,21 @@ class Distance(object):
         derivatives[n, :] = -u
         return derivatives
 
-    def second_derivative(self, xyz):
-          xyz = xyz.reshape(-1,3)
-          deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-          m = self.a
-          n = self.b
-          l = np.linalg.norm(xyz[m] - xyz[n])
-          u = (xyz[m] - xyz[n]) / l
-          mtx = (np.outer(u, u) - np.eye(3))/l
-          deriv2[m, :, m, :] = -mtx
-          deriv2[n, :, n, :] = -mtx
-          deriv2[m, :, n, :] = mtx
-          deriv2[n, :, m, :] = mtx
-          return deriv2
+    def second_derivative(self, xyz, start_idx=0):
+        xyz = xyz.reshape(-1,3)
+        deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        #m = self.a
+        #n = self.b
+        m = self.a-start_idx
+        n = self.b-start_idx
+        l = np.linalg.norm(xyz[m] - xyz[n])
+        u = (xyz[m] - xyz[n]) / l
+        mtx = (np.outer(u, u) - np.eye(3))/l
+        deriv2[m, :, m, :] = -mtx
+        deriv2[n, :, n, :] = -mtx
+        deriv2[m, :, n, :] = mtx
+        deriv2[n, :, m, :] = mtx
+        return deriv2
 
 class Angle(object):
     __slots__=['a','b','c','isAngular','isPeriodic']
@@ -846,12 +976,15 @@ class Angle(object):
         derivatives[o, :] = -(term1 + term2)
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        m = self.a
-        o = self.b
-        n = self.c
+        #m = self.a
+        #o = self.b
+        #n = self.c
+        m = self.a-start_idx
+        o = self.b-start_idx
+        n = self.c-start_idx
         # Unit displacement vectors
         u_prime = (xyz[m] - xyz[o])
         u_norm = np.linalg.norm(u_prime)
@@ -1024,11 +1157,14 @@ class LinearAngle(object):
         ##     raise Exception()
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx):
          xyz = xyz.reshape(-1,3)
-         a = self.a
-         b = self.b
-         c = self.c
+         #a = self.a
+         #b = self.b
+         #c = self.c
+         a = self.a-start_idx
+         b = self.b-start_idx
+         c = self.c-start_idx
          deriv2 = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3), dtype=float)
          h = 1.0e-3
          for i in range(3):
@@ -1154,7 +1290,7 @@ class MultiAngle(object):
         derivatives[o, :] = -(term1 + term2)
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
 class Dihedral(object):
@@ -1248,13 +1384,17 @@ class Dihedral(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        m = self.a
-        o = self.b
-        p = self.c
-        n = self.d
+        #m = self.a
+        #o = self.b
+        #p = self.c
+        #n = self.d
+        m = self.a-start_idx
+        o = self.b-start_idx
+        p = self.c-start_idx
+        n = self.d-start_idx
         u_prime = (xyz[m] - xyz[o])
         w_prime = (xyz[p] - xyz[o])
         v_prime = (xyz[n] - xyz[p])
@@ -1415,7 +1555,7 @@ class MultiDihedral(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx=0):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
 class OutOfPlane(object):
@@ -1513,12 +1653,16 @@ class OutOfPlane(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
-    def second_derivative(self, xyz):
+    def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
-        a = self.a
-        b = self.b
-        c = self.c
-        d = self.d
+        #a = self.a
+        #b = self.b
+        #c = self.c
+        #d = self.d
+        a = self.a-start_idx
+        b = self.b-start_idx
+        c = self.c-start_idx
+        d = self.d-start_idx
         deriv2 = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3), dtype=float)
         h = 1.0e-3
         for i in range(4):
