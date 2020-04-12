@@ -308,6 +308,8 @@ class Base_Method(Print,Analyze,object):
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
+            if self.TSnode == self.nnodes-2 and (self.climb or self.find):
+                nifty.printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
 
             # => find peaks <= #
             fp = self.find_peaks(2)
@@ -1736,7 +1738,7 @@ class Base_Method(Print,Analyze,object):
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
    
-    def restart_string(self,xyzfile='restart.xyz',rtype=2):
+    def restart_string(self,xyzfile='restart.xyz',rtype=2,reparametrize=False):
         nifty.printcool("Restarting string from file")
         self.growth_direction=0
         with open(xyzfile) as f:
@@ -1810,10 +1812,11 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
 
-        #print(" doing one-time ic_reparam REMOVE ME")
-        #self.get_tangents_1()
-        #self.ic_reparam(ic_reparam_steps=8)
-        #self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
+        if reparametrize:
+            nifty.printcool("Reparametrizing")
+            self.get_tangents_1()
+            self.ic_reparam(ic_reparam_steps=8)
+            self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
         for struct in range(1,nstructs-1):
             print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))

@@ -77,6 +77,7 @@ def main():
     parser.add_argument('-DMAX',default=1.,type=float,help='')
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
+    parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
 
 
     args = parser.parse_args()
@@ -505,7 +506,7 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.restart_string(args.restart_file,rtype)
+        gsm.restart_string(args.restart_file,rtype,args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(
@@ -513,12 +514,14 @@ def main():
                 analyze_ICs=args.dont_analyze_ICs,
                 have_TS=False,
                 )
+        manage_xyz.write_xyz('TSnode.xyz',gsm.nodes[gsm.nR].geometry)
     else:
         post_processing(
                 gsm,
                 analyze_ICs=args.dont_analyze_ICs,
                 have_TS=True,
                 )
+        manage_xyz.write_xyz('TSnode.xyz',gsm.nodes[gsm.TSnode].geometry)
 
     cleanup_scratch(gsm.ID)
 
