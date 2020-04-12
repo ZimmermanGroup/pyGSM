@@ -24,6 +24,8 @@ class QChem(Lot):
         copy_input_file = os.getcwd() + "/QChem_input.txt"
         print(copy_input_file)
         self.write_preamble(self.geom,self.states[0][0],copy_input_file)
+        print(" making folder scratch/{}".format(self.node_id))
+        os.system('mkdir -p scratch/{}'.format(self.node_id))
 
     def write_preamble(self,geom,multiplicity,tempfilename,jobtype='FORCE'):
 
@@ -114,6 +116,10 @@ class QChem(Lot):
         else:
             raise NotImplementedError
 
+        # write E to scratch
+        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
+            for E in self.E:
+                f.write('{} {:9.7f}\n'.format(E[0],E[1]))
 
 
         return 

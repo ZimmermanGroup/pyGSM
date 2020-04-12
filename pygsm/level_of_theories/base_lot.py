@@ -5,7 +5,8 @@ import os
 import numpy as np
 
 # local application imports
-from utilities import *
+from utilities import manage_xyz,options,elements,nifty
+from .file_options import File_Options
 
 ELEMENT_TABLE = elements.ElementData()
 
@@ -13,7 +14,7 @@ ELEMENT_TABLE = elements.ElementData()
 #TODO fix tuple searches
 
 
-class Lot(object):
+class Lot(File_Options):
     """ Lot object for level of theory calculators """
 
     @staticmethod
@@ -57,33 +58,6 @@ class Lot(object):
                 required=False,
                 doc='states to calculate derivative coupling. Currently only one coupling can be calculated per level of theory object.'
                 )
-
-        opt.add_option(
-                key='functional',
-                required=False,
-                allowed_types=[str],
-                doc='density functional')
-
-        opt.add_option(
-                key='nocc',
-                value=0,
-                required=False,
-                allowed_types=[int],
-                doc='number of occupied orbitals (for CAS)')
-
-        opt.add_option(
-                key='nactive',
-                value=0,
-                required=False,
-                allowed_types=[int],
-                doc='number of active orbitals (for CAS)')
-
-        opt.add_option(
-                key='basis',
-                value=0,
-                required=False,
-                allowed_types=[str],
-                doc='Basis set')
 
         opt.add_option(
                 key='charge',
@@ -158,6 +132,7 @@ class Lot(object):
             options,
             ):
         """ Constructor """
+
         self.options = options
 
         # count number of states
@@ -213,10 +188,8 @@ class Lot(object):
         self.ID = self.options['ID']
 
         #TODO remove some of these options  make others properties
-        self.nocc=self.options['nocc']
-        self.nactive=self.options['nactive']
-        self.basis=self.options['basis']
-        self.functional=self.options['functional']
+        #self.nocc=self.options['nocc']
+        #self.nactive=self.options['nactive']
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
         self.node_id=self.options['node_id']
@@ -224,10 +197,22 @@ class Lot(object):
         self.has_nelectrons =False
         self.lot_inp_file = self.options['lot_inp_file']
 
+        # Parse input file saving options to self, only do this for classes which need it
+        # E.g. Q-Chem does not currently need to save the file arguments because it can simply concatenate 
+        # lot_inp_file and geometry
+        if self.__class__.__name__ =='pDynamo':
+            super(Lot,self).__init__(self.lot_inp_file)
+
+
         #package  specific implementation
+        # tc cloud
         self.options['job_data']['orbfile'] = self.options['job_data'].get('orbfile','')
+        # pytc? TODO
         self.options['job_data']['lot'] = self.options['job_data'].get('lot',None)
+        # openmm
         self.options['job_data']['simulation'] = self.options['job_data'].get('simulation',None)
+        #pDynamo
+        self.options['job_data']['system'] = self.options['job_data'].get('simulation',None)
 
     @classmethod
     def from_options(cls,**kwargs):

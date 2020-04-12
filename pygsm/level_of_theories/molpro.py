@@ -99,7 +99,9 @@ class Molpro(Lot):
 
         tempfile.close()
 
-        cmd = "molpro -W scratch -n {} {} --no-xml-output".format(self.nproc,tempfilename)
+        scratch = os.environ['SLURM_LOCAL_SCRATCH']
+
+        cmd = "molpro -W scratch -n {} {} -d {} --no-xml-output".format(self.nproc,tempfilename,scratch)
         os.system(cmd)
 
         tempfileout='scratch/gopro.out'
@@ -185,7 +187,7 @@ class Molpro(Lot):
         #print(" old node id = ",self.node_id)
         node_id = options.get('node_id',1)
         if node_id != lot.node_id and copy_wavefunction:
-            cmd = "cp scratch/mp_{:04d}_{:04d} scratch/mp_{:04d}_{:04d}".format(self.ID,lot.node_id,self.ID,node_id)
+            cmd = "cp scratch/mp_{:04d}_{:04d} scratch/mp_{:04d}_{:04d}".format(lot.ID,lot.node_id,lot.ID,node_id)
             print(cmd)
             os.system(cmd)
         return cls(lot.options.copy().set_values(options))
