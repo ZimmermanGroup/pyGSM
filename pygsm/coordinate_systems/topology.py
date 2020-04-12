@@ -542,15 +542,6 @@ class Topology():
 
         return sorted_bonds
 
-    def distance_matrix(self,xyz, pbc=True):
-        """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.natoms-i-1) for i in range(self.natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,self.natoms)) for i in range(self.natoms)]),dtype=np.int32))).T)
-        drij = []
-        if hasattr(self, 'boxes') and pbc:
-            drij.append(AtomContact(xyz,AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c])))
-        else:
-            drij.append(AtomContact(xyz,AtomIterator))
-        return AtomIterator, drij
 
     def distance_displacement(xyz,self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
@@ -617,6 +608,18 @@ class Topology():
                             if a4 != a2 and len({a1, a2, a3, a4}) == 4:
                                 dihidx.append((a1, a2, a3, a4))
         return dihidx
+
+    @staticmethod
+    def distance_matrix(xyz, pbc=True):
+        """ Obtain distance matrix between all pairs of atoms. """
+        natoms = len(xyz)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(natoms-i-1) for i in range(natoms)]),dtype=np.int32), np.fromiter(itertools.chain(*[list(range(i+1,natoms)) for i in range(natoms)]),dtype=np.int32))).T)
+        drij = []
+        #if hasattr(self, 'boxes') and pbc:
+        #    drij.append(AtomContact(xyz,AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c])))
+        #else:
+        drij.append(AtomContact(xyz,AtomIterator))
+        return AtomIterator, drij
 
 if __name__ =='__main__' and __package__ is None:
     from os import sys, path

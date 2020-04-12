@@ -1,3 +1,4 @@
+from .internal_coordinates import InternalCoordinates
 from .delocalized_coordinates import DelocalizedInternalCoordinates
 from .primitive_internals import PrimitiveInternalCoordinates
 from .cartesian import CartesianCoordinates

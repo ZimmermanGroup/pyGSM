@@ -122,7 +122,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # Connect all non-bonded fragments together
         if connect:
             # Make a distance matrix mapping atom pairs to interatomic distances
-            AtomIterator, dxij = self.distance_matrix(xyz,pbc=False)
+            AtomIterator, dxij = Topology.distance_matrix(xyz,pbc=False)
             D = {}
             for i, j in zip(AtomIterator, dxij[0]):
                 assert i[0] < i[1]
@@ -728,10 +728,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if info[-1]=='reg':
                 frag = info[2]
                 noncov = []
-                # Connect all non-bonded fragments together
                 if connect:
+                    # Connect all non-bonded fragments together
                     # Make a distance matrix mapping atom pairs to interatomic distances
-                    AtomIterator, dxij = self.distance_matrix(xyz,pbc=False)
+                    AtomIterator, dxij = Topology.distance_matrix(xyz,pbc=False)
                     D = {}
                     for i, j in zip(AtomIterator, dxij[0]):
                         assert i[0] < i[1]
@@ -748,8 +748,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             self.topology.add_edge(edge[0], edge[1])
                             noncov.append(edge)
            
-                else:
-                    #Add Cart or TR
+                else: #Add Cart or TR
                     if addcart:
                         for i in range(info[0],info[1]):
                             self.add(CartesianX(i, w=1.0))
@@ -777,6 +776,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 self.add(CartesianY(j, w=1.0))
                                 self.add(CartesianZ(j, w=1.0))
                                 nprims+=3
+
                 # # Build a list of noncovalent distances
                 # Add an internal coordinate for all interatomic distances
                 for (a, b) in frag.edges():
