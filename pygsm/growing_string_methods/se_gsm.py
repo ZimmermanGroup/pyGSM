@@ -303,6 +303,12 @@ class SE_GSM(Base_Method):
                 print("done adding node")
                 print("nnodes = ",self.nnodes)
                 self.get_tangents_1()
+                
+                # need to reform the energies array
+                tmp = []
+                for n in range(self.nnodes):
+                    tmp.append(self.energies[n])
+                self.energies = np.asarray(tmp)
             return isDone
 
         # => check string profile <= #
