@@ -135,6 +135,7 @@ class Lot(File_Options):
 
         self.options = options
 
+        self.E=[]
         # count number of states
         singlets=self.search_tuple(self.states,1)
         doublets=self.search_tuple(self.states,2)
@@ -200,7 +201,7 @@ class Lot(File_Options):
         # Parse input file saving options to self, only do this for classes which need it
         # E.g. Q-Chem does not currently need to save the file arguments because it can simply concatenate 
         # lot_inp_file and geometry
-        if self.__class__.__name__ =='pDynamo':
+        if self.__class__.__name__ in ['pDynamo','OpenMM']:
             super(Lot,self).__init__(self.lot_inp_file)
 
 

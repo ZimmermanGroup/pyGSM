@@ -19,67 +19,62 @@ from utilities import *
 
 class OpenMM(Lot):
     def __init__(self,options):
+
+        # BASE LOT READS FILE
         super(OpenMM,self).__init__(options)
         if self.lot_inp_file is not None and self.simulation is None:
-            self.build_simulation_from_dictionary()
+            # Now go through the logic of determining which FILE options are activated.
+            self.set_active('use_crystal',False,bool,"Use crystal unit parameters")
+            self.set_active('use_pme',False,bool,"Use particle mesh ewald-- requires periodic boundary conditions")
+            self.set_active('cutoff',1.0,float,depend=(self.use_pme),msg="Requires PME")
+            self.set_active('prmtopfile',None,str,"parameter file")
+            self.set_active('inpcrdfile',None,str,"inpcrd file")
+
+            nifty.printcool(" Options for OpenMM")
+            for val in [self.prmtopfile,self.inpcrdfile]:
+                assert val!=None,"Missing prmtop or inpcrdfile"
+            for line in self.record():
+                print(line)
+
+            # Integrator will never be used (Simulation requires one)
+            integrator = openmm.VerletIntegrator(1.0)
+
+            # create simulation object
+            if self.use_crystal=='yes':
+                crystal = load_file(prmtopfile,inpcrdfile)
+                if self.use_pme=='yes':
+                    system = crystal.createSystem(
+                        nonbondedMethod=openmm_app.PME,
+                        nonbondedCutoff=cutoff*openmm_units.nanometer,
+                        )
+                else:
+                    system = crystal.createSystem(
+                        nonbondedMethod=openmm_app.NoCutoff,
+                        )
+                self.simulation = openmm_app.Simulation(crystal.topology, system, integrator)
+                # set the box vectors
+                inpcrd = openmm_app.AmberInpcrdFile(inpcrdfile)
+                if inpcrd.boxVectors is not None:
+                    print(" setting box vectors")
+                    print(inpcrd.boxVectors)
+                    self.simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+            else:  # Do not use crystal parameters
+                prmtop = openmm_app.AmberPrmtopFile(prmtopfile)
+                if use_pme=='yes':
+                    system = prmtop.createSystem(
+                        nonbondedMethod=openmm_app.PME,
+                        nonbondedCutoff=cutoff*openmm_units.nanometer,
+                        )
+                else:
+                    system = prmtop.createSystem(
+                        nonbondedMethod=openmm_app.NoCutoff,
+                        )
+                self.simulation = openmm_app.Simulation(
+                    prmtop.topology,
+                    system,
+                    integrator,
+                    )
    
-    def build_simulation_from_dictionary(self):
-        d = {}
-        d = json.load(open(self.lot_inp_file))
-        print(d)
-
-        # crystal
-        use_crystal = d.get('use_crystal','no')
-
-        # PME
-        use_pme = d.get('use_pme','no')
-        cutoff = d.get('cutoff',1.0)
-
-        # prmtop, inpcrd
-        prmtopfile = d.get('prmtop',None)
-        inpcrdfile = d.get('inpcrd',None)
-
-        # Integrator will never be used (Simulation requires one)
-        integrator = openmm.VerletIntegrator(1.0)
-
-        # create simulation object
-        if use_crystal=='yes':
-            crystal = load_file(prmtopfile,inpcrdfile)
-
-            if use_pme=='yes':
-                system = crystal.createSystem(
-                    nonbondedMethod=openmm_app.PME,
-                    nonbondedCutoff=cutoff*openmm_units.nanometer,
-                    )
-            else:
-                system = crystal.createSystem(
-                    nonbondedMethod=openmm_app.NoCutoff,
-                    )
-            self.simulation = openmm_app.Simulation(crystal.topology, system, integrator)
-            # set the box vectors
-            inpcrd = openmm_app.AmberInpcrdFile(inpcrdfile)
-            if inpcrd.boxVectors is not None:
-                print(" setting box vectors")
-                print(inpcrd.boxVectors)
-                self.simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
-        else:
-            prmtop = openmm_app.AmberPrmtopFile(prmtopfile)
-            if use_pme=='yes':
-                system = prmtop.createSystem(
-                    nonbondedMethod=openmm_app.PME,
-                    nonbondedCutoff=cutoff*openmm_units.nanometer,
-                    )
-            else:
-                system = prmtop.createSystem(
-                    nonbondedMethod=openmm_app.NoCutoff,
-                    )
-            self.simulation = openmm_app.Simulation(
-                prmtop.topology,
-                system,
-                integrator,
-                )
-
-
     @property
     def simulation(self):
         return self.options['job_data']['simulation']

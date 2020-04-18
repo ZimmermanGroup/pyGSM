@@ -702,7 +702,7 @@ class Base_Method(Print,Analyze,object):
                 print("can't add anymore nodes, bdist too small")
 
                 # why not for SE_Cross too?
-                if self.__class__.__name__=="SE_GSM":
+                if self.__class__.__name__=="SE_GSM" or self.__class__.__name__=="SE_Cross":
                     if self.nodes[self.nR-1].PES.lot.do_coupling:
                         opt_type='MECI'
                     else:
@@ -917,7 +917,7 @@ class Base_Method(Print,Analyze,object):
             breakdq = 0.3
             bdist=0.0
             atoms = node1.atoms
-            xyz = node1.xyz
+            xyz = node1.xyz.copy()
 
             for i in driving_coords:
                 if "ADD" in i:
@@ -947,7 +947,7 @@ class Base_Method(Print,Analyze,object):
                     if print_level>0:
                         print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
 
-                if "BREAK" in i:
+                elif "BREAK" in i:
                     #order indices to avoid duplicate bonds
                     if i[1]<i[2]:
                         index = [i[1]-1, i[2]-1]
@@ -969,7 +969,7 @@ class Base_Method(Print,Analyze,object):
 
                     if print_level>0:
                         print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-                if "ANGLE" in i:
+                elif "ANGLE" in i:
 
                     if i[1]<i[3]:
                         index = [i[1]-1, i[2]-1,i[3]-1]
@@ -988,7 +988,7 @@ class Base_Method(Print,Analyze,object):
                     #TODO need to come up with an adist
                     #if abs(ang_diff)>0.1:
                     #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
-                if "TORSION" in i:
+                elif "TORSION" in i:
 
                     if i[1]<i[4]:
                         index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
@@ -1010,8 +1010,25 @@ class Base_Method(Print,Analyze,object):
                     if print_level>0:
                         print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
 
+                elif "OOP" in i:
+                    index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
+                    oop = OutOfPlane(index[0],index[1],index[2],index[3])
+                    prim_idx = node1.coord_obj.Prims.dof_index(oop)
+                    oopt = i[5]
+                    oopv = oop.value(xyz)
+                    oop_diff = oopt - oopv*180./np.pi
+                    if oop_diff>180.:
+                        oop_diff-=360.
+                    elif oop_diff<-180.:
+                        oop_diff+=360.
+                    ictan[prim_idx] = -oop_diff*np.pi/180.
 
-                if "ROTATE" in i:
+                    if oop_diff*np.pi/180.>0.1 or oop_diff*np.pi/180.<0.1:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if print_level>0:
+                        print((" current oopv: %4.3f align to %4.3f diff(deg): %4.3f" %(oopv*180./np.pi,oopt,oop_diff)))
+
+                elif "ROTATE" in i:
                     frag = i[1]
                     a1 = i[2]  #atom 1
                     a2 = i[3]  #atom 2
