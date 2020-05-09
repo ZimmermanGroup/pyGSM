@@ -199,7 +199,7 @@ class DE_GSM(Base_Method):
                 self.tscontinue=False
 
         if rtype==1 and self.climb:
-            if self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']: 
+            if self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2: 
                 isDone=True
 
         return isDone

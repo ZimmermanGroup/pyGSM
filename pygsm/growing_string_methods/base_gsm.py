@@ -578,7 +578,11 @@ class Base_Method(Print,Analyze,object):
             # update newic coordinate basis
             self.newic.xyz = self.nodes[newic_n].xyz
             Vecs = self.newic.update_coordinate_basis(self.ictan[n])
-            self.nodes[n].coord_basis = Vecs
+
+            # don't update tsnode coord basis 
+            if n!=self.TSnode:
+                self.nodes[n].coord_basis = Vecs
+
             nbonds=self.nodes[0].num_bonds
             # cnorms
             constraint = self.newic.constraints[:,0]

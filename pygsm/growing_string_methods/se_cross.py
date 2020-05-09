@@ -85,11 +85,13 @@ class SE_Cross(SE_GSM):
             print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
             self.optimizer[self.nR].opt_cross=True
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_gmax = self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_Ediff = 0.1
             self.optimizer[self.nR].optimize(
                     molecule=self.nodes[self.nR],
                     refE=self.nodes[0].V0,
                     opt_type='UNCONSTRAINED',
-                    opt_steps=100,
+                    opt_steps=200,
                     )
             self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
 
