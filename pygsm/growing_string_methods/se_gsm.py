@@ -39,7 +39,7 @@ class SE_GSM(Base_Method):
         self.reference_xyz = None
         for i in self.driving_coords:
             if "ROTATE" in i:
-                self.reference_xyz = self.nodes[0].xyz
+                self.reference_xyz = self.nodes[0].xyz.copy()
                 break
 
         # stash bdist for node 0

@@ -959,6 +959,7 @@ def vibrational_basis(
     """
 
     # Compute Eckart frame geometry
+    # L,O are the Principle moments/Principle axes of the intertial tensor
     COM, L, O, geom2 = eckart_frame(geom, masses)
     G = manage_xyz.xyz_to_np(geom2)
 
@@ -968,6 +969,7 @@ def vibrational_basis(
     TR[0::3,0] = np.sqrt(masses) # +X
     TR[1::3,1] = np.sqrt(masses) # +Y
     TR[2::3,2] = np.sqrt(masses) # +Z
+
     # Rotations in the Eckart frame
     for A, mass in enumerate(masses):
         mass_12 = np.sqrt(mass)
@@ -981,7 +983,6 @@ def vibrational_basis(
 
     # The null-space of TR
     B = U[:,6:]
-
     return B
 
 def main():

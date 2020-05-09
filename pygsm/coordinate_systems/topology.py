@@ -190,7 +190,7 @@ class Topology():
             nifty.printcool(" building bonds")
             print(prim_idx_start_stop)
             bonds = Topology.build_bonds(xyz,atoms,primitive_indices,prim_idx_start_stop)
-            print("done")
+            #print(" done")
             assert bondlistfile is None
         else: 
             #bondlistfile:
@@ -226,7 +226,10 @@ class Topology():
         topology = G
         fragments = [G.subgraph(c).copy() for c in nx.connected_components(G)]
         for g in fragments: g.__class__ = MyG
-
+        
+        #print(len(fragments))
+        #for frag in fragments:
+        #    print(frag.L())
 
         #print("nodes of Graph")
         #print(topology.L())

@@ -98,6 +98,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims.topology = deepcopy(Prims.topology)
         newPrims.Internals = deepcopy(Prims.Internals)
         newPrims.block_info = deepcopy(Prims.block_info)
+        newPrims.prim_only_block_info = Prims.prim_only_block_info.copy()
         newPrims.atoms = newPrims.options['atoms']
         newPrims.fragments = [Prims.topology.subgraph(c).copy() for c in nx.connected_components(Prims.topology)]
         for g in newPrims.fragments: g.__class__ = MyG
@@ -928,6 +929,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
 
         #print(self.Internals)
+        self.prim_only_block_info=[]
         for info1,info2 in zip(tmp_block_info,self.block_info):
             if info1[-1]=='hyb':
                 #for i in range(info2[2],info2[3]):
@@ -938,6 +940,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 self.Internals.insert(i,CartesianX(info1[0], w=1.0))
                 self.Internals.insert(j,CartesianY(info1[0], w=1.0))
                 self.Internals.insert(k,CartesianZ(info1[0], w=1.0))
+            else:
+                self.prim_only_block_info.append(info2)
 
         print(" Done making primitives")
         print(" Made a total of {} primitives".format(len(self.Internals)))
@@ -945,7 +949,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #print(" block info")
         #print(self.block_info)
         print(" num blocks ",len(self.block_info))
-
+        print(" num prim blocks ",len(self.prim_only_block_info))
+        #print(self.prim_only_block_info)
 
         #if len(newPrims) != len(self.Internals):
         #    #print(np.setdiff1d(self.Internals,newPrims))

@@ -34,7 +34,7 @@ class SE_Cross(SE_GSM):
         sys.stdout.flush()
 
         # stash bdist for node 0
-        _,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords)
+        _,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords,reference_xyz=self.reference_xyz)
         print(" Initial bdist is %1.3f" %self.nodes[0].bdist)
 
         # interpolate first node

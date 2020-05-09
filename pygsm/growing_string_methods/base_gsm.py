@@ -1044,28 +1044,33 @@ class Base_Method(Print,Analyze,object):
                     reference_xyz = kwargs.get('reference_xyz',None)
                     #print(reference_xyz)
                     # block
-                    info = node1.coord_obj.Prims.block_info[frag]
+                    info = node1.coord_obj.Prims.prim_only_block_info[frag]
                     #print(info)
-                    sp,ep,sa,ea = info
+                    sa,ea,sp,ep = info
+                    print(info)
 
-                    xyz_frag = node1.xyz[sa:ea]
-                    axis = node1.xyz[a2] - xyz_frag[a1]
+                    xyz_frag = node1.xyz[sa:ea].copy()
+                    print(xyz_frag)
+                    #axis = node1.xyz[a2] - xyz_frag[a1]
+                    axis = node1.xyz[a2] - node1.xyz[a1]
                     axis /= np.linalg.norm(axis)
 
                     # only want the fragment of interest
                     ref_xyz = reference_xyz[sa:ea]
+                    print(ref_xyz)
                     ref_axis = reference_xyz[a2] - reference_xyz[a1]
                     ref_axis /= np.linalg.norm(ref_axis)
-                    #print('axis')
-                    #print(axis)
-                    #print('ref-axis')
-                    #print(ref_axis)
+                    print('axis')
+                    print(axis)
+                    print('ref-axis')
+                    print(ref_axis)
 
                     print(' Rotating reference axis to current axis')
                     I = np.eye(3)
                     v = np.cross(ref_axis,axis)
 
                     if v.all()==0.:
+                        print('Rotation is identity')
                         R=I
                     else:
                         vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
@@ -1075,17 +1080,23 @@ class Base_Method(Print,Analyze,object):
                     new_ref_axis = np.dot(ref_axis,R.T)
                     print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
                     new_ref_xyz = np.dot(ref_xyz,R.T)
+
+                    print(new_ref_xyz)
                     
                     # Calculate theta from ref_xyz to current xyz
                     qnew = get_quat(new_ref_xyz,xyz_frag)
                     theta_actual = np.arccos(qnew[0])*2
+
+                    if np.isclose(theta_actual,np.pi):
+                        print("warning")
+                        theta_actual=0.
                     print('theta around u1 from (rotated) reference to current')
                     print(theta_actual)
                     dtheta = theta_target - theta_actual
                     print(' Still need to twist %4.3f' %dtheta)
 
                     # TODO  Check if rotation is less than 0.9 pi
-                    if theta_actual < 0.9*np.pi:
+                    if np.abs(theta_actual) < 0.9*np.pi:
                         
                         # First calculate reference v
                         sel_ref = ref_xyz.reshape(-1,3)
@@ -1098,13 +1109,20 @@ class Base_Method(Print,Analyze,object):
 
                         # Create tangent with dtheta 
                         sel = xyz_frag.reshape(-1,3)
+                        print(sel)
                         sel -= np.mean(sel, axis=0)
+                        print(sel)
                         rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
                         c = np.cos(dtheta/2.0)
                         s = np.sin(dtheta/2.0)
                         q = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
                         fac, _ = calc_fac_dfac(c)
 
+                        print(rg)
+                        print(fac)
+                        print(q[1]-q_ref[1])
+                        print(q[2]-q_ref[2])
+                        print(q[3]-q_ref[3])
 
                         # Try difference
                         v1 = fac*rg*(q[1] - q_ref[1])

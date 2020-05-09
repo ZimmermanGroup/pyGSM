@@ -252,7 +252,11 @@ def main():
         nifty.printcool(" Defining primitive internal region :)")
         assert inpfileq['coordinate_type']=="TRIC", "won't work (currently) with other coordinate systems"
         prim_indices = np.loadtxt(inpfileq['prim_idx_file'])
-        prim_indices = [ (int(prim_indices[i,0]), int(prim_indices[i,1])-1) for i in range(len(prim_indices))]
+        if prim_indices.ndim==2:
+            prim_indices = [ (int(prim_indices[i,0]), int(prim_indices[i,1])-1) for i in range(len(prim_indices))]
+        elif prim_indices.ndim==1:
+            prim_indices = [ (int(prim_indices[0]), int(prim_indices[1])-1) ]
+
         print(prim_indices)
         #with open(inpfileq['prim_idx_file']) as f:
         #    prim_indices = f.read().splitlines()
@@ -593,10 +597,10 @@ def get_driving_coord_prim(dc):
         else:
             prim = Dihedral(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
     elif "OOP" in dc:
-        if dc[1]<dc[4]:
-            prim = OutOfPlane(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
-        else:
-            prim = OutOfPlane(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
+        #if dc[1]<dc[4]:
+        prim = OutOfPlane(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
+        #else:
+        #    prim = OutOfPlane(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
     return prim
 
 

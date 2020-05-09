@@ -227,7 +227,11 @@ class Molecule(object):
         # Perform all the sanity checks and cache some useful attributes
 
         #TODO make PES property
-        self.PES = type(self.Data['PES']).create_pes_from(self.Data['PES'],{'node_id':self.Data['node_id']},self.Data['copy_wavefunction'])
+        self.PES = type(self.Data['PES']).create_pes_from(
+                PES = self.Data['PES'],
+                options = {'node_id':self.Data['node_id']},
+                copy_wavefunction = self.Data['copy_wavefunction']
+                )
         if not hasattr(atoms, "__getitem__"):
             raise TypeError("atoms must be a sequence of atomic symbols")
 

@@ -240,6 +240,8 @@ if __name__ == '__main__':
 
     import time
 
+    print(" this demonstrates options")
+
     start = time.time()
     options1 = Options()        
     for k in range(500):
@@ -249,9 +251,10 @@ if __name__ == '__main__':
             allowed_types=[int],
             allowed_values=[0,1],
             ) 
+
     start = time.time()
     options2 = options1.copy()
-    print('%11.3E' % (time.time() - start))
+    print('copy time %11.3E' % (time.time() - start))
 
     start = time.time()
     options3 = Options()        
