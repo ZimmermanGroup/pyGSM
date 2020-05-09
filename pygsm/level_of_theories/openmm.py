@@ -14,7 +14,10 @@ from parmed import load_file, unit as u
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from .base_lot import Lot
+try:
+    from .base_lot import Lot
+except:
+    from base_lot import Lot
 from utilities import *
 
 class OpenMM(Lot):
@@ -155,7 +158,7 @@ if __name__=="__main__":
         system,
         integrator,
         )
-    mol=next(pb.readfile('pdb','../data/solvated.pdb'))
+    mol=next(pb.readfile('pdb','../../data/solvated.pdb'))
     coords = nifty.getAllCoords(mol)
     atoms = nifty.getAtomicSymbols(mol)
     print(coords)

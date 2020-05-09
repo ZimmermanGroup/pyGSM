@@ -29,7 +29,7 @@ class DFTB(Lot):
     def run(self,geom):
         owd = os.getcwd()
         manage_xyz.write_xyz('scratch/{}/tmp.xyz'.format(self.node_id),geom,scale=1.0)
-        os.system('xyz2gen scratch/{}/tmp.xyz'.format(self.node_id))
+        os.system('./xyz2gen scratch/{}/tmp.xyz'.format(self.node_id))
         os.chdir('scratch/{}'.format(self.node_id))
         os.system('pwd')
         cmd = "dftb+"
@@ -38,12 +38,12 @@ class DFTB(Lot):
                 stderr=subprocess.PIPE,
                 )
         stdout,stderr = proc.communicate()
-        with open('dftb_jobs.txt','a') as out:
-            out.write(stdout)
-            out.write(stderr)
+        #with open('dftb_jobs.txt','a') as out:
+        #    out.write(stdout)
+        #    out.write(stderr)
 
         ofilepath = "detailed.out"
-        with open(ofilepath) as ofile:
+        with open(ofilepath,'r') as ofile:
             olines = ofile.readlines()
 
         self.E = []

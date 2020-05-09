@@ -66,7 +66,6 @@ class SE_Cross(SE_GSM):
             # MECI optimization
             self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
-            self.nodes[self.nR].PES.lot.do_coupling=True
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']

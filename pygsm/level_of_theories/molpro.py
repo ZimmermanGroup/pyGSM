@@ -9,24 +9,41 @@ import numpy as np
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from .base_lot import Lot
+try:
+    from .base_lot import Lot
+except:
+    from base_lot import Lot
 from utilities import *
 
 class Molpro(Lot):
 
+    def __init__(self,options):
+        super(Molpro,self).__init__(options)
+
+        self.file_options.set_active('basis','6-31g',str,'')
+        self.file_options.set_active('closed',None,int,'')
+        self.file_options.set_active('occ',None,int,'')
+        self.file_options.set_active('n_electrons',None,int,'')
+        self.file_options.set_active('memory',800,int,'')
+
+        # set all active values to self for easy access
+        for key in self.file_options.ActiveOptions:
+            setattr(self, key, self.file_options.ActiveOptions[key])
+
+        if self.has_nelectrons==False:
+            for i in self.states:
+                self.get_nelec(self.geom,i[0])
+
+
     # designed to do multiple multiplicities at once... maybe not such a good idea, that feature is currently broken
     #TODO 
     def run(self,geom):
-        if self.has_nelectrons==False:
-            for i in self.states:
-                self.get_nelec(geom,i[0])
-            self.has_nelectrons==True
 
         #TODO gopro needs a number
         tempfilename = 'scratch/gopro.com'
         tempfile = open(tempfilename,'w')
         tempfile.write(' file,2,mp_{:04d}_{:04d}\n'.format(self.ID,self.node_id))
-        tempfile.write(' memory,800,m\n')
+        tempfile.write(' memory,{},m\n'.format(self.memory))
         tempfile.write(' symmetry,nosym\n')
         tempfile.write(' orient,noorient\n\n')
         tempfile.write(' geometry={\n')
@@ -35,75 +52,72 @@ class Molpro(Lot):
                 tempfile.write(' '+str(i))
             tempfile.write('\n')
         tempfile.write('}\n\n')
+
+        # get states
         singlets=self.search_tuple(self.states,1)
         len_singlets=len(singlets)
         len_E_singlets=singlets[-1][1] +1 #final adiabat +1 because 0 indexed
         triplets=self.search_tuple(self.states,3)
         len_triplets=len(triplets)
 
-        if self.lot_inp_file == False:
-            tempfile.write(' basis={}\n\n'.format(self.basis))
-            if len_singlets is not 0:
-                tempfile.write(' {multi\n')
-                nclosed = self.nocc
-                nocc = nclosed+self.nactive
-                tempfile.write(' direct\n')
-                tempfile.write(' closed,{}\n'.format(nclosed))
-                tempfile.write(' occ,{}\n'.format(nocc))
-                tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
-                #this can be made the len of singlets
-                tempfile.write(' state,{}\n'.format(len_singlets))
+        tempfile.write(' basis={}\n\n'.format(self.basis))
 
-                for state in singlets:
-                    s=state[1]
-                    grad_name="510"+str(s)+".1"
-                    tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
+        # do singlets
+        if len_singlets is not 0:
+            tempfile.write(' {multi\n')
+            tempfile.write(' direct\n')
+            tempfile.write(' closed,{}\n'.format(self.closed))
+            tempfile.write(' occ,{}\n'.format(self.occ))
+            tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
+            #this can be made the len of singlets
+            tempfile.write(' state,{}\n'.format(len_singlets))
 
-                #TODO this can only do coupling if states is 2, want to generalize to 3 states
-                if self.do_coupling==True and len(singlets)==2:
-                    tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(singlets[0][1]+1,singlets[1][1]+1))
-                tempfile.write(' }\n')
+            for state in self.gradient_states:
+                s=state[1]
+                print("running grad state ",s)
+                grad_name="510"+str(s)+".1"
+                tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
 
-                for state in singlets:
-                    s=state[1]
-                    grad_name="510"+str(s)+".1"
-                    tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
-                if self.do_coupling==True and len(singlets)==2:
-                    tempfile.write('Force;SAMC,5200.1;varsav\n')
-            if len_triplets is not 0:
-                tempfile.write(' {multi\n')
-                nclosed = self.nocc
-                nocc = nclosed+self.nactive
-                tempfile.write(' closed,{}\n'.format(nclosed))
-                tempfile.write(' occ,{}\n'.format(nocc))
-                tempfile.write(' wf,{},1,2\n'.format(self.n_electrons))
-                nstates = len(self.states)
-                tempfile.write(' state,{}\n'.format(len_triplets))
+            #TODO this can only do coupling if states is 2, want to generalize to 3 states
+            if self.coupling_states:
+                tempfile.write('CPMCSCF,NACM,{}.1,{}.1,record=5200.1\n'.format(self.coupling_states[0],self.coupling_states[1]))
+            tempfile.write(' }\n')
 
-                for state in triplets:
-                    s=state[1]
-                    grad_name="511"+str(s)+".1"
-                    tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
-                tempfile.write(' }\n')
+            for state in self.gradient_states:
+                s=state[1]
+                grad_name="510"+str(s)+".1"
+                tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
+            if self.coupling_states:
+                tempfile.write('Force;SAMC,5200.1;varsav\n')
 
-                for s in triplets:
-                    s=state[1]
-                    grad_name="511"+str(s)+".1"
-                    tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
-        else:
-            with open(self.lot_inp_file) as lot_inp:
-                lot_inp_lines = lot_inp.readlines()
-            for line in lot_inp_lines:
-                #print line
-                tempfile.write(line)
+        if len_triplets is not 0:
+            tempfile.write(' {multi\n')
+            nclosed = self.nocc
+            nocc = nclosed+self.nactive
+            tempfile.write(' closed,{}\n'.format(nclosed))
+            tempfile.write(' occ,{}\n'.format(nocc))
+            tempfile.write(' wf,{},1,2\n'.format(self.n_electrons))
+            nstates = len(self.states)
+            tempfile.write(' state,{}\n'.format(len_triplets))
+
+            for state in triplets:
+                s=state[1]
+                grad_name="511"+str(s)+".1"
+                tempfile.write(' CPMCSCF,GRAD,{}.1,record={}\n'.format(s+1,grad_name))
+            tempfile.write(' }\n')
+
+            for s in triplets:
+                s=state[1]
+                grad_name="511"+str(s)+".1"
+                tempfile.write('Force;SAMC,{};varsav\n'.format(grad_name))
 
         tempfile.close()
-
         scratch = os.environ['SLURM_LOCAL_SCRATCH']
 
         cmd = "molpro -W scratch -n {} {} -d {} --no-xml-output".format(self.nproc,tempfilename,scratch)
         os.system(cmd)
 
+        # Now read the output
         tempfileout='scratch/gopro.out'
         pattern = re.compile(r'MCSCF STATE \d.1 Energy \s* ([-+]?[0-9]*\.?[0-9]+)')
         self.E = []
@@ -148,7 +162,7 @@ class Molpro(Lot):
                             float(mobj.group(4)),
                             ])
 
-        for count,i in enumerate(self.states):
+        for count,i in enumerate(self.gradient_states):
             if i[0]==1:
                 self.grada.append((1,i[1],tmpgrada[count]))
             if i[0]==3:
@@ -178,8 +192,6 @@ class Molpro(Lot):
             self.run(geom)
         return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
 
-    #TODO molpro requires extra things when copying. . . can this be done in the base_lot? 
-    # e.g. if cls=="Molpro": #do molpro stuff?
     @classmethod
     def copy(cls,lot,options,copy_wavefunction=True):
         """ create a copy of this lot object"""
@@ -194,8 +206,9 @@ class Molpro(Lot):
 
 if __name__=='__main__':
     filepath="../../data/ethylene.xyz"
-    molpro = Molpro.from_options(states=[(1,0)],fnm=filepath,lot_inp_file='../../data/ethylene_molpro.com')
+    molpro = Molpro.from_options(states=[(1,0),(1,1)],fnm=filepath,lot_inp_file='../../data/ethylene_molpro.com',coupling_states=[0,1])
     geom=manage_xyz.read_xyz(filepath)
     xyz = manage_xyz.xyz_to_np(geom)
-    print molpro.get_energy(xyz,1,0)
-    print molpro.get_gradient(xyz,1,0)
+    print(molpro.get_energy(xyz,1,0))
+    print(molpro.get_gradient(xyz,1,0))
+    print(molpro.get_coupling(xyz,1,0,1))
