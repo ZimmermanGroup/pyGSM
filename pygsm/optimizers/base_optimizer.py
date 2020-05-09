@@ -325,11 +325,11 @@ class base_optimizer(object):
         if opt_type=="CLIMB": 
             gts = np.dot(g.T,molecule.constraints[:,0])
             #stepsize=np.linalg.norm(constraint_steps)
-            print(" gts %1.4f" % gts)
             max_step = 0.05/self.SCALE_CLIMB
-            if gts > max_step:
-                gts = max_step
+            if gts > np.abs(max_step):
+                gts = np.sign(gts)*max_step
                 #constraint_steps = constraint_steps*max_step/stepsize
+            print(" gts %1.4f" % gts)
             constraint_steps = gts*molecule.constraints[:,0]
             constraint_steps = constraint_steps[:,np.newaxis]
         # => MECI

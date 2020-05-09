@@ -189,7 +189,7 @@ class lbfgs(base_optimizer):
 
 
             # revert to the privious point
-            if ls['status'] < 0 or ratio<0.:
+            if ls['status'] < 0 or (ratio<0. and opt_type!='CLIMB'):
                 if ratio<0.:
                     ls['status']=-1
                 x = xp.copy()
@@ -199,9 +199,9 @@ class lbfgs(base_optimizer):
                 #fx = molecule.energy
                 ratio=0.
                 dEstep=0.
-                if self.SCALE_CLIMB<5. and opt_type=='CLIMB':
+                if self.SCALE_CLIMB<10. and opt_type=='CLIMB':
                     self.SCALE_CLIMB+=1.
-                    print('print SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
+                    print('SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
                 print('[ERROR] the point return to the previous point')
                 self.lm = []
                 for i in range(0, maxcor):
@@ -211,13 +211,15 @@ class lbfgs(base_optimizer):
                 self.k = 0
                 self.end =0
                 molecule.newHess=5
-                self.options['DMAX'] = ls['step']
+                self.options['DMAX'] = ls['step']/2
+                if self.options['DMAX'] < self.DMIN:
+                    self.options['DMAX'] = self.DMIN
             else:
                 # update molecule xyz
                 xyz = molecule.update_xyz(x-xp)
 
             # if ratio is less than 0.3 than reduce DMAX
-            if ratio<0.3 and ratio>0.: #and abs(dEpre)>0.05:
+            if ratio<0.3 and ls['status']>0: #and abs(dEpre)>0.05:
                 print(" Reducing DMAX")
                 self.options['DMAX'] /= 1.5
                 if self.options['DMAX'] < self.DMIN:
