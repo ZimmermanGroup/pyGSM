@@ -6,7 +6,10 @@ import numpy as np
 
 # local application imports
 from utilities import manage_xyz,options,elements,nifty
-from .file_options import File_Options
+try:
+    from .file_options import File_Options
+except:
+    from file_options import File_Options
 
 ELEMENT_TABLE = elements.ElementData()
 
@@ -14,7 +17,7 @@ ELEMENT_TABLE = elements.ElementData()
 #TODO fix tuple searches
 
 
-class Lot(File_Options):
+class Lot(object):
     """ Lot object for level of theory calculators """
 
     @staticmethod
@@ -125,6 +128,15 @@ class Lot(File_Options):
                      TeraChem Cloud requires a TeraChem client and options dictionary.'
                 )
 
+        opt.add_option(
+                key='file_options',
+                value=None,
+                allowed_types=[File_Options],
+                doc='A specialized dictionary containing lot specific options from file\
+                        including checks on dependencies and clashes. Not all packages\
+                        require'
+                )
+
         Lot._default_options = opt
         return Lot._default_options.copy()
 
@@ -183,42 +195,43 @@ class Lot(File_Options):
         else:
             raise RuntimeError("Need to initialize LOT object")
 
-        # Cache some useful atributes
+        # Cache some useful atributes - other useful attributes are properties
         self.currentCoords = manage_xyz.xyz_to_np(self.geom)
         self.atoms = manage_xyz.get_atoms(self.geom)
         self.ID = self.options['ID']
-
-        #TODO remove some of these options  make others properties
-        #self.nocc=self.options['nocc']
-        #self.nactive=self.options['nactive']
         self.nproc=self.options['nproc']
         self.charge = self.options['charge']
         self.node_id=self.options['node_id']
-        self.hasRanForCurrentCoords =False
-        self.has_nelectrons =False
         self.lot_inp_file = self.options['lot_inp_file']
 
-        # Parse input file saving options to self, only do this for classes which need it
-        # E.g. Q-Chem does not currently need to save the file arguments because it can simply concatenate 
-        # lot_inp_file and geometry
-        if self.__class__.__name__ in ['pDynamo','OpenMM']:
-            super(Lot,self).__init__(self.lot_inp_file)
+        # Bools for running 
+        self.hasRanForCurrentCoords =False
+        self.has_nelectrons =False
 
+        # Read file options if they exist and not already set
+        if self.file_options is None:
+            self.file_options = File_Options(self.lot_inp_file)
 
-        #package  specific implementation
+        #package  specific implementation 
+        #TODO MOVE to specific package !!!
         # tc cloud
         self.options['job_data']['orbfile'] = self.options['job_data'].get('orbfile','')
         # pytc? TODO
         self.options['job_data']['lot'] = self.options['job_data'].get('lot',None)
-        # openmm
-        self.options['job_data']['simulation'] = self.options['job_data'].get('simulation',None)
-        #pDynamo
-        self.options['job_data']['system'] = self.options['job_data'].get('simulation',None)
 
     @classmethod
     def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return cls(cls.default_options().set_values(kwargs))
+
+    @property 
+    def file_options(self):
+            return self.options['file_options']
+    @file_options.setter
+    def file_options(self,value):
+        assert type(value)==File_Options, "incorrect type for file options"
+        self.options['file_options']=value
+
 
     @property
     def do_coupling(self):

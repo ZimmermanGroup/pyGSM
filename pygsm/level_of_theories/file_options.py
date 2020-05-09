@@ -1,11 +1,12 @@
 from collections import namedtuple, defaultdict, OrderedDict
 from re import sub
 from ast import literal_eval as leval
+from copy import deepcopy
 
 class File_Options(object):
     """ Class file_options allows parsing of an input file
     """
-    def __init__(self, input_file):
+    def __init__(self,input_file=None):
         self.Documentation = OrderedDict()
         self.UserOptions = OrderedDict()
         self.ActiveOptions = OrderedDict()
@@ -13,7 +14,8 @@ class File_Options(object):
         self.ForcedWarnings = OrderedDict()
         self.InactiveOptions = OrderedDict()
         self.InactiveWarnings = OrderedDict()
-        # First build a dictionary of user supplied options.
+
+        # still need to read the file to build the dictionary
         if input_file != None:
             for line in open(input_file).readlines():
                 line = sub('#.*$','',line.strip())
@@ -27,6 +29,16 @@ class File_Options(object):
                         val = str(line.replace(s[0],'',1).strip())
                     self.UserOptions[key] = val
 
+    @staticmethod
+    def copy(file_options):
+        new = File_Options() 
+        new.Documentation = deepcopy(file_options.Documentation)
+        new.UserOptions = deepcopy(file_options.UserOptions)
+        new.ActiveOptions = deepcopy(file_options.ActiveOptions)
+        new.ForcedOptions = deepcopy(file_options.ForcedOptions)
+        new.InactiveOptions = deepcopy(file_options.InactiveOptions)
+        new.InactiveWarnings = deepcopy(file_options.InactiveWarnings)
+        return new
 
 
     def set_active(self,key,default,typ,doc,allowed=None,depend=True,clash=False,msg=None):
@@ -175,3 +187,26 @@ class File_Options(object):
             out += Unrecognized
         return out
 
+        
+
+if __name__ == '__main__':
+
+    fo = File_Options('tmp')
+    fo.set_active('crystal','not-stupid',str,'is crystal stupid')
+
+    fo2=File_Options.copy(fo)
+
+    print(id(fo))
+    print(id(fo2))
+
+    print(fo)
+    for line in fo.record():
+        print(line)
+    
+    class tmp2(object):
+        def __init__():
+            return
+
+    for key in fo.ActiveOptions:
+        setattr(tmp2, key, fo.ActiveOptions[key])
+    print(tmp2.crystal)

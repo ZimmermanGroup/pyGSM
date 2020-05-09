@@ -20,15 +20,23 @@ from utilities import *
 class OpenMM(Lot):
     def __init__(self,options):
 
-        # BASE LOT READS FILE
         super(OpenMM,self).__init__(options)
+
+        # get simulation from options if it exists
+        self.options['job_data']['simulation'] = self.options['job_data'].get('simulation',None)
+
         if self.lot_inp_file is not None and self.simulation is None:
+
             # Now go through the logic of determining which FILE options are activated.
-            self.set_active('use_crystal',False,bool,"Use crystal unit parameters")
-            self.set_active('use_pme',False,bool,"Use particle mesh ewald-- requires periodic boundary conditions")
-            self.set_active('cutoff',1.0,float,depend=(self.use_pme),msg="Requires PME")
-            self.set_active('prmtopfile',None,str,"parameter file")
-            self.set_active('inpcrdfile',None,str,"inpcrd file")
+            self.file_options.set_active('use_crystal',False,bool,"Use crystal unit parameters")
+            self.file_options.set_active('use_pme',False,bool,"Use particle mesh ewald-- requires periodic boundary conditions")
+            self.file_options.set_active('cutoff',1.0,float,depend=(self.file_options.use_pme),msg="Requires PME")
+            self.file_options.set_active('prmtopfile',None,str,"parameter file")
+            self.file_options.set_active('inpcrdfile',None,str,"inpcrd file")
+
+            # set all active values to self for easy access
+            for key in self.file_options.ActiveOptions:
+                setattr(self, key, self.file_options.ActiveOptions[key])
 
             nifty.printcool(" Options for OpenMM")
             for val in [self.prmtopfile,self.inpcrdfile]:
