@@ -55,7 +55,7 @@ def main():
     parser.add_argument('-DQMAG_MAX',type=float,default=0.8,help='Maximum step size in single-ended mode (default: %(default)s)',required=False)
     parser.add_argument('-BDIST_RATIO',type=float,default=0.5,help='Reaction completion convergence in SE modes (default: %(default)s)')
     parser.add_argument('-CONV_TOL',type=float,default=0.0005,help='Convergence tolerance for optimizing nodes (default: %(default)s)',required=False)
-    parser.add_argument('-growth_direction',type=int,default=0,help='Direction adding new nodes (default: %(default)s)',choices=[0,1])
+    parser.add_argument('-growth_direction',type=int,default=0,help='Direction adding new nodes (default: %(default)s)',choices=[0,1,2])
     parser.add_argument('-reactant_geom_fixed',action='store_true',help='Fix reactant geometry i.e. do not pre-optimize')
     parser.add_argument('-product_geom_fixed',action='store_true',help='Fix product geometry i.e. do not pre-optimize')
     parser.add_argument('-nproc',type=int,default=1,help='Processors for calculation. Python will detect OMP_NUM_THREADS, only use this if you want to force the number of processors')

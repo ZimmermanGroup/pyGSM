@@ -136,10 +136,10 @@ class eigenvector_follow(base_optimizer):
             fx = ls['fx']
             g  = ls['g']
 
-            if ls['status'] ==-2:  # Not used
+            if ls['status'] ==-2:  
                 print('[ERROR] the point return to the privious point')
                 x = xp.copy()
-                molecule.xyz = self.xyzp
+                molecule.xyz = xyzp
                 g = gp.copy()
                 fx = fxp
                 ratio=0.
@@ -169,8 +169,8 @@ class eigenvector_follow(base_optimizer):
             constraint_energy = np.dot(gp.T,constraint_steps)*units.KCAL_MOL_PER_AU  
             #print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
-            if abs(dEpre)<0.01:
-                dEpre = np.sign(dEpre)*0.01
+            #if abs(dEpre)<0.01:
+            #    dEpre = np.sign(dEpre)*0.01
 
             # project out the constraint
             gc = g.copy()
@@ -182,7 +182,8 @@ class eigenvector_follow(base_optimizer):
             print(" dEstep=%5.4f" %dEstep)
             ratio = dEstep/dEpre
             molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
-            self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
+            if ls['status'] !=-2:  
+                self.step_controller(actual_step,ratio,molecule.gradrms,pgradrms,dEpre,opt_type,dEstep)
 
             # update molecule xyz
             xyz = molecule.update_xyz(x-xp)

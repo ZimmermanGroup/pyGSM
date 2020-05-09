@@ -70,6 +70,38 @@ def read_xyzs(
         geoms.append(geom)
     return geoms
 
+def read_molden_geoms(
+    filename, 
+    scale=1.
+    ):
+
+    lines = open(filename).readlines()
+    natoms=int(lines[2])
+    nlines = len(lines)
+
+    #print "number of atoms is ",natoms
+    num_geoms = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
+    num_geoms = int(num_geoms)
+    print(num_geoms)
+    geoms = []
+
+    sa=4
+    for i in range(int(num_geoms)):
+        ea=sa+natoms
+        geom=[]
+        for line in lines[sa:ea]:
+            mobj = re.match(r'^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
+            geom.append((
+                mobj.group(1),
+                scale*float(mobj.group(2)),
+                scale*float(mobj.group(3)),
+                scale*float(mobj.group(4)),
+                ))
+        sa=ea+2
+        geoms.append(geom)
+    return geoms
+        
+
 def get_atoms(
         geom,
         ):

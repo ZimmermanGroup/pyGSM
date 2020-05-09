@@ -123,6 +123,8 @@ class DE_GSM(Base_Method):
         isDone=False
         if self.nn==self.nnodes:
             isDone=True
+
+            # TODO should something be done for growthdirection 2?
             if self.growth_direction==1:
                 print("Setting LOT of last node")
                 self.nodes[-1] = Molecule.copy_from_options(
@@ -183,9 +185,9 @@ class DE_GSM(Base_Method):
         #if True:
 
         TS_conv = self.options['CONV_TOL']
-        if self.find and self.optimizer[self.TSnode].nneg>1:
-            print(" reducing TS convergence because nneg>1")
-            TS_conv = self.options['CONV_TOL']/2.
+        #if self.find and self.optimizer[self.TSnode].nneg>1:
+        #    print(" reducing TS convergence because nneg>1")
+        #    TS_conv = self.options['CONV_TOL']/2.
         self.optimizer[self.TSnode].conv_grms = TS_conv
 
         if (rtype == 2 and self.find):

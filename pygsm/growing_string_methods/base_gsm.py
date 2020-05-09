@@ -351,6 +351,10 @@ class Base_Method(Print,Analyze,object):
             # => set stage <= #
             form_TS_hess = self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
 
+            # => Reparam the String <= #
+            if oi!=max_iter-1:
+                self.ic_reparam(nconstraints=nconstraints)
+
             # Modify TS Hess if necessary
             if form_TS_hess:
                 self.get_tangents_1e()
@@ -380,10 +384,6 @@ class Base_Method(Print,Analyze,object):
                  self.get_eigenv_finite(self.TSnode)                    
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
-
-            # => Reparam the String <= #
-            if oi!=max_iter-1:
-                self.ic_reparam(nconstraints=nconstraints)
 
             # store reparam energies
             self.store_energies()
@@ -795,11 +795,6 @@ class Base_Method(Print,Analyze,object):
             #    self.nodes[n]=node
             #    self.optimizer[n]=optimizer
         else:
-            #results=[]
-            #run_list = [n for n in range(self.nnodes) if (self.nodes[n] and self.active[n])]
-            #for n in run_list:
-            #    args = [self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim]
-            #    results.append(run(args))
 
             for n in range(self.nnodes):
                 if self.nodes[n] and self.active[n]:
@@ -828,11 +823,17 @@ class Base_Method(Print,Analyze,object):
                                 ictan=self.ictan[n],
                                 )
 
-        optlastnode=False
-        if self.product_geom_fixed==False:
+        if self.product_geom_fixed==False and self.done_growing:
+            fp = self.find_peaks(2)
             #BUG 1/24/2020
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
-                optlastnode=True
+                self.optimizer[self.nnodes-1].optimize(
+                        molecule=self.nodes[self.nnodes-1],
+                        refE=refE,
+                        opt_type='UNCONSTRAINED',
+                        opt_steps=osteps,
+                        ictan=None,
+                        )
 
 
     def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
@@ -841,7 +842,7 @@ class Base_Method(Print,Analyze,object):
         sum_conv_tol = np.sum([self.optimizer[n].conv_grms for n in range(1,self.nnodes-1)])+ 0.0005
 
         #TODO totalgrad is not a good criteria for large systems
-        if (totalgrad < 0.3 or sumgradrms<sum_conv_tol)  and fp>0: # extra criterion in og-gsm for added
+        if (totalgrad < 0.3 or sumgradrms<sum_conv_tol or ts_cgradq < 0.01)  and fp>0: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
@@ -858,7 +859,7 @@ class Base_Method(Print,Analyze,object):
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
                     (sumgradrms< sum_conv_tol) or
-                    (ts_gradrms<self.options['CONV_TOL']*2.)  #  used to be 5
+                    (ts_gradrms<self.options['CONV_TOL']*5.)  #  used to be 5
                     )):
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
@@ -1641,7 +1642,7 @@ class Base_Method(Print,Analyze,object):
 
         self.nodes[en].update_coordinate_basis()
 
-        self.newic.xyz = self.nodes[en].xyz
+        self.newic.xyz = self.nodes[en].xyz.copy()
         Vecs = self.newic.update_coordinate_basis(self.ictan[en])
         #nicd = self.newic.num_coordinates
         #num_ics = self.newic.num_primitives 
@@ -1664,12 +1665,12 @@ class Base_Method(Print,Analyze,object):
         #print "tan0"
         #print tan0
 
-        self.newic.xyz = self.nodes[en-1].xyz
+        self.newic.xyz = self.nodes[en-1].xyz.copy()
         qm1 = self.newic.coordinates[0]
         #print "qm1 is %1.3f " %qm1
 
         if en+1<self.nnodes:
-            self.newic.xyz = self.nodes[en+1].xyz
+            self.newic.xyz = self.nodes[en+1].xyz.copy()
             qp1 = self.newic.coordinates[0]
         else:
             qp1 = qm1
@@ -1682,7 +1683,7 @@ class Base_Method(Print,Analyze,object):
         self.newic.xyz = self.nodes[en].xyz
         Vecs =self.newic.update_coordinate_basis()
 
-        self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian
+        self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian.copy()
         self.newic.form_Hessian_in_basis()
 
         tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   #nicd,1
