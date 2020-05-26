@@ -10,6 +10,7 @@ import numpy as np
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from .base_lot import Lot
 from utilities import *
+import subprocess 
 
 class QChem(Lot):
     def __init__(self,options):
@@ -81,10 +82,19 @@ class QChem(Lot):
         else:
            self.write_preamble(geom,multiplicity,tempfilename,jobtype='SP')
         
-        cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
-        #print(cmd)
+        #cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
 
-        os.system(cmd)
+        cmd = ['qchem']
+        args = ['-nt',str(self.nproc),
+                '-save',
+                tempfilename,
+                '{}.qchem.out'.format(tempfilename),
+                'string_{:03d}/{}.{}'.format(self.ID,self.node_id,multiplicity)
+                ]
+        cmd.extend(args)
+        output = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.PIPE).communicate()[0]
+        #print(cmd)
+        #os.system(cmd)
        
         # PARSE OUTPUT #
         if self.calc_grad:

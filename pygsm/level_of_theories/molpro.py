@@ -14,6 +14,7 @@ try:
 except:
     from base_lot import Lot
 from utilities import *
+import subprocess 
 
 class Molpro(Lot):
 
@@ -25,6 +26,7 @@ class Molpro(Lot):
         self.file_options.set_active('occ',None,int,'')
         self.file_options.set_active('n_electrons',None,int,'')
         self.file_options.set_active('memory',800,int,'')
+        self.file_options.set_active('n_states',2,int,'')
 
         # set all active values to self for easy access
         for key in self.file_options.ActiveOptions:
@@ -70,7 +72,7 @@ class Molpro(Lot):
             tempfile.write(' occ,{}\n'.format(self.occ))
             tempfile.write(' wf,{},1,0\n'.format(self.n_electrons))
             #this can be made the len of singlets
-            tempfile.write(' state,{}\n'.format(len_singlets))
+            tempfile.write(' state,{}\n'.format(self.n_states))
 
             for state in self.gradient_states:
                 s=state[1]
@@ -114,8 +116,18 @@ class Molpro(Lot):
         tempfile.close()
         scratch = os.environ['SLURM_LOCAL_SCRATCH']
 
-        cmd = "molpro -W scratch -n {} {} -d {} --no-xml-output".format(self.nproc,tempfilename,scratch)
-        os.system(cmd)
+        #cmd = "molpro -W scratch -n {} {} -d {} --no-xml-output".format(self.nproc,tempfilename,scratch)
+        args = ['-W','scratch','-n',str(self.nproc),tempfilename,'-d',scratch]
+        command=['molpro']
+        command.extend(args)
+        output = subprocess.Popen(command, stdout=subprocess.PIPE, stderr = subprocess.PIPE).communicate()[0]
+
+        #with open('molpro.stdout','a') as out:
+        #    with nifty.custom_redirection2(out):
+        #        os.system(cmd)
+        #process = Popen(['cat', 'test.py'], stdout=PIPE, stderr=PIPE)
+        #process = Popen([cmd], stdout=PIPE, stderr=PIPE)
+        #stdout, stderr = process.communicate()
 
         # Now read the output
         tempfileout='scratch/gopro.out'
@@ -167,6 +179,10 @@ class Molpro(Lot):
                 self.grada.append((1,i[1],tmpgrada[count]))
             if i[0]==3:
                 self.grada.append((3,i[1],tmpgrada[count]))
+
+        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
+            for E in self.E:
+                f.write('{} {} {:9.7f}\n'.format(E[0],E[1],E[2]))
         self.hasRanForCurrentCoords=True
         return
 
