@@ -150,6 +150,9 @@ class TeraChem(Lot):
         print(" making folder scratch/{}".format(node_id))
         os.system('mkdir -p scratch/{}'.format(node_id))
 
+        file_options = File_Options.copy(lot.file_options)
+        options['file_options'] =file_options
+
         if node_id != lot.node_id and copy_wavefunction:
             if "casscf" in lot.file_options.ActiveOptions:
                 old_path = 'scratch/{}/c0.casscf'.format(lot.node_id)

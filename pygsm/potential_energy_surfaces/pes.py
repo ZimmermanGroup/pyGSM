@@ -65,6 +65,7 @@ class PES(object):
     @classmethod
     def create_pes_from(cls,PES,options={},copy_wavefunction=True):
         lot = type(PES.lot).copy(PES.lot,options,copy_wavefunction)
+
         return cls(PES.options.copy().set_values({
             "lot":lot,
             }))
@@ -159,17 +160,56 @@ class PES(object):
         return self.lot.get_energy(xyz,self.multiplicity,self.ad_idx) +fdE
 
     #TODO this needs to be fixed
-    def get_finite_difference_hessian(self,coords):
-        hess = np.zeros((len(coords)*3,len(coords)*3))
-        I = np.eye(hess.shape[0])
-        for n,row in enumerate(I):
-            print("on hessian product ",n)
-            hess[n] = np.squeeze(self.get_finite_difference_hessian_product(coords,row))
+    #def get_finite_difference_hessian(self,coords):
+    #    hess = np.zeros((len(coords)*3,len(coords)*3))
+    #    I = np.eye(hess.shape[0])
+    #    for n,row in enumerate(I):
+    #        print("on hessian product ",n)
+    #        hess[n] = np.squeeze(self.get_finite_difference_hessian_product(coords,row))
+    #    return hess
+
+    def get_finite_difference_hessian(self,coords,qm_region=None):
+        ''' Calculate Finite Differnce Hessian
+
+        Params:
+            coords ((natoms,3) np.ndarray - system coordinates  (x,y,z)
+            qm_region list of QM atoms in a QMMM simulation to obtain environment perturbed Hessian with the size of the QM region
+
+        Returns:
+            Hessian (N1,N1) np.ndarray 
+
+        '''
+        if qm_region is None:
+            hess = np.zeros((len(coords)*3,len(coords)*3))
+            n1_region = [ x for x in range(3*len(coords)) ]
+        else:
+            n1_region =[]
+            for n in qm_region:
+                for j in range(3):
+                    n1_region.append(n*3+j)
+            print('n1_region')
+            print(n1_region)
+            #hess = np.zeros((len(coords[qm_region])*3,len(coords[qm_region])*3))
+            hess = np.zeros((len(n1_region),len(n1_region)))
+        print("hess shape", hess.shape)
+
+        def gen_row(n):
+            vec = np.zeros(coords.shape[0]*3)
+            vec[n] = 1.
+            return vec
+       
+        n_actual = 0
+        for n in range(len(coords)*3):
+            if n in n1_region:
+                print("on hessian product ",n)
+                row = gen_row(n)
+                ans = self.get_finite_difference_hessian_product(coords,row)
+                #hess[n_actual] = np.squeeze(self.get_finite_difference_hessian_product(coords,row))
+                hess[n_actual] = np.squeeze(ans[n1_region])
+                n_actual +=1
         return hess
 
-    #TODO this needs to be fixed
-    def get_finite_difference_hessian_product(self,coords,direction):
-        FD_STEP_LENGTH=0.001
+    def get_finite_difference_hessian_product(self,coords,direction,FD_STEP_LENGTH=0.001):
 
         # format the direction
         direction = direction/np.linalg.norm(direction)
@@ -212,19 +252,28 @@ class PES(object):
         hess2 = hess / np.sqrt(np.outer(m,m))
     
         # Find normal modes (project translation/rotations before)
+        #B = 3N,3N-6
         B = rotate.vibrational_basis(geom, masses)
         h, U3 = np.linalg.eigh(np.dot(B.T,np.dot(hess2,B)))
+        # U3 = (3N-6,3N)(3N,3N)(3N-6,3N) = 3N-6,3N
         U = np.dot(B, U3)
+        # U = (3N,3N-6),(3N-6,3N)
     
-        # TEST: Find normal modes (without projection translations/rotations)
-        # RMP: Matches TC output for PYP - same differences before/after projection
-        # h2, U2 = np.linalg.eigh(hess2)
-        # h2 = h2[6:]
-        # U2 = U2[:,6:]
-        # for hval, hval2 in zip(h,h2):
-        #     wval = np.sqrt(hval) / units['au_per_cminv']
-        #     wval2 = np.sqrt(hval2) / units['au_per_cminv']
-        #     print '%10.6E %10.6E %11.3E' % (wval, wval2, np.abs(wval - wval2))
+        ## TEST: Find normal modes (without projection translations/rotations)
+        ## RMP: Matches TC output for PYP - same differences before/after projection
+        #h2, U2 = np.linalg.eigh(hess2)
+        #h3 = h2[:6]
+        #for hval in h3:
+        #    print(hval)
+
+        #h2 = h2[6:]
+        #U2 = U2[:,6:]
+        #for hval, hval2 in zip(h,h2):
+        #    #wval = np.sqrt(hval) / units['au_per_cminv']
+        #    wval = np.sqrt(hval) * units.INV_CM_PER_AU
+        #    #wval2 = np.sqrt(hval2) / units['au_per_cminv']
+        #    wval2 = np.sqrt(hval2) *units.INV_CM_PER_AU
+        #    print('%10.6E %10.6E %11.3E' % (wval, wval2, np.abs(wval - wval2)))
     
         # Normal frequencies
         w = np.sqrt(h)
