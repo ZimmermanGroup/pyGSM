@@ -48,31 +48,31 @@ class TeraChem(Lot):
 
         # CASSCF
         self.file_options.set_active('casscf','no',str,'')
-        self.file_options.set_active('active',0,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('closed',0,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('nalpha',0,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('nbeta',0,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfmaxiter',200,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('alphacas','no',str,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfmacroiter',10,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfmicroconvthre',0.1,float,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfmacroconvthre',1e-3,float,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfconvthre',1e-6,float,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('casscfenergyconvthre',1e-6,float,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('cpsacasscfmaxiter',20,int,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('cpsacasscfconvthre',1e-7,float,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('dci_explicit_h','no',str,'',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('directci','no',str,'',depend=(self.file_options.casscf),msg='')
+        self.file_options.set_active('active',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('closed',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('nalpha',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('nbeta',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfmaxiter',200,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('alphacas','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfmacroiter',10,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfmicroconvthre',0.1,float,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfmacroconvthre',1e-3,float,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfconvthre',1e-6,float,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('casscfenergyconvthre',1e-6,float,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('cpsacasscfmaxiter',20,int,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('cpsacasscfconvthre',1e-7,float,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('dci_explicit_h','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('directci','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
 
         # FOMO
         self.file_options.set_active('fomo','no',str,'',
-                clash=(self.file_options.casscf),
+                clash=(self.file_options.casscf=="yes"),
                 msg = 'Cant activate FOMO with CASSCF')
-        self.file_options.set_active('fomo_temp',0.3,float,'',depend=(self.file_options.fomo),msg='')
-        self.file_options.set_active('fomo_nocc',self.file_options.closed,int,'',depend=(self.file_options.fomo),msg='')
-        self.file_options.set_active('fomo_nact',self.file_options.active,int,'',depend=(self.file_options.fomo),msg='')
-        self.file_options.set_active('fomo_method','gaussian',str,'',depend=(self.file_options.fomo),msg='')
+        self.file_options.set_active('fomo_temp',0.3,float,'',depend=(self.file_options.fomo=="yes"),msg='')
+        self.file_options.set_active('fomo_nocc',self.file_options.closed,int,'',depend=(self.file_options.fomo=="yes"),msg='')
+        self.file_options.set_active('fomo_nact',self.file_options.active,int,'',depend=(self.file_options.fomo=="yes"),msg='')
+        self.file_options.set_active('fomo_method','gaussian',str,'',depend=(self.file_options.fomo=="yes"),msg='')
 
         # QMMM
         self.file_options.set_active('prmtop',None,str,'')
@@ -82,16 +82,18 @@ class TeraChem(Lot):
         self.file_options.set_active('cis','no',str,'',
                 clash=(self.file_options.casscf or self.file_options.cis),
                 msg = 'Cant activate CIS with FOMO or CASSCF')
-        self.file_options.set_active('cisnumstates',4,int,'',depend=(self.file_options.cis))
-        self.file_options.set_active('cisguessvecs',self.file_options.cisnumstates,int,'',depend=(self.file_options.cis))
-        self.file_options.set_active('cismaxiter',20,int,'',depend=(self.file_options.cis))
+        self.file_options.set_active('cisnumstates',4,int,'',depend=(self.file_options.cis=="yes"))
+        self.file_options.set_active('cisguessvecs',self.file_options.cisnumstates,int,'',depend=(self.file_options.cis=="yes"))
+        self.file_options.set_active('cismaxiter',20,int,'',depend=(self.file_options.cis=="yes"))
 
         # DFT
-        self.file_options.set_active('rc_w',None,float,'',
-                clash=(self.file_options.casscf or self.file_options.fomo),
+        self.file_options.set_active('rc_w',None,float,
+                doc='',
+                clash=(self.file_options.casscf=="yes" or self.file_options.fomo=="yes"),
+                msg='',
                 )
         self.file_options.set_active('dftd','no',str,'',
-                clash=(self.file_options.casscf or self.file_options.cis),
+                clash=(self.file_options.casscf=="yes" or self.file_options.fomo=="yes"),
                 msg = 'Cant activate dftd with FOMO or CASSCF')
 
         # GPU
@@ -104,16 +106,25 @@ class TeraChem(Lot):
        
         # Deactivate useless keys 
         #casscf
+        keys_to_del=[]
+        for key,value in self.file_options.ActiveOptions.items():
+            if value=="no":
+                keys_to_del.append(key)
+        for key in keys_to_del:
+            self.file_options.deactivate(key)
+
+        #if self.file_options.casscf=='no':
+        #    self.file_options.deactivate('casscf')
         if self.file_options.nalpha==0:
             self.file_options.deactivate('nalpha')
         if self.file_options.nbeta==0:
             self.file_options.deactivate('nbeta')
-        if self.file_options.alphacas=='no':
-            self.file_options.deactivate('alphacas')
-        if self.file_options.dci_explicit_h=='no':
-            self.file_options.deactivate('dci_explicit_h')
-        if self.file_options.directci=='no':
-            self.file_options.deactivate('directci')
+        #if self.file_options.alphacas=='no':
+        #    self.file_options.deactivate('alphacas')
+        #if self.file_options.dci_explicit_h=='no':
+        #    self.file_options.deactivate('dci_explicit_h')
+        #if self.file_options.directci=='no':
+        #    self.file_options.deactivate('directci')
         if self.file_options.prmtop==None:
             self.file_options.deactivate('prmtop')
         else:
@@ -131,8 +142,11 @@ class TeraChem(Lot):
             self.file_options.deactivate('dftd')
 
         self.file_options.set_active('casguess','scratch/{}/c0.casscf'.format(self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf),msg='')
-        self.file_options.set_active('guess','scratch/{}/c0'.format(self.node_id),str,doc='guess for dft/HF',
-                clash=(self.file_options.casscf or self.file_options.fomo),msg='Not needed for casscf') 
+
+        guess_file='scratch/{}/c0'.format(self.node_id)
+        self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
+                clash=(self.file_options.casscf or self.file_options.fomo),
+                depend=(os.path.isfile(guess_file)),msg='guess does not exist pr not needed, deactivating for now')
 
         ## DONE setting values ##
         
@@ -141,6 +155,8 @@ class TeraChem(Lot):
 
         self.link_atoms=None
 
+        for line in self.file_options.record():
+            print(line)
     
     @classmethod
     def copy(cls,lot,options,copy_wavefunction=True):
@@ -204,6 +220,11 @@ class TeraChem(Lot):
         ### RUN THE CALCULATION ###
         cmd = "terachem {} > {}".format(inpfilename,outfilename)
         os.system(cmd)
+
+
+        # Turn on C0 for non-CASSCF calculations after running
+        if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
+            self.file_options.force_active('guess','scratch/{}/c0'.format(self.node_id))
 
         if "prmtop" in self.file_options.ActiveOptions and self.link_atoms is None:
             # parse qmindices
@@ -399,7 +420,7 @@ class TeraChem(Lot):
             self.run(geom)
         tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
         if tmp is not None:
-            return np.asarray(tmp)*units.ANGSTROM_TO_AU
+            return np.asarray(tmp)*units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
         else:
             return None
 
