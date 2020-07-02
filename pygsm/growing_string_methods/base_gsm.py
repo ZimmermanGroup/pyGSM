@@ -479,31 +479,26 @@ class Base_Method(Print,Analyze,object):
             self.newic.xyz = self.nodes[n].xyz
             Vecs = self.newic.update_coordinate_basis(ictan[n])
 
-            # cnorms
-            constraint = self.newic.constraints[:,0]
+
+            # NOTE:
+            # vanilla GSM has a strange metric for distance
+            # no longer following 7/1/2020
+            #constraint = self.newic.constraints[:,0]
             # just a fancy way to get the normalized tangent vector
-            prim_constraint = block_matrix.dot(Vecs,constraint)
+            #prim_constraint = block_matrix.dot(Vecs,constraint)
+            #for prim in self.newic.primitive_internal_coordinates:
+            #    if type(prim) is Distance:
+            #        index = self.newic.coord_obj.Prims.dof_index(prim)
+            #        prim_constraint[index] *= 2.5
+            #dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
+            #dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
-            #assert np.isclose([np.linalg.norm(prim_constraint)],[1.0]), "This should be 1"
-
-            for prim in self.newic.primitive_internal_coordinates:
-                if type(prim) is Distance:
-                    index = self.newic.coord_obj.Prims.dof_index(prim)
-                    prim_constraint[index] *= 2.5
-           
-            dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
+            dqmaga[n] = np.linalg.norm(ictan0)
             if dqmaga[n]<0.:
                 raise RuntimeError
 
-            # should I do this?  TURN off 11/22/19
-            dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
-            # note: C++ gsm modifies tangent here
-            #nbonds=self.nodes[0].num_bonds
-            #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
-            #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
-            #print('dqmaga[n] %.3f' % dqmaga[n])
-      
+        # TEMPORORARY parallel idea 
         #ictan = [0.]
         #ictan += [ Process(target=get_tangent,args=(n,)) for n in range(n0+1,self.nnodes)]
         #dqmaga = [ Process(target=get_dqmag,args=(n,ictan[n])) for n in range(n0+1,self.nnodes)]
@@ -516,11 +511,13 @@ class Base_Method(Print,Analyze,object):
             for n in range(n0+1,self.nnodes):
                 print("ictan[%i]" %n)
                 print(ictan[n].T)
-        #if self.print_level>0:
-        #    print('------------printing dqmaga---------------')
-        #    for n in range(n0+1,self.nnodes-1):
-        #        print(" {:5.4}".format(dqmaga[n]),end='')
-        #    print()
+        if self.print_level>0:
+            print('------------printing dqmaga---------------')
+            for n in range(n0+1,self.nnodes):
+                print(" {:5.4}".format(dqmaga[n]),end='')
+                if (n)%5==0:
+                    print()
+            print()
 
 
     # for some reason this fxn doesn't work when called outside gsm
@@ -573,7 +570,6 @@ class Base_Method(Print,Analyze,object):
                 t2,_ = Base_Method.tangent(self.nodes[newic_n],self.nodes[int2ic_n])
                 print(" done 3 way tangent")
                 ictan0 = f1*t1 +(1.-f1)*t2
-                #self.ictan[n]=ictan0
             self.ictan[n] = ictan0/np.linalg.norm(ictan0)
             
             dqmaga[n]=0.0
@@ -589,22 +585,24 @@ class Base_Method(Print,Analyze,object):
             nbonds=self.nodes[0].num_bonds
             # cnorms
             constraint = self.newic.constraints[:,0]
+
+            # NOTE:
+            # regular GSM does something weird with the magnitude
+            # No longer followed 7/1/2020
             # just a fancy way to get the tangent vector
-            prim_constraint = block_matrix.dot(Vecs,constraint)
+            #prim_constraint = block_matrix.dot(Vecs,constraint)
+            ## mult bonds
+            #for prim in self.newic.primitive_internal_coordinates:
+            #    if type(prim) is Distance:
+            #        index = self.newic.coord_obj.Prims.dof_index(prim)
+            #        prim_constraint[index] *= 2.5
+            #dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
+            #dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
-            # mult bonds
-            for prim in self.newic.primitive_internal_coordinates:
-                if type(prim) is Distance:
-                    index = self.newic.coord_obj.Prims.dof_index(prim)
-                    prim_constraint[index] *= 2.5
-
-            dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
-            #dqmaga[n] += np.dot(Vecs[:nbonds,0],ictan0[:nbonds])*2.5
-            #dqmaga[n] += np.dot(Vecs[nbonds:,0],ictan0[nbonds:])
+            dqmaga[n] = np.linalg.norm(ictan0)
             if dqmaga[n]<0.:
                 raise RuntimeError
         
-            dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
         if self.print_level>1:
             print('------------printing ictan[:]-------------')
@@ -615,7 +613,6 @@ class Base_Method(Print,Analyze,object):
             for n in range(n0+1,self.nnodes):
                 print(" {:5.4}".format(dqmaga[n]),end='')
             print()
-            #print(dqmaga)
         self.dqmaga = dqmaga
 
     def get_tangents_1g(self):
@@ -633,49 +630,49 @@ class Base_Method(Print,Analyze,object):
             print(nlist)
 
         for n in range(ncurrent):
-            self.ictan[nlist[2*n]],_ = Base_Method.tangent(
+            print(" ictan[{}]".format(nlist[2*n]))
+            ictan0,_ = Base_Method.tangent(
                     node1=self.nodes[nlist[2*n]],
                     node2=self.nodes[nlist[2*n+1]],
                     driving_coords=self.driving_coords,
                     reference_xyz = self.reference_xyz)
 
-            #save copy to get dqmaga
-            ictan0 = np.copy(self.ictan[nlist[2*n]])
             if self.print_level>1:
                 print("forming space for", nlist[2*n+1])
             if self.print_level>1:
                 print("forming tangent for ",nlist[2*n])
 
             if (ictan0[:]==0.).all():
+                print(" ICTAN IS ZERO!")
                 print(nlist[2*n])
                 print(nlist[2*n+1])
-                print(self.nodes[nlist[2*n]])
-                print(self.nodes[nlist[2*n+1]])
                 raise RuntimeError
 
             #normalize ictan
             norm = np.linalg.norm(ictan0)  
-            self.ictan[nlist[2*n]] /= norm
+            self.ictan[nlist[2*n]] = ictan0/norm
            
-            Vecs = self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
-            #constraint = self.nodes[nlist[2*n+1]].constraints
-            #prim_constraint = block_matrix.dot(Vecs,constraint)
-            #print(" norm of ictan %5.4f" % norm)
+            Vecs = self.nodes[nlist[2*n]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
+            constraint = self.nodes[nlist[2*n]].constraints
+            prim_constraint = block_matrix.dot(Vecs,constraint)
+
+            # NOTE regular GSM does something weird here 
+            # but this is not followed here anymore 7/1/2020
             #dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
             #dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
-
-            # for some reason the sqrt norm matches up 
-            dqmaga[nlist[2*n]] = np.sqrt(norm)
-
-            #print(" dqmaga %5.4f" %dqmaga[nlist[2*n]])
+            tmp_dqmaga = np.dot(prim_constraint.T,ictan0)
+            tmp_dqmaga = np.sqrt(tmp_dqmaga)
+            dqmaga[nlist[2*n]] = norm
 
         self.dqmaga = dqmaga
 
         if self.print_level>0:
             print('------------printing dqmaga---------------')
-            for n in range(1,ncurrent):
-                print(" {:5.4}".format(dqmaga[n]),end='')
-            print()
+            for n in range(self.nnodes):
+                print(" {:5.3}".format(dqmaga[n]), end=' ')
+                if (n+1)%5==0:
+                    print()
+            print() 
        
         if False:
             for n in range(ncurrent):
@@ -736,6 +733,7 @@ class Base_Method(Print,Analyze,object):
 
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
+            self.get_tangents_1g()
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
 
         # create newic object
@@ -1353,13 +1351,14 @@ class Base_Method(Print,Analyze,object):
             new_node.update_xyz(dq0)
             new_node.bdist = bdist
 
+            manage_xyz.write_xyz('tmp.xyz',new_node.geometry)
+
             return new_node
         else:
             ictan,_ =  Base_Method.tangent(nodeR,nodeP)
             Vecs = nodeR.update_coordinate_basis(constraints=ictan)
             constraint = nodeR.constraints[:,0]
-            prim_constraint = block_matrix.dot(Vecs,constraint)
-            dqmag = np.dot(prim_constraint.T,ictan)
+            dqmag = np.linalg.norm(ictan)
             print(" dqmag: %1.3f"%dqmag)
             #sign=-1
             sign=1.
