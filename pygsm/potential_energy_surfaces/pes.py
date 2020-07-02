@@ -287,18 +287,22 @@ class PES(object):
     
     def get_gradient(self,xyz):
         tmp =self.lot.get_gradient(xyz,self.multiplicity,self.ad_idx)
-        grad = np.reshape(tmp,(-1,1))
+        grad = tmp
         if self.FORCE is not None:
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
                 diff = (xyz[i[0]]- xyz[i[1]])*units.ANGSTROM_TO_AU
+                d = np.linalg.norm(diff)
                 t = (force/d/2.)  # Hartree/Ang
-                savegrad = np.copy(grad)
+                #savegrad = np.copy(grad)
                 sign=1
-                for a in [3*(i-1) for i in atoms]:
-                    grad[a:a+3] += sign*t*diff.T
+                #for a in [3*(i-1) for i in atoms]:
+                for a in atoms:
+                    #grad[a:a+3] += sign*t*diff.T
+                    grad[a] += sign*t*diff.T
                     sign*=-1
+        grad = np.reshape(grad,(-1,1))
         return grad
 
     def check_input(self,geom):
