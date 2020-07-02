@@ -401,15 +401,6 @@ def main():
     if inpfileq['gsm_type'] == 'DE_GSM':
         # TMP 
         pass
-        #coord_obj2 = DelocalizedInternalCoordinates.from_options(
-        #        xyz=xyz2,
-        #        atoms=atoms,
-        #        addtr = True,
-        #        addcart=addcart,
-        #        connect=connect,
-        #        primitives=p1,
-        #        frozen_atoms=frozen_indices,
-        #        ) 
 
 
     nifty.printcool("Building the reactant")
@@ -417,29 +408,17 @@ def main():
             geom=geoms[0],
             PES=pes,
             coord_obj = coord_obj1,
-            #coordinate_type=inpfileq['coordinate_type'],
             Form_Hessian=Form_Hessian,
-            #top_settings = {
-            #    'form_primitives': form_primitives,
-            #    'hybrid_indices' : hybrid_indices,
-            #    },
             )
 
     if inpfileq['gsm_type']=='DE_GSM':
         nifty.printcool("Building the product object")
-        product = Molecule.from_options(
-                geom=geoms[1],
-                PES=pes,
-                #coord_obj = coord_obj2,
-                coord_obj = coord_obj1,
-                #coordinate_type=inpfileq['coordinate_type'],
-                Form_Hessian=Form_Hessian,
-                node_id=inpfileq['num_nodes']-1,
-                #top_settings = {
-                #    'form_primitives': form_primitives,
-                #    'hybrid_indices' : hybrid_indices,
-                #    },
-                copy_wavefunction= False,  
+        xyz2 = manage_xyz.xyz_to_np(geoms[-1])
+        product = Molecule.copy_from_options(
+                reactant,
+                xyz=xyz2,
+                new_node_id = inpfileq['num_nodes']-1,
+                copy_wavefunction=False,
                 )
    
     # optimizer

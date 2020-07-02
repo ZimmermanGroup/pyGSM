@@ -161,7 +161,6 @@ class base_optimizer(object):
 
         self.options = options
         if self.options['Linesearch']=="backtrack":
-            print("Using backtrack")
             self.Linesearch=backtrack
         elif self.options['Linesearch']=="NoLineSearch":
             self.Linesearch=NoLineSearch

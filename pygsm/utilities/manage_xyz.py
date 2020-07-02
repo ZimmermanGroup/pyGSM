@@ -139,7 +139,8 @@ def write_xyz(
 def write_xyzs(
     filename, 
     geoms, 
-    scale=(1.0/units.ANGSTROM_TO_AU),
+    scale=1.,
+    #scale=(1.0/units.ANGSTROM_TO_AU),
     ):
 
     """ Writes xyz trajectory file with multiple frames
