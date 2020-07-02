@@ -55,6 +55,7 @@ class TeraChem(Lot):
         self.file_options.set_active('casscfmaxiter',200,int,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('alphacas','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('alpha',0.4,float,'',depend=(self.file_options.alphacas=="yes"),msg='')
         self.file_options.set_active('casscfmacroiter',10,int,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('casscfmicroconvthre',0.1,float,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('casscfmacroconvthre',1e-3,float,'',depend=(self.file_options.casscf=="yes"),msg='')
@@ -120,7 +121,9 @@ class TeraChem(Lot):
         if self.file_options.nbeta==0:
             self.file_options.deactivate('nbeta')
         #if self.file_options.alphacas=='no':
-        #    self.file_options.deactivate('alphacas')
+        #    self.file_options.deactivate('alpha')
+
+            #self.file_options.deactivate('alphacas')
         #if self.file_options.dci_explicit_h=='no':
         #    self.file_options.deactivate('dci_explicit_h')
         #if self.file_options.directci=='no':
@@ -155,8 +158,9 @@ class TeraChem(Lot):
 
         self.link_atoms=None
 
-        for line in self.file_options.record():
-            print(line)
+        if self.node_id==0:
+            for line in self.file_options.record():
+                print(line)
     
     @classmethod
     def copy(cls,lot,options,copy_wavefunction=True):
@@ -179,6 +183,7 @@ class TeraChem(Lot):
             cmd = 'cp -r ' + old_path +' ' + new_path
             print(" copying scr files\n {}".format(cmd))
             os.system(cmd)
+            os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
 
@@ -224,7 +229,8 @@ class TeraChem(Lot):
 
         # Turn on C0 for non-CASSCF calculations after running
         if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
-            self.file_options.force_active('guess','scratch/{}/c0'.format(self.node_id))
+            #self.file_options.force_active('guess','scratch/{}/c0'.format(self.node_id))
+            self.file_options.set_active('guess','scratch/{}/c0'.format(self.node_id),str,'')
 
         if "prmtop" in self.file_options.ActiveOptions and self.link_atoms is None:
             # parse qmindices
