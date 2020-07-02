@@ -43,7 +43,7 @@ class DE_GSM(Base_Method):
         #print(" Primitive Internal Coordinates")
         #print(self.nodes[0].primitive_internal_coordinates)
         print(" number of primitives is", self.nodes[0].num_primitives)
-        self.set_V0()
+        #self.set_V0()
 
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         """
@@ -51,6 +51,7 @@ class DE_GSM(Base_Method):
         1 Climb with no exact find, 
         0 turning of climbing image and TS search
         """
+        self.set_V0()
 
         if not self.isRestarted:
             if self.growth_direction==0:
@@ -140,9 +141,11 @@ class DE_GSM(Base_Method):
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             if self.nodes[self.nR] == None:
                 self.add_GSM_nodeR()
+                print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
         if self.nodes[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
             if self.nodes[-self.nP-1] == None:
                 self.add_GSM_nodeP()
+                print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
         return success
 
 

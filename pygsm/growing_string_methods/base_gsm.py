@@ -220,6 +220,9 @@ class Base_Method(Print,Analyze,object):
         self.hessrcount=0   # are these used?!  TODO
         self.newclimbscale=2.
 
+        # create newic object
+        self.newic  = Molecule.copy_from_options(self.nodes[0])
+
 
     @property
     def TSnode(self):
@@ -359,8 +362,8 @@ class Base_Method(Print,Analyze,object):
             if form_TS_hess:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
-                if self.optimizer[self.TSnode].options['DMAX']>0.05:
-                    self.optimizer[self.TSnode].options['DMAX']=0.05
+                if self.optimizer[self.TSnode].options['DMAX']>0.1:
+                    self.optimizer[self.TSnode].options['DMAX']=0.1
             elif self.find and not self.optimizer[n].maxol_good:
                 # reform Hess for TS if not good
                 self.get_tangents_1e()
@@ -980,7 +983,6 @@ class Base_Method(Print,Analyze,object):
                         index = [i[1]-1, i[2]-1,i[3]-1]
                     else:
                         index = [i[3]-1, i[2]-1,i[1]-1]
-
                     angle = Angle(index[0],index[1],index[2])
                     prim_idx = node1.coord_obj.Prims.dof_index(angle)
                     anglet = i[4]
@@ -1263,8 +1265,7 @@ class Base_Method(Print,Analyze,object):
             #print("%i %i %i" %(iR,iP,iN))
 
             print(" Aligning")
-            self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
-            print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
+            #self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
 
         return success
 
@@ -1303,8 +1304,8 @@ class Base_Method(Print,Analyze,object):
             # align center of mass  and rotation
             #print("%i %i %i" %(n1,n3,n2))
             print(" Aligning")
-            self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
-            print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
+            #self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
+            #print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
 
         return success
 
@@ -1825,8 +1826,6 @@ class Base_Method(Print,Analyze,object):
             #for struct in range(nstructs):
             #    dE.append(float(f.readline()))
 
-        # create newic object
-        self.newic  = Molecule.copy_from_options(self.nodes[0])
 
         # initialize lists
         self.energies = [0.]*nstructs
