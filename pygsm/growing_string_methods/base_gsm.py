@@ -1231,7 +1231,7 @@ class Base_Method(Print,Analyze,object):
             iN = self.nR
             print(" adding node: %i between %i %i from %i" %(iN,iR,iP,iR))
             if self.nnodes - self.nn > 1:
-                stepsize = 1./float(self.nnodes-self.nn)
+                stepsize = 1./float(self.nnodes-self.nn+1)
             else:
                 stepsize = 0.5
 
@@ -1280,7 +1280,7 @@ class Base_Method(Print,Analyze,object):
             n3=self.nR-1
             print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
             if self.nnodes - self.nn > 1:
-                stepsize = 1./float(self.nnodes-self.nn)
+                stepsize = 1./float(self.nnodes-self.nn+1)
             else:
                 stepsize = 0.5
 
@@ -1390,8 +1390,8 @@ class Base_Method(Print,Analyze,object):
         # assuming they are aligned
         #self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes-1,self.nnodes-2)
 
-        for n in range(1,self.nnodes-1):
-            self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
+        #for n in range(1,self.nnodes-1):
+        #    self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
 
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
@@ -1414,9 +1414,10 @@ class Base_Method(Print,Analyze,object):
             #if climb:
             if self.climb or rtype==2:
                 h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
+                #h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
                 h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                if self.print_level>1:
-                    print(" h1dqmag, h2dqmag: %1.1f %1.1f" % (h1dqmag,h2dqmag))
+                if self.print_level>0:
+                    print(" h1dqmag, h2dqmag: %3.2f %3.2f" % (h1dqmag,h2dqmag))
            
             # => Using average <= #
             if i==0 and rtype==0:
@@ -1457,37 +1458,35 @@ class Base_Method(Print,Analyze,object):
                 for n in range(n0+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - totaldqmag * rpart[n]
                     if n==self.nnodes-2:
-                        deltadq += totaldqmag * rpart[n] - self.dqmaga[n+1] # so zero?
+                        deltadq += (totaldqmag * rpart[n] - self.dqmaga[n+1]) # this shifts the last node backwards
+                        deltadq /= 2.
                     rpmove[n] = -deltadq
             else:
                 deltadq = 0.
                 rpmove[self.TSnode] = 0.
                 for n in range(n0+1,self.TSnode):
                     deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
-                    if n==self.nnodes-2:
-                        deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
+                    if n==self.TSnode-1:
+                        deltadq += h1dqmag * rpart[n] - self.dqmaga[n+1]
+                        deltadq /= 2.
                     rpmove[n] = -deltadq
                 for n in range(self.TSnode+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
                     if n==self.nnodes-2:
                         deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
+                        deltadq /= 2.
                     rpmove[n] = -deltadq
 
             MAXRE = 0.5
             for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>MAXRE:
                     rpmove[n] = np.sign(rpmove[n])*MAXRE
-            for n in range(n0+1,self.nnodes-2):
-                if n+1 != self.TSnode or self.climb:
-                    rpmove[n+1] += rpmove[n]
-            for n in range(n0+1,self.nnodes-1):
-                if abs(rpmove[n])>MAXRE:
-                    rpmove[n] = np.sign(rpmove[n])*MAXRE
+            # There was a really weird rpmove code here from GSM but
+            # removed 7/1/2020
             if self.climb or rtype==2:
                 rpmove[self.TSnode] = 0.
 
-
-            disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])
+            disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])/np.sqrt(len(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
 
             if self.print_level>0:
@@ -1535,7 +1534,7 @@ class Base_Method(Print,Analyze,object):
         print()
         print("  disprms: {:1.3}\n".format(disprms))
 
-    def ic_reparam_g(self,ic_reparam_steps=4,n0=0):  #see line 3863 of gstring.cpp
+    def ic_reparam_g(self,ic_reparam_steps=4,n0=0,reparam_interior=True):  #see line 3863 of gstring.cpp
         """
         
         """
@@ -1551,15 +1550,19 @@ class Base_Method(Print,Analyze,object):
         edist = np.zeros(self.nnodes)
         emax = -1000 # And this?
 
+        if self.nn==self.nnodes:
+            self.ic_reparam(4)
+            return
+
         for i in range(ic_reparam_steps):
             self.get_tangents_1g()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
-            if self.print_level>1:
+            if self.print_level>0:
                 if i==0:
                     print(" totaldqmag (without inner): {:1.2}\n".format(totaldqmag))
                 print(" printing spacings dqmaga: ")
                 for n in range(self.nnodes):
-                    print(" {:1.2}".format(self.dqmaga[n]), end=' ')
+                    print(" {:2.3}".format(self.dqmaga[n]), end=' ')
                     if (n+1)%5==0:
                         print()
                 print() 
@@ -1571,22 +1574,22 @@ class Base_Method(Print,Analyze,object):
                         rpart[n] = 1.0/(self.nn-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
                         rpart[n] = 1.0/(self.nn-2)
-                    if self.print_level>1:
-                        if i==0:
-                            print(" rpart: ")
-                            for n in range(1,self.nnodes):
-                                print(" {:1.2}".format(rpart[n]), end=' ')
-                                if (n)%5==0:
-                                    print()
-                            print()
                 else:
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
+                if self.print_level>0:
+                    if i==0:
+                        print(" rpart: ")
+                        for n in range(1,self.nnodes-1):
+                            print(" {:1.2}".format(rpart[n]), end=' ')
+                            if (n)%5==0:
+                                print()
+                        print()
             nR0 = self.nR
             nP0 = self.nP
 
             # TODO CRA 3/2019 why is this here?
-            if False:
+            if not reparam_interior:
                 if self.nnodes-self.nn > 2:
                     nR0 -= 1
                     nP0 -= 1
@@ -1607,27 +1610,38 @@ class Base_Method(Print,Analyze,object):
 
             disprms = float(np.linalg.norm(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
-            if self.print_level>1:
+            if self.print_level>0:
                 for n in range(n0+1,self.nnodes-1):
                     print(" disp[{}]: {:1.2f}".format(n,rpmove[n]), end=' ')
+                    if (n)%5==0:
+                        print()
                 print()
                 print(" disprms: {:1.3}\n".format(disprms))
 
             if disprms < 1e-2:
                 break
 
-            for n in range(n0+1,self.nnodes-1):
-                if isinstance(self.nodes[n],Molecule):
-                    if rpmove[n] > 0:
-                        self.nodes[n].update_coordinate_basis(constraints=self.ictan[n])
-                        constraint = self.nodes[n].constraints[:,0]
-                        dq0 = rpmove[n]*constraint
-                        if self.print_level>1:
-                            print(" dq0[constraint]: {:1.3}".format(rpmove[n]))
-                        self.nodes[n].update_xyz(dq0,verbose=True)
+            ncurrent,nlist = self.make_nlist()
+            param_list=[]
+            for n in range(ncurrent):
+                if nlist[2*n+1] not in param_list:
+                    if rpmove[nlist[2*n+1]]>0:
+                        # Using tangent pointing inner?
+                        print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n+1]))
+                        self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n+1]])
+                        constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
+                        dq0 = rpmove[nlist[2*n+1]]*constraint
+                        self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
+                        param_list.append(nlist[2*n+1])
                     else:
-                        pass
-        print(" spacings (end ic_reparam, steps: {}/{}):".format(i,ic_reparam_steps), end=' ')
+                        # Using tangent point outer
+                        print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n]))
+                        self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
+                        constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
+                        dq0 = rpmove[nlist[2*n+1]]*constraint
+                        self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
+                        param_list.append(nlist[2*n+1])
+        print(" spacings (end ic_reparam, steps: {}/{}):".format(i+1,ic_reparam_steps), end=' ')
         for n in range(self.nnodes):
             print(" {:1.2}".format(self.dqmaga[n]), end=' ')
         print("  disprms: {:1.3}".format(disprms))
