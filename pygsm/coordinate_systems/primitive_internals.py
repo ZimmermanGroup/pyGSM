@@ -153,6 +153,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
                         sel = coords.reshape(-1,3)[i,:] 
                         sel -= np.mean(sel, axis=0)
+                        # rg is sqrt(sum(x^2))
                         rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
                         self.add(RotationA(i, coords, self.Rotators, w=rg))
                         self.add(RotationB(i, coords, self.Rotators, w=rg))
@@ -306,11 +307,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             ans = self.stored_wilsonB[xhash]
             return ans
         xyz = xyz.reshape(-1,3)
-        Blist = []
-        #sa=0
-        #for nprim,na in zip(self.nprims_frag,self.natoms_frag):
 
-        #sp=0
+        Blist = []
         for info in self.block_info:
             WilsonB = []
             sa = info[0]
@@ -319,10 +317,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             ep = info[3]
             #nprim = info[2]
             #ep=sp+nprim
-            Der = np.array( [ p.derivative(xyz[sa:ea,:],start_idx=sa) for p in self.Internals[sp:ep] ])
-            for i in range(Der.shape[0]):
-                WilsonB.append(Der[i].flatten())
-            Blist.append(np.asarray(WilsonB))
+            #Der = np.array( [ p.derivative(xyz[sa:ea,:],start_idx=sa) for p in self.Internals[sp:ep] ])
+            #for i in range(Der.shape[0]):
+            #    WilsonB.append(Der[i].flatten())
+            #Blist.append(np.asarray(WilsonB))
+            Blist.append(np.array( [ p.derivative(xyz[sa:ea,:],start_idx=sa).flatten() for p in self.Internals[sp:ep] ]))
 
         ans = block_matrix(Blist)
         #print(block_matrix.full_matrix(ans))

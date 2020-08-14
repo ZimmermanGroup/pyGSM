@@ -353,7 +353,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             assert cVec is None,"can't have vector constraint and cprim."
             cVec=self.form_cVec_from_cPrims()
 
-        #TODO use block diagonal
         if C is not None:
             # orthogonalize
             #C = C.copy()
@@ -365,8 +364,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # CRA 3/2019 NOT SURE WHY THIS IS DONE
             # couldn't Cn just be used?
 
-            ## TMP TRYING TO USE Cn
-            #cVecs = Cn
             cVecs = block_matrix.dot(block_matrix.dot(self.Vecs,block_matrix.transpose(self.Vecs)),Cn)
 
             # normalize C_U
@@ -378,24 +375,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 print("error forming cVec")
                 exit(-1)
 
-            
-            # artificially increase component of distance,angle,dihedral 
-            #typs=[Distance,Angle,LinearAngle,OutOfPlane,Dihedral]
-            #for inum,p in enumerate(self.Prims.Internals):
-            #    if type(p) in typs:
-            #        pass
-            #    else:
-            #        cVecs[inum,:] = 0.
-
-
             #project constraints into vectors
             self.Vecs = block_matrix.project_constraint(self.Vecs,cVecs)
-            #overDeterminedVecs = block_matrix.project_constraint(self.Vecs,cVecs)
             #print(" shape of DLC")
             #print(self.Vecs.shape)
-            #print("shape overdetermined %s" %(overDeterminedVecs.shape,))
-            #self.Vecs = block_matrix.gram_schmidt(overDeterminedVecs)
-
         return
 
 
