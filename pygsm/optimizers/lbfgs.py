@@ -187,7 +187,6 @@ class lbfgs(base_optimizer):
             print(" dEpre=%5.4f" %dEpre)
             print(" ratio=%5.4f" %ratio)
 
-
             # revert to the privious point
             if ls['status'] < 0 or (ratio<0. and opt_type!='CLIMB'):
                 if ratio<0.:
@@ -199,9 +198,7 @@ class lbfgs(base_optimizer):
                 #fx = molecule.energy
                 ratio=0.
                 dEstep=0.
-                if self.SCALE_CLIMB<10. and opt_type=='CLIMB':
-                    self.SCALE_CLIMB+=1.
-                    print('SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
+
                 print('[ERROR] the point return to the previous point')
                 self.lm = []
                 for i in range(0, maxcor):
@@ -219,15 +216,25 @@ class lbfgs(base_optimizer):
                 xyz = molecule.update_xyz(x-xp)
 
             # if ratio is less than 0.3 than reduce DMAX
-            if ratio<0.3 and ls['status']>0: #and abs(dEpre)>0.05:
+            flag=True
+            if ratio<0.3 and ls['status']==0: #and abs(dEpre)>0.05:
                 print(" Reducing DMAX")
                 self.options['DMAX'] /= 1.5
                 if self.options['DMAX'] < self.DMIN:
                     self.options['DMAX'] = self.DMIN
                 if molecule.newHess<5:
                     molecule.newHess+=1
+                flag=False
+
+                if opt_type=="CLIMB":
+                    if self.SCALE_CLIMB<10. and opt_type=='CLIMB':
+                        self.SCALE_CLIMB+=1.
+                        print('SCALING CLIMB BY {}'.format(self.SCALE_CLIMB))
             elif ratio>0.3:
                 molecule.newHess-=1
+                if opt_type=="CLIMB":
+                    if self.SCALE_CLIMB>1.:
+                        self.SCALE_CLIMB -=1.
 
 
             # project out the constraints
@@ -243,31 +250,30 @@ class lbfgs(base_optimizer):
 
 
             # control step size  NEW FEB 2020
-            if ls['status']==0:
-                dgradrms = molecule.gradrms - pgradrms
-                print("dgradrms ",dgradrms)
-                if ls['step'] > self.options['DMAX']:
-                    if ls['step']<= self.options['abs_max_step']:     # absolute max
-                        print(" Increasing DMAX to {}".format(ls['step']))
-                        self.options['DMAX'] = ls['step']
-                        if self.SCALE_CLIMB>1.:
-                            self.SCALE_CLIMB -=1.
-                    else:
-                        self.options['DMAX'] =self.options['abs_max_step']
-                elif ls['step']<self.options['DMAX']:
-                    if ls['step']>=self.DMIN:     # absolute min
-                        print(" Decreasing DMAX to {}".format(ls['step']))
-                        self.options['DMAX'] = ls['step']
-                    elif ls['step']<=self.DMIN:
-                        self.options['DMAX'] = self.DMIN
-                        print(" Decreasing DMAX to {}".format(self.DMIN))
-                elif ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<-0.00005:
-                    print(" HERE increasing DMAX")
-                    self.options['DMAX'] *= 1.1
-                    if self.options['DMAX']>self.options['abs_max_step']:
-                        self.options['DMAX']=self.options['abs_max_step']
-            else:
-                print("status not zero")
+            if flag:
+                if ls['status']==0:  # passed
+                    dgradrms = molecule.gradrms - pgradrms
+                    print("dgradrms ",dgradrms)
+                    if ls['step'] > self.options['DMAX']:
+                        if ls['step']<= self.options['abs_max_step']:     # absolute max
+                            print(" Increasing DMAX to {}".format(ls['step']))
+                            self.options['DMAX'] = ls['step']
+                        else:
+                            self.options['DMAX'] =self.options['abs_max_step']
+                    elif ls['step']<self.options['DMAX']:
+                        if ls['step']>=self.DMIN:     # absolute min
+                            print(" Decreasing DMAX to {}".format(ls['step']))
+                            self.options['DMAX'] = ls['step']
+                        elif ls['step']<=self.DMIN:
+                            self.options['DMAX'] = self.DMIN
+                            print(" Decreasing DMAX to {}".format(self.DMIN))
+                    elif ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<-0.00005:
+                        print(" HERE increasing DMAX")
+                        self.options['DMAX'] *= 1.1
+                        if self.options['DMAX']>self.options['abs_max_step']:
+                            self.options['DMAX']=self.options['abs_max_step']
+                else:
+                    print("status not zero")
 
 
             if ostep % xyzframerate==0:
