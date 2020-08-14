@@ -35,15 +35,12 @@ class SE_GSM(Base_Method):
 
         sys.stdout.flush()
         
-        #self.reference_frag_xyz = []
-        self.reference_xyz = None
-        for i in self.driving_coords:
-            if "ROTATE" in i:
-                self.reference_xyz = self.nodes[0].xyz.copy()
-                break
-
         # stash bdist for node 0
-        ictan,self.nodes[0].bdist = Base_Method.tangent(self.nodes[0],None,driving_coords=self.driving_coords,reference_xyz=self.reference_xyz)
+        ictan,self.nodes[0].bdist = Base_Method.tangent(
+                self.nodes[0],
+                None,
+                driving_coords=self.driving_coords,
+                )
         self.nodes[0].update_coordinate_basis(constraints=ictan)
         self.set_V0()
 

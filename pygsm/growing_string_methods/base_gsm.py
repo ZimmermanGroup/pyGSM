@@ -425,6 +425,34 @@ class Base_Method(Print,Analyze,object):
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
             print('\n')
 
+        ## Optimize TS node to a finer convergence
+        #if rtype==2:
+        #    # Change convergence
+        #    self.nodes[self.TSnode].optimizer.optimize[]
+
+        #    # loop 10 times, 5 optimization steps each
+        #    for i in range(10):
+        #        nifty.printcool('cycle {}'.format(i))
+        #        geoms,energies = self.nodes[self.TSnode].optimizer.optimize(
+        #                molecule=self.nodes[gsm.TSnode],
+        #                refE=self.nodes[0].V0,
+        #                opt_steps=5,
+        #                opt_type="TS",
+        #                ictan=self.ictan[gsm.TSnode],
+        #                verbose=True,
+        #                )
+        #        self.get_tangents_1e()
+        #        tmp_geoms+=geoms
+        #        tmp_E+=energies
+        #        manage_xyz.write_xyzs_w_comments(
+        #                'optimization.xyz',
+        #                tmp_geoms,
+        #                tmp_E,
+        #                )
+        #        if self.nodes[self.TSnode].optimizer.converged:
+        #            break
+
+
         print(" Printing string to opt_converged_000.xyz")
         self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
         sys.stdout.flush()
@@ -636,7 +664,7 @@ class Base_Method(Print,Analyze,object):
                     node1=self.nodes[nlist[2*n]],
                     node2=self.nodes[nlist[2*n+1]],
                     driving_coords=self.driving_coords,
-                    reference_xyz = self.reference_xyz)
+                    )
 
             if self.print_level>1:
                 print("forming space for", nlist[2*n+1])
@@ -1018,122 +1046,66 @@ class Base_Method(Print,Analyze,object):
                     if print_level>0:
                         print((" current oopv: %4.3f align to %4.3f diff(deg): %4.3f" %(oopv*180./np.pi,oopt,oop_diff)))
 
-                elif "ROTATE" in i:
-                    frag = i[1]
-                    a1 = i[2]  #atom 1
-                    a2 = i[3]  #atom 2
-                    theta_target = i[4]*np.pi/180.    # degree
+                # Doesn't work
+                #elif "ROTATE" in i:
+                #    frag = i[1]
+                #    a1 = i[2]  #atom 1
+                #    a2 = i[3]  #atom 2
+                #     
+                #    sa,ea,sp,ep = node1.coord_obj.Prims.prim_only_block_info[frag]
 
-                    # Need to retrieve reference fragment and reference axis of rotation
-                    # Need rotational coordinates of fragment
-                    # 2) align reference axis of rotation to new axis of rotation with rotation matrix
-                    # 3) rotate reference fragment using the same rotation matrix 
-                    # 4) Calculate theta of rotation from reference to current
-                    # 5) calculate dtheta as target_theta - theta
+                #    # NEW bdist is just theta_to_go, ictan is axis
+                #    # The direction of the vector is the rotation axis, norm is the rotation angle
 
-                    reference_xyz = kwargs.get('reference_xyz',None)
-                    #print(reference_xyz)
-                    # block
-                    info = node1.coord_obj.Prims.prim_only_block_info[frag]
-                    #print(info)
-                    sa,ea,sp,ep = info
-                    print(info)
+                #    theta_target = i[4]*np.pi/180.    # radians
 
-                    xyz_frag = node1.xyz[sa:ea].copy()
-                    print(xyz_frag)
-                    #axis = node1.xyz[a2] - xyz_frag[a1]
-                    axis = node1.xyz[a2] - node1.xyz[a1]
-                    axis /= np.linalg.norm(axis)
+                #    #data = [tup for tup in node1.frag_rotations if frag==tup[0]]
+                #    if node1.frag_rotations is None:
+                #        raise RuntimeError("frag rotations is a pain in the but, it needs to be saved before running tangents because it relies on the path history")
+                #    found=False
+                #    for tup in node1.frag_rotations:
+                #        if frag==tup[0]:
+                #            current_rotation = tup[1]
+                #            found=True
+                #            break
+                #    if not found:
+                #        raise RuntimeError(" Didn't find current rotation.")
+                #    axis = node1.xyz[a2] - node1.xyz[a1]
+                #    axis /= np.linalg.norm(axis)
 
-                    # only want the fragment of interest
-                    ref_xyz = reference_xyz[sa:ea]
-                    print(ref_xyz)
-                    ref_axis = reference_xyz[a2] - reference_xyz[a1]
-                    ref_axis /= np.linalg.norm(ref_axis)
-                    print('axis')
-                    print(axis)
-                    print('ref-axis')
-                    print(ref_axis)
+                #    theta_to_go = theta_target - current_rotation
 
-                    print(' Rotating reference axis to current axis')
-                    I = np.eye(3)
-                    v = np.cross(ref_axis,axis)
+                #    # theta in pi sphere
+                #    #dtheta = theta_to_go + np.pi % (2*np.pi) - np.pi
+                #    #dtheta = theta_to_go/
+                #    dtheta = 5.*np.pi/180.
+                #    new_theta = current_rotation + dtheta
+                #    theta3 = (new_theta + np.pi) % (2*np.pi) - np.pi
 
-                    if v.all()==0.:
-                        print('Rotation is identity')
-                        R=I
-                    else:
-                        vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-                        c = np.dot(ref_axis,axis)
-                        s = np.linalg.norm(v)
-                        R = I + vx + np.dot(vx,vx) * (1. - c)/(s**2)
-                    new_ref_axis = np.dot(ref_axis,R.T)
-                    print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
-                    new_ref_xyz = np.dot(ref_xyz,R.T)
+                #    xyz_frag = node1.xyz[sa:ea].copy()
+                #    sel = xyz_frag.reshape(-1,3)
+                #    sel -= np.mean(sel, axis=0)
+                #    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+                #    #c = np.cos(new_theta/2.0)
+                #    #s = np.sin(new_theta/2.0)
+                #    c = np.cos(dtheta/2.0)
+                #    s = np.sin(dtheta/2.0)
+                #    #c = np.cos(theta3/2.0)
+                #    #s = np.sin(theta3/2.0)
+                #    #c = np.cos(theta_to_go/2.0)
+                #    #s = np.sin(theta_to_go/2.0)
+                #    q = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
+                #    fac, _ = calc_fac_dfac(c)
 
-                    print(new_ref_xyz)
-                    
-                    # Calculate theta from ref_xyz to current xyz
-                    qnew = get_quat(new_ref_xyz,xyz_frag)
-                    theta_actual = np.arccos(qnew[0])*2
+                #    #ictan[sp+3] =  axis[0]
+                #    #ictan[sp+4] =  axis[1]
+                #    #ictan[sp+5] =  axis[2]
+                #    ictan[sp+3] = fac*rg*q[1]
+                #    ictan[sp+4] = fac*rg*q[2]
+                #    ictan[sp+5] = fac*rg*q[3]
 
-                    if np.isclose(theta_actual,np.pi):
-                        print("warning")
-                        theta_actual=0.
-                    print('theta around u1 from (rotated) reference to current')
-                    print(theta_actual)
-                    dtheta = theta_target - theta_actual
-                    print(' Still need to twist %4.3f' %dtheta)
-
-                    # TODO  Check if rotation is less than 0.9 pi
-                    if np.abs(theta_actual) < 0.9*np.pi:
-                        
-                        # First calculate reference v
-                        sel_ref = ref_xyz.reshape(-1,3)
-                        sel_ref -= np.mean(sel_ref, axis=0)
-                        rg = np.sqrt(np.mean(np.sum(sel_ref**2, axis=1)))
-                        c = np.cos(0./2.0)
-                        s = np.sin(0./2.0)
-                        q_ref = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
-                        fac, _ = calc_fac_dfac(c)
-
-                        # Create tangent with dtheta 
-                        sel = xyz_frag.reshape(-1,3)
-                        print(sel)
-                        sel -= np.mean(sel, axis=0)
-                        print(sel)
-                        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                        c = np.cos(dtheta/2.0)
-                        s = np.sin(dtheta/2.0)
-                        q = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
-                        fac, _ = calc_fac_dfac(c)
-
-                        print(rg)
-                        print(fac)
-                        print(q[1]-q_ref[1])
-                        print(q[2]-q_ref[2])
-                        print(q[3]-q_ref[3])
-
-                        # Try difference
-                        v1 = fac*rg*(q[1] - q_ref[1])
-                        v2 = fac*rg*(q[2] - q_ref[1])
-                        v3 = fac*rg*(q[3] - q_ref[1])
-
-                        print(' v: %3.2f %3.2f %3.2f' % (v1,v2,v3))
-                        #v1 = fac*q[1]*rg
-                        #v2 = fac*q[2]*rg
-                        #v3 = fac*q[3]*rg
-
-                        # rotational coordinates should be the third in the list of primitives
-                        ictan[sp+3] = v1
-                        ictan[sp+4] = v2
-                        ictan[sp+5] = v3
-
-                        # THIS DOESN"T WORK
-                        bdist += np.dot(ictan[sp+3],ictan[sp+3])
-                        bdist += np.dot(ictan[sp+4],ictan[sp+4])
-                        bdist += np.dot(ictan[sp+5],ictan[sp+5])
-                        #bdist += dtheta
+                #    print(q)
+                #    bdist += theta_to_go
 
 
                 #trans = ['TranslationX', 'TranslationY', 'TranslationZ']
@@ -1235,7 +1207,11 @@ class Base_Method(Print,Analyze,object):
                 break
 
             if self.__class__.__name__!="DE_GSM":
-                ictan,bdist =  Base_Method.tangent(self.nodes[self.nR],None,driving_coords=self.driving_coords,reference_xyz=self.reference_xyz)
+                ictan,bdist =  Base_Method.tangent(
+                        self.nodes[self.nR],
+                        None,
+                        driving_coords=self.driving_coords,
+                        )
                 self.nodes[self.nR].bdist = bdist
 
             self.nn+=1
@@ -1302,14 +1278,13 @@ class Base_Method(Print,Analyze,object):
 
         #get driving coord
         driving_coords  = kwargs.get('driving_coords',None)
-        reference_xyz  = kwargs.get('reference_xyz',None)
         DQMAG_MAX       =kwargs.get('DQMAG_MAX',0.8)
         DQMAG_MIN       =kwargs.get('DQMAG_MIN',0.2)
 
         if nodeP is None:
             # nodeP is not used!
             BDISTMIN=0.05
-            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords,reference_xyz=reference_xyz)
+            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords)
 
             if bdist<BDISTMIN:
                 print("bdist too small %.3f" % bdist)
@@ -1946,6 +1921,68 @@ class Base_Method(Print,Analyze,object):
 
         return new_xyz
 
+    def get_current_rotation(self,frag,a1,a2):
+        '''
+        calculate current rotation for single-ended nodes
+        '''
+    
+        # Get the information on fragment to rotate
+        sa,ea,sp,ep = self.nodes[0].coord_obj.Prims.prim_only_block_info[frag]
+    
+        theta = 0.
+        # Haven't added any nodes yet
+        if self.nR==1:
+            return theta
+   
+        for n in range(1,self.nR):
+            xyz_frag = self.nodes[n].xyz[sa:ea].copy()
+            axis = self.nodes[n].xyz[a2] - self.nodes[n].xyz[a1]
+            axis /= np.linalg.norm(axis)
+    
+            # only want the fragment of interest
+            reference_xyz = self.nodes[n-1].xyz.copy()
+
+            # Turn off
+            ref_axis = reference_xyz[a2] - reference_xyz[a1]
+            ref_axis /= np.linalg.norm(ref_axis)
+   
+            # ALIGN previous and current node to get rotation around axis of rotation
+            #print(' Rotating reference axis to current axis')
+            I = np.eye(3)
+            v = np.cross(ref_axis,axis)
+            if v.all()==0.:
+                print('Rotation is identity')
+                R=I
+            else:
+                vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+                c = np.dot(ref_axis,axis)
+                s = np.linalg.norm(v)
+                R = I + vx + np.dot(vx,vx) * (1. - c)/(s**2)
+            new_ref_axis = np.dot(ref_axis,R.T)
+            #print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
+            new_ref_xyz = np.dot(reference_xyz,R.T)
+
+            
+            # Calculate dtheta 
+            ca = self.nodes[n].primitive_internal_coordinates[sp+3]
+            cb = self.nodes[n].primitive_internal_coordinates[sp+4]
+            cc = self.nodes[n].primitive_internal_coordinates[sp+5]
+            dv12_a = ca.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+            dv12_b = cb.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+            dv12_c = cc.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+            dv12 = np.array([dv12_a,dv12_b,dv12_c])
+            #print(dv12)
+            dtheta = np.linalg.norm(dv12)  #?
+        
+            dtheta = dtheta + np.pi % (2*np.pi) - np.pi
+            theta += dtheta
+   
+        theta = theta/ca.w
+        angle = theta * 180./np.pi
+        print(angle) 
+
+        return theta
+
 def run(args):
 
     node,optimizer,ictan,opt_steps,opt_type,refE,n,s0,gp_prim = args
@@ -1963,54 +2000,16 @@ def run(args):
 
     # => do constrained optimization
     try:
-
-        if opt_type!="BEALES_CG":
-            optimizer.optimize(
-                    molecule=node,
-                    refE=refE,
-                    opt_type=opt_type,
-                    opt_steps=opt_steps,
-                    ictan=ictan
-                    )
-        else:
-            optimizer.optimize(
-                    molecule=node,
-                    s0=s0,
-                    gp_prim=gp_prim,
-                    refE=refE,
-                    opt_type=opt_type,
-                    opt_steps=opt_steps,
-                    ictan=ictan,
-                    )
+        optimizer.optimize(
+                molecule=node,
+                refE=refE,
+                opt_type=opt_type,
+                opt_steps=opt_steps,
+                ictan=ictan
+                )
 
     except:
         RuntimeError
-
-#def mod(
-#        node,
-#        optimizer,
-#        ictan,
-#        steps,
-#        opt_type,
-#        refE,
-#        n,
-#        s,
-#        gp_prim,
-#        out_queue,
-#        )
-#
-#    optimizer.optimize(
-#            molecule = node,
-#            s0=s,
-#            gp_prim=gp_prim,
-#            refE = refE,
-#            opt_type=opt_type,
-#            opt_steps=steps,
-#            ictan=ictan,
-#            )
-#
-#    out_queue.put(test)
-
 
 
 def mod(test,nn,out_queue):
