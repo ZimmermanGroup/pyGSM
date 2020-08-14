@@ -603,24 +603,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 3) 3
         return np.array(answer)
 
-    def calcDiff(self, coord1, coord2):
-        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
-        Q1 = self.calculate(coord1)
-        Q2 = self.calculate(coord2)
-        PMDiff = (Q1-Q2)
-        for k in range(len(PMDiff)):
-            # TODO periodic boundary conditions
-            #if self.Internals[k].isPeriodicBoundary:
-            #    PlusL = PMdiff[k] + self.boundary
-            #    MinsL = PMdiff[k] - self.boundary
-            if self.Internals[k].isPeriodic:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
-        return PMDiff
+    def calcDiff(self, xyz1, xyz2):
+        """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.calcDiff(xyz1, xyz2))
+        return np.array(answer)
 
     def GInverse(self, xyz):
         #9/2019 CRA what is the difference in performace/stability for SVD vs regular inverse?

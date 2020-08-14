@@ -12,11 +12,55 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import nifty,math_utils
 
 try:
-    from .rotate import get_expmap, get_expmap_der, is_linear
+    from .rotate import get_expmap, get_expmap_der, is_linear, calc_rot_vec_diff
 except:
-    from rotate import get_expmap, get_expmap_der, is_linear
+    from rotate import get_expmap, get_expmap_der, is_linear, calc_rot_vec_diff
 
-class CartesianX(object):
+
+class PrimitiveCoordinate(object):
+    """
+    Parent class for primitive internal coordinate objects with common methods.
+    """
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        """
+        Return the difference of the internal coordinate
+        calculated for c(xyz1) - c(xyz2) or c(xyz1) - val2.
+
+        Parameters
+        ----------
+        xyz1 : np.ndarray
+            xyz coordinates of first structure in Bohr
+        xyz2 : np.ndarray
+            If provided, xyz coordinates of second structure in Bohr
+        val2 : float
+            If provided, this is the value to subtract
+        """
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        if hasattr(self, 'w'):
+            w = self.w
+        else:
+            w = 1.0
+        # Divide by the weight, if exists, to get the "base" number
+        diff /= w
+        # Subtract out any differences of 2*pi for periodic degrees of freedom
+        # (rotation ICs handled separately)
+        if hasattr(self, 'isPeriodic') and self.isPeriodic:
+            Plus2Pi = diff + 2*np.pi
+            Minus2Pi = diff - 2*np.pi
+            if np.abs(diff) > np.abs(Plus2Pi):
+                diff = Plus2Pi
+            if np.abs(diff) > np.abs(Minus2Pi):
+                diff = Minus2Pi
+        diff *= w
+        return diff
+
+class CartesianX(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w=1.0):
         self.a = a
@@ -57,16 +101,12 @@ class CartesianX(object):
         derivatives[relative_a][0] = self.w
         return derivatives
 
-    #def second_derivative(self, xyz):
-    #    xyz = xyz.reshape(-1,3)
-    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-    #    return deriv2
     def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class CartesianY(object):
+class CartesianY(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w=1.0):
         self.a = a
@@ -117,7 +157,7 @@ class CartesianY(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class CartesianZ(object):
+class CartesianZ(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w=1.0):
         self.a = a
@@ -168,7 +208,7 @@ class CartesianZ(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class TranslationX(object):
+class TranslationX(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w):
         self.a = a
@@ -200,6 +240,18 @@ class TranslationX(object):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,0]*self.w)
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
         
     def derivative(self, xyz, start_idx=0):
         xyz = xyz.reshape(-1,3)
@@ -209,16 +261,12 @@ class TranslationX(object):
             derivatives[a][0] = self.w[i]
         return derivatives
 
-    #def second_derivative(self, xyz):
-    #    xyz = xyz.reshape(-1,3)
-    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-    #    return deriv2
     def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class TranslationY(object):
+class TranslationY(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w):
         self.a = a
@@ -250,6 +298,18 @@ class TranslationY(object):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,1]*self.w)
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
         
     def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
@@ -259,16 +319,12 @@ class TranslationY(object):
             derivatives[a][1] = self.w[i]
         return derivatives
 
-    #def second_derivative(self, xyz):
-    #    xyz = xyz.reshape(-1,3)
-    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-    #    return deriv2
     def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class TranslationZ(object):
+class TranslationZ(PrimitiveCoordinate):
     __slots__ = ['a','w','isAngular','isPeriodic']
     def __init__(self, a, w):
         self.a = a
@@ -300,6 +356,18 @@ class TranslationZ(object):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,2]*self.w)
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
         
     def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
@@ -309,24 +377,25 @@ class TranslationZ(object):
             derivatives[a][2] = self.w[i]
         return derivatives
 
-    #def second_derivative(self, xyz):
-    #    xyz = xyz.reshape(-1,3)
-    #    deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-    #    return deriv2
     def second_derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
 class Rotator(object):
-    __slots__=['a','x0','stored_value','stored_valxyz','stored_deriv','stored_derxyz','stored_deriv2','stored_deriv2xyz','stored_norm','e0','stored_dot2','linear']
+    __slots__=['a','x0','stored_value','stored_value2','stored_valxyz','stored_valxyz2','stored_deriv','stored_derxyz','stored_deriv2','stored_deriv2xyz','stored_norm','e0','stored_dot2','linear']
     def __init__(self, a, x0):
         self.a = list(tuple(sorted(a)))
         x0 = x0.reshape(-1, 3)
         self.x0 = x0.copy()
         self.stored_valxyz = np.zeros_like(x0)
         self.stored_value = None
-        self.stored_derxyz = np.zeros_like(x0)
+        # A second set of xyz coordinates used only when computing
+        # differences in rotation coordinates
+        self.stored_valxyz2 = np.zeros_like(x0)
+        self.stored_value2 = None
+        # derivative stuff
+        self.stored_derxyz = None # np.zeros_like(x0)
         self.stored_deriv = None
         self.stored_deriv2xyz = np.zeros_like(x0)
         self.stored_deriv2 = None
@@ -384,9 +453,9 @@ class Rotator(object):
         self.e0 = np.cross(vy, [ex, ey, ez][np.argmin([np.dot(i, ev)**2 for i in [ex, ey, ez]])])
         self.e0 /= np.linalg.norm(self.e0)
 
-    def value(self, xyz):
+    def value(self, xyz,store=True):
         xyz = xyz.reshape(-1, 3)
-        if np.max(np.abs(xyz-self.stored_valxyz)) < 1e-12:
+        if np.max(np.abs(xyz[self.a,:]-self.stored_valxyz[self.a,:])) < 1e-12:
             return self.stored_value
         else:
             xsel = xyz[self.a, :]
@@ -415,22 +484,46 @@ class Rotator(object):
                 xsel = np.vstack((xsel, exdum+xmean))
                 ysel = np.vstack((ysel, eydum+ymean))
             answer = get_expmap(xsel, ysel)
-            self.stored_norm = np.linalg.norm(answer)
-            self.stored_valxyz = xyz.copy()
-            self.stored_value = answer
+
+            if store:
+                self.stored_norm = np.linalg.norm(answer)
+                self.stored_valxyz = xyz.copy()
+                self.stored_value = answer
             return answer
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        """
+        Return the difference of the internal coordinate
+        calculated for (xyz1 - xyz2).
+        """
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        val1 = self.value(xyz1)
+        if xyz2 is not None:
+            # The "second" coordinate set is cached separately
+            xyz2 = xyz2.reshape(-1, 3)
+            if np.max(np.abs(xyz2-self.stored_valxyz2)) < 1e-12:
+                val2 = self.stored_value2.copy()
+            else:
+                val2 = self.value(xyz2, store=False)
+                self.stored_valxyz2 = xyz2.copy()
+                self.stored_value2 = val2.copy()
+        # Calculate difference in rotation vectors, modulo n*2pi displacement vectors
+        return calc_rot_vec_diff(val1, val2)
 
     def derivative(self, xyz,start_idx=0):
         xyz = xyz.reshape(-1, 3)
         relative_a = [ a-start_idx for a in self.a]
 
         # NOTE 3/2020 CRA stored_der does not currently work in block-matrix formulism
-        #if np.max(np.abs(xyz-self.stored_derxyz[relative_a])) < 1e-12:
-        #    return self.stored_deriv[relative_a]
-        #else:
-        ####
+        if self.stored_derxyz is None:
+            pass
+        elif np.max(np.abs(xyz-self.stored_derxyz)) < 1e-12:
+            return self.stored_deriv[relative_a]
 
-        xsel = xyz[relative_a, :]
+        xsel = xyz #[relative_a, :]
         # x0 is the full size. . . 
         # need absolute indices of fragment
         absolute_a = list(range(start_idx,start_idx+len(relative_a)))
@@ -476,17 +569,15 @@ class Rotator(object):
             #     raise Exception()
             # Apply terms from chain rule
             deriv_raw[0]  -= np.dot(dexdum, deriv_raw[-1])
-            #for i in range(len(self.a)):
             for i in range(len(relative_a)):
                 deriv_raw[i]  += np.dot(np.eye(3), deriv_raw[-1])/len(self.a)
             deriv_raw[-2] += np.dot(dexdum, deriv_raw[-1])
             deriv_raw = deriv_raw[:-1]
         derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
-        #for i, a in enumerate(self.a):
         for i, a in enumerate(relative_a):
             derivatives[a, :, :] = deriv_raw[i, :, :]
-        #self.stored_derxyz = xyz.copy()
-        #self.stored_deriv = derivatives
+        self.stored_derxyz = xyz.copy()
+        self.stored_deriv = derivatives
 
         return derivatives
 
@@ -674,7 +765,7 @@ class Rotator(object):
                 second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
         return second_derivatives
 
-class RotationA(object):
+class RotationA(PrimitiveCoordinate):
     __slots__=['a','x0','w','Rotator','isAngular','isPeriodic']
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -708,6 +799,9 @@ class RotationA(object):
         
     def value(self, xyz):
         return self.Rotator.value(xyz)[0]*self.w
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[0]*self.w
         
     def derivative(self, xyz,start_idx=0):
         der_all = self.Rotator.derivative(xyz,start_idx)
@@ -719,7 +813,7 @@ class RotationA(object):
         second_derivatives = deriv2_all[:, :, :, :, 0]*self.w
         return second_derivatives
 
-class RotationB(object):
+class RotationB(PrimitiveCoordinate):
     __slots__=['a','x0','w','Rotator','isAngular','isPeriodic']
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -753,6 +847,9 @@ class RotationB(object):
         
     def value(self, xyz):
         return self.Rotator.value(xyz)[1]*self.w
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[1]*self.w
         
     def derivative(self, xyz,start_idx=0):
         der_all = self.Rotator.derivative(xyz,start_idx)
@@ -764,7 +861,7 @@ class RotationB(object):
         second_derivatives = deriv2_all[:, :, :, :, 1]*self.w
         return second_derivatives
 
-class RotationC(object):
+class RotationC(PrimitiveCoordinate):
     __slots__=['a','x0','w','Rotator','isAngular','isPeriodic']
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -798,6 +895,9 @@ class RotationC(object):
         
     def value(self, xyz):
         return self.Rotator.value(xyz)[2]*self.w
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[2]*self.w
         
     def derivative(self, xyz,start_idx=0):
         der_all = self.Rotator.derivative(xyz,start_idx)
@@ -809,7 +909,7 @@ class RotationC(object):
         second_derivatives = deriv2_all[:, :, :, :, 2]*self.w
         return second_derivatives
 
-class Distance(object):
+class Distance(PrimitiveCoordinate):
     __slots__=['a','b','isAngular','isPeriodic']
     def __init__(self, a, b):
         self.a = a
@@ -871,7 +971,7 @@ class Distance(object):
         deriv2[n, :, m, :] = mtx
         return deriv2
 
-class Angle(object):
+class Angle(PrimitiveCoordinate):
     __slots__=['a','b','c','isAngular','isPeriodic']
     def __init__(self, a, b, c):
         self.a = a
@@ -1019,7 +1119,7 @@ class Angle(object):
         return deriv2
 
 
-class LinearAngle(object):
+class LinearAngle(PrimitiveCoordinate):
     __slots__=['a','b','c','axis','e0','stored_dot2','isAngular','isPeriodic']
     def __init__(self, a, b, c, axis):
         self.a = a
@@ -1179,7 +1279,7 @@ class LinearAngle(object):
                  deriv2[ii, j, :, :] = fderiv
          return deriv2
     
-class MultiAngle(object):
+class MultiAngle(PrimitiveCoordinate):
     __slots__=['a','b','c','isAngular','isPeriodic']
     def __init__(self, a, b, c):
         if type(a) is int:
@@ -1293,7 +1393,7 @@ class MultiAngle(object):
     def second_derivative(self, xyz,start_idx):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
-class Dihedral(object):
+class Dihedral(PrimitiveCoordinate):
     __slots__=['a','b','c','d','isAngular','isPeriodic']
     def __init__(self, a, b, c, d):
         self.a = a
@@ -1454,7 +1554,7 @@ class Dihedral(object):
                                            (zeta(a, n, o)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, o, n))*term8)
         return deriv2
 
-class MultiDihedral(object):
+class MultiDihedral(PrimitiveCoordinate):
     __slots__=['a','b','c','d','isAngular','isPeriodic']
     def __init__(self, a, b, c, d):
         if type(a) is int:
@@ -1558,7 +1658,7 @@ class MultiDihedral(object):
     def second_derivative(self, xyz,start_idx=0):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
-class OutOfPlane(object):
+class OutOfPlane(PrimitiveCoordinate):
     __slots__=['a','b','c','d','isAngular','isPeriodic']
     def __init__(self, a, b, c, d):
         self.a = a
