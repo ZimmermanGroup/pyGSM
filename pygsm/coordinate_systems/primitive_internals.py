@@ -1387,6 +1387,44 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #print(' block info after')
         #print(self.block_info)
 
+    def add_driving_coord_prim(self,driving_coordinates):
+        driving_coord_prims=[]
+        for dc in driving_coordinates:
+            prim = get_driving_coord_prim(dc)
+            if prim is not None:
+                driving_coord_prims.append(prim)
+        for dc in driving_coord_prims:
+            if type(dc)!=Distance: # Already handled in topology
+                if dc not in self.Internals:
+                    print("Adding driving coord prim {} to Internals".format(dc))
+                    self.append_prim_to_block(dc)
+
+
+def get_driving_coord_prim(dc):
+    prim=None
+    if "ADD" in dc or "BREAK" in dc:
+        if dc[1]<dc[2]:
+            prim = Distance(dc[1]-1,dc[2]-1)
+        else:
+            prim = Distance(dc[2]-1,dc[1]-1)
+    elif "ANGLE" in dc:
+        if dc[1]<dc[3]:
+            prim = Angle(dc[1]-1,dc[2]-1,dc[3]-1)
+        else:
+            prim = Angle(dc[3]-1,dc[2]-1,dc[1]-1)
+    elif "TORSION" in dc:
+        if dc[1]<dc[4]:
+            prim = Dihedral(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
+        else:
+            prim = Dihedral(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
+    elif "OOP" in dc:
+        #if dc[1]<dc[4]:
+        prim = OutOfPlane(dc[1]-1,dc[2]-1,dc[3]-1,dc[4]-1)
+        #else:
+        #    prim = OutOfPlane(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
+    return prim
+
+
 
 if __name__ =='__main__' and __package__ is None:
     from os import sys, path
