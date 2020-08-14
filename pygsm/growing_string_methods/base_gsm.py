@@ -213,7 +213,6 @@ class Base_Method(Print,Analyze,object):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
-        self.reference_xyz = None
 
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
@@ -521,7 +520,7 @@ class Base_Method(Print,Analyze,object):
 
 
     # for some reason this fxn doesn't work when called outside gsm
-    def get_tangents_1e(self,n0=0):
+    def get_tangents_1e(self,n0=0,update_TS=False):
         ictan0 = np.zeros((self.newic.num_primitives,1))
         dqmaga = [0.]*self.nnodes
 
@@ -579,7 +578,9 @@ class Base_Method(Print,Analyze,object):
             Vecs = self.newic.update_coordinate_basis(self.ictan[n])
 
             # don't update tsnode coord basis 
-            if n!=self.TSnode:
+            if n!=self.TSnode: 
+                self.nodes[n].coord_basis = Vecs
+            elif n==self.TSnode and update_TS:
                 self.nodes[n].coord_basis = Vecs
 
             nbonds=self.nodes[0].num_bonds
@@ -803,26 +804,13 @@ class Base_Method(Print,Analyze,object):
                     nifty.printcool("Optimizing node {}".format(n))
                     opt_type = self.set_opt_type(n)
                     osteps = self.mult_steps(n,opt_steps)
-
-                    if opt_type != "BEALES_CG":
-                        self.optimizer[n].optimize(
-                                molecule=self.nodes[n],
-                                refE=refE,
-                                opt_type=opt_type,
-                                opt_steps=osteps,
-                                ictan=self.ictan[n],
-                                )
-                    else:
-                        self.optimizer[n].optimize(
-                                molecule=self.nodes[n],
-                                #s0=s,
-                                s0_prim=s0_prim,
-                                gp_prim=gp_prim,
-                                refE=refE,
-                                opt_type=opt_type,
-                                opt_steps=osteps,
-                                ictan=self.ictan[n],
-                                )
+                    self.optimizer[n].optimize(
+                            molecule=self.nodes[n],
+                            refE=refE,
+                            opt_type=opt_type,
+                            opt_steps=osteps,
+                            ictan=self.ictan[n],
+                            )
 
         if self.product_geom_fixed==False and self.done_growing:
             fp = self.find_peaks(2)
@@ -886,11 +874,8 @@ class Base_Method(Print,Analyze,object):
         #if self.print_level>1:
         #    print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
         # this could have been done easier but it is nicer to do it this way
-
         print_level = 1
 
-        #if len(kwargs)==0:
-        #if node1.node_id != node2.node_id:
         if node2 is not None and node1.node_id!=node2.node_id:
             print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
             assert node2!=None,'node n2 is None'
@@ -1243,7 +1228,6 @@ class Base_Method(Print,Analyze,object):
                     DQMAG_MAX = self.DQMAG_MAX,
                     DQMAG_MIN = self.DQMAG_MIN,
                     driving_coords = self.driving_coords,
-                    reference_xyz = self.reference_xyz,
                     )
 
             if self.nodes[self.nR]==None:
@@ -1514,9 +1498,13 @@ class Base_Method(Print,Analyze,object):
                     self.newic.update_coordinate_basis(ictan[n])
 
                     constraint = self.newic.constraints[:,0]
-                    dq = rpmove[n]*constraint
-                    self.newic.update_xyz(dq,verbose=True)
-                    self.nodes[n].xyz = self.newic.xyz.copy()
+
+                    if self.climb or rtype==2:
+                        pass
+                    else:
+                        dq = rpmove[n]*constraint
+                        self.newic.update_xyz(dq,verbose=True)
+                        self.nodes[n].xyz = self.newic.xyz.copy()
 
                     # new 6/7/2019
                     if self.nodes[n].newHess==0:
@@ -1897,7 +1885,7 @@ class Base_Method(Print,Analyze,object):
         if self.__class__.__name__!="SE_Cross":
             self.set_finder(rtype)
 
-            self.get_tangents_1e()
+            self.get_tangents_1e(update_TS=True)
             num_coords =  self.nodes[0].num_coordinates - 1
 
             # project out the constraint
@@ -1917,7 +1905,6 @@ class Base_Method(Print,Analyze,object):
             ts_gradrms=self.nodes[self.TSnode].gradrms
 
             self.set_stage(totalgrad,sumgradrms,ts_cgradq,ts_gradrms,fp)
-
 
         #tmp for testing
         #self.emax = self.energies[self.TSnode]
@@ -2032,7 +2019,6 @@ def mod(test,nn,out_queue):
     print(test.num)
     test.name = nn
     out_queue.put(test)
-
 
 
 if __name__=='__main__':
