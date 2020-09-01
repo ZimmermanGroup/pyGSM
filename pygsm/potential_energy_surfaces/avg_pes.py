@@ -234,10 +234,10 @@ class Avg_PES(PES):
         return mxyz
 
 
-    def fill_energy_grid2d(self,xyz_grid):
-        #E1 = self.PES1.fill_energy_grid2d(xyz_grid)
-        #E2 = self.PES2.fill_energy_grid2d(xyz_grid)
-        #return E1,E2
+    def fill_energy_grid2d(self,
+            xyz_grid
+            ):
+
         assert xyz_grid.shape[-1] == len(self.lot.geom)*3, "xyz nneds to be 3*natoms long"
         assert xyz_grid.ndim == 3, " xyzgrid needs to be a tensor with 3 dimensions"
 
@@ -251,8 +251,6 @@ class Avg_PES(PES):
                 xyz = np.reshape(row,(-1,3))
                 E1[rc,cc] = self.PES1.get_energy(xyz)
                 E2[rc,cc] = self.PES2.get_energy(xyz)
-                #E1[rc,cc] = self.lot.get_energy(xyz,self.PES1.multiplicity,self.PES1.ad_idx)
-                #E2[rc,cc] = self.lot.get_energy(xyz,self.PES2.multiplicity,self.PES2.ad_idx)
                 cc+=1
             rc+=1
          

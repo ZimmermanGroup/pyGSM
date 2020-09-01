@@ -107,42 +107,44 @@ class PES(object):
         else:
             return 0.
 
-    def fill_energy_grid2d(self,xyz_grid):
+    def create_2dgrid(self,
+            xyz,
+            xvec,
+            yvec,
+            nx,
+            ny,
+            xmin=-1.,
+            ymin=-1.,
+            xmax=1.,
+            ymax=1.
+            ):
+        xyz = xyz.flatten()
+        # create the scalar values in the grid from 0 to mag
+        x=np.linspace(xmin,xmax,nx)
+        y=np.linspace(ymin,ymax,ny)
+        xv,yv = np.meshgrid(x,y)
+        # create the xyz coordinates and save as a tensor
+        xyz_grid = np.zeros((xv.shape[0],xv.shape[1],xvec.shape[0]))
+        rc=0
+        for xrow,yrow in zip(xv,yv):
+            cc=0
+            for xx,yy in zip(xrow,yrow):
+                idx = (rc,cc)
+                xyz_grid[rc,cc,:] = xx*xvec + yy*yvec + xyz
+                cc+=1
+            rc+=1
+        return xyz_grid,xv,yv
+
+
+    #def fill_energy_grid2d(self,xyz_grid):
+    def fill_energy_grid2d(self,
+            xyz_grid
+            ):
 
         assert xyz_grid.shape[-1] == len(self.lot.geom)*3, "xyz nneds to be 3*natoms long"
         assert xyz_grid.ndim == 3, " xyzgrid needs to be a tensor with 3 dimensions"
 
-        energies = np.zeros((xyz_grid.shape[0],xyz_grid.shape[1]))
-
-        # E.G DO THIS OUTSIDE PES
-        # get xyz in np format
-        #xyz = manage_xyz.xyz_to_np(geoms[0])
-        #xyz = xyz.flatten()
-
-        # define the underlying grid coordinate basis 
-        #xvec = np.zeros((len(xyz)))
-        #yvec = np.zeros((len(xyz)))
-        #xvec[0]+=1.
-        #yvec[1]+=1.
-
-        # create the grid from 0 to 1
-        #nx, ny = (3, 2)
-        #x=np.linspace(0,1,nx)
-        #y=np.linspace(0,1,ny)
-        #xv,yv = np.meshgrid(x,y)
-
-        # actually create the xyz coordinates and save as a tensor
-        #xresult = np.zeros((xv.shape[0],xv.shape[1],xvec.shape[0]))
-        #rc=0
-        #for xrow,yrow in zip(xv,yv):
-        #    cc=0
-        #    for xx,yy in zip(xrow,yrow):
-        #        idx = (rc,cc)
-        #        xresult[rc,cc,:] = xx*xvec + yy*yvec + xyz
-        #        cc+=1
-        #    rc+=1
-
-
+        energies = np.zeros((nx,ny))
         rc=0
         for mat in xyz_grid:
             cc=0
