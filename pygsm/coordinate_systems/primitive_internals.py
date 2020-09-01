@@ -46,6 +46,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # initialize 
         self.Internals = []
+        self.tmp_Internals = []
         self.cPrims = []
         self.cVals = []
         self.Rotators = OrderedDict()
@@ -628,6 +629,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             return True
         else:
             return False
+
+    def tmp_add(self, dof,verbose=False):
+        if dof.__class__.__name__ in ['CartesianX', 'CartesianY','CartesianZ']:
+            if verbose:
+                print((" adding ",dof))
+            self.tmp_Internals.append(dof)
+        elif dof not in self.tmp_Internals:
+            if verbose:
+                print((" adding ",dof))
+            self.tmp_Internals.append(dof)
+            return True
+        else:
+            return False
     
     def dof_index(self,dof):
         return self.Internals.index(dof)
@@ -639,6 +653,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 del self.Internals[ii]
                 found=True
         return found
+
+    def tmp_delete(self,dof):
+        found=False
+        for ii in range(len(self.tmp_Internals))[::-1]:
+            if dof == self.tmp_Internals[ii]:
+                del self.tmp_Internals[ii]
+                found=True
+        return found
+
 
     def addConstraint(self, cPrim, cVal=None, xyz=None):
         if cVal is None and xyz is None:
@@ -717,6 +740,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         sp=0
         for info in tmp_block_info:
             nprims=0
+            # This corresponds to the primitive coordinate region
             if info[-1]=='reg':
                 frag = info[2]
                 noncov = []
@@ -743,37 +767,37 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else: #Add Cart or TR
                     if addcart:
                         for i in range(info[0],info[1]):
-                            self.add(CartesianX(i, w=1.0))
-                            self.add(CartesianY(i, w=1.0))
-                            self.add(CartesianZ(i, w=1.0))
+                            self.tmp_add(CartesianX(i, w=1.0))
+                            self.tmp_add(CartesianY(i, w=1.0))
+                            self.tmp_add(CartesianZ(i, w=1.0))
                             nprims+=3
                     elif addtr:
                         nodes=frag.nodes()
                         #print(" Nodes")
                         #print(nodes)
                         if len(nodes) >= 2:
-                            self.add(TranslationX(nodes, w=np.ones(len(nodes))/len(nodes)))
-                            self.add(TranslationY(nodes, w=np.ones(len(nodes))/len(nodes)))
-                            self.add(TranslationZ(nodes, w=np.ones(len(nodes))/len(nodes)))
+                            self.tmp_add(TranslationX(nodes, w=np.ones(len(nodes))/len(nodes)))
+                            self.tmp_add(TranslationY(nodes, w=np.ones(len(nodes))/len(nodes)))
+                            self.tmp_add(TranslationZ(nodes, w=np.ones(len(nodes))/len(nodes)))
                             sel = xyz.reshape(-1,3)[nodes,:] 
                             sel -= np.mean(sel, axis=0)
                             rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                            self.add(RotationA(nodes, coords, self.Rotators, w=rg))
-                            self.add(RotationB(nodes, coords, self.Rotators, w=rg))
-                            self.add(RotationC(nodes, coords, self.Rotators, w=rg))
+                            self.tmp_add(RotationA(nodes, coords, self.Rotators, w=rg))
+                            self.tmp_add(RotationB(nodes, coords, self.Rotators, w=rg))
+                            self.tmp_add(RotationC(nodes, coords, self.Rotators, w=rg))
                             nprims+=6
                         else:
                             for j in nodes:
-                                self.add(CartesianX(j, w=1.0))
-                                self.add(CartesianY(j, w=1.0))
-                                self.add(CartesianZ(j, w=1.0))
+                                self.tmp_add(CartesianX(j, w=1.0))
+                                self.tmp_add(CartesianY(j, w=1.0))
+                                self.tmp_add(CartesianZ(j, w=1.0))
                                 nprims+=3
 
                 # # Build a list of noncovalent distances
                 # Add an internal coordinate for all interatomic distances
                 for (a, b) in frag.edges():
                     #if a in list(range(info[0],info[1])):
-                    if self.add(Distance(a, b)):
+                    if self.tmp_add(Distance(a, b)):
                         nprims+=1
 
                 # Add an internal coordinate for all angles
@@ -791,7 +815,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 # if nnc >= 2: continue
                                 # logger.info("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
                                 if np.abs(np.cos(Ang.value(coords))) < LinThre:
-                                    if self.add(Angle(a, b, c)):
+                                    if self.tmp_add(Angle(a, b, c)):
                                         nprims+=1
                                     AngDict[b].append(Ang)
                                 elif connect or not addcart:
@@ -802,9 +826,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                     # Bringing back old code to use "translations" for the latter case, but should be investigated
                                     # more deeply in the future.
                                     if nnc == 0:
-                                        if self.add(LinearAngle(a, b, c, 0)):
+                                        if self.tmp_add(LinearAngle(a, b, c, 0)):
                                             nprims+=1
-                                        if self.add(LinearAngle(a, b, c, 1)):
+                                        if self.tmp_add(LinearAngle(a, b, c, 1)):
                                             nprims+=1
                                     else:
                                         # Unit vector connecting atoms a and c
@@ -819,7 +843,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                         w = np.array([-1.0, 2.0, -1.0])
                                         # Add two of the most perpendicular Cartesian coordinates
                                         for i in np.argsort(dots)[:2]:
-                                            if self.add(trans[i]([a, b, c], w=w)):
+                                            if self.tmp_add(trans[i]([a, b, c], w=w)):
                                                 nprims+=1
                             
                 # Make Dihedrals
@@ -838,9 +862,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                         if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                                         if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                                         if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > LinThre:
-                                            if self.delete(Angle(i, b, j)):
+                                            if self.tmp_delete(Angle(i, b, j)):
                                                 nprims-=1
-                                            if self.add(OutOfPlane(b, i, j, k)):
+                                            if self.tmp_add(OutOfPlane(b, i, j, k)):
                                                 nprims+=1
                                             break
                                         
@@ -901,14 +925,18 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                     # (should be eliminated already)
                                     if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                                     if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                                    if self.add(Dihedral(a, b, c, d)):
+                                    if self.tmp_add(Dihedral(a, b, c, d)):
                                         nprims+=1
 
-            else:   # THIS ELSE CORRESPONS TO FRAGMENTS BUILT WITH THE HYBRID REGION
-                #self.add(CartesianX(info[0], w=1.0))
-                #self.add(CartesianY(info[0], w=1.0))
-                #self.add(CartesianZ(info[0], w=1.0))
+            else:   # THIS ELSE CORRESPONS TO FRAGMENTS BUILT WITH THE HYBRID REGION (below)
+                self.tmp_add(CartesianX(info[0], w=1.0))
+                self.tmp_add(CartesianY(info[0], w=1.0))
+                self.tmp_add(CartesianZ(info[0], w=1.0))
                 nprims=3
+
+            # Add all elements in tmp_Internals to Internals and then clear list
+            self.Internals += self.tmp_Internals
+            self.tmp_Internals.clear()
 
             ep = sp+nprims
             self.block_info.append((info[0],info[1],sp,ep))
@@ -919,14 +947,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.prim_only_block_info=[]
         for info1,info2 in zip(tmp_block_info,self.block_info):
             if info1[-1]=='hyb':
-                #for i in range(info2[2],info2[3]):
-                i=info2[2]
-                j=i+1
-                k=i+2
-                #print(" Inserting Cart at elements {} {} {}".format(i,j,k))
-                self.Internals.insert(i,CartesianX(info1[0], w=1.0))
-                self.Internals.insert(j,CartesianY(info1[0], w=1.0))
-                self.Internals.insert(k,CartesianZ(info1[0], w=1.0))
+                pass
+                ##for i in range(info2[2],info2[3]):
+                #i=info2[2]
+                #j=i+1
+                #k=i+2
+                ##print(" Inserting Cart at elements {} {} {}".format(i,j,k))
+                #self.Internals.insert(i,CartesianX(info1[0], w=1.0))
+                #self.Internals.insert(j,CartesianY(info1[0], w=1.0))
+                #self.Internals.insert(k,CartesianZ(info1[0], w=1.0))
             else:
                 self.prim_only_block_info.append(info2)
 
@@ -1317,18 +1346,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #print(self.hybrid_idx_start_stop)
 
 
-    def append_prim_to_block(self,prim):
+    def append_prim_to_block(self,prim,count=None):
         #for info in self.block_info:
         #print(self.block_info)
         total_blocks = len(self.block_info)
 
-        count=0
-        for info in self.block_info:
-            if info[3]-info[2] != 3:  # this is a hybrid block skipping 
-                if all([atom in range(info[0],info[1]) for atom in prim.atoms]):
-                    break
-            count+=1
-        #print(" the prim lives in block {}".format(count))
+        if count==None:
+            count=0
+            for info in self.block_info:
+                if info[3]-info[2] != 3:  # this is a hybrid block skipping 
+                    if all([atom in range(info[0],info[1]) for atom in prim.atoms]):
+                        break
+                count+=1
+            #print(" the prim lives in block {}".format(count))
 
         # the start and end of the primitives is stored in block info
         # the third element is the end index for that blocks prims
@@ -1360,26 +1390,44 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #print(' block info before')
         #print(self.block_info)
 
-        prim_idx1 =[]
-        for count,prim in enumerate(self.Internals):
-            if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
-                prim_idx1.append(count)
+        #prim_idx1 =[]
+        #for count,prim in enumerate(self.Internals):
+        #    if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
+        #        prim_idx1.append(count)
 
-        prim_idx2 =[]
-        for count,prim in enumerate(other.Internals):
-            if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
-                prim_idx2.append(count)
+        #prim_idx2 =[]
+        #for count,prim in enumerate(other.Internals):
+        #    if type(prim) not in [CartesianX,CartesianY,CartesianZ]:
+        #        prim_idx2.append(count)
 
-        tmp_internals1 = [self.Internals[i] for i in prim_idx1]
-        tmp_internals2 = [other.Internals[i] for i in prim_idx2]
+        #tmp_internals1 = [self.Internals[i] for i in prim_idx1]
+        #tmp_internals2 = [other.Internals[i] for i in prim_idx2]
 
-        #for i in other.Internals:
-        #    if i not in self.Internals:
-        for i in tmp_internals2:
-            if i not in tmp_internals1:
-                #print("this prim is in p2 but not p1",i)
-                print("Adding prim {} that is in Other to Internals".format(i))
-                self.append_prim_to_block(i)
+        ##for i in other.Internals:
+        ##    if i not in self.Internals:
+        #for i in tmp_internals2:
+        #    if i not in tmp_internals1:
+        #        #print("this prim is in p2 but not p1",i)
+        #        print("Adding prim {} that is in Other to Internals".format(i))
+        #        self.append_prim_to_block(i)
+
+        # NEW
+        # will be changing block info and self.Internals therefore
+        # need to create temporary Internals list to check other against
+        tmp_internals = self.Internals.copy()
+        block_info = self.block_info.copy()
+        count=0
+        for info1,info2 in zip(block_info,other.block_info):
+            sa1,ea1,sp1,ep1 = info1
+            sa2,ea2,sp2,ep2 = info2
+            for i in other.Internals[sp2:ep2]:
+                # Dont check Cartesians
+                if type(i) not in [CartesianX,CartesianY,CartesianZ]:
+                    if i not in self.Internals[sp1:ep1]:
+                        print("Adding prim {} that is in Other to Internals".format(i))
+                        self.append_prim_to_block(i,count)
+            count+=1
+
 
         #print(self.Internals)
         #print(len(self.Internals))
