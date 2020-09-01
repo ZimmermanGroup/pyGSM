@@ -45,7 +45,8 @@ def main():
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
     parser.add_argument('-adiabatic_index',nargs="*",type=int,default=[0],help='Adiabatic index (default: %(default)s)',required=False)
     parser.add_argument('-multiplicity',nargs="*",type=int,default=[1],help='Multiplicity (default: %(default)s)')
-    parser.add_argument('-FORCE_FILE',type=str,default=None,help='Spring force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
+    parser.add_argument('-FORCE_FILE',type=str,default=None,help='Constant force between atoms in AU,e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive')
+    parser.add_argument('-RESTRAINT_FILE',type=str,default=None,help='Harmonic translational restraints')
     parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. (default: %(default)s Recommend LBFGS for large molecules >1000 atoms)',required=False)
     parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
     parser.add_argument('-gsm_print_level',type=int,default=1,help='Printout for gsm. 1 prints ?',required=False)
@@ -120,7 +121,9 @@ def main():
               'adiabatic_index': args.adiabatic_index,
               'multiplicity': args.multiplicity,
               'FORCE_FILE': args.FORCE_FILE,
+              'RESTRAINT_FILE': args.RESTRAINT_FILE,
               'FORCE': None,
+              'RESTRAINTS': None,
 
               #optimizer
               'optimizer' : args.optimizer,
@@ -198,13 +201,12 @@ def main():
     if args.optimize_mesx or args.optimize_meci  or inpfileq['gsm_type']=="SE_Cross":
         assert inpfileq['PES_type'] == "Penalty_PES", "Need penalty pes for optimizing MESX/MECI"
     if inpfileq['FORCE_FILE']:
-        FORCE=[]
+        inpfileq['FORCE']=[]
         with open(inpfileq['FORCE_FILE'],'r') as f:
             tmp = filter(None, (line.rstrip() for line in f))
             lines=[]
             for line in tmp:
                 lines.append(line)
-        inpfileq['FORCE']=[]
         for line in lines:
             force=[]
             for i,elem in enumerate(line.split()):
@@ -213,8 +215,23 @@ def main():
                 else:
                     force.append(float(elem))
             inpfileq['FORCE'].append(tuple(force))
-
         print(inpfileq['FORCE'])
+    if inpfileq['RESTRAINT_FILE']:
+        inpfileq['RESTRAINTS']=[]
+        with open(inpfileq['RESTRAINT_FILE'],'r') as f:
+            tmp = filter(None, (line.rstrip() for line in f))
+            lines=[]
+            for line in tmp:
+                lines.append(line)
+        for line in lines:
+            restraint=[]
+            for i,elem in enumerate(line.split()):
+                if i==0:
+                    restraint.append(int(elem))
+                else:
+                    restraint.append(float(elem))
+            inpfileq['RESTRAINTS'].append(tuple(restraint))
+        print(inpfileq['RESTRAINTS'])
 
     nifty.printcool("Building the {} objects".format(inpfileq['PES_type']))
     pes_class = getattr(sys.modules[__name__], inpfileq['PES_type'])
@@ -223,19 +240,22 @@ def main():
                 lot=lot,
                 ad_idx=inpfileq['adiabatic_index'][0],
                 multiplicity=inpfileq['multiplicity'][0],
-                FORCE=inpfileq['FORCE']
+                FORCE=inpfileq['FORCE'],
+                RESTRAINTS=inpfileq['RESTRAINTS'],
                 )
     else:
         pes1 = PES.from_options(
                 lot=lot,multiplicity=inpfileq['states'][0][0],
                 ad_idx=inpfileq['states'][0][1],
-                FORCE=inpfileq['FORCE']
+                FORCE=inpfileq['FORCE'],
+                RESTRAINTS=inpfileq['RESTRAINTS'],
                 )
         pes2 = PES.from_options(
                 lot=lot,
                 multiplicity=inpfileq['states'][1][0],
                 ad_idx=inpfileq['states'][1][1],
-                FORCE=inpfileq['FORCE']
+                FORCE=inpfileq['FORCE'],
+                RESTRAINTS=inpfileq['RESTRAINTS'],
                 )
         if inpfileq['PES_type']=="Avg_PES":
             pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)

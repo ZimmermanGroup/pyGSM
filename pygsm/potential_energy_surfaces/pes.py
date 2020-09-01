@@ -43,7 +43,14 @@ class PES(object):
                 key="FORCE",
                 value=None,
                 required=False,
-                doc='Apply a spring force between atoms in units of AU, e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',
+                doc='Apply a constant force between atoms in units of AU, e.g. [(1,2,0.1214)]. Negative is tensile, positive is compresive',
+                )
+
+        opt.add_option(
+                key='RESTRAINTS',
+                value=None,
+                required=False,
+                doc='Translational harmonic constraint'
                 )
 
         opt.add_option(
@@ -80,6 +87,7 @@ class PES(object):
         self.ad_idx = self.options['ad_idx']
         self.multiplicity = self.options['multiplicity']
         self.FORCE = self.options['FORCE']
+        self.RESTRAINTS = self.options['RESTRAINTS']
         self._dE=1000.
         #print ' PES object parameters:'
         #print ' Multiplicity:',self.multiplicity,'ad_idx:',self.ad_idx
@@ -147,26 +155,23 @@ class PES(object):
         return energies
 
     def get_energy(self,xyz):
-        #if self.checked_input == False:
-        #    self.check_input(geom)
         fdE=0.
         if self.FORCE is not None:
             for i in self.FORCE:
-                atoms=[i[0],i[1]]
+                #atoms=[i[0],i[1]]
                 force=i[2]
-                diff = (xyz[i[0]]- xyz[i[1]])*units.ANGSTROM_TO_AU
-                d = np.linalg.norm(diff)
-                fdE +=  force*d*units.KCAL_MOL_PER_AU
-        return self.lot.get_energy(xyz,self.multiplicity,self.ad_idx) +fdE
+                diff = (xyz[i[0]]- xyz[i[1]])
+                d = np.linalg.norm(diff)*units.ANGSTROM_TO_AU  # AU
+                fdE +=  force*d*units.KCAL_MOL_PER_AU   
+                #print(" Force energy: {} kcal/mol".format(fdE))
+        kdE=0.
+        if self.RESTRAINTS is not None:
+            for i in self.RESTRAINTS:
+                a=i[0]
+                force=i[1]   # In kcal/mol/Ang^2?
+                kdE += 0.5*force*(xyz[a] - self.reference_xyz[a])**2
+        return self.lot.get_energy(xyz,self.multiplicity,self.ad_idx) +fdE +kdE   # Kcal/mol
 
-    #TODO this needs to be fixed
-    #def get_finite_difference_hessian(self,coords):
-    #    hess = np.zeros((len(coords)*3,len(coords)*3))
-    #    I = np.eye(hess.shape[0])
-    #    for n,row in enumerate(I):
-    #        print("on hessian product ",n)
-    #        hess[n] = np.squeeze(self.get_finite_difference_hessian_product(coords,row))
-    #    return hess
 
     def get_finite_difference_hessian(self,coords,qm_region=None):
         ''' Calculate Finite Differnce Hessian
@@ -292,18 +297,25 @@ class PES(object):
             for i in self.FORCE:
                 atoms=[i[0],i[1]]
                 force=i[2]
-                diff = (xyz[i[0]]- xyz[i[1]])*units.ANGSTROM_TO_AU
-                d = np.linalg.norm(diff)
-                t = (force/d/2.)  # Hartree/Ang
-                #savegrad = np.copy(grad)
+                diff = (xyz[i[0]]- xyz[i[1]])
+                d = np.linalg.norm(diff)*units.ANGSTROM_TO_AU  # Bohr
+
+                # Constant force  
+                # grad=\nabla E + FORCE
+                t = (force/d/2.)  # Hartree/bohr
+                t*= units.ANGSTROM_TO_AU   # Ha/bohr * bohr/ang = Ha/ang
                 sign=1
-                #for a in [3*(i-1) for i in atoms]:
                 for a in atoms:
-                    #grad[a:a+3] += sign*t*diff.T
                     grad[a] += sign*t*diff.T
                     sign*=-1
+        if self.RESTRAINTS is not None:
+            for i in self.RESTRAINTS:
+                a= i[0]
+                force=i[1]
+                grada[a] += force*(xyz[a] - self.reference_xyz[a])
+
         grad = np.reshape(grad,(-1,1))
-        return grad
+        return grad  #Ha/ang
 
     def check_input(self,geom):
         atoms = manage_xyz.get_atoms(self.geom)
