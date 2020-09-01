@@ -1474,7 +1474,7 @@ class Base_Method(Print,Analyze,object):
 
                     constraint = self.newic.constraints[:,0]
 
-                    if self.climb or rtype==2:
+                    if n==self.TSnode and (self.climb or rtype==2):
                         pass
                     else:
                         dq = rpmove[n]*constraint
