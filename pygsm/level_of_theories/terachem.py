@@ -81,7 +81,7 @@ class TeraChem(Lot):
 
         # CIS
         self.file_options.set_active('cis','no',str,'',
-                clash=(self.file_options.casscf or self.file_options.cis),
+                clash=(self.file_options.casscf=='yes' or self.file_options.fomo=='yes'),
                 msg = 'Cant activate CIS with FOMO or CASSCF')
         self.file_options.set_active('cisnumstates',4,int,'',depend=(self.file_options.cis=="yes"))
         self.file_options.set_active('cisguessvecs',self.file_options.cisnumstates,int,'',depend=(self.file_options.cis=="yes"))
@@ -114,20 +114,12 @@ class TeraChem(Lot):
         for key in keys_to_del:
             self.file_options.deactivate(key)
 
-        #if self.file_options.casscf=='no':
-        #    self.file_options.deactivate('casscf')
+        # TODO can make all these "None" and then 
+        # deactivate all Nones
         if self.file_options.nalpha==0:
             self.file_options.deactivate('nalpha')
         if self.file_options.nbeta==0:
             self.file_options.deactivate('nbeta')
-        #if self.file_options.alphacas=='no':
-        #    self.file_options.deactivate('alpha')
-
-            #self.file_options.deactivate('alphacas')
-        #if self.file_options.dci_explicit_h=='no':
-        #    self.file_options.deactivate('dci_explicit_h')
-        #if self.file_options.directci=='no':
-        #    self.file_options.deactivate('directci')
         if self.file_options.prmtop==None:
             self.file_options.deactivate('prmtop')
         else:
@@ -144,12 +136,12 @@ class TeraChem(Lot):
         if self.file_options.dftd==None:
             self.file_options.deactivate('dftd')
 
-        self.file_options.set_active('casguess','scratch/{}/c0.casscf'.format(self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf),msg='')
+        self.file_options.set_active('casguess','scratch/{}/c0.casscf'.format(self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf=="yes"),msg='')
 
         guess_file='scratch/{}/c0'.format(self.node_id)
         self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
                 clash=(self.file_options.casscf or self.file_options.fomo),
-                depend=(os.path.isfile(guess_file)),msg='guess does not exist pr not needed, deactivating for now')
+                depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
 
         ## DONE setting values ##
         
@@ -186,8 +178,9 @@ class TeraChem(Lot):
             os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
-
+    
     def go(self,geom,mult,ad_idx,runtype='gradient'):
+        ''' compute an individual gradient or NACME '''
 
         # first write the file, run it, and the read the output
         # filenames
@@ -198,6 +191,7 @@ class TeraChem(Lot):
         # Write the file
         for key,value in self.file_options.ActiveOptions.items():
             inpfile.write('{0:<25}{1:<25}\n'.format(key,value))
+        inpfile.write('spinmult             {}\n'.format(mult))
 
         if "casscf" in self.file_options.ActiveOptions:
             if runtype == "gradient":
@@ -229,9 +223,12 @@ class TeraChem(Lot):
 
         # Turn on C0 for non-CASSCF calculations after running
         if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
-            #self.file_options.force_active('guess','scratch/{}/c0'.format(self.node_id))
-            self.file_options.set_active('guess','scratch/{}/c0'.format(self.node_id),str,'')
+            if mult == 2:
+                self.file_options.set_active('guess','scratch/{}/ca0 scratch/{}/cb0'.format(self.node_id,self.node_id),str,'')
+            else:
+                self.file_options.set_active('guess','scratch/{}/c0'.format(self.node_id),str,'')
 
+        # if QM/MM get link atoms
         if "prmtop" in self.file_options.ActiveOptions and self.link_atoms is None:
             # parse qmindices
             with open(self.file_options.qmindices) as f:
@@ -253,32 +250,39 @@ class TeraChem(Lot):
         # copy the wavefunction file
         if "casscf" in self.file_options.ActiveOptions:
             cp_cmd = 'cp scratch/{}/scr/c0.casscf scratch/{}/'.format(self.node_id,self.node_id)
+            os.system(cp_cmd)
         else:
-            cp_cmd = 'cp scratch/{}/scr/c0 scratch/{}/'.format(self.node_id,self.node_id)
-        os.system(cp_cmd)
+            if mult==2:
+                cp_cmd = 'cp scratch/{}/scr/ca0 scratch/{}/'.format(self.node_id,self.node_id)
+                os.system(cp_cmd)
+                cp_cmd = 'cp scratch/{}/scr/cb0 scratch/{}/'.format(self.node_id,self.node_id)
+                os.system(cp_cmd)
+            else:
+                cp_cmd = 'cp scratch/{}/scr/c0 scratch/{}/'.format(self.node_id,self.node_id)
+                os.system(cp_cmd)
 
         if "casscf" in self.file_options.ActiveOptions:
             cp_cmd = 'cp scratch/{}/scr/casscf.molden scratch/{}/'.format(self.node_id,self.node_id)
             os.system(cp_cmd)
 
-        # TODO what about guess? 4262020
-
+        # Get the gradient and coupling
         if "prmtop" not in self.file_options.ActiveOptions:
             if runtype=='gradient':
-                cp_grad = 'cp scratch/{}/scr/grad.xyz scratch/{}/grad_{}_{}.xyz'.format(self.node_id,self.node_id,1,ad_idx)
+                cp_grad = 'cp scratch/{}/scr/grad.xyz scratch/{}/grad_{}_{}.xyz'.format(self.node_id,self.node_id,mult,ad_idx)
                 os.system(cp_grad)
             elif runtype == "coupling":
                 cp_coup = 'cp scratch/{}/scr/grad.xyz scratch/{}/coup_{}_{}.xyz'.format(self.node_id,self.node_id,self.coupling_states[0],self.coupling_states[1])
                 os.system(cp_coup)
 
-        rm_cmd = 'rm -rf scratch/{}/scr'.format(self.node_id)
-        os.system(rm_cmd)
+        # clean up
+        #rm_cmd = 'rm -rf scratch/{}/scr'.format(self.node_id)
+        #os.system(rm_cmd)
 
         return
         #Done go
 
     def run(self,geom):
-        ## The following runs all the singlets. Other multiplicities are broken!!!
+        ''' calculate all states '''
 
         tempfileout='scratch/{}/output.dat'.format(self.node_id)
         self.grada=[]
@@ -286,8 +290,9 @@ class TeraChem(Lot):
         self.E = []
         if not self.gradient_states and not self.coupling_states:
             print(" only calculating energies")
-            # can calculate multiple multiplicities TODO
-            self.go(geom,1,None,'energy')
+            # TODO what about multiple multiplicities? 
+            tup = self.states[0]
+            self.go(geom,tup[0],None,'energy')
             # make grada all None
             for tup in self.states:
                 self.grada.append((tup[0],tup[1],None))
