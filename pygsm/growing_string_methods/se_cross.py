@@ -69,6 +69,9 @@ class SE_Cross(SE_GSM):
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
+            self.optimizer[self.nR].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR].optimize(
                     molecule=self.nodes[self.nR],
                     refE=self.nodes[0].V0,
@@ -83,9 +86,10 @@ class SE_Cross(SE_GSM):
             self.nodes[self.nR].PES.sigma = 10.0
             print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
             self.optimizer[self.nR].opt_cross=True
-            self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
-            self.optimizer[self.nR].conv_gmax = self.options['CONV_TOL']
-            self.optimizer[self.nR].conv_Ediff = 0.1
+            self.optimizer[self.nR].conv_grms = self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
+            self.optimizer[self.nR].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR].optimize(
                     molecule=self.nodes[self.nR],
                     refE=self.nodes[0].V0,

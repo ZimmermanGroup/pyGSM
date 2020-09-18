@@ -179,6 +179,9 @@ class SE_GSM(Base_Method):
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             print(" Optimizing node %i" % self.nR)
             self.optimizer[self.nR].conv_grms = self.options['CONV_TOL']
+            self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
+            self.optimizer[self.nR].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR].optimize(
                         molecule=self.nodes[self.nR],
                         refE=self.nodes[0].V0,
@@ -193,6 +196,9 @@ class SE_GSM(Base_Method):
         elif rtype==2:
             print(" already created node, opting")
             self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
+            self.optimizer[self.nR-1].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[self.nR-1].conv_Ediff = self.options['CONV_Ediff']
+            self.optimizer[self.nR-1].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR-1].optimize(
                         molecule=self.nodes[self.nR-1],
                         refE=self.nodes[0].V0,
@@ -236,11 +242,14 @@ class SE_GSM(Base_Method):
         for i in range(self.nnodes):
             if self.nodes[i] != None:
                 self.active[i] = False
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']
-                print(" conv_tol of node %d is %.4f" % (i,self.optimizer[i].conv_grms))
+
+        # set 
         self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        self.optimizer[nR].conv_gmax = self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
+        self.optimizer[nR].conv_Ediff = 2.5
+
         print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
-        #self.optimizer[nR].conv_grms = self.options['CONV_TOL']*2
+
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 

@@ -87,7 +87,32 @@ class Base_Method(Print,Analyze,object):
             value=0.0005,
             required=False,
             allowed_types=[float],
-            doc='Convergence threshold')
+            doc='Convergence threshold'
+            )
+
+        opt.add_option(
+            key='CONV_gmax',
+            value=0.0005,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold'
+            )
+
+        opt.add_option(
+            key='CONV_Ediff',
+            value=0.1,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold'
+            )
+
+        opt.add_option(
+            key='CONV_dE',
+            value=0.5,
+            required=False,
+            allowed_types=[float],
+            doc='Convergence threshold'
+            )
 
         opt.add_option(
             key='ADD_NODE_TOL',
@@ -280,6 +305,8 @@ class Base_Method(Print,Analyze,object):
         for i in range(self.nnodes):
             if self.nodes[i] !=None:
                 self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
+                self.optimizer[i].conv_gmax = self.options['CONV_gmax']*factor
+                self.optimizer[i].conv_Ediff = self.options['CONV_Ediff']*factor
 
         # enter loop
         for oi in range(max_iter):
@@ -734,7 +761,6 @@ class Base_Method(Print,Analyze,object):
             if not success:
                 print("can't add anymore nodes, bdist too small")
 
-                # why not for SE_Cross too?
                 if self.__class__.__name__=="SE_GSM" or self.__class__.__name__=="SE_Cross":
                     if self.nodes[self.nR-1].PES.lot.do_coupling:
                         opt_type='MECI'
@@ -1710,9 +1736,10 @@ class Base_Method(Print,Analyze,object):
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
+            self.optimizer[n].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
         if (self.find or self.climb) and n==tsnode: 
             exsteps=2
-            #exsteps = self.ts_exsteps
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
         elif not (self.find or self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode: 
