@@ -898,12 +898,12 @@ class Base_Method(Print,Analyze,object):
                 # overwrite this here just in case TSnode changed wont cause slow down climb  
                 self.pTSnode = self.TSnode
 
-            elif (self.climb and not self.find and self.finder and self.nclimb<1 and self.dE_iter<4. and
+            elif (self.climb and not self.find and self.finder and self.nclimb<1 and
                     ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
                     (sumgradrms< sum_conv_tol) or
                     (ts_gradrms<self.options['CONV_TOL']*5.)  #  used to be 5
-                    )):
+                    )): #and self.dE_iter<4. 
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
@@ -1385,10 +1385,10 @@ class Base_Method(Print,Analyze,object):
             ictan0 = np.copy(self.ictan)
             ictan = np.copy(self.ictan)
 
-            if self.print_level>1:
+            if self.print_level>0:
                 print(" printing spacings dqmaga:")
                 for n in range(1,self.nnodes):
-                    print(" %1.2f" % self.dqmaga[n], end=' ') 
+                    print(" dq[%d] %1.4f" % (n,self.dqmaga[n]), end=' ') 
                 print() 
 
             totaldqmag = 0.
@@ -1442,24 +1442,25 @@ class Base_Method(Print,Analyze,object):
             if not self.climb and rtype!=2:
                 for n in range(n0+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - totaldqmag * rpart[n]
-                    if n==self.nnodes-2:
-                        deltadq += (totaldqmag * rpart[n] - self.dqmaga[n+1]) # this shifts the last node backwards
-                        deltadq /= 2.
+                    #if n==self.nnodes-2:
+                    #    deltadq += (totaldqmag * rpart[n] - self.dqmaga[n+1]) # this shifts the last node backwards
+                    #    deltadq /= 2.
+                    print(deltadq)
                     rpmove[n] = -deltadq
             else:
                 deltadq = 0.
                 rpmove[self.TSnode] = 0.
                 for n in range(n0+1,self.TSnode):
                     deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
-                    if n==self.TSnode-1:
-                        deltadq += h1dqmag * rpart[n] - self.dqmaga[n+1]
-                        deltadq /= 2.
+                    #if n==self.TSnode-1:
+                    #    deltadq += h1dqmag * rpart[n] - self.dqmaga[n+1]
+                    #    deltadq /= 2.
                     rpmove[n] = -deltadq
                 for n in range(self.TSnode+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
-                    if n==self.nnodes-2:
-                        deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
-                        deltadq /= 2.
+                    #if n==self.nnodes-2:
+                    #    deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
+                    #    deltadq /= 2.
                     rpmove[n] = -deltadq
 
             MAXRE = 0.5
@@ -1738,11 +1739,11 @@ class Base_Method(Print,Analyze,object):
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
             self.optimizer[n].conv_gmax = self.options['CONV_gmax']
             self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
-        if (self.find or self.climb) and n==tsnode: 
+        if (self.find or (self.climb and self.energies[tsnode]>self.energies[tsnode-1]+5 and self.energies[tsnode]>self.energies[tsnode+1]+5.)) and n==tsnode: #or self.climb
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
-        elif not (self.find or self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode: 
+        elif not (self.find and self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode:  #or self.climb
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
         return exsteps*opt_steps

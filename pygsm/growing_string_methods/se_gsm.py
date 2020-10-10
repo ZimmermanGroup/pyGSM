@@ -245,8 +245,8 @@ class SE_GSM(Base_Method):
 
         # set 
         self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
-        self.optimizer[nR].conv_gmax = self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
-        self.optimizer[nR].conv_Ediff = 2.5
+        self.optimizer[nR].conv_gmax = 100. #self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
+        self.optimizer[nR].conv_Ediff = 1000. # 2.5
 
         print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
 
