@@ -50,14 +50,14 @@ class Lot(object):
 
         opt.add_option(
                 key='gradient_states',
-                value=[],
+                value=None,
                 required=False,
                 doc='list of states to calculate gradients for, will assume same as states if not given'
                 )
 
         opt.add_option(
                 key='coupling_states',
-                value=[],
+                value=None,
                 required=False,
                 doc='states to calculate derivative coupling. Currently only one coupling can be calculated per level of theory object.'
                 )
@@ -155,7 +155,7 @@ class Lot(object):
         quartets=self.search_tuple(self.states,4)
         quintets=self.search_tuple(self.states,5)
 
-        #TODO do this for all states, since it catches if states are put in lazy
+        #TODO do this for all states, since it catches if states are put in lazy e.g [(1,1)]
         if singlets:
             len_singlets= max(singlets,key=lambda x: x[1])[1]+1
         else:
@@ -165,10 +165,8 @@ class Lot(object):
         len_quartets=len(quartets)
         len_quintets=len(quintets)
 
-        # DO this before fixing states
-        # THIS is wrong if you set gradient states to [] to purposefully prevent gradients
-        # will none work? use calc_grad?
-        if not self.options['gradient_states'] and self.calc_grad:
+        # DO this before fixing states if put in lazy
+        if self.options['gradient_states']==None and self.calc_grad:
             print(" Assuming gradient states are ",self.states)
             self.options['gradient_states']=self.options['states']
 

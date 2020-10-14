@@ -178,14 +178,9 @@ class TeraChem(Lot):
             os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
-    
-    def go(self,geom,mult,ad_idx,runtype='gradient'):
-        ''' compute an individual gradient or NACME '''
-
+    def write_input(self,inpfilename,geom,mult,ad_idx,runtype='gradient'):
         # first write the file, run it, and the read the output
         # filenames
-        inpfilename = 'scratch/{}/{}'.format(self.node_id,self.lot_inp_file)
-        outfilename = 'scratch/{}/output.dat'.format(self.node_id)
         inpfile = open(inpfilename,'w')
 
         # Write the file
@@ -204,6 +199,9 @@ class TeraChem(Lot):
         elif "cis" in self.file_options.ActiveOptions:
             if runtype == "gradient":
                 inpfile.write('cistarget            {}\n'.format(ad_idx))
+            elif runtype=="coupling":
+                inpfile.write('nacstate1 {}\n'.format(self.coupling_states[0]))
+                inpfile.write('nacstate2 {}\n'.format(self.coupling_states[1]))
 
 
         # Runtype
@@ -215,11 +213,21 @@ class TeraChem(Lot):
             manage_xyz.write_amber_xyz('scratch/{}/tmp.inpcrd'.format(self.node_id),geom)
         else:
             manage_xyz.write_xyz('scratch/{}/tmp.xyz'.format(self.node_id),geom,scale=1.0)
+
+        return
     
+    def go(self,geom,mult,ad_idx,runtype='gradient'):
+        ''' compute an individual gradient or NACME '''
+
+        inpfilename = 'scratch/{}/{}'.format(self.node_id,self.lot_inp_file)
+        outfilename = 'scratch/{}/output.dat'.format(self.node_id)
+
+        # Write input file
+        self.write_input(inpfilename,geom,mult,ad_idx,runtype)
+
         ### RUN THE CALCULATION ###
         cmd = "terachem {} > {}".format(inpfilename,outfilename)
         os.system(cmd)
-
 
         # Turn on C0 for non-CASSCF calculations after running
         if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
@@ -281,14 +289,14 @@ class TeraChem(Lot):
         return
         #Done go
 
-    def run(self,geom):
+    def run(self,geom,runtype=None):
         ''' calculate all states '''
 
         tempfileout='scratch/{}/output.dat'.format(self.node_id)
         self.grada=[]
         self.coup=[]
         self.E = []
-        if not self.gradient_states and not self.coupling_states:
+        if not self.gradient_states and not self.coupling_states or runtype=="energy":
             print(" only calculating energies")
             # TODO what about multiple multiplicities? 
             tup = self.states[0]
@@ -416,11 +424,11 @@ class TeraChem(Lot):
         self.hasRanForCurrentCoords=True
         return
 
-    def get_energy(self,coords,multiplicity,state):
+    def get_energy(self,coords,multiplicity,state,runtype=None):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom)
+            self.run(geom,runtype)
         tmp = self.search_PES_tuple(self.E,multiplicity,state)[0][2]
         return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
 

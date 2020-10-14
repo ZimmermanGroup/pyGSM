@@ -864,6 +864,7 @@ class Base_Method(Print,Analyze,object):
                             opt_type=opt_type,
                             opt_steps=osteps,
                             ictan=self.ictan[n],
+                            xyzframerate=1,
                             )
 
         if self.product_geom_fixed==False and self.done_growing:
