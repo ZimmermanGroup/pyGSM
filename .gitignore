@@ -10,3 +10,4 @@ ipynb_demos/pytc/scratch/*.xyz
 docs/html/
 html/
 build/
+pyGSM.egg-info/
