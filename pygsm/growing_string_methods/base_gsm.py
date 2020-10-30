@@ -495,50 +495,18 @@ class Base_Method(Print,Analyze,object):
         dqa = np.zeros((self.nnodes+1,self.nnodes))
         ictan = [[]]*self.nnodes
 
-        def get_tangent(n):
-            assert self.nodes[n]!=None,"n is bad"
-            assert self.nodes[n-1]!=None,"n-1 is bad"
-            tangent,_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
-            return tangent
-
-        def get_dqmag(ictan,n):
-            dqmag = 0.
-            ictan0= np.copy(ictan)
-            ictan /= np.linalg.norm(ictan)
-
-            self.newic.xyz = self.nodes[n].xyz
-            Vecs = self.newic.update_coordinate_basis(ictan0)
-
-            constraint = self.newic.constraints[:,0]
-            prim_constraint = block_matrix.dot(Vecs,constraint)
-
-            for prim in self.newic.primitive_internal_coordinates:
-                if type(prim) is Distance:
-                    index = self.newic.coord_obj.Prims.dof_index(prim)
-                    prim_constraint[index] *= 2.5
-
-            dqmag = np.dot(prim_constraint.T,ictan0) 
-            if dqmag<0.:
-                raise RuntimeError
-            dqmag = float(np.sqrt(dqmag))
-            return dqmag
-
-
-        #print "getting tangents for nodes 0 to ",self.nnodes
         for n in range(n0+1,self.nnodes):
             #print "getting tangent between %i %i" % (n,n-1)
             assert self.nodes[n]!=None,"n is bad"
             assert self.nodes[n-1]!=None,"n-1 is bad"
             ictan[n],_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
+
             dqmaga[n] = 0.
-            ictan0= np.copy(ictan[n])
-            
-            ictan[n] /= np.linalg.norm(ictan[n])
+            #ictan0= np.copy(ictan[n])
+            dqmaga[n] = np.linalg.norm(ictan[n])
+           
+            ictan[n] /= dqmaga[n]
              
-            self.newic.xyz = self.nodes[n].xyz
-            Vecs = self.newic.update_coordinate_basis(ictan[n])
-
-
             # NOTE:
             # vanilla GSM has a strange metric for distance
             # no longer following 7/1/2020
@@ -552,7 +520,6 @@ class Base_Method(Print,Analyze,object):
             #dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
             #dqmaga[n] = float(np.sqrt(dqmaga[n]))
 
-            dqmaga[n] = np.linalg.norm(ictan0)
             if dqmaga[n]<0.:
                 raise RuntimeError
 
@@ -938,18 +905,11 @@ class Base_Method(Print,Analyze,object):
         if node2 is not None and node1.node_id!=node2.node_id:
             print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
             assert node2!=None,'node n2 is None'
+           
+            PMDiff = np.zeros(node2.num_primitives)
+            for k,prim in enumerate(node2.primitive_internal_coordinates):
+                PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
 
-            Q1 = node1.primitive_internal_values 
-            Q2 = node2.primitive_internal_values 
-            PMDiff = Q2-Q1
-            for k,prim in zip(list(range(len(PMDiff))),node1.primitive_internal_coordinates):
-                if prim.isPeriodic:
-                    Plus2Pi = PMDiff[k] + 2*np.pi
-                    Minus2Pi = PMDiff[k] - 2*np.pi
-                    if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                        PMDiff[k] = Plus2Pi
-                    if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                        PMDiff[k] = Minus2Pi
             return np.reshape(PMDiff,(-1,1)),None
         else:
             print(" getting tangent from node ",node1.node_id)
@@ -1253,7 +1213,7 @@ class Base_Method(Print,Analyze,object):
             # align center of mass  and rotation
             #print("%i %i %i" %(iR,iP,iN))
 
-            print(" Aligning")
+            #print(" Aligning")
             #self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
 
         return success
@@ -1292,7 +1252,7 @@ class Base_Method(Print,Analyze,object):
 
             # align center of mass  and rotation
             #print("%i %i %i" %(n1,n3,n2))
-            print(" Aligning")
+            #print(" Aligning")
             #self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
             #print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
 
@@ -1451,7 +1411,7 @@ class Base_Method(Print,Analyze,object):
                     #if n==self.nnodes-2:
                     #    deltadq += (totaldqmag * rpart[n] - self.dqmaga[n+1]) # this shifts the last node backwards
                     #    deltadq /= 2.
-                    print(deltadq)
+                    #print(deltadq)
                     rpmove[n] = -deltadq
             else:
                 deltadq = 0.
@@ -1521,8 +1481,8 @@ class Base_Method(Print,Analyze,object):
 
                 #TODO might need to recalculate energy here for seam? 
 
-        for n in range(1,self.nnodes-1):
-            self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
+        #for n in range(1,self.nnodes-1):
+        #    self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
 
         print(' spacings (end ic_reparam, steps: {}/{}):'.format(i+1,ic_reparam_steps))
         for n in range(1,self.nnodes):
