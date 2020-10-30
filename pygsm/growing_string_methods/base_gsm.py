@@ -738,8 +738,6 @@ class Base_Method(Print,Analyze,object):
                     else:
                        opt_type='UNCONSTRAINED'
 
-                    ictan,_ = Base_Method.tangent(self.nodes[self.nR-1],self.nodes[self.nR-2])
-
                     print(" optimizing last node")
                     self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
                     print(self.optimizer[self.nR-1].conv_grms)
@@ -747,13 +745,13 @@ class Base_Method(Print,Analyze,object):
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
                             opt_steps=50,
-                            #opt_type=opt_type,
-                            opt_type='ICTAN',
-                            ictan=ictan,
+                            opt_type=opt_type,
                             )
                 else:
                     raise RuntimeError
 
+                # check if grown will set some variables like 
+                # tscontinue and end_early
                 self.check_if_grown()
                 break
 
@@ -1195,7 +1193,7 @@ class Base_Method(Print,Analyze,object):
 
             if self.nodes[self.nR]==None:
                 success= False
-                break
+                return success
 
             if self.__class__.__name__!="DE_GSM":
                 ictan,bdist =  Base_Method.tangent(

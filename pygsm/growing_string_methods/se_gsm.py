@@ -208,8 +208,6 @@ class SE_GSM(Base_Method):
 
     def check_add_node(self):
         success=True
-        #if self.nodes[self.nR-1].gradrms < self.gaddmax:
-        #if self.optimizer[self.nR-1].converged:
         if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
                 print(" Ran out of nodes, exiting GSM")
