@@ -196,7 +196,7 @@ class Topology():
             #bondlistfile:
             #prim_idx_start_stop = kwargs.get('prim_idx_start_stop',None)
             try:
-                bonds = Topology.read_bonds_from_file(bondlistfile,prim_idx_start_stop)
+                bonds = Topology.read_bonds_from_file(bondlistfile ) #,prim_idx_start_stop)
             except:
                 raise RuntimeError
 
