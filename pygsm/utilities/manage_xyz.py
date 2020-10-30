@@ -1,5 +1,9 @@
 import numpy as np
-from . import units 
+try:
+    from . import units 
+except:
+    import units
+
 import re
 #import openbabel as ob
 
@@ -114,7 +118,7 @@ def get_atoms(
 def write_xyz(
     filename, 
     geom, 
-    charge=0,
+    comment=0,
     scale=1.0 #(1.0/units.ANGSTROM_TO_AU),
     ):
 
@@ -127,7 +131,7 @@ def write_xyz(
     """
     fh = open(filename,'w')
     fh.write('%d\n' % len(geom))
-    fh.write('%i\n' % charge)
+    fh.write('{}\n'.format(comment))
     for atom in geom:
         fh.write('%-2s %14.6f %14.6f %14.6f\n' % (
             atom[0],
