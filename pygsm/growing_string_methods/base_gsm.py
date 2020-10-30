@@ -220,7 +220,6 @@ class Base_Method(Print,Analyze,object):
         self.nn = 2
         self.nR = 1
         self.nP = 1        
-        self.energies = np.asarray([0.]*self.nnodes)
         self.emax = 0.0
 
         # TSnode is now a property
@@ -259,31 +258,35 @@ class Base_Method(Print,Analyze,object):
                     energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
             return np.argmax(energies)
         else:
-            return np.argmax(self.energies[:self.nnodes-1])
+            #return np.argmax(self.energies[:self.nnodes-1])
+            return np.argmax(self.energies[:self.nnodes])
 
     @property
     def npeaks(self):
         minnodes=[]
         maxnodes=[]
-        if self.energies[1]>self.energies[0]:
+        energies = self.energies
+        if energies[1]>energies[0]:
             minnodes.append(0)
-        if self.energies[self.nnodes-1]<self.energies[self.nnodes-2]:
+        if energies[self.nnodes-1]<energies[self.nnodes-2]:
             minnodes.append(self.nnodes-1)
         for n in range(self.n0,self.nnodes-1):
-            if self.energies[n+1]>self.energies[n]:
-                if self.energies[n]<self.energies[n-1]:
+            if energies[n+1]>energies[n]:
+                if energies[n]<energies[n-1]:
                     minnodes.append(n)
-            if self.energies[n+1]<self.energies[n]:
-                if self.energies[n]>self.energies[n-1]:
+            if energies[n+1]<energies[n]:
+                if energies[n]>energies[n-1]:
                     maxnodes.append(n)
 
         return len(maxnodes)
 
-
-    def store_energies(self):
+    @property
+    def energies(self):
+        E = np.asarray([0.]*self.nnodes)
         for i,ico in enumerate(self.nodes):
             if ico != None:
-                self.energies[i] = ico.energy - self.nodes[0].energy
+                E[i] = ico.energy - self.nodes[0].energy
+        return E
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
         nifty.printcool("In opt_iters")
@@ -294,7 +297,7 @@ class Base_Method(Print,Analyze,object):
         self.newclimbscale=2.
 
         self.set_finder(rtype)
-        self.store_energies()
+        #self.store_energies()
         self.emax = self.energies[self.TSnode]
 
         # set convergence for nodes
@@ -326,12 +329,13 @@ class Base_Method(Print,Analyze,object):
            
             # => do opt steps <= #
             self.opt_steps(optsteps)
-            self.store_energies()
+            #self.store_energies()
 
             print()
             print(" V_profile: ", end=' ')
+            energies = self.energies
             for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
 
             #TODO resetting
@@ -415,11 +419,12 @@ class Base_Method(Print,Analyze,object):
                 self.hessrcount-=1
 
             # store reparam energies
-            self.store_energies()
-            self.emax= self.energies[self.TSnode]
+            #self.store_energies()
+            energies = self.energies
+            self.emax= energies[self.TSnode]
             print(" V_profile (after reparam): ", end=' ')
             for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
 
             if self.pTSnode!=self.TSnode and self.climb:
@@ -578,14 +583,14 @@ class Base_Method(Print,Analyze,object):
     def get_tangents_1e(self,n0=0,update_TS=False):
         ictan0 = np.zeros((self.newic.num_primitives,1))
         dqmaga = [0.]*self.nnodes
-
+        energies = self.energies
         for n in range(n0+1,self.nnodes-1):
             do3 = False
             if not self.find:
-                if self.energies[n+1] > self.energies[n] and self.energies[n] > self.energies[n-1]:
+                if energies[n+1] > energies[n] and energies[n] > energies[n-1]:
                     intic_n = n
                     newic_n = n+1
-                elif self.energies[n-1] > self.energies[n] and self.energies[n] > self.energies[n+1]:
+                elif energies[n-1] > energies[n] and energies[n] > energies[n+1]:
                     intic_n = n-1
                     newic_n = n
                 else:
@@ -609,11 +614,11 @@ class Base_Method(Print,Analyze,object):
                 ictan0,_ = Base_Method.tangent(self.nodes[newic_n],self.nodes[intic_n])
             else:
                 f1 = 0.
-                dE1 = abs(self.energies[n+1]-self.energies[n])
-                dE2 = abs(self.energies[n] - self.energies[n-1])
+                dE1 = abs(energies[n+1]-energies[n])
+                dE2 = abs(energies[n] - energies[n-1])
                 dEmax = max(dE1,dE2)
                 dEmin = min(dE1,dE2)
-                if self.energies[n+1]>self.energies[n-1]:
+                if energies[n+1]>energies[n-1]:
                     f1 = dEmax/(dEmax+dEmin+0.00000001)
                 else:
                     f1 = 1 - dEmax/(dEmax+dEmin+0.00000001)
@@ -750,7 +755,6 @@ class Base_Method(Print,Analyze,object):
             nifty.printcool("Starting growth iter %i" % n)
             sys.stdout.flush()
             self.opt_steps(maxopt)
-            self.store_energies()
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.emax = self.energies[self.TSnode]
             self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
@@ -1381,6 +1385,7 @@ class Base_Method(Print,Analyze,object):
 
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
+            energies = self.energies
 
             # copies of original ictan
             ictan0 = np.copy(self.ictan)
@@ -1421,7 +1426,7 @@ class Base_Method(Print,Analyze,object):
             if rtype==1 and i==0:
                 dEmax = 0.
                 for n in range(n0+1,self.nnodes):
-                    dE[n] = abs(self.energies[n]-self.energies[n-1])
+                    dE[n] = abs(energies[n]-energies[n-1])
                 dEmax = max(dE)
                 for n in range(n0+1,self.nnodes):
                     edist[n] = dE[n]*self.dqmaga[n]

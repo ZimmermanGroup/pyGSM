@@ -42,7 +42,6 @@ class SE_GSM(Base_Method):
                 driving_coords=self.driving_coords,
                 )
         self.nodes[0].update_coordinate_basis(constraints=ictan)
-        self.set_V0()
 
 
     def set_V0(self):
@@ -103,6 +102,7 @@ class SE_GSM(Base_Method):
         1 Climb with no exact find, 
         0 turning of climbing image and TS search
         """
+        self.set_V0()
 
         if self.isRestarted==False:
             self.nodes[0].gradrms = 0.
@@ -122,11 +122,8 @@ class SE_GSM(Base_Method):
                     self.add_last_node(1)
 
             self.nnodes=self.nR
-            tmp = []
-            for n in range(self.nnodes):
-                tmp.append(self.energies[n])
-            self.energies = np.asarray(tmp)
-            self.emax = self.energies[self.TSnode]
+            energies = self.energies
+            self.emax = energies[self.TSnode]
 
             if self.TSnode == self.nR:
                 print(" The highest energy node is the last")
@@ -149,10 +146,10 @@ class SE_GSM(Base_Method):
         if not self.isRestarted:
             print(" initial ic_reparam")
             self.ic_reparam(25)
-            self.store_energies()
             print(" V_profile (after reparam): ", end=' ')
+            energies = self.energies
             for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
             self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
@@ -312,11 +309,6 @@ class SE_GSM(Base_Method):
                 print("nnodes = ",self.nnodes)
                 self.get_tangents_1()
                 
-                # need to reform the energies array
-                tmp = []
-                for n in range(self.nnodes):
-                    tmp.append(self.energies[n])
-                self.energies = np.asarray(tmp)
             return isDone
 
         # => check string profile <= #

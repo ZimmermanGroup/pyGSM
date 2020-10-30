@@ -17,21 +17,21 @@ class Analyze:
             raise ValueError("find peaks bad input")
         #if rtype==1 or rtype==2:
         #    print "Energy"
-        #    print self.energies
         alluptol=0.1
         alluptol2=0.5
         allup=True
         diss=False
-        for n in range(1,len(self.energies[:nnodes])):
-            if self.energies[n]+alluptol<self.energies[n-1]:
+        energies = self.energies
+        for n in range(1,len(energies[:nnodes])):
+            if energies[n]+alluptol<energies[n-1]:
                 allup=False
                 break
 
-        if self.energies[nnodes-1]>15.0:
+        if energies[nnodes-1]>15.0:
             if nnodes-3>0:
-                if (abs(self.energies[nnodes-1]-self.energies[nnodes-2])<alluptol2 and
-                abs(self.energies[nnodes-2]-self.energies[nnodes-3])<alluptol2 and
-                abs(self.energies[nnodes-3]-self.energies[nnodes-4])<alluptol2):
+                if (abs(energies[nnodes-1]-energies[nnodes-2])<alluptol2 and
+                abs(energies[nnodes-2]-energies[nnodes-3])<alluptol2 and
+                abs(energies[nnodes-3]-energies[nnodes-4])<alluptol2):
                     print(" possible dissociative profile")
                     diss=True
 
@@ -42,16 +42,16 @@ class Analyze:
         npeaks2=0
         minnodes=[]
         maxnodes=[]
-        if self.energies[1]>self.energies[0]:
+        if energies[1]>energies[0]:
             minnodes.append(0)
-        if self.energies[nnodes-1]<self.energies[nnodes-2]:
+        if energies[nnodes-1]<energies[nnodes-2]:
             minnodes.append(nnodes-1)
         for n in range(self.n0,nnodes-1):
-            if self.energies[n+1]>self.energies[n]:
-                if self.energies[n]<self.energies[n-1]:
+            if energies[n+1]>energies[n]:
+                if energies[n]<energies[n-1]:
                     minnodes.append(n)
-            if self.energies[n+1]<self.energies[n]:
-                if self.energies[n]>self.energies[n-1]:
+            if energies[n+1]<energies[n]:
+                if energies[n]>energies[n-1]:
                     maxnodes.append(n)
 
         print(" min nodes ",minnodes)
@@ -66,17 +66,17 @@ class Analyze:
             ediff=PEAK4_EDIFF
 
         if rtype==1:
-            nmax = np.argmax(self.energies[:self.nR])
-            emax = float(max(self.energies[:self.nR]))
+            nmax = np.argmax(energies[:self.nR])
+            emax = float(max(energies[:self.nR]))
         else:
-            emax = float(max(self.energies))
-            nmax = np.argmax(self.energies)
+            emax = float(max(energies))
+            nmax = np.argmax(energies)
 
         print(" emax and nmax in find peaks %3.4f,%i " % (emax,nmax))
 
         #check if any node after peak is less than 2 kcal below
         for n in maxnodes:
-            diffs=( self.energies[n]-e>ediff for e in self.energies[n:nnodes])
+            diffs=( energies[n]-e>ediff for e in energies[n:nnodes])
             if any(diffs):
                 found=n
                 npeaks2+=1
@@ -117,19 +117,20 @@ class Analyze:
         if ns<nodemax: ns=nodemax
 
         print(" Energies",end=' ')
+        energies = self.energies
         for n in range(ns,self.nR):
-            print(" {:4.3f}".format(self.energies[n]),end=' ')
-            if self.energies[n]>emax:
+            print(" {:4.3f}".format(energies[n]),end=' ')
+            if energies[n]>emax:
                 nodemax=n
-                emax=self.energies[n]
+                emax=energies[n]
         print("\n nodemax ",nodemax)
 
         for n in range(nodemax,self.nR):
-            if self.energies[n]<emax-THRESH1:
+            if energies[n]<emax-THRESH1:
                 ispast1+=1
-            if self.energies[n]<emax-THRESH2:
+            if energies[n]<emax-THRESH2:
                 ispast2+=1
-            if self.energies[n]<emax-THRESH3:
+            if energies[n]<emax-THRESH3:
                 ispast3+=1
             if ispast1>1:
                 break
@@ -217,16 +218,17 @@ class Analyze:
         minnodes=[]
         maxnodes=[]
         wint=0
-        if self.energies[1]>self.energies[0]:
+        energies = self.energies
+        if energies[1]>energies[0]:
             minnodes.append(0)
-        if self.energies[self.nnodes-1]<self.energies[self.nnodes-2]:
+        if energies[self.nnodes-1]<energies[self.nnodes-2]:
             minnodes.append(self.nnodes-1)
         for n in range(self.n0,self.nnodes-1):
-            if self.energies[n+1]>self.energies[n]:
-                if self.energies[n]<self.energies[n-1]:
+            if energies[n+1]>energies[n]:
+                if energies[n]<energies[n-1]:
                     minnodes.append(n)
-            if self.energies[n+1]<self.energies[n]:
-                if self.energies[n]>self.energies[n-1]:
+            if energies[n+1]<energies[n]:
+                if energies[n]>energies[n-1]:
                     maxnodes.append(n)
         if len(minnodes)>2 and len(maxnodes)>1:
             wint=minnodes[1] # the real reaction ends at first minimum
