@@ -79,6 +79,7 @@ def main():
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
+    parser.add_argument('-bonds_file',type=str,help="A file which contains the bond indices (0-based)")
 
 
     args = parser.parse_args()
@@ -317,6 +318,7 @@ def main():
             atoms,
             hybrid_indices=hybrid_indices,
             prim_idx_start_stop=prim_indices,
+            bondlistfile=args.bonds_file,
             )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
