@@ -1137,11 +1137,17 @@ class LinearAngle(PrimitiveCoordinate):
     def atoms(self):
         return [self.a,self.b,self.c]
 
-    def reset(self, xyz,start_idx):
+    def reset(self, xyz,start_idx=None):
         xyz = xyz.reshape(-1,3)
-        a = self.a-start_idx
-        b = self.b-start_idx
-        c = self.c-start_idx
+
+        if start_idx is not None:
+            a = self.a-start_idx
+            b = self.b-start_idx
+            c = self.c-start_idx
+        else:
+            a = self.a 
+            b = self.b 
+            c = self.c 
         # Unit vector pointing from a to c.
         v = xyz[c] - xyz[a]
         ev = v / np.linalg.norm(v)
