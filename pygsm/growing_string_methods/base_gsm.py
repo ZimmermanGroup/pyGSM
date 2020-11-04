@@ -551,6 +551,7 @@ class Base_Method(Print,Analyze,object):
         ictan0 = np.zeros((self.newic.num_primitives,1))
         dqmaga = [0.]*self.nnodes
         energies = self.energies
+        TSnode = self.TSnode
         for n in range(n0+1,self.nnodes-1):
             do3 = False
             if not self.find:
@@ -566,10 +567,10 @@ class Base_Method(Print,Analyze,object):
                     intic_n = n+1
                     int2ic_n = n-1
             else:
-                if n < self.TSnode:
+                if n < TSnode:
                     intic_n = n
                     newic_n = n+1
-                elif n> self.TSnode:
+                elif n> TSnode:
                     intic_n = n-1
                     newic_n = n
                 else:
@@ -605,9 +606,9 @@ class Base_Method(Print,Analyze,object):
             Vecs = self.newic.update_coordinate_basis(self.ictan[n])
 
             # don't update tsnode coord basis 
-            if n!=self.TSnode: 
+            if n!=TSnode: 
                 self.nodes[n].coord_basis = Vecs
-            elif n==self.TSnode and update_TS:
+            elif n==TSnode and update_TS:
                 self.nodes[n].coord_basis = Vecs
 
             nbonds=self.nodes[0].num_bonds
@@ -732,7 +733,8 @@ class Base_Method(Print,Analyze,object):
             if not success:
                 print("can't add anymore nodes, bdist too small")
 
-                if self.__class__.__name__=="SE_GSM" or self.__class__.__name__=="SE_Cross":
+                if self.__class__.__name__=="SE_GSM": # or self.__class__.__name__=="SE_Cross":
+                    # Don't do SE_cross because that already does optimization later
                     if self.nodes[self.nR-1].PES.lot.do_coupling:
                         opt_type='MECI'
                     else:
@@ -1341,9 +1343,13 @@ class Base_Method(Print,Analyze,object):
         #for n in range(1,self.nnodes-1):
         #    self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
 
+        # stash energies
+        energies = np.copy(self.energies)
+        # do this or else it will recalculate energies every step!
+        TSnode = self.TSnode
+
         for i in range(ic_reparam_steps):
             self.get_tangents_1(n0=n0)
-            energies = self.energies
 
             # copies of original ictan
             ictan0 = np.copy(self.ictan)
@@ -1362,9 +1368,8 @@ class Base_Method(Print,Analyze,object):
 
             #if climb:
             if self.climb or rtype==2:
-                h1dqmag = np.sum(self.dqmaga[1:self.TSnode+1])
-                #h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
-                h2dqmag = np.sum(self.dqmaga[self.TSnode+1:self.nnodes])
+                h1dqmag = np.sum(self.dqmaga[1:TSnode+1])
+                h2dqmag = np.sum(self.dqmaga[TSnode+1:self.nnodes])
                 if self.print_level>0:
                     print(" h1dqmag, h2dqmag: %3.2f %3.2f" % (h1dqmag,h2dqmag))
            
@@ -1375,11 +1380,11 @@ class Base_Method(Print,Analyze,object):
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
                 else:
-                    for n in range(n0+1,self.TSnode):
-                        rpart[n] = 1./(self.TSnode-n0)
-                    for n in range(self.TSnode+1,self.nnodes):
-                        rpart[n] = 1./(self.nnodes-self.TSnode-1)
-                    rpart[self.TSnode]=0.
+                    for n in range(n0+1,TSnode):
+                        rpart[n] = 1./(TSnode-n0)
+                    for n in range(TSnode+1,self.nnodes):
+                        rpart[n] = 1./(self.nnodes-TSnode-1)
+                    rpart[TSnode]=0.
 
             if rtype==1 and i==0:
                 dEmax = 0.
@@ -1413,14 +1418,14 @@ class Base_Method(Print,Analyze,object):
                     rpmove[n] = -deltadq
             else:
                 deltadq = 0.
-                rpmove[self.TSnode] = 0.
-                for n in range(n0+1,self.TSnode):
+                rpmove[TSnode] = 0.
+                for n in range(n0+1,TSnode):
                     deltadq = self.dqmaga[n] - h1dqmag * rpart[n]
-                    #if n==self.TSnode-1:
+                    #if n==TSnode-1:
                     #    deltadq += h1dqmag * rpart[n] - self.dqmaga[n+1]
                     #    deltadq /= 2.
                     rpmove[n] = -deltadq
-                for n in range(self.TSnode+1,self.nnodes-1):
+                for n in range(TSnode+1,self.nnodes-1):
                     deltadq = self.dqmaga[n] - h2dqmag * rpart[n]
                     #if n==self.nnodes-2:
                     #    deltadq += h2dqmag * rpart[n] - self.dqmaga[n+1]
@@ -1434,7 +1439,7 @@ class Base_Method(Print,Analyze,object):
             # There was a really weird rpmove code here from GSM but
             # removed 7/1/2020
             if self.climb or rtype==2:
-                rpmove[self.TSnode] = 0.
+                rpmove[TSnode] = 0.
 
             disprms = np.linalg.norm(rpmove[n0+1:self.nnodes-1])/np.sqrt(len(rpmove[n0+1:self.nnodes-1]))
             lastdispr = disprms
@@ -1451,7 +1456,7 @@ class Base_Method(Print,Analyze,object):
             for n in range(n0+1,self.nnodes-1):
                 if abs(rpmove[n])>0.:
                     #print "moving node %i %1.3f" % (n,rpmove[n])
-                    self.newic.xyz = self.nodes[n].xyz
+                    self.newic.xyz = self.nodes[n].xyz.copy()
 
                     if rpmove[n] < 0.:
                         ictan[n] = np.copy(ictan0[n]) 
@@ -1465,7 +1470,7 @@ class Base_Method(Print,Analyze,object):
 
                     constraint = self.newic.constraints[:,0]
 
-                    if n==self.TSnode and (self.climb or rtype==2):
+                    if n==TSnode and (self.climb or rtype==2):
                         pass
                     else:
                         dq = rpmove[n]*constraint
@@ -1474,7 +1479,7 @@ class Base_Method(Print,Analyze,object):
 
                     # new 6/7/2019
                     if self.nodes[n].newHess==0:
-                        if not (n==self.TSnode and (self.climb or self.find)):
+                        if not (n==TSnode and (self.climb or self.find)):
                             self.nodes[n].newHess=2
 
                 #TODO might need to recalculate energy here for seam? 
@@ -1606,16 +1611,7 @@ class Base_Method(Print,Analyze,object):
 
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
-        print("modifying Hessian with RP")
-
-        self.nodes[en].update_coordinate_basis()
-
-        self.newic.xyz = self.nodes[en].xyz.copy()
-        Vecs = self.newic.update_coordinate_basis(self.ictan[en])
-        #nicd = self.newic.num_coordinates
-        #num_ics = self.newic.num_primitives 
-        print(" number of primitive coordinates: %i" % self.newic.num_primitives)
-        print(" number of non-redundant coordinates: %i" % self.newic.num_coordinates)
+        print("modifying %i Hessian with RP" % en)
 
         E0 = self.energies[en]/units.KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/units.KCAL_MOL_PER_AU
@@ -1624,41 +1620,40 @@ class Base_Method(Print,Analyze,object):
         else:
             Ep1 = Em1
 
-        q0 = self.newic.coordinates[0]
-        #print "q0 is %1.3f" % q0
-        print(self.newic.coord_basis.shape)
-        #tan0 = self.newic.coord_basis[:,0]
-        constraint = self.newic.constraints[:,0]
-        tan0 = block_matrix.dot(Vecs,constraint)
-        #print "tan0"
-        #print tan0
+        # Update TS node coord basis
+        Vecs = self.nodes[en].update_coordinate_basis(constraints=None)
 
+        # get constrained coord basis
+        self.newic.xyz = self.nodes[en].xyz.copy()
+        const_vec = self.newic.update_coordinate_basis(constraints=self.ictan[en])
+        q0 = self.newic.coordinates[0]
+        constraint = self.newic.constraints[:,0]
+
+        # this should just give back ictan[en]? 
+        tan0 = block_matrix.dot(const_vec,constraint)
+
+        # get qm1 (don't update basis)
         self.newic.xyz = self.nodes[en-1].xyz.copy()
         qm1 = self.newic.coordinates[0]
-        #print "qm1 is %1.3f " %qm1
 
         if en+1<self.nnodes:
+            # get qp1 (don't update basis)
             self.newic.xyz = self.nodes[en+1].xyz.copy()
             qp1 = self.newic.coordinates[0]
         else:
             qp1 = qm1
 
-        #print "qp1 is %1.3f" % qp1
-
         if en == self.TSnode:
             print(" TS Hess init'd w/ existing Hintp")
 
-        self.newic.xyz = self.nodes[en].xyz
-        Vecs =self.newic.update_coordinate_basis()
-
+        # Go to non-constrained basis
+        self.newic.xyz = self.nodes[en].xyz.copy()
+        self.newic.coord_basis = Vecs
         self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian.copy()
         self.newic.form_Hessian_in_basis()
 
-        tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   #nicd,1
-        #print "tan"
-        #print tan
-
-        Ht = np.dot(self.newic.Hessian,tan) #(nicd,nicd)(nicd,1) = nicd,1
+        tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   # (nicd,1
+        Ht = np.dot(self.newic.Hessian,tan)                         # (nicd,nicd)(nicd,1) = nicd,1
         tHt = np.dot(tan.T,Ht) 
 
         a = abs(q0-qm1)
@@ -1667,15 +1662,19 @@ class Base_Method(Print,Analyze,object):
         print(" tHt %1.3f a: %1.1f b: %1.1f c: %1.3f" % (tHt,a[0],b[0],c[0]))
 
         ttt = np.outer(tan,tan)
-        #print "Hint before"
+
+        # Hint before
         #with np.printoptions(threshold=np.inf):
         #    print self.newic.Hessian
         #eig,tmph = np.linalg.eigh(self.newic.Hessian)
         #print "initial eigenvalues"
         #print eig
-       
+      
+        # Finalize Hessian
         self.newic.Hessian += (c-tHt)*ttt
-        self.nodes[en].Hessian = self.newic.Hessian
+        self.nodes[en].Hessian = self.newic.Hessian.copy()
+
+        # Hint after
         #with np.printoptions(threshold=np.inf):
         #    print self.nodes[en].Hessian
         #print "shape of Hessian is %s" % (np.shape(self.nodes[en].Hessian),)
@@ -1689,6 +1688,7 @@ class Base_Method(Print,Analyze,object):
             print(eigen)
 
         # reset pgradrms ? 
+
 
     def set_V0(self):
         raise NotImplementedError 
@@ -1747,7 +1747,7 @@ class Base_Method(Print,Analyze,object):
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
    
-    def restart_string(self,xyzfile='restart.xyz',rtype=2,reparametrize=False):
+    def restart_string(self,xyzfile='restart.xyz',rtype=2,reparametrize=False,restart_energies=True):
         nifty.printcool("Restarting string from file")
         self.growth_direction=0
         with open(xyzfile) as f:
@@ -1796,20 +1796,9 @@ class Base_Method(Print,Analyze,object):
 
 
         # initialize lists
-        self.energies = [0.]*nstructs
         self.gradrms = [0.]*nstructs
         self.dE = [1000.]*nstructs
 
-        # initial energy
-        self.nodes[0].V0 = self.nodes[0].energy 
-        #self.nodes[0].gradrms=grmss[0]
-        #self.nodes[0].PES.dE = dE[0]
-        #self.nodes[-1].gradrms=grmss[-1]
-        #self.nodes[-1].PES.dE = dE[-1]
-        self.energies[0] = 0.
-        print(" initial energy is %3.4f" % self.nodes[0].energy)
-
-        self.nnodes=self.nR=nstructs
         self.isRestarted=True
         self.done_growing=True
         for struct in range(1,nstructs-1):
@@ -1818,6 +1807,7 @@ class Base_Method(Print,Analyze,object):
             #self.nodes[struct].gradrms=grmss[struct]
             #self.nodes[struct].PES.dE = dE[struct]
             self.nodes[struct].newHess=5
+        self.nnodes=self.nR=nstructs
 
         if reparametrize:
             nifty.printcool("Reparametrizing")
@@ -1825,53 +1815,65 @@ class Base_Method(Print,Analyze,object):
             self.ic_reparam(ic_reparam_steps=8)
             self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
 
-        for struct in range(1,nstructs-1):
-            print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
-            self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
-            print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+        if restart_energies:
+            # initial energy
+            self.nodes[0].V0 = self.nodes[0].energy 
+            self.energies[0] = 0.
+            print(" initial energy is %3.4f" % self.nodes[0].energy)
+
+            for struct in range(1,nstructs-1):
+                print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
+                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
+                print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+
+            print(" V_profile: ", end=' ')
+            energies= self.energies
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
+            print()
+            #print(" grms_profile: ", end=' ')
+            #for n in range(self.nnodes):
+            #    print(" {:7.3f}".format(float(self.nodes[n].gradrms)), end=' ')
+            #print()
+            print(" dE_profile: ", end=' ')
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
+            print()
 
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
             self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
             self.optimizer[n].options['DMAX'] = 0.05
-        print(" V_profile: ", end=' ')
-        for n in range(self.nnodes):
-            print(" {:7.3f}".format(float(self.energies[n])), end=' ')
-        print()
-        #print(" grms_profile: ", end=' ')
-        #for n in range(self.nnodes):
-        #    print(" {:7.3f}".format(float(self.nodes[n].gradrms)), end=' ')
-        #print()
-        print(" dE_profile: ", end=' ')
-        for n in range(self.nnodes):
-            print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
-        print()
 
 
         if self.__class__.__name__!="SE_Cross":
             self.set_finder(rtype)
 
-            self.get_tangents_1e(update_TS=True)
-            num_coords =  self.nodes[0].num_coordinates - 1
 
-            # project out the constraint
-            for n in range(0,self.nnodes):
-                gc=self.nodes[n].gradient.copy()
-                for c in self.nodes[n].constraints.T:
-                    gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
-                self.nodes[n].gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
+            if restart_energies:
+                self.get_tangents_1e(update_TS=True)
+                num_coords =  self.nodes[0].num_coordinates - 1
 
-            fp = self.find_peaks(2)
-            totalgrad,gradrms,sumgradrms = self.calc_grad()
-            self.emax = self.energies[self.TSnode]
-            print(" totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
+                # project out the constraint
+                for n in range(0,self.nnodes):
+                    gc=self.nodes[n].gradient.copy()
+                    for c in self.nodes[n].constraints.T:
+                        gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
+                    self.nodes[n].gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
 
-            ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
-            print(" ts_cgradq %5.4f" % ts_cgradq)
-            ts_gradrms=self.nodes[self.TSnode].gradrms
+                fp = self.find_peaks(2)
+                totalgrad,gradrms,sumgradrms = self.calc_grad()
+                self.emax = self.energies[self.TSnode]
+                print(" totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
 
-            self.set_stage(totalgrad,sumgradrms,ts_cgradq,ts_gradrms,fp)
+                ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
+                print(" ts_cgradq %5.4f" % ts_cgradq)
+                ts_gradrms=self.nodes[self.TSnode].gradrms
+
+                self.set_stage(totalgrad,sumgradrms,ts_cgradq,ts_gradrms,fp)
+            else:
+                return
 
         #tmp for testing
         #self.emax = self.energies[self.TSnode]

@@ -38,6 +38,7 @@ def main():
     parser.add_argument('-xyzfile', help='XYZ file containing reactant and, if DE-GSM, product.',  required=True)
     parser.add_argument('-isomers', help='driving coordinate file', type=str, required=False)
     parser.add_argument('-mode', default="DE_GSM",help='GSM Type (default: %(default)s)',choices=["DE_GSM","SE_GSM","SE_Cross"], type=str, required=True)
+    parser.add_argument('-only_drive',action='store_true',help='')
     parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package (default: %(default)s)",choices=["QChem","Orca","Molpro","PyTC","TeraChemCloud","OpenMM","DFTB","TeraChem","BAGEL","xTB_lot"])
     parser.add_argument('-lot_inp_file',type=str,default=None, help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=False)
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
@@ -75,7 +76,7 @@ def main():
     parser.add_argument('-conv_Ediff',default=100.,type=float,help='')
     parser.add_argument('-conv_dE',default=1.,type=float,help='')
     parser.add_argument('-conv_gmax',default=100.,type=float,help='')
-    parser.add_argument('-DMAX',default=1.,type=float,help='')
+    parser.add_argument('-DMAX',default=.1,type=float,help='')
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
@@ -494,6 +495,23 @@ def main():
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
                 )
+
+
+
+    if args.only_drive:
+        for i in range(gsm.nnodes-1):
+            success=gsm.add_GSM_nodeR()
+            if not success:
+                break
+        geoms=[]
+        for node in gsm.nodes:
+            if node is not None:
+                geoms.append(node.geometry)
+            else:
+                break
+        manage_xyz.write_xyzs('interpolated.xyz',geoms)
+        return
+
 
     # For seam calculation
     if inpfileq['gsm_type']!='SE_Cross' and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
