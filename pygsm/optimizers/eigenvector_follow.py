@@ -107,8 +107,8 @@ class eigenvector_follow(base_optimizer):
             actual_step = np.linalg.norm(dq)
             #print(" actual_step= %1.2f"% actual_step)
             dq = dq/actual_step #normalize
-            if actual_step>self.options['DMAX']:
-                step=self.options['DMAX']
+            if actual_step>self.DMAX:
+                step=self.DMAX
                 #print(" reducing step, new step = %1.2f" %step)
             else:
                 step=actual_step
@@ -146,18 +146,18 @@ class eigenvector_follow(base_optimizer):
                 molecule.newHess=5
                 #return ls['status']
 
-            if ls['step'] > self.options['DMAX']:
+            if ls['step'] > self.DMAX:
                 if ls['step']<= self.options['abs_max_step']:  # absolute max
                     print(" Increasing DMAX to {}".format(ls['step']))
-                    self.options['DMAX'] = ls['step']
+                    self.DMAX = ls['step']
                 else:
-                    self.options['DMAX'] =self.options['abs_max_step']
-            elif ls['step']<self.options['DMAX']:
+                    self.DMAX =self.options['abs_max_step']
+            elif ls['step']<self.DMAX:
                 if ls['step']>=self.DMIN:     # absolute min
                     print(" Decreasing DMAX to {}".format(ls['step']))
-                    self.options['DMAX'] = ls['step']
+                    self.DMAX = ls['step']
                 elif ls['step']<=self.DMIN:
-                    self.options['DMAX'] = self.DMIN
+                    self.DMAX = self.DMIN
                     print(" Decreasing DMAX to {}".format(self.DMIN))
 
             # calculate predicted value from Hessian, gp is previous constrained gradient
@@ -210,8 +210,8 @@ class eigenvector_follow(base_optimizer):
                 raise NotImplementedError(" ef not implemented for CART")
 
             if self.options['print_level']>0:
-                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
-            self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.DMAX))
+            self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.DMAX))
 
             # check for convergence TODO
             fx = molecule.energy
@@ -227,7 +227,9 @@ class eigenvector_follow(base_optimizer):
 
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
             self.converged=False
-            if self.opt_cross and abs(dE)<1.0 and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+
+            #TODO turn back on conv_DE
+            if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 self.converged=True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if self.opt_climb and opt_type=="CLIMB":

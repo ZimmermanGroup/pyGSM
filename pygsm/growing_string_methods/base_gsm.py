@@ -749,6 +749,8 @@ class Base_Method(Print,Analyze,object):
                             opt_steps=50,
                             opt_type=opt_type,
                             )
+                elif self.__class__.__name__=="SE_Cross":
+                    print(" Will do extra optimization of this node in SE-Cross")
                 else:
                     raise RuntimeError
 
@@ -1205,6 +1207,7 @@ class Base_Method(Print,Analyze,object):
                         )
                 self.nodes[self.nR].bdist = bdist
 
+            self.optimizer[self.nR].DMAX = self.optimizer[self.nR-1].DMAX
             self.nn+=1
             self.nR+=1
             print(" nn=%i,nR=%i" %(self.nn,self.nR))
@@ -1245,6 +1248,7 @@ class Base_Method(Print,Analyze,object):
                 success= False
                 break
 
+            self.optimizer[n2].DMAX = self.optimizer[n1].DMAX
             self.nn+=1
             self.nP+=1
             print(" nn=%i,nP=%i" %(self.nn,self.nP))
@@ -1801,12 +1805,18 @@ class Base_Method(Print,Analyze,object):
 
         self.isRestarted=True
         self.done_growing=True
-        for struct in range(1,nstructs-1):
+        # TODO
+
+        # set coordinates from restart file
+        self.nodes[0].xyz = coords[0].copy()
+        self.nodes[nstructs-1].xyz = coords[nstructs-1].copy()
+        for struct in range(1,nstructs):
             self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct,copy_wavefunction=False)
+            self.nodes[struct].newHess=5
+            # Turning this off
             #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
             #self.nodes[struct].gradrms=grmss[struct]
             #self.nodes[struct].PES.dE = dE[struct]
-            self.nodes[struct].newHess=5
         self.nnodes=self.nR=nstructs
 
         if reparametrize:

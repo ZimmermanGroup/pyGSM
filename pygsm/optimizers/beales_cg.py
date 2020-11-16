@@ -106,8 +106,8 @@ class beales_cg(base_optimizer):
             stepsize = np.linalg.norm(d)
             print(" stepsize = %1.2f"% stepsize)
             d = d/stepsize #normalize
-            if stepsize>self.options['DMAX']:
-                stepsize=self.options['DMAX']
+            if stepsize>self.DMAX:
+                stepsize=self.DMAX
                 print(" reducing step, new step = %1.2f" %stepsize)
 
             # store

@@ -229,6 +229,14 @@ class base_optimizer(object):
     def SCALE_CLIMB(self,value):
         self.options['SCALE_CLIMB']=value
 
+    @property
+    def DMAX(self):
+       return self.options['DMAX']
+
+    @DMAX.setter
+    def DMAX(self,value):
+        self.options['DMAX']=value
+
     def get_nconstraints(self,opt_type):
         if opt_type in ["ICTAN", "CLIMB"]:
             nconstraints = 1
@@ -387,44 +395,44 @@ class base_optimizer(object):
         if opt_type in ["TS","CLIMB"]:
             if ratio<0. and abs(dEpre)>0.05:
                 print("sign problem, decreasing DMAX")
-                self.options['DMAX'] /= 1.35
+                self.DMAX /= 1.35
             elif (ratio<0.75 or ratio>1.5) and abs(dEpre)>0.05:
                 if self.options['print_level']>0:
                     print(" decreasing DMAX")
-                if step<self.options['DMAX']:
-                    self.options['DMAX'] = step/1.1
+                if step<self.DMAX:
+                    self.DMAX = step/1.1
                 else:
-                    self.options['DMAX'] = self.options['DMAX']/1.2
-            elif ratio>0.85 and ratio<1.3 and step>self.options['DMAX'] and gradrms<pgradrms*1.35:
+                    self.DMAX = self.DMAX/1.2
+            elif ratio>0.85 and ratio<1.3 and step>self.DMAX and gradrms<pgradrms*1.35:
                 print(" increasing DMAX")
-                self.options['DMAX'] *= 1.1
-            if self.options['DMAX']>0.15:
-                self.options['DMAX']=0.15
+                self.DMAX *= 1.1
+            if self.DMAX>0.15:
+                self.DMAX=0.15
         else:
             if dE_iter > 0.001 and opt_type in ['UNCONSTRAINED','ICTAN']:
                 if self.options['print_level']>0:
                     print(" decreasing DMAX")
-                if step<self.options['DMAX']:
-                    self.options['DMAX'] = step/1.5
+                if step<self.DMAX:
+                    self.DMAX = step/1.5
                 else:
-                    self.options['DMAX'] = self.options['DMAX']/1.5
+                    self.DMAX = self.DMAX/1.5
             elif (ratio<0.25 or ratio>1.5) and abs(dEpre)>0.05:
                 if self.options['print_level']>0:
                     print(" decreasing DMAX")
-                if step<self.options['DMAX']:
-                    self.options['DMAX'] = step/1.1
+                if step<self.DMAX:
+                    self.DMAX = step/1.1
                 else:
-                    self.options['DMAX'] = self.options['DMAX']/1.2
-            elif ratio>0.75 and ratio<1.25 and step > self.options['DMAX'] and gradrms<(pgradrms*1.35):
+                    self.DMAX = self.DMAX/1.2
+            elif ratio>0.75 and ratio<1.25 and step > self.DMAX and gradrms<(pgradrms*1.35):
                 if self.options['print_level']>0:
                     print(" increasing DMAX")
-                self.options['DMAX']=self.options['DMAX']*1.1 + 0.01
-            if self.options['DMAX']>0.25:
-                self.options['DMAX']=0.25
+                self.DMAX=self.DMAX*1.1 + 0.01
+            if self.DMAX>0.25:
+                self.DMAX=0.25
         
-        if self.options['DMAX']<self.DMIN:
-            self.options['DMAX']=self.DMIN
-        #print(" DMAX %1.2f" % self.options['DMAX'])
+        if self.DMAX<self.DMIN:
+            self.DMAX=self.DMIN
+        #print(" DMAX %1.2f" % self.DMAX)
 
     def eigenvector_step(self,molecule,g):
 

@@ -142,8 +142,8 @@ class lbfgs(base_optimizer):
             actual_step = np.linalg.norm(d)
             print(" actual_step= %1.5f"% actual_step)
             d = d/actual_step #normalize
-            if actual_step>self.options['DMAX']:
-                step=self.options['DMAX']
+            if actual_step>self.DMAX:
+                step=self.DMAX
                 print(" reducing step, new step = %1.5f" %step)
             else:
                 step=actual_step
@@ -208,9 +208,9 @@ class lbfgs(base_optimizer):
                 self.k = 0
                 self.end =0
                 molecule.newHess=5
-                self.options['DMAX'] = ls['step']/2
-                if self.options['DMAX'] < self.DMIN:
-                    self.options['DMAX'] = self.DMIN
+                self.DMAX = ls['step']/2
+                if self.DMAX < self.DMIN:
+                    self.DMAX = self.DMIN
             else:
                 # update molecule xyz
                 xyz = molecule.update_xyz(x-xp)
@@ -219,9 +219,9 @@ class lbfgs(base_optimizer):
             flag=True
             if ratio<0.3 and ls['status']==0: #and abs(dEpre)>0.05:
                 print(" Reducing DMAX")
-                self.options['DMAX'] /= 1.5
-                if self.options['DMAX'] < self.DMIN:
-                    self.options['DMAX'] = self.DMIN
+                self.DMAX /= 1.5
+                if self.DMAX < self.DMIN:
+                    self.DMAX = self.DMIN
                 if molecule.newHess<5:
                     molecule.newHess+=1
                 flag=False
@@ -254,24 +254,24 @@ class lbfgs(base_optimizer):
                 if ls['status']==0:  # passed
                     dgradrms = molecule.gradrms - pgradrms
                     print("dgradrms ",dgradrms)
-                    if ls['step'] > self.options['DMAX']:
+                    if ls['step'] > self.DMAX:
                         if ls['step']<= self.options['abs_max_step']:     # absolute max
                             print(" Increasing DMAX to {}".format(ls['step']))
-                            self.options['DMAX'] = ls['step']
+                            self.DMAX = ls['step']
                         else:
-                            self.options['DMAX'] =self.options['abs_max_step']
-                    elif ls['step']<self.options['DMAX']:
+                            self.DMAX =self.options['abs_max_step']
+                    elif ls['step']<self.DMAX:
                         if ls['step']>=self.DMIN:     # absolute min
                             print(" Decreasing DMAX to {}".format(ls['step']))
-                            self.options['DMAX'] = ls['step']
+                            self.DMAX = ls['step']
                         elif ls['step']<=self.DMIN:
-                            self.options['DMAX'] = self.DMIN
+                            self.DMAX = self.DMIN
                             print(" Decreasing DMAX to {}".format(self.DMIN))
-                    elif ratio>0.85 and ratio<1.1 and actual_step>self.options['DMAX'] and dgradrms<-0.00005:
+                    elif ratio>0.85 and ratio<1.1 and actual_step>self.DMAX and dgradrms<-0.00005:
                         print(" HERE increasing DMAX")
-                        self.options['DMAX'] *= 1.1
-                        if self.options['DMAX']>self.options['abs_max_step']:
-                            self.options['DMAX']=self.options['abs_max_step']
+                        self.DMAX *= 1.1
+                        if self.DMAX>self.options['abs_max_step']:
+                            self.DMAX=self.options['abs_max_step']
                 else:
                     print("status not zero")
 
@@ -282,12 +282,12 @@ class lbfgs(base_optimizer):
                 manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
 
             if self.options['print_level']>0:
-                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
-            self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.options['DMAX']))
+                print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.DMAX))
+            self.buf.write(u' Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.DMAX))
 
             gmax = float(np.max(np.absolute(gc)))
             disp = float(np.linalg.norm((xyz-self.xyzp).flatten()))
-            print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
+            print(" gmax %5.4f disp %5.4f dEstep %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
             self.converged=False
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp and ls['status']==0:
                 self.converged=True
