@@ -65,6 +65,7 @@ class TeraChem(Lot):
         self.file_options.set_active('cpsacasscfconvthre',1e-7,float,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('dci_explicit_h','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('directci','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
+        self.file_options.set_active('ci_solver','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
 
         # FOMO
         self.file_options.set_active('fomo','no',str,'',
