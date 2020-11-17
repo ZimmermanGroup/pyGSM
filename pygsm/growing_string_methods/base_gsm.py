@@ -1841,14 +1841,15 @@ class Base_Method(Print,Analyze,object):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
+
             #print(" grms_profile: ", end=' ')
             #for n in range(self.nnodes):
             #    print(" {:7.3f}".format(float(self.nodes[n].gradrms)), end=' ')
             #print()
-            print(" dE_profile: ", end=' ')
-            for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
-            print()
+            #print(" dE_profile: ", end=' ')
+            #for n in range(self.nnodes):
+            #    print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
+            #print()
 
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):

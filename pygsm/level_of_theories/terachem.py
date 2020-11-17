@@ -48,12 +48,7 @@ class TeraChem(Lot):
 
         # CASSCF
         self.file_options.set_active('casscf','no',str,'')
-        self.file_options.set_active('active',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
-        self.file_options.set_active('closed',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
-        self.file_options.set_active('nalpha',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
-        self.file_options.set_active('nbeta',0,int,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('casscfmaxiter',200,int,'',depend=(self.file_options.casscf=="yes"),msg='')
-        self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('alphacas','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('alpha',0.4,float,'',depend=(self.file_options.alphacas=="yes"),msg='')
         self.file_options.set_active('casscfmacroiter',10,int,'',depend=(self.file_options.casscf=="yes"),msg='')
@@ -67,7 +62,28 @@ class TeraChem(Lot):
         self.file_options.set_active('directci','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
         self.file_options.set_active('ci_solver','no',str,'',depend=(self.file_options.casscf=="yes"),msg='')
 
+        # CASCI
+        self.file_options.set_active('casci','no',str,'',
+                clash=(self.file_options.casscf=="yes"),
+                msg = 'Cant activate FOMO with CASSCF')
+
+        # active space (some options below depend on this)
+        self.file_options.set_active('active',0,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes")
+                ,msg='')
+        self.file_options.set_active('closed',0,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
+        self.file_options.set_active('nalpha',0,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
+        self.file_options.set_active('nbeta',0,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
+        self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
+
+        # FON
+        self.file_options.set_active('fon','no',str,'',
+                clash=(self.file_options.casscf=="yes"),
+                depend=(self.file_options.casci=="yes"),
+                msg = 'Cant activate FOMO with CASSCF')
+        self.file_options.set_active('fon_temperature',0.3,float,'',depend=(self.file_options.fon=="yes"),msg='')
+
         # FOMO
+        #self.file_options.set_active('fon_nocc',self.file_options.closed,int,'',depend=(self.file_options.casci=="yes"),msg='')
         self.file_options.set_active('fomo','no',str,'',
                 clash=(self.file_options.casscf=="yes"),
                 msg = 'Cant activate FOMO with CASSCF')
@@ -75,6 +91,7 @@ class TeraChem(Lot):
         self.file_options.set_active('fomo_nocc',self.file_options.closed,int,'',depend=(self.file_options.fomo=="yes"),msg='')
         self.file_options.set_active('fomo_nact',self.file_options.active,int,'',depend=(self.file_options.fomo=="yes"),msg='')
         self.file_options.set_active('fomo_method','gaussian',str,'',depend=(self.file_options.fomo=="yes"),msg='')
+
 
         # QMMM
         self.file_options.set_active('prmtop',None,str,'')
@@ -189,7 +206,7 @@ class TeraChem(Lot):
             inpfile.write('{0:<25}{1:<25}\n'.format(key,value))
         inpfile.write('spinmult             {}\n'.format(mult))
 
-        if "casscf" in self.file_options.ActiveOptions:
+        if "casscf" in self.file_options.ActiveOptions or "casci" or self.file_options.ActiveOptions:
             if runtype == "gradient":
                 inpfile.write('castarget            {}\n'.format(ad_idx))
                 inpfile.write('castargetmult        {}\n'.format(mult))
@@ -397,7 +414,7 @@ class TeraChem(Lot):
 
         # parse the output for Energies  --> This can be done on any of the files since they should be the same
         #TODO Parse other multiplicities is broken here
-        if "casscf" in self.file_options.ActiveOptions:
+        if "casscf" in self.file_options.ActiveOptions or "casci" in self.file_options.ActiveOptions:
             pattern = re.compile(r'Singlet state  \d energy: \s* ([-+]?[0-9]*\.?[0-9]+)')
         else:
             pattern = re.compile(r'FINAL ENERGY: ([-+]?[0-9]*\.?[0-9]+) a.u.')
