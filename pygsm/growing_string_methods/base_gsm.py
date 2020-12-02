@@ -23,7 +23,7 @@ from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
-from .eckart_align import Eckart_align
+#from .eckart_align import Eckart_align
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
