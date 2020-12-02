@@ -11,6 +11,38 @@ from utilities import *
 from ._linesearch import backtrack,NoLineSearch
 
 
+def sorted_eigh(mat, asc=False):
+    """ 
+    Return eigenvalues and eigenvectors of a symmetric matrix 
+    in descending order and associated eigenvectors. 
+
+    This is just a convenience function to get eigenvectors
+    in descending or ascending order as desired.
+    """
+    L, Q = np.linalg.eigh(mat)
+    if asc:
+        idx = L.argsort()
+    else:
+        idx = L.argsort()[::-1]   
+    L = L[idx]
+    Q = Q[:,idx]
+    return L, Q
+
+def force_positive_definite(H):
+    """
+    Force all eigenvalues to be positive.
+    """
+    # Sorted eigenvalues and corresponding eigenvectors of the Hessian
+    Hvals, Hvecs = sorted_eigh(H, asc=True)
+    Hs = np.zeros_like(H)
+    for i in range(H.shape[0]):
+        if Hvals[i] > 0:
+            Hs += Hvals[i] * np.outer(Hvecs[:,i], Hvecs[:,i])
+        else:
+            Hs -= Hvals[i] * np.outer(Hvecs[:,i], Hvecs[:,i])
+    return Hs
+
+
 #TODO Add primitive constraint e.g. a list of internal coordinates to be left basically frozen throughout optimization
 class base_optimizer(object):
     ''' some common functions that the children can use (ef, cg, hybrid ef/cg, etc). 
@@ -396,16 +428,30 @@ class base_optimizer(object):
             if ratio<0. and abs(dEpre)>0.05:
                 print("sign problem, decreasing DMAX")
                 self.DMAX /= 1.35
-            elif (ratio<0.75 or ratio>1.5) and abs(dEpre)>0.05:
+            elif (ratio<0.75 or ratio>1.5): # and abs(dEpre)>0.05:
                 if self.options['print_level']>0:
                     print(" decreasing DMAX")
                 if step<self.DMAX:
                     self.DMAX = step/1.1
                 else:
                     self.DMAX = self.DMAX/1.2
-            elif ratio>0.85 and ratio<1.3 and step>self.DMAX and gradrms<pgradrms*1.35:
-                print(" increasing DMAX")
-                self.DMAX *= 1.1
+
+            elif ratio>0.85 and ratio<1.3 :
+
+                #if step>self.DMAX and gradrms<(pgradrms*1.35):
+                #    print(" increasing DMAX")
+                #    self.DMAX *= 1.1
+                if  gradrms>(pgradrms+ 0.0005):
+                    print(' decreasing DMAX, gradrms increased')
+                    self.DMAX -= self.DMAX/10.
+                elif step > self.DMAX and gradrms<(pgradrms-0.0005):
+                    print(' increased DMAX, gradrms decreased')
+                    print(gradrms)
+                    print(pgradrms)
+                    print(" increasing DMAX")
+                    self.DMAX += self.DMAX/10.
+            
+
             if self.DMAX>0.15:
                 self.DMAX=0.15
         else:
@@ -498,11 +544,10 @@ class base_optimizer(object):
         if molecule.newHess>0: SCALE = self.options['SCALEQN']*molecule.newHess
         if self.options['SCALEQN']>10.0: SCALE=10.0
 
-        # constraint vector
+        ## constraint vector
         norm = np.linalg.norm(ictan)
         C = ictan/norm
         Vecs = molecule.coord_basis
-        #Cn = np.linalg.multi_dot([Vecs,Vecs.T,C])
         Cn = block_matrix.dot(block_matrix.dot(Vecs,block_matrix.transpose(Vecs)),C)
         norm = np.linalg.norm(Cn)
         Cn = Cn/norm
@@ -516,7 +561,6 @@ class base_optimizer(object):
         self.nneg = sum(1 for e in eigen if e<-0.01)
 
         #=> Overlap metric <= #
-        #overlap = np.dot(np.dot(tmph,Vecs.T),Cn) 
         overlap = np.dot(block_matrix.dot(tmph,block_matrix.transpose(Vecs)),Cn)
 
         print(" overlap", overlap[:4].T)
@@ -629,7 +673,9 @@ class base_optimizer(object):
         return change
 
     def update_bofill(self,molecule):
-        print("in update bofill")
+        print(" in update bofill")
+
+        #return self.update_TS_BFGS(molecule)
 
         G = np.copy(molecule.Hessian) #nicd,nicd
         Gdx = np.dot(G,self.dx) #(nicd,nicd)(nicd,1) = (nicd,1)
@@ -655,6 +701,26 @@ class base_optimizer(object):
 
         change = (1.-phi)*Gms + phi*Gpsb
         return change
+
+    def update_TS_BFGS(self,molecule):
+        G = np.copy(molecule.Hessian) #nicd,nicd
+        dk = self.dx
+        yk = self.dg
+
+        jk = yk - np.dot(G, dk)
+        B = force_positive_definite(G)
+
+        # Scalar 1: dk^T |Bk| dk
+        s1 = np.linalg.multi_dot([dk.T, B, dk])
+        # Scalar 2: (yk^T dk)^2 + (dk^T |Bk| dk)^2
+        s2 = np.dot(yk.T, dk)**2 + s1**2
+
+        # Vector quantities
+        v2 = np.dot(yk.T, dk)*yk + s1*np.dot(B, dk)
+        uk = v2/s2
+        Ek = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
+
+        return Ek
 
     def update_constraint_bfgsp(self):
         return change

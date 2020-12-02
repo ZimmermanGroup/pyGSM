@@ -195,14 +195,12 @@ class eigenvector_follow(base_optimizer):
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
                 # only form g_prim for non-constrained 
-                #self.g_prim = np.dot(molecule.coord_basis[:,nconstraints:],g[nconstraints:])
                 self.g_prim = block_matrix.dot(molecule.coord_basis,gc)
                 self.dx = x-xp
                 self.dg = g - gp
 
                 self.dx_prim_actual = molecule.coord_obj.Prims.calcDiff(xyz,xyzp)
                 self.dx_prim_actual = np.reshape(self.dx_prim_actual,(-1,1))
-                #self.dx_prim = np.dot(molecule.coord_basis[:,nconstraints:],scaled_dq[nconstraints:]) 
                 self.dx_prim = block_matrix.dot(molecule.coord_basis,scaled_dq)
                 self.dg_prim = self.g_prim - gp_prim
 
