@@ -55,8 +55,10 @@ class Orca(Lot):
             except:
                 runscr = '/tmp/'+user+'/'+slurmID
         except:
+            pbsID = os.environ['PBS_JOBID']
             orcascr = 'temporcarun'
-            runscr = '/tmp/'+user+'/'+orcascr
+            #runscr = '/tmp/'+user+'/'+orcascr
+            runscr ='/tmp/'+pbsID+'/'+orcasc
 
         os.system('mkdir -p {}'.format(runscr))
         os.system('mv {} {}/'.format(tempfilename,runscr))
@@ -69,7 +71,7 @@ class Orca(Lot):
 
         temp = 100000
         for i,lines in enumerate(engradlines):
-            if 'current total energy' in lines:
+            if '# The current total energy in Eh\n' in lines:
                 temp = i
             if i > temp+1:
                 self.E.append((multiplicity,float(lines.split()[0]))) 
@@ -79,7 +81,7 @@ class Orca(Lot):
         tmp = []
         tmp2 = []
         for i,lines in enumerate(engradlines):
-            if 'current gradient' in lines:
+            if '# The current gradient in Eh/bohr\n' in lines:
                 temp = i
             if  i> temp+1:
                 if "#" in lines:
@@ -113,4 +115,4 @@ class Orca(Lot):
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])#*ANGSTROM_TO_AU #ORCA grad is given in AU
+        return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU # I think in ORCA with version 4.2.1, gradient is E_h/Bohr
