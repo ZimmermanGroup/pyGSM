@@ -130,12 +130,56 @@ class OpenMM(Lot):
                     system = prmtop.createSystem(
                         nonbondedMethod=openmm_app.NoCutoff,
                         )
+   
+                # Torsion restraint
+                if self.restrain_torfile is not None:
+                    nifty.printcool(" Adding torsional restraints!")
+
+                    # Harmonic constraint
+                    tforce = openmm.CustomTorsionForce("0.5*k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535")
+                    tforce.addPerTorsionParameter("k")
+                    tforce.addPerTorsionParameter("theta0")
+                    system.addForce(tforce)
+                    
+                    xyz = manage_xyz.xyz_to_np(self.geom)
+                    with open(self.restrain_torfile,'r') as input_file:
+                        for line in input_file:
+                            columns = line.split()
+                            a = int(columns[0])
+                            b = int(columns[1])
+                            c = int(columns[2])
+                            d = int(columns[3])
+                            k = float(columns[4])
+                            dih = Dihedral(a,b,c,d)
+                            theta0 = dih.value(xyz)
+                            tforce.addTorsion(a,b,c,d,[k,theta0])
+
+                # Translation restraint
+                if self.restrain_tranfile is not None:
+                    nifty.printcool(" Adding translational restraints!")
+                    trforce = openmm.CustomExternalForce("k*distance(x, y, z, x0, y0, z0)^2")
+                    trforce.addPerParticleParameter("k")
+                    trforce.addPerParticleParameter("x0")
+                    trforce.addPerParticleParameter("y0")
+                    trforce.addPerParticleParameter("z0")
+                    system.addForce(trforce)
+
+                    xyz = manage_xyz.xyz_to_np(self.geom)
+                    with open(self.restrain_tranfile,'r') as input_file:
+                        for line in input_file:
+                            columns = line.split()
+                            a = int(columns[0])
+                            k = float(columns[1])
+                            x0=xyz[a,0]*0.1  # Units are in nm 
+                            y0=xyz[a,1]*0.1  # Units are in nm 
+                            z0=xyz[a,2]*0.1  # Units are in nm 
+                            trforce.addParticle(a,[k,x0,y0,z0])
+
                 self.simulation = openmm_app.Simulation(
                     prmtop.topology,
                     system,
                     integrator,
                     )
-   
     @property
     def simulation(self):
         return self.options['job_data']['simulation']
