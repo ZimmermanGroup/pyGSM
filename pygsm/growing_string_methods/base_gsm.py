@@ -23,6 +23,7 @@ from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
+from .eckart_align import Eckart_align
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
@@ -241,6 +242,7 @@ class Base_Method(Print,Analyze,object):
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
+        self.hess_consistently_neg = 0
         self.newclimbscale=2.
 
         # create newic object
@@ -394,11 +396,14 @@ class Base_Method(Print,Analyze,object):
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.1:
                     self.optimizer[self.TSnode].options['DMAX']=0.1
+
             elif self.find and not self.optimizer[n].maxol_good:
                 # reform Hess for TS if not good
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0) and ts_gradrms >self.options['CONV_TOL']:
+
+
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_consistently_neg > 3) and ts_gradrms >self.options['CONV_TOL']:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
@@ -417,6 +422,11 @@ class Base_Method(Print,Analyze,object):
                  self.get_eigenv_finite(self.TSnode)                    
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
+
+            if self.find and self.optimizer[self.TSnode].nneg > 1:
+                self.hess_consistently_neg += 1
+            elif self.find and self.optimizer[self.TSnode].nneg==1: 
+                self.hess_consistently_neg -= 1
 
             # store reparam energies
             #self.store_energies()
@@ -1711,9 +1721,9 @@ class Base_Method(Print,Analyze,object):
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
 
-        elif not (self.find and self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode:  #or self.climb
-            exsteps=2
-            print(" multiplying steps for node %i by %i" % (n,exsteps))
+        #elif not (self.find and self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode:  #or self.climb
+        #    exsteps=2
+        #    print(" multiplying steps for node %i by %i" % (n,exsteps))
         return exsteps*opt_steps
 
     def set_opt_type(self,n,quiet=False):
@@ -1893,21 +1903,34 @@ class Base_Method(Print,Analyze,object):
 
 
     def com_rotate_move(self,iR,iP,iN):
+        print(" aligning com and to Eckart Condition")
+
         mfrac = 0.5
         if self.nnodes - self.nn+1  != 1:
             mfrac = 1./(self.nnodes - self.nn+1)
+
+        #if self.__class__.__name__ != "DE_GSM":
+        #    # no "product" structure exists, use initial structure
+        #    iP = 0
 
         xyz0 = self.nodes[iR].xyz.copy()
         xyz1 = self.nodes[iN].xyz.copy()
         com0 = self.nodes[iR].center_of_mass
         com1 = self.nodes[iN].center_of_mass
+        masses = self.nodes[iR].mass_amu
+
+        # From the old GSM code doesn't work
+        #com1 = mfrac*(com2-com0)
+        #print("com1")
+        #print(com1)
+        ## align centers of mass
+        #xyz1 += com1
+        #Eckart_align(xyz1,xyz2,masses,mfrac)
 
         # rotate to be in maximal coincidence with 0
         # assumes iP i.e. 2 is also in maximal coincidence
-
-        # align xyz1 to xyz0?
-        U = rotate.get_rot(xyz0,xyz1)
-        new_xyz = np.dot(xyz1,U)
+        #U = rotate.get_rot(xyz0,xyz1)
+        #xyz1 = np.dot(xyz1,U)
 
         # align 
         if self.nodes[iP] != None:
@@ -1919,12 +1942,17 @@ class Base_Method(Print,Analyze,object):
             else:
                 avg_com = mfrac*com0 + (1.-mfrac)*com2
             dist = avg_com - com1  #final minus initial
-            new_xyz += dist
         else:
             dist = com0 - com1  #final minus initial
-            new_xyz += dist
 
-        return new_xyz
+        print("aligning to com")
+        print(dist)
+        xyz1 += dist
+
+
+
+
+        return xyz1
 
     def get_current_rotation(self,frag,a1,a2):
         '''
