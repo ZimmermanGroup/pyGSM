@@ -55,9 +55,25 @@ class QChem(Lot):
                 tempfile.write(line)
 
         tempfile.write('{} {}\n'.format(self.charge,multiplicity))
-        if os.path.isfile("link.txt"):
-            with open("link.txt") as link:
-                link_lines = link.readlines()
+        # QMMM
+        if os.path.isfile("MM_region.txt"):
+            with open("MM_region.txt") as MM_region:
+               MM_geom = MM_region.readlines()
+            if not os.path.isfile("link.txt"):
+                raise FileNotFoundError('QMMM calculation needs link.txt file')
+            else:
+                with open("link.txt") as link:
+                    link_lines = link.readlines()
+            # calling copy to avoid modifing the geomtry
+            from copy import deepcopy
+            geom = deepcopy(geom)
+            nHcap = len(geom) + len(MM_geom) - len(link_lines)
+            geom = deepcopy(geom[:-nHcap])
+            for line in MM_geom:
+                line = line.split()
+                geom.append(line)
+            # the general format for the $molecule section in QMMM is
+            # <Atom> <X> <Y> <Z> <MM atom type> <Bond 1> <Bond 2> <Bond 3> <Bond 4> 
             tmp_geom = [list(i) for i in geom]
             for i,coord in enumerate(tmp_geom):
                 coord.append(link_lines[i].rstrip('\n'))
@@ -111,17 +127,18 @@ class QChem(Lot):
                     temp += 1
 
             with open(efilepath) as efile:
-                gradlines = efile.readlines()
-            temp = 0
-            tmp=[]
-            for lines in gradlines:
-                if '$' in lines:
-                    temp+=1
-                elif temp == 2:
-                    tmpline = lines.split()
-                    tmp.append([float(i) for i in tmpline])
-                elif temp == 3:
-                    break
+                tmp=[]
+                line = efile.readline()
+                while line != '':
+                    if line.startswith('$gradient'):
+                        line = efile.readline()
+                        natoms = len(self.geom) 
+                        for i in range(natoms):
+                            tmpline = line.split()
+                            tmp.append([float(i) for i in tmpline])
+                            line = efile.readline()
+                        break
+                    line = efile.readline()
             self.grada.append((multiplicity,tmp))
         else:
             raise NotImplementedError
@@ -178,4 +195,5 @@ class QChem(Lot):
                 print(" copying QCSCRATCH files\n {}".format(cmd))
                 os.system(cmd)
         return cls(lot.options.copy().set_values(options))
+
 
