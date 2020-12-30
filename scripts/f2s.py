@@ -2,8 +2,7 @@
 """
 Create QM_region.xyz, MM_region.txt, link.txt, and frozen.txt for GSM job in QMMM system from a given freq output file.
 
-python f2s.py qchem_freq_output.py
-
+python f2s.py qchem_freq.out
 """
 
 import argparse
