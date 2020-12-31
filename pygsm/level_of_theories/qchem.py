@@ -72,8 +72,11 @@ class QChem(Lot):
             for line in MM_geom:
                 line = line.split()
                 geom.append(line)
-            # the general format for the $molecule section in QMMM is
-            # <Atom> <X> <Y> <Z> <MM atom type> <Bond 1> <Bond 2> <Bond 3> <Bond 4> 
+        # the general format for the $molecule section in QMMM is
+        # <Atom> <X> <Y> <Z> <MM atom type> <Bond 1> <Bond 2> <Bond 3> <Bond 4> 
+        if os.path.isfile("link.txt"):
+            with open("link.txt") as link:
+                link_lines = link.readlines()
             tmp_geom = [list(i) for i in geom]
             for i,coord in enumerate(tmp_geom):
                 coord.append(link_lines[i].rstrip('\n'))
