@@ -1760,7 +1760,69 @@ class Base_Method(Print,Analyze,object):
         else:
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
-   
+  
+    def restart_from_geoms(geoms,reparametrize=False,restart_energies=True):
+        '''
+        '''
+
+        nifty.printcool("Restarting GSM from geometries")
+        self.growth_direction=0
+
+        nstructs=len(geoms)
+
+        self.gradrms = [0.]*nstructs
+        self.dE = [1000.]*nstructs
+
+        self.isRestarted=True
+        self.done_growing=True
+
+        # set coordinates from geoms
+        self.nodes[0].xyz = manage_xyz.xyz_to_np(geoms[0])
+        self.nodes[nstructs-1].xyz = manage_xyz.xyz_to_np(geoms[-1])
+        for struct in range(1,nstructs-1):
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],
+                    manage_xyz.xyz_to_np(geoms[struct]),
+                    new_node_id=struct,
+                    copy_wavefunction=False)
+            self.nodes[struct].newHess=5
+            # Turning this off
+            #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
+            #self.nodes[struct].gradrms=grmss[struct]
+            #self.nodes[struct].PES.dE = dE[struct]
+        self.nnodes=self.nR=nstructs
+
+        if reparametrize:
+            nifty.printcool("Reparametrizing")
+            self.get_tangents_1()
+            self.ic_reparam(ic_reparam_steps=8)
+            self.write_xyz_files('grown_string1_{:03}'.format(self.ID))
+
+        if restart_energies:
+            # initial energy
+            self.nodes[0].V0 = self.nodes[0].energy 
+            self.energies[0] = 0.
+            print(" initial energy is %3.4f" % self.nodes[0].energy)
+
+            for struct in range(1,nstructs-1):
+                print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
+                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
+                print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+
+            print(" V_profile: ", end=' ')
+            energies= self.energies
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
+            print()
+
+        print(" setting all interior nodes to active")
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
+            self.optimizer[n].options['DMAX'] = 0.05
+
+
+        return
+
     def restart_string(self,xyzfile='restart.xyz',rtype=2,reparametrize=False,restart_energies=True):
         nifty.printcool("Restarting string from file")
         self.growth_direction=0
