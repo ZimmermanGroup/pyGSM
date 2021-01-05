@@ -188,51 +188,40 @@ class OpenMM(Lot):
     def simulation(self,value):
         self.options['job_data']['simulation'] = value
   
-    def get_energy(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            self.run(coords)
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
+    def run(self,geom,mult,ad_idx,runtype='gradient'):
 
-    def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            self.run(coords)
-        return self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-
-
-    def run(self,coords):
-        self.E=[]
-        self.grada=[]
+        coords  = manage_xyz.xyz_to_np(geom)
+        self.Gradients={}
+        self.Energies = {}
+        self.Couplings = {}
 
         # Update coordinates of simulation (shallow-copied object)
         xyz_nm = 0.1 * coords  # coords are in angstrom
         self.simulation.context.setPositions(xyz_nm)
     
         # actually compute (only applicable to ground-states,singlet mult)
-        for state in self.states:
-            multiplicity=state[0]
-            ad_idx=state[1]
-            s = self.simulation.context.getState(
-                    getEnergy=True,
-                    getForces=True,
-                    )
-            tmp = s.getPotentialEnergy()
-            E = tmp.value_in_unit(openmm_units.kilocalories / openmm_units.moles)
-            E /= units.KCAL_MOL_PER_AU
-            self.E.append((multiplicity,ad_idx,E))
+        if mult!=1 or ad_idx>1:
+            raise RuntimeError('MM cant do excited states')
 
-            F = s.getForces()
-            G = F.value_in_unit(openmm_units.kilocalories/openmm_units.moles / openmm_units.angstroms)
-            G = np.asarray(G)
+        s = self.simulation.context.getState(
+                getEnergy=True,
+                getForces=True,
+                )
+        tmp = s.getPotentialEnergy()
+        E = tmp.value_in_unit(openmm_units.kilocalories / openmm_units.moles)
+        self._Energies[(multiplicity,ad_idx)] = self.Energy(E,'kcal/mol')
+
+        F = s.getForces()
+        G = F.value_in_unit(openmm_units.kilocalories/openmm_units.moles / openmm_units.angstroms)
+        G = -1.0*np.asarray(G)
              
-            self.grada.append((multiplicity,ad_idx, -1.0 * G * units.KCAL_MOL_TO_AU)) # H/ang
+        self.Gradients[(multiplicity,ad_idx)] = self.Gradient(G,'kcal/mol/Angstrom')
         self.hasRanForCurrentCoords=True
 
         return 
 
 if __name__=="__main__":
-    import pybel as pb
+    from openbabel import pybel as pb
     # Create and initialize System object from prmtop/inpcrd
     prmtopfile='../../data/solvated.prmtop'
     inpcrdfile='../../data/solvated.rst7'

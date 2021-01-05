@@ -5,16 +5,19 @@ import os
 import numpy as np
 
 # local application imports
-from utilities import manage_xyz,options,elements,nifty
+from utilities import manage_xyz,options,elements,nifty,units
 try:
     from .file_options import File_Options
 except:
     from file_options import File_Options
 
 ELEMENT_TABLE = elements.ElementData()
+from collections import namedtuple
 
 #TODO take out all job-specific data -- encourage external files since those are most customizable
 #TODO fix tuple searches
+
+#TODO Make energies,grada dictionaries
 
 
 class Lot(object):
@@ -147,7 +150,14 @@ class Lot(object):
 
         self.options = options
 
-        self.E=[]
+        # properties
+        self.Energy = namedtuple('Energy','value unit')
+        self.Gradient = namedtuple('Gradient','value unit')
+        self.Coupling = namedtuple('Coupling','value unit')
+        self._Energies={}
+        self._Gradients={}
+        self._Couplings={}
+
         # count number of states
         singlets=self.search_tuple(self.states,1)
         doublets=self.search_tuple(self.states,2)
@@ -222,9 +232,47 @@ class Lot(object):
         """ Returns an instance of this class with default options updated from values in kwargs"""
         return cls(cls.default_options().set_values(kwargs))
 
+    @property
+    def Energies(self):
+        '''
+        A list of tuples with multiplicity, state and energy 
+        '''
+        #assert type(self._E) is dict,"E must be dictionary"
+        return self._Energies
+
+    @Energies.setter
+    def Energies(self,value):
+        #assert type(value) is dict,"E must be dictionary"
+        self._Energies = value
+
+    @property
+    def Gradients(self):
+        '''
+        A list of tuples with multiplicity, state and energy 
+        '''
+
+        #assert type(self._) is dict,"grada must be dictionary"
+        return self._Gradients
+
+    @Gradients.setter
+    def Gradients(self,value):
+        assert type(value) is dict,"grada must be dictionary"
+        self._Gradients = value
+
+    @property
+    def Couplings(self):
+        '''
+        '''
+        return self._Couplings
+
+    @Couplings.setter
+    def Couplings(self,value):
+        self._Couplings = value
+
     @property 
     def file_options(self):
-            return self.options['file_options']
+        return self.options['file_options']
+
     @file_options.setter
     def file_options(self,value):
         assert type(value)==File_Options, "incorrect type for file options"
@@ -246,7 +294,7 @@ class Lot(object):
 
     @coupling_states.setter
     def coupling_states(self,value):
-        assert type(value)==list or type(value)==tuple, "incorrect type for coupling"
+        assert type(value)==tuple, "incorrect type for coupling,currently only support a tuple"
         self.options['coupling_states']=value
 
     @property
@@ -284,7 +332,6 @@ class Lot(object):
     def check_multiplicity(self,multiplicity):
         if multiplicity > self.n_electrons + 1:
             raise ValueError("Spin multiplicity too high.")
-        if (self.n_electrons + multiplicity + 1) % 2:
             print(self.n_electrons)
             print(multiplicity)
             raise ValueError("Inconsistent charge/multiplicity.")
@@ -299,38 +346,97 @@ class Lot(object):
         self.check_multiplicity(multiplicity)
         return 
 
-    def runall(self,geom):
-        self.E=[]
-        self.grada = []
-        singlets=self.search_tuple(self.states,1)
-        len_singlets=len(singlets) 
-        if len_singlets is not 0:
-            self.run(geom,1)
-        triplets=self.search_tuple(self.states,3)
-        len_triplets=len(triplets) 
-        if len_triplets is not 0:
-            self.run(geom,3)
-        doublets=self.search_tuple(self.states,2)
-        len_doublets=len(doublets) 
-        if len_doublets is not 0:
-            self.run(geom,2)
-        quartets=self.search_tuple(self.states,4)
-        len_quartets=len(quartets) 
-        if len_quartets is not 0:
-            self.run(geom,4)
-        pentets=self.search_tuple(self.states,5)
-        len_pentets=len(pentets) 
-        if len_pentets is not 0:
-            self.run(geom,5)
-        hextets=self.search_tuple(self.states,6)
-        len_hextets=len(hextets) 
-        if len_hextets is not 0:
-            self.run(geom,6)
-        septets=self.search_tuple(self.states,7)
-        len_septets=len(septets) 
-        if len_septets is not 0:
-            self.run(geom,7)
-        self.hasRanForCurrentCoords=True
+    def get_energy(self,coords,multiplicity,state,runtype=None):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
+            self.runall(geom,runtype)
+        
+        Energy = self.Energies[(multiplicity,state)]
+        if Energy.unit=="Hartree":
+            return Energy.value*units.KCAL_MOL_PER_AU
+        elif Energy.unit=='kcal/mol':
+            return Energy.value
+        elif Energy.unit==None:
+            return Energy.value
+
+    def get_gradient(self,coords,multiplicity,state):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
+            self.runall(geom)
+        Gradient = self.Gradients[(multiplicity,state)]
+        if Gradient.value is not None:
+            if Gradient.unit=="Hartree/Bohr":
+                return Gradient.value *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
+            if Gradient.unit=="kcal/mol/Angstrom":
+                return Gradient.value *units.KCAL_MOL_TO_AU  #kcalmol/A*Ha/kcalmol=Ha/ang
+        else:
+            return None
+
+    def get_coupling(self,coords,multiplicity,state1,state2):
+        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
+            self.currentCoords = coords.copy()
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
+            self.runall(geom)
+        Coupling = self.Couplings[(state1,state2)]
+        if Coupling.value is not None:
+            if Coupling.unit=="Hartree/Bohr":
+                return Coupling.value *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
+        else:
+            return None
+        #return np.reshape(self.coup,(3*len(self.geom),1))*units.ANGSTROM_TO_AU
+
+    def write_E_to_file(self):
+        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
+            for key,Energy in self.Energies.items():
+                f.write('{} {} {:9.7f} Hartree\n'.format(key[0],key[1],Energy.value))
+
+    def run(self,geom,mult,ad_idx,runtype='gradient'):
+        raise NotImplementedError
+
+    def runall(self,geom,runtype=None):
+        for state in self.states:
+            mult,ad_idx = state
+            if state in self.gradient_states:
+                self.run(geom,mult,ad_idx)
+            elif state in self.coupling_states:
+                self.run(geom,mult,ad_idx,'coupling')
+            else:
+                self.run(geom,mult,ad_idx,'energy')
+
+    #    self.E=[]
+    #    self.grada = []
+    #    singlets=self.search_tuple(self.states,1)
+    #    len_singlets=len(singlets) 
+    #    if len_singlets is not 0:
+    #        self.run(geom,1)
+    #    triplets=self.search_tuple(self.states,3)
+    #    len_triplets=len(triplets) 
+    #    if len_triplets is not 0:
+    #        self.run(geom,3)
+    #    doublets=self.search_tuple(self.states,2)
+    #    len_doublets=len(doublets) 
+    #    if len_doublets is not 0:
+    #        self.run(geom,2)
+    #    quartets=self.search_tuple(self.states,4)
+    #    len_quartets=len(quartets) 
+    #    if len_quartets is not 0:
+    #        self.run(geom,4)
+    #    pentets=self.search_tuple(self.states,5)
+    #    len_pentets=len(pentets) 
+    #    if len_pentets is not 0:
+    #        self.run(geom,5)
+    #    hextets=self.search_tuple(self.states,6)
+    #    len_hextets=len(hextets) 
+    #    if len_hextets is not 0:
+    #        self.run(geom,6)
+    #    septets=self.search_tuple(self.states,7)
+    #    len_septets=len(septets) 
+    #    if len_septets is not 0:
+    #        self.run(geom,7)
+    #    self.hasRanForCurrentCoords=True
+
 
     def search_PES_tuple(self,tups, multiplicity,state):
         '''returns tuple in list of tuples that matches multiplicity and state'''

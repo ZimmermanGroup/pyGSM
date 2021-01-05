@@ -29,15 +29,13 @@ class xTB_lot(Lot):
             numbers.append(elem.atomic_num)
         self.numbers = np.asarray(numbers)
 
-    def run(self,coords,multiplicity,state,verbose=False):
+    def run(self,geom,multiplicity,state,verbose=False):
         
         #print('running!')
         #sys.stdout.flush()
+        coords = manage_xyz.xyz_to_np(geom) 
 
-        self.E=[]
-        self.grada=[]
-
-        # convert to angstrom
+        # convert to bohr
         positions = coords* units.ANGSTROM_TO_AU
 
         calc = Calculator(get_method("GFN2-xTB"), self.numbers, positions)
@@ -46,37 +44,17 @@ class xTB_lot(Lot):
         calc.release_output()
      
         # energy in hartree
-        self.E.append((multiplicity,state,res.get_energy()))
+        self._Energies[(multiplicity,state)] = self.Energy(res.get_energy(),'Hartree')
 
         # grad in Hatree/Bohr
-        self.grada.append((multiplicity,state,res.get_gradient()))
+        self._Gradients[(multiplicity,state)] = self.Gradient(res.get_gradient(),'Hartree/Bohr')
 
         # write E to scratch
-        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
-            for E in self.E:
-                f.write('{} {:9.7f}\n'.format(E[0],E[2]))
+        self.write_E_to_file()
+
         self.hasRanForCurrentCoords = True
 
         return res
-
-    def get_energy(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(coords,multiplicity,state)
-        tmp = self.search_PES_tuple(self.E,multiplicity,state)[0][2]
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
-
-    def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(coords,multiplicity,state)
-        tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        if tmp is not None:
-            return np.asarray(tmp)*units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
-        else:
-            return None
 
 
 if __name__=="__main__":
@@ -89,7 +67,7 @@ if __name__=="__main__":
     xyz = manage_xyz.xyz_to_np(geom) 
     #xyz *= units.ANGSTROM_TO_AU
 
-    lot  = xTB.from_options(states=[(1,0)],gradient_states=[(1,0)],geom=geom,node_id=0)
+    lot  = xTB_lot.from_options(states=[(1,0)],gradient_states=[(1,0)],geom=geom,node_id=0)
 
     E = lot.get_energy(xyz,1,0)
     print(E)

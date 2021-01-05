@@ -102,8 +102,9 @@ class PES(object):
 
     @property
     def energy(self):
-        if self.lot.E:
-            return self.lot.search_PES_tuple(self.lot.E,self.multiplicity,self.ad_idx)[0][2]*units.KCAL_MOL_PER_AU
+        if self.lot.Energies:
+            # if E is property and a dictionary
+            return self.lot.Energies[(self.multiplicity,self.ad_idx)]
         else:
             return 0.
 
@@ -150,7 +151,7 @@ class PES(object):
             cc=0
             for row in mat:
                 xyz = np.reshape(row,(-1,3))
-                energies[rc,cc] = self.lot.get_energy(xyz,self.multiplicity,self.ad_idx)
+                energies[rc,cc] = self.lot.get_energy(xyz,self.multiplicity,self.ad_idx,runtype='energy')
                 cc+=1
             rc+=1
          

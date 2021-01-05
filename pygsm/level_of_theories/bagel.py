@@ -99,11 +99,9 @@ class BAGEL(Lot):
             os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
-    def go(self,geom,runtype='gradient'):
-        # first write the file, run it, and the read the output
+    def write_input(self,geom,runtype='gradient'):
         # filenames
         inpfilename = 'scratch/{}/bagel.json'.format(self.node_id)
-        outfilename = 'scratch/{}/output.dat'.format(self.node_id)
         inpfile = open(inpfilename,'w')
 
         # Header
@@ -178,7 +176,7 @@ class BAGEL(Lot):
                 inpfile.write('     {{ "title" : "force", "target" : {} }},\n'.format(state[1]))
 
             inpfile.write('     {{ "title"  : "nacme", "target1" : {}, "tartet2": {}, "nacmtype" : "full" }}\n'.format(self.coupling_states[0],self.coupling_states[1]))
-            inpfile.write(' \n],\n')
+            inpfile.write(' ],\n')
 
 
         if "caspt2" in self.file_options.ActiveOptions and (runtype=='gh' or runtype=='gradient'):
@@ -212,40 +210,35 @@ class BAGEL(Lot):
         inpfile.write(']}')    
         inpfile.close()
 
-
-        # Run BAGEL
-        ### RUN THE CALCULATION ###
-        cmd = "BAGEL {} > {}".format(inpfilename,outfilename)
-        os.system(cmd)
-        os.system('wait')
-
+    def parse(self,geom,runtype='gradient'):
+        self.Gradients={}
+        self.Energies = {}
+        self.Couplings = {}
 
         # Parse the output for Energies
         tempfileout='scratch/{}/output.dat'.format(self.node_id)
         tmp =[]
         if "caspt2" in self.file_options.ActiveOptions:
             pattern = re.compile(r'\s. MS-CASPT2 energy : state  \d \s* ([-+]?[0-9]*\.?[0-9]+)')
-            for i,line in enumerate(open(tempfileout)):
+            for line in open(tempfileout):
                 for match in re.finditer(pattern,line):
                     tmp.append(float(match.group(1)))
         else:
+            print("CASSCF not currently enabled")
             for i in self.states:
                 tmp.append(0.0)
 
-        # Finalize Energy list
-        for i,tup in enumerate(self.states):
-            self.E.append((tup[0],tup[1],tmp[i]))
-        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
-            for E in self.E:
-                f.write('{} {} {:9.7f}\n'.format(E[0],E[1],E[2]))
+        for E,state in zip(tmp,self.states):
+            self._Energies[state] = self.Energy(E,'Hartree')
+
+        # Save to file
+        self.write_E_to_file()
 
         # Parse the output for Gradients
         if runtype=="gradient" or runtype=='gh':
-            self.grada=[]
             tmpgrada=[]
             tmpgrad = []
             tmpcoup = []
-            self.coup = []
             count=1
             with open(tempfileout,"r") as f:
                 for line in f:
@@ -270,66 +263,53 @@ class BAGEL(Lot):
                             else:
                                 mobj = re.match(r'. \s* ([-+]?[0-9]*\.?[0-9]+)', findline)
                                 tmpcoup.append(float(mobj.group(1)))
-                        self.coup = np.asarray(tmpcoup)
+                        self.Couplings[self.coupling_states] = self.Coupling(np.asarray(tmpcoup),'Hartree/Bohr')
                         break
 
-            for count,i in enumerate(self.gradient_states):
-                if i[0]==1:
-                    self.grada.append((1,i[1],tmpgrada[count]))
-                if i[0]==3:
-                    self.grada.append((3,i[1],tmpgrada[count]))
+            for tup,tmpgrad in zip(self.gradient_states,tmpgrada):
+                self._Gradients[tup] = self.Gradient(tmpgrad,'Hartree/Bohr')
+
+
+    def run(self,geom,runtype='gradient'):
+        # first write the file, run it, and the read the output
+
+        inpfilename = 'scratch/{}/bagel.json'.format(self.node_id)
+        outfilename = 'scratch/{}/output.dat'.format(self.node_id)
+
+        # Write
+        self.write_input(geom,runtype)
+
+        # Run BAGEL
+        ### RUN THE CALCULATION ###
+        cmd = "BAGEL {} > {}".format(inpfilename,outfilename)
+        os.system(cmd)
+        os.system('wait')
+
+        # Parse the output for Energies
+        self.parse(geom,runtype)
 
         # Turn on guess for calculations after running
         if 'load_ref' not in self.file_options.ActiveOptions:
             self.file_options.set_active('load_ref','scratch/{}/orbs'.format(self.node_id),str,'')
         return
-        # Done go
 
-    def get_energy(self,coords,multiplicity,state,runtype=None):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom,runtype)
-        tmp = self.search_PES_tuple(self.E,multiplicity,state)[0][2]
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
 
-    def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom)
-        tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        if tmp is not None:
-            return np.asarray(tmp) *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
-        else:
-            return None
-
-    def get_coupling(self,coords,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom)
-        return np.reshape(self.coup,(3*len(self.geom),1))*units.ANGSTROM_TO_AU
-
-    def run(self,geom,runtype=None):
+    def runall(self,geom,runtype=None):
         ''' calculate all states with BAGEL '''
         tempfileout='scratch/{}/output.dat'.format(self.node_id)
-        self.grada=[]
-        self.coup=[]
-        self.E = []
         
         if (not self.gradient_states and not self.coupling_states) or runtype=='energy':
             print(" only calculating energies")
             # TODO what about multiple multiplicities? 
             tup = self.states[0]
-            self.go(geom,'energy')
+            self.run(geom,'energy')
             # make grada all None
             for tup in self.states:
-                self.grada.append((tup[0],tup[1],None))
+                self._Gradients[tup] = self.Gradients(None,None)
         elif self.gradient_states and self.coupling_states or runtype=='gh':
-            self.go(geom,'gh')
+            self.run(geom,'gh')
         elif self.gradient_states and not self.coupling_states or runtype=='gradient':
-            self.go(geom,'gradient')
+            self.run(geom,'gradient')
         else:
             raise RuntimeError
 
@@ -340,7 +320,7 @@ class BAGEL(Lot):
 
 if __name__=="__main__":
     geom=manage_xyz.read_xyz('../../data/ethylene.xyz') #,units.ANGSTROM_TO_AU)
-    B = BAGEL.from_options(states=[(1,0),(1,1)],gradient_states=[(1,0),(1,1)],coupling_states=[(1,0),(1,1)],geom=geom,lot_inp_file='bagel.txt',node_id=0)
+    B = BAGEL.from_options(states=[(1,0),(1,1)],gradient_states=[(1,0),(1,1)],coupling_states=(0,1),geom=geom,lot_inp_file='bagel.txt',node_id=0)
     coords  = manage_xyz.xyz_to_np(geom)
     E0 = B.get_energy(coords,1,0)
     E1 = B.get_energy(coords,1,1)

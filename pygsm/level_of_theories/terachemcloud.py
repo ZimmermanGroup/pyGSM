@@ -53,9 +53,9 @@ class TeraChemCloud(Lot):
         self.tcc_options = tcc_options_copy
 
     def run(self,coords):
-        self.E=[]
-        self.grada=[]
-    
+   
+        E=[]
+        grada=[]
         for state in self.states:
             #print("on state %d" % state[1])
             multiplicity=state[0]
@@ -81,11 +81,11 @@ class TeraChemCloud(Lot):
             #print((json.dumps(results, indent=2, sort_keys=True)))
             self.orbfile = results['orbfile']
             try:
-                self.E.append((multiplicity,ad_idx,results['energy'][ad_idx]))
+                E.append((multiplicity,ad_idx,results['energy'][ad_idx]))
             except:
-                self.E.append((multiplicity,ad_idx,results['energy']))
+                E.append((multiplicity,ad_idx,results['energy']))
 
-            self.grada.append((multiplicity,ad_idx,results['gradient']))
+            grada.append((multiplicity,ad_idx,results['gradient']))
         if self.do_coupling==True:
             state1=self.states[0][1]
             state2=self.states[1][1]
@@ -105,26 +105,14 @@ class TeraChemCloud(Lot):
                 time.sleep(1)
                 sys.stdout.flush()
             #print((json.dumps(results, indent=2, sort_keys=True)))
-            self.coup = results['nacme']
+            coup = results['nacme']
+            self.Couplings[self.coupling_states] = self.Coupling(coup,'Hartree/Bohr') 
+
+        for energy,state in zip(E,self.states):
+            self._Energies[state] = self.Energy(energy,'Hartree')
+        for grad,state in zip(E,self.gradient_states):
+            self._Gradients[state] = self.Gradient(grad,"Hartree/Bohr")
 
         self.hasRanForCurrentCoords=True
         return  
 
-    def get_energy(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
-            self.currentCoords = coords.copy()
-            self.run(coords)
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
-
-    def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).all():
-            self.currentCoords = coords.copy()
-            self.run(coords)
-        tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        return np.asarray(tmp)*units.ANGSTROM_TO_AU
-
-    def get_coupling(self,coords,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            self.run(coords)
-        return np.reshape(self.coup,(-1,1))*units.ANGSTROM_TO_AU

@@ -12,9 +12,8 @@ from .base_lot import Lot
 from utilities import *
 
 class Orca(Lot):
-    
-    def run(self,geom,multiplicity):
-        
+   
+    def write_input_file(self):
         if self.lot_inp_file == False:
             inpstring = '!'
             inpstring += ' '+self.functional
@@ -42,9 +41,15 @@ class Orca(Lot):
         tempfile = open(tempfilename,'w')
         tempfile.write(inpstring)
         tempfile.close()
+
+    def run(self,geom,multiplicity,ad_idx,runtype='gradient'):
+
+        assert ad_idx == 0,"pyGSM ORCA doesn't currently support ad_idx!=0"
         
+        # Write input file
+        self.write_input_file()
+
         path2orca = os.popen('which orca').read().rstrip()
-#        path2orca = '/export/zimmerman/khyungju/orca_4_0_0_2_linux_x86-64/orca'
         user = os.environ['USER']
         cwd = os.environ['PWD']
         try:
@@ -65,6 +70,12 @@ class Orca(Lot):
         cmd = 'cd {}; {} {} > {}/{}.log; cd {}'.format(runscr,path2orca,tempfilename,runscr,tempfilename,cwd)
         os.system(cmd)
 
+        # parse output
+        self.parse()
+
+        return
+
+    def parse(self):
         engradpath = runscr+'/{}.engrad'.format(tempfilename) 
         with open(engradpath) as engradfile:
             engradlines = engradfile.readlines()
@@ -74,7 +85,7 @@ class Orca(Lot):
             if '# The current total energy in Eh\n' in lines:
                 temp = i
             if i > temp+1:
-                self.E.append((multiplicity,float(lines.split()[0]))) 
+                self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree')
                 break
 
         temp = 100000
@@ -90,29 +101,5 @@ class Orca(Lot):
             if len(tmp2) == 3:
                 tmp.append(tmp2)
                 tmp2 = []
-        self.grada.append((multiplicity,tmp))
-        return
+        self._Gradients[(multiplicity,0)] = self.Gradient(np.asarray(tmp),'Hartree/Bohr')
 
-    def get_energy(self,coords,multiplicity,state):
-        #if self.has_nelectrons==False:
-        #    for i in self.states:
-        #        self.get_nelec(geom,i[0])
-        #    self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.runall(geom)
-        tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*units.KCAL_MOL_PER_AU
-
-    def get_gradient(self,coords,multiplicity,state):
-        #if self.has_nelectrons==False:
-        #    for i in self.states:
-        #        self.get_nelec(geom,i[0])
-        #    self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.runall(geom)
-        tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU # I think in ORCA with version 4.2.1, gradient is E_h/Bohr

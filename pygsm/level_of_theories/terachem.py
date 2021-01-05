@@ -234,7 +234,7 @@ class TeraChem(Lot):
 
         return
     
-    def go(self,geom,mult,ad_idx,runtype='gradient'):
+    def run(self,geom,mult,ad_idx,runtype='gradient'):
         ''' compute an individual gradient or NACME '''
 
         inpfilename = 'scratch/{}/{}'.format(self.node_id,self.lot_inp_file)
@@ -307,112 +307,48 @@ class TeraChem(Lot):
         return
         #Done go
 
-    def run(self,geom,runtype=None):
+    def runall(self,geom,runtype=None):
         ''' calculate all states '''
 
+        self.Gradients={}
+        self.Energies = {}
+        self.Couplings = {}
+
         tempfileout='scratch/{}/output.dat'.format(self.node_id)
-        self.grada=[]
-        self.coup=[]
-        self.E = []
         if not self.gradient_states and not self.coupling_states or runtype=="energy":
             print(" only calculating energies")
             # TODO what about multiple multiplicities? 
             tup = self.states[0]
-            self.go(geom,tup[0],None,'energy')
+            self.run(geom,tup[0],None,'energy')
             # make grada all None
             for tup in self.states:
-                self.grada.append((tup[0],tup[1],None))
+                self._Gradients[tup] = self.Gradients(None,None)
         elif self.gradient_states:
-
             ### Calculate gradient(s) ###
             for tup in self.states:
                 if tup in self.gradient_states:
                     ## RUN ##
-                    self.go(geom,tup[0],tup[1],'gradient')
-
-                    # GET GRADIENT FOR QMMMM -- REGULAR GRADIENT IS PARSED THROUGH grad.xyz
-                    # QMMM is done differently :(
-                    if "prmtop" in self.file_options.ActiveOptions:
-                        tmpgrad=[]
-                        with open(tempfileout,"r") as f:
-                            for line in f:
-                                if line.startswith("dE/dX",8):
-                                    for i in range(self.QM_atoms):
-                                        findline = next(f,'').strip()
-                                        mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
-                                        tmpgrad.append([
-                                            float(mobj.group(1)),
-                                            float(mobj.group(2)),
-                                            float(mobj.group(3)),
-                                            ])
-                                    for i in range(self.link_atoms):
-                                        next(f)
-                                    # read two lines seperating the QM and MM regions
-                                    next(f)
-                                    next(f) 
-                                    for i in range(self.MM_atoms):
-                                        findline = next(f,'').strip()
-                                        mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
-                                        tmpgrad.append([
-                                            float(mobj.group(1)),
-                                            float(mobj.group(2)),
-                                            float(mobj.group(3)),
-                                            ])
-
-                        tmpgrad = np.asarray(tmpgrad)
-                        grad = np.zeros_like(tmpgrad)
-                        grad[self.qmindices] = tmpgrad[:len(self.qmindices)]
-                        grad[self.mm_indices] = tmpgrad[len(self.qmindices):]
-                        self.grada.append((tup[0],tup[1],grad))
-
-                    else:  
-                        # getting gradient of non-prmtop job
-                        gradfile='scratch/{}/grad_{}_{}.xyz'.format(self.node_id,tup[0],tup[1])
-                        grad = manage_xyz.read_xyz(gradfile,scale=1.0)
-                        grad = manage_xyz.xyz_to_np(grad)
-                        self.grada.append((tup[0],tup[1],grad))
+                    self.run(geom,tup[0],tup[1],'gradient')
+                    self.parse_grad(tup)
 
                 else:  # not in gradient states
-                    self.grada.append((tup[0],tup[1],None))
+                    self._Gradients[tup] = self.Gradient(None,None)
+
         if self.coupling_states: 
             #TODO  Warning only allowing one coupling state, with singlet multiplicities
-            self.go(geom,1,None,runtype="coupling")
-            if "prmtop" in self.file_options.ActiveOptions:
-                tmpcoup = []
-                with open(tempfileout,"r") as f:
-                    for line in f:
-                        if line.startswith("dE/dX",8): #will work for SA-MC and RSPT2 HF
-                            for i in range(self.QM_atoms):
-                                findline = next(f,'').strip()
-                                mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
-                                tmpcoup.append([
-                                    float(mobj.group(1)),
-                                    float(mobj.group(2)),
-                                    float(mobj.group(3)),
-                                    ])
-                            # read link atoms
-                            for i in range(self.link_atoms):
-                                next(f)
-                            next(f)
-                            next(f) # read two lines seperating the QM and MM regions
-                            for i in range(self.MM_atoms):
-                                findline = next(f,'').strip()
-                                mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
-                                tmpcoup.append([
-                                    float(mobj.group(1)),
-                                    float(mobj.group(2)),
-                                    float(mobj.group(3)),
-                                    ])
-                self.coup = np.zeros_like(tmpgrad)
-                self.coup[self.qmindices] = tmpcoup[:len(self.qmindices)]
-                self.coup[self.mm_indices] = tmpcoup[len(self.qmindices):]
-            else:
-                coupfile='scratch/{}/coup_{}_{}.xyz'.format(self.node_id,self.coupling_states[0],self.coupling_states[1])
-                coup = manage_xyz.read_xyz(coupfile,scale=1.0)
-                self.coup = manage_xyz.xyz_to_np(coup)
+            self.run(geom,1,None,runtype="coupling")
+            self.parse_coup()
         #### FINALLY DONE WITH RUN Energy/Gradients ###
 
+        self.parse_E()       
+        self.hasRanForCurrentCoords=True
+        return
+        
+    def parse_E(self):
         # parse the output for Energies  --> This can be done on any of the files since they should be the same
+
+        tempfileout='scratch/{}/output.dat'.format(self.node_id)
+
         #TODO Parse other multiplicities is broken here
         if "casscf" in self.file_options.ActiveOptions or "casci" in self.file_options.ActiveOptions:
             pattern = re.compile(r'Singlet state  \d energy: \s* ([-+]?[0-9]*\.?[0-9]+)')
@@ -432,72 +368,128 @@ class TeraChem(Lot):
                 if mobj:
                     tmp.append(float(mobj.group(2)))
 
-        # Finalize Energy list
-        for i,tup in enumerate(self.states):
-            self.E.append((tup[0],tup[1],tmp[i]))
-        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
-            for E in self.E:
-                f.write('{} {} {:9.7f}\n'.format(E[0],E[1],E[2]))
+        for E,state in zip(tmp,self.states):
+            self._Energies[state] = self.Energy(E,'Hartree')
+
+        self.write_E_to_file()
                 
-        self.hasRanForCurrentCoords=True
         return
+    
+    def parse_grad(self,
+            state,
+            tempfileout=None,
+            ):
 
-    def get_energy(self,coords,multiplicity,state,runtype=None):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom,runtype)
-        tmp = self.search_PES_tuple(self.E,multiplicity,state)[0][2]
-        return self.search_PES_tuple(self.E,multiplicity,state)[0][2]*units.KCAL_MOL_PER_AU
+        if tempfileout==None:
+            tempfileout ='scratch/{}/output.dat'.format(self.node_id)
+        # GET GRADIENT FOR QMMMM -- REGULAR GRADIENT IS PARSED THROUGH grad.xyz
+        # QMMM is done differently :(
+        if "prmtop" in self.file_options.ActiveOptions:
+            tmpgrad=[]
+            with open(tempfileout,"r") as f:
+                for line in f:
+                    if line.startswith("dE/dX",8):
+                        for i in range(self.QM_atoms):
+                            findline = next(f,'').strip()
+                            mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
+                            tmpgrad.append([
+                                float(mobj.group(1)),
+                                float(mobj.group(2)),
+                                float(mobj.group(3)),
+                                ])
+                        for i in range(self.link_atoms):
+                            next(f)
+                        # read two lines seperating the QM and MM regions
+                        next(f)
+                        next(f) 
+                        for i in range(self.MM_atoms):
+                            findline = next(f,'').strip()
+                            mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
+                            tmpgrad.append([
+                                float(mobj.group(1)),
+                                float(mobj.group(2)),
+                                float(mobj.group(3)),
+                                ])
 
-    def get_gradient(self,coords,multiplicity,state):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom)
-        tmp = self.search_PES_tuple(self.grada,multiplicity,state)[0][2]
-        if tmp is not None:
-            return np.asarray(tmp)*units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
+            tmpgrad = np.asarray(tmpgrad)
+            grad = np.zeros_like(tmpgrad)
+            grad[self.qmindices] = tmpgrad[:len(self.qmindices)]
+            grad[self.mm_indices] = tmpgrad[len(self.qmindices):]
+        else:  
+            # getting gradient of non-prmtop job
+            gradfile='scratch/{}/grad_{}_{}.xyz'.format(self.node_id,state[0],state[1])
+            grad = manage_xyz.read_xyz(gradfile,scale=1.0)
+            grad = manage_xyz.xyz_to_np(grad)
+        self._Gradients[state] = self.Gradient(grad,"Hartree/Bohr")
+
+    def parse_coup(self):
+        if "prmtop" in self.file_options.ActiveOptions:
+            tmpcoup = []
+            with open(tempfileout,"r") as f:
+                for line in f:
+                    if line.startswith("dE/dX",8): #will work for SA-MC and RSPT2 HF
+                        for i in range(self.QM_atoms):
+                            findline = next(f,'').strip()
+                            mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
+                            tmpcoup.append([
+                                float(mobj.group(1)),
+                                float(mobj.group(2)),
+                                float(mobj.group(3)),
+                                ])
+                        # read link atoms
+                        for i in range(self.link_atoms):
+                            next(f)
+                        next(f)
+                        next(f) # read two lines seperating the QM and MM regions
+                        for i in range(self.MM_atoms):
+                            findline = next(f,'').strip()
+                            mobj = re.match(r'(\S+)\s+(\S+)\s+(\S+)\s*$', findline)
+                            tmpcoup.append([
+                                float(mobj.group(1)),
+                                float(mobj.group(2)),
+                                float(mobj.group(3)),
+                                ])
+            coup = np.zeros_like(tmpgrad)
+            coup[self.qmindices] = tmpcoup[:len(self.qmindices)]
+            coup[self.mm_indices] = tmpcoup[len(self.qmindices):]
+            coup = np.asarray(coup)
         else:
-            return None
-
-    def get_coupling(self,coords,multiplicity,state1,state2):
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.run(geom)
-        return np.reshape(self.coup,(3*len(self.coup),1))*units.ANGSTROM_TO_AU
+            coupfile='scratch/{}/coup_{}_{}.xyz'.format(self.node_id,self.coupling_states[0],self.coupling_states[1])
+            coup = manage_xyz.read_xyz(coupfile,scale=1.0)
+            coup = manage_xyz.xyz_to_np(coup)
+        self.Couplings[self.coupling_states] = self.Coupling(coup,'Hartree/Bohr') 
+    
 
 if __name__=="__main__":
 
-    #filepath="../../data/ethylene.xyz"
-    filepath='tmp.inpcrd'
-    geom=manage_xyz.read_xyz('geom.xyz')
+    filepath="../../data/ethylene.xyz"
+    #filepath='tmp.inpcrd'
+    geom=manage_xyz.read_xyz(filepath)
     #TC = TeraChem.from_options(states=[(1,1)],fnm=filepath,lot_inp_file='tc_options.txt')
     #TC = TeraChem.from_options(states=[(1,0),(1,1)],fnm=filepath,lot_inp_file='tc_options.txt')
-    TC = TeraChem.from_options(states=[(1,0),(1,1)],gradient_states=[(1,1)],geom=geom,lot_inp_file='tc_options.txt',node_id=3)
+    TC = TeraChem.from_options(states=[(1,0),(1,1)],gradient_states=[(1,1)],geom=geom,lot_inp_file='tc_options.txt',node_id=0)
 
-    for line in TC.file_options.record():
-        print(line)
+    #for line in TC.file_options.record():
+    #    print(line)
     
     #print(TC.casscf)
     #print(TC.rc_w)
 
     #for key in TC.file_options.ActiveOptions:
     #    print(key,TC.file_options.ActiveOptions[key])
-    for key,value in TC.file_options.ActiveOptions.items():
-        print(key,value)
+    #for key,value in TC.file_options.ActiveOptions.items():
+    #    print(key,value)
 
     #c = deepcopy(TC.file_options)
-    TC2 = TeraChem.copy(TC,options={'node_id':3})
-    print(id(TC.file_options))
-    print(id(TC2))
+    #TC2 = TeraChem.copy(TC,options={'node_id':3})
+    #print(id(TC.file_options))
+    #print(id(TC2))
 
     #geom=manage_xyz.read_xyz(filepath)
     xyz = manage_xyz.xyz_to_np(geom)
     print("getting energy")
     print(TC.get_energy(xyz,1,0))
-    #print(TC.get_energy(xyz,1,1))
+    print(TC.get_energy(xyz,1,1))
     print("getting grad")
     print(TC.get_gradient(xyz,1,0))
     print(TC.get_gradient(xyz,1,1))

@@ -72,18 +72,18 @@ class QChem(Lot):
         tempfile.write('$end')
         tempfile.close()
     
-    def run(self,geom,multiplicity):
+    def run(self,geom,multiplicity,ad_idx,runtype='gradient'):
+
+        assert ad_idx == 0,"pyGSM Q-Chem doesn't currently support ad_idx!=0"
 
         qcscratch = os.environ['QCSCRATCH']
         tempfilename = qcscratch + '/string_{:03d}/{}.{}/tempQCinp'.format(self.ID,self.node_id,multiplicity)
 
-        if self.calc_grad:
+        if self.calc_grad and runtype!="energy":
            self.write_preamble(geom,multiplicity,tempfilename)
         else:
            self.write_preamble(geom,multiplicity,tempfilename,jobtype='SP')
         
-        #cmd = "qchem -nt {} -save {} {}.qchem.out string_{:03d}/{}.{}".format(self.nproc,tempfilename,tempfilename,self.ID,self.node_id,multiplicity)
-
         cmd = ['qchem']
         args = ['-nt',str(self.nproc),
                 '-save',
@@ -92,10 +92,15 @@ class QChem(Lot):
                 'string_{:03d}/{}.{}'.format(self.ID,self.node_id,multiplicity)
                 ]
         cmd.extend(args)
+
+        #  Run the process
         output = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.PIPE).communicate()[0]
-        #print(cmd)
-        #os.system(cmd)
+
+        self.parse()
        
+        return 
+
+    def parse(self):
         # PARSE OUTPUT #
         if self.calc_grad:
             efilepath = qcscratch + '/string_{:03d}/{}.{}/GRAD'.format(self.ID,self.node_id,multiplicity)
@@ -105,7 +110,8 @@ class QChem(Lot):
             temp = 0
             for lines in elines:
                 if temp == 1:
-                    self.E.append((multiplicity,float(lines.split()[0])))
+                    # defaulting to the ground-state
+                    self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree')
                     break
                 if "$" in lines:
                     temp += 1
@@ -122,47 +128,10 @@ class QChem(Lot):
                     tmp.append([float(i) for i in tmpline])
                 elif temp == 3:
                     break
-            self.grada.append((multiplicity,tmp))
+            self._Gradients[(multiplicity,0)] = self.Gradient(tmp,'Hartree/Bohr')
         else:
             raise NotImplementedError
-
-        # write E to scratch
-        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
-            for E in self.E:
-                f.write('{} {:9.7f}\n'.format(E[0],E[1]))
-
-
-        return 
-
-    def get_energy(self,coords,multiplicity,state):
-        #if self.has_nelectrons==False:
-        #    for i in self.states:
-        #        self.get_nelec(geom,i[0])
-        #    self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            #print(" Running calculation!")
-            #print(coords.flatten())
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            #print(geom)
-            self.runall(geom)
-            self.hasRanForCurrentCoords=True
-        #else:
-        #    print(" Returning memoization!")
-        tmp = self.search_tuple(self.E,multiplicity)
-        return np.asarray(tmp[state][1])*units.KCAL_MOL_PER_AU
-
-    def get_gradient(self,coords,multiplicity,state):
-        #if self.has_nelectrons==False:
-        #    for i in self.states:
-        #        self.get_nelec(geom,i[0])
-        #    self.has_nelectrons==True
-        if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
-            self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
-            self.runall(geom)
-        tmp = self.search_tuple(self.grada,multiplicity)
-        return np.asarray(tmp[state][1])*units.ANGSTROM_TO_AU
+        self.write_E_to_file()
 
     @classmethod
     def copy(cls,lot,options,copy_wavefunction=True):
