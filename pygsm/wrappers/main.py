@@ -25,6 +25,8 @@ from coordinate_systems import Topology,PrimitiveInternalCoordinates,Delocalized
 
 
 
+#TODO can use the "dest" keyword in parser to automatically save the variable
+
 def main():
     parser = argparse.ArgumentParser(
         description="Reaction path transition state and photochemistry tool",
@@ -73,9 +75,9 @@ def main():
     parser.add_argument('-dont_analyze_ICs',action='store_false',help="Don't post-print the internal coordinates primitives and values") #defaults to true
     parser.add_argument('-hybrid_coord_idx_file',type=str,help="A filename containing a list of  indices to use in hybrid coordinates. 0-Based indexed")
     parser.add_argument('-frozen_coord_idx_file',type=str,help="A filename containing a list of  indices to be frozen. 0-Based indexed")
-    parser.add_argument('-conv_Ediff',default=100.,type=float,help='')
-    parser.add_argument('-conv_dE',default=1.,type=float,help='')
-    parser.add_argument('-conv_gmax',default=100.,type=float,help='')
+    parser.add_argument('-conv_Ediff',default=100.,type=float,help='Energy difference convergence of optimization.')
+    parser.add_argument('-conv_dE',default=1.,type=float,help='State difference energy convergence')
+    parser.add_argument('-conv_gmax',default=100.,type=float,help='Max grad rms threshold')
     parser.add_argument('-DMAX',default=.1,type=float,help='')
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
