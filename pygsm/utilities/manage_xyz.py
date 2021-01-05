@@ -135,9 +135,6 @@ def write_molden_geoms(
             f.write("max-step\n")
             for dE in dEs:
                 f.write('{}\n'.format(float(dE)))
-        f.close()
-
-    return
 
 def get_atoms(
         geom,

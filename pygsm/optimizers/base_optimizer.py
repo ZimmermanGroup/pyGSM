@@ -444,16 +444,18 @@ class base_optimizer(object):
                 if  gradrms>(pgradrms+ 0.0005):
                     print(' decreasing DMAX, gradrms increased')
                     self.DMAX -= self.DMAX/10.
-                elif step > self.DMAX and gradrms<(pgradrms-0.0005):
-                    print(' increased DMAX, gradrms decreased')
-                    print(gradrms)
-                    print(pgradrms)
-                    print(" increasing DMAX")
-                    self.DMAX += self.DMAX/10.
-            
+                elif gradrms<pgradrms:
+                    if self.DMAX<0.05:
+                        print(' increased DMAX, gradrms decreased')
+                        print(gradrms)
+                        print(pgradrms)
+                        print(" increasing DMAX")
+                        self.DMAX=self.DMAX*1.1
+                    elif gradrms<(pgradrms-0.0005) and ratio>0.9 and ratio<1.1:
+                        self.DMAX=self.DMAX*1.1
 
-            if self.DMAX>0.15:
-                self.DMAX=0.15
+            if self.DMAX>0.25:
+                self.DMAX=0.25
         else:
             if dE_iter > 0.001 and opt_type in ['UNCONSTRAINED','ICTAN']:
                 if self.options['print_level']>0:

@@ -414,7 +414,7 @@ class Base_Method(Print,Analyze,object):
                     print(" Hessian consistently bad, going back to climb (for 3 iterations)")
                     self.find=False
                     #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
-                    self.nclimb=3
+                    self.nclimb=2
 
             elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
                  print(" nneg > 1 and close to converging -- reforming Hessian")                
@@ -461,7 +461,7 @@ class Base_Method(Print,Analyze,object):
                     #self.get_eigenv_finite(self.TSnode)
 
             # => write Convergence to file <= #
-            self.write_xyz_files('opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi))
+            self.write_xyz_files('scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi))
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
@@ -735,7 +735,7 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(maxopt)
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.emax = self.energies[self.TSnode]
-            self.write_xyz_files('growth_iters_{:03}_{:03}'.format(self.ID,n))
+            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,n))
             if self.check_if_grown(): 
                 break
 
@@ -1795,7 +1795,7 @@ class Base_Method(Print,Analyze,object):
             nifty.printcool("Reparametrizing")
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files('grown_string1_{:03}'.format(self.ID))
+            self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if restart_energies:
             # initial energy
@@ -1895,7 +1895,7 @@ class Base_Method(Print,Analyze,object):
             nifty.printcool("Reparametrizing")
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files('grown_string1_{:03}'.format(self.ID))
+            self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if restart_energies:
             # initial energy
