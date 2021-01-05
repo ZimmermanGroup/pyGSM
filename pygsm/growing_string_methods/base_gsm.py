@@ -461,7 +461,7 @@ class Base_Method(Print,Analyze,object):
                     #self.get_eigenv_finite(self.TSnode)
 
             # => write Convergence to file <= #
-            self.write_xyz_files(base='opt_iters',iters=oi,nconstraints=nconstraints)
+            self.write_xyz_files('opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi))
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
@@ -494,9 +494,9 @@ class Base_Method(Print,Analyze,object):
         #        if self.nodes[self.TSnode].optimizer.converged:
         #            break
 
-
-        print(" Printing string to opt_converged_000.xyz")
-        self.write_xyz_files(base='opt_converged',iters=0,nconstraints=nconstraints)
+        filename="opt_converged_{:03d}.xyz".format(self.ID)
+        print(" Printing string to " + filename)
+        self.write_xyz_files(filename)
         sys.stdout.flush()
         return
 
@@ -735,7 +735,7 @@ class Base_Method(Print,Analyze,object):
             self.opt_steps(maxopt)
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.emax = self.energies[self.TSnode]
-            self.write_xyz_files(iters=n,base='growth_iters',nconstraints=nconstraints)
+            self.write_xyz_files('growth_iters_{:03}_{:03}'.format(self.ID,n))
             if self.check_if_grown(): 
                 break
 
@@ -1833,7 +1833,7 @@ class Base_Method(Print,Analyze,object):
             nifty.printcool("Reparametrizing")
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
+            self.write_xyz_files('grown_string1_{:03}'.format(self.ID))
 
         if restart_energies:
             # initial energy

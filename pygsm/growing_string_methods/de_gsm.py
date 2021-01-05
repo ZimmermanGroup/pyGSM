@@ -66,8 +66,7 @@ class DE_GSM(Base_Method):
             #nifty.printcool("initial ic_reparam")
             self.get_tangents_1()
             self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
-            #self.write_xyz_files(iters=1,base='initial_ic_reparam',nconstraints=1)
+            self.write_xyz_files('grown_string_{:03}.xyz'.format(self.ID))
         else:
             oi=0
             self.get_tangents_1()

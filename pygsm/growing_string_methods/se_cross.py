@@ -64,7 +64,7 @@ class SE_Cross(SE_GSM):
         self.optimizer[self.nR].opt_cross=True
         if rtype==0:
             # MECI optimization
-            self.write_xyz_files(iters=1,base="after_penalty",nconstraints=1)
+            self.write_xyz_files('after_penalty_{:03}'.format(self.ID))
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
@@ -78,7 +78,7 @@ class SE_Cross(SE_GSM):
                     opt_type='MECI',
                     opt_steps=100,
                     )
-            self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
+            self.write_xyz_files('grown_string_{:03}'.format(self.ID))
         else:
             # unconstrained penalty optimization
             #TODO make unctonstrained "CROSSING" which checks for dE convergence
@@ -96,8 +96,7 @@ class SE_Cross(SE_GSM):
                     opt_type='UNCONSTRAINED',
                     opt_steps=200,
                     )
-            self.write_xyz_files(iters=1,base="grown_string",nconstraints=1)
-
+            self.write_xyz_files('grown_string_{:03}'.format(self.ID))
     
     def converged(self,n,opt_type):
         if opt_type=="UNCSONTRAINED":

@@ -132,7 +132,7 @@ class SE_GSM(Base_Method):
 
             print(" Number of nodes is ",self.nnodes)
             print(" Warning last node still not optimized fully")
-            self.write_xyz_files(iters=1,base='grown_string',nconstraints=1)
+            self.write_xyz_files('grown_string_{:03}.xyz'.format(self.ID))
             print(" SSM growth phase over")
             self.done_growing=True
 
@@ -151,7 +151,7 @@ class SE_GSM(Base_Method):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
-            self.write_xyz_files(iters=1,base='grown_string1',nconstraints=1)
+            self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if self.tscontinue:
             self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah

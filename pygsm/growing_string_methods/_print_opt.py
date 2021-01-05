@@ -3,14 +3,14 @@ from utilities import manage_xyz
 
 class Print:
                 
-    def write_xyz_files(self,iters=0,base='xyzgeom',nconstraints=1):
-        xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}_{:03}.xyz'.format(self.ID,iters)
+    def write_xyz_files(self,filename):
+        #xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}_{:03}.xyz'.format(self.ID,iters)
         geoms = []
         for ico in self.nodes:
             if ico != None:
                 geoms.append(ico.geometry)
 
-        with open(xyzfile,'w') as f:
+        with open(filename,'w') as f:
             f.write("[Molden Format]\n[Geometries] (XYZ)\n")
             for geom in geoms:
                 f.write('%d\n\n' % len(geom))
