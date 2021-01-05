@@ -230,6 +230,7 @@ class Base_Method(Print,Analyze,object):
         self.n0 = 1 # something to do with added nodes? "first node along current block"
         self.end_early=False
         self.tscontinue=True # whether to continue with TS opt or not
+        self.found_ts=False
         self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
         self.gaddmax = self.options['ADD_NODE_TOL'] #self.options['ADD_NODE_TOL']/self.rn3m6;
         print(" gaddmax:",self.gaddmax)
@@ -368,6 +369,7 @@ class Base_Method(Print,Analyze,object):
             # => Check Convergence <= #
             isDone = self.check_opt(totalgrad,fp,rtype,ts_cgradq)
             if isDone:
+                self.found_ts=True
                 break
 
             sum_conv_tol = (self.nnodes-2)*self.options['CONV_TOL'] 

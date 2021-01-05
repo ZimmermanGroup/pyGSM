@@ -157,6 +157,7 @@ class SE_GSM(Base_Method):
             self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
         else:
             print("Exiting early")
+            self.end_early=True
 
         print("Finished GSM!")  
 

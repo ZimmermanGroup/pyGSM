@@ -71,12 +71,13 @@ class DE_GSM(Base_Method):
             oi=0
             self.get_tangents_1()
 
-        if self.tscontinue==True:
+        if self.tscontinue:
             if max_iters-oi>0:
                 opt_iters=max_iters-oi
                 self.opt_iters(max_iter=opt_iters,optsteps=opt_steps,rtype=rtype)
         else:
             print("Exiting early")
+            self.end_early=True
         print("Finished GSM!") 
 
         return self.nnodes,self.energies
