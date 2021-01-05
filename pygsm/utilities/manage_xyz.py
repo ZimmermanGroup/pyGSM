@@ -105,6 +105,39 @@ def read_molden_geoms(
         geoms.append(geom)
     return geoms
         
+def write_molden_geoms(
+        filename,
+        geoms,
+        energies,
+        gradrms,
+        dEs,
+        ):
+        with open(filename,'w') as f:
+            f.write("[Molden Format]\n[Geometries] (XYZ)\n")
+            for geom in geoms:
+                f.write('%d\n\n' % len(geom))
+                for atom in geom:
+                    f.write('%-2s %14.6f %14.6f %14.6f\n' % (
+                        atom[0],
+                        atom[1],
+                        atom[2],
+                        atom[3],
+                        ))
+            f.write("[GEOCONV]\n")
+            f.write('energy\n')
+            V0=energies[0]
+            for energy in energies:
+                f.write('{}\n'.format(energy-V0))
+            f.write("max-force\n")
+            for grad in gradrms:
+                f.write('{}\n'.format(float(grad)))
+            #print(" WARNING: Printing dE as max-step in molden output ")
+            f.write("max-step\n")
+            for dE in dEs:
+                f.write('{}\n'.format(float(dE)))
+        f.close()
+
+    return
 
 def get_atoms(
         geom,

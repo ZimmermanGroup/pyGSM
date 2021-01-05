@@ -440,8 +440,8 @@ class ElementData(object):
         return [element.symbol for element in cls.data]
  
 if __name__ == '__main__':
-    from . import manage_xyz
 
+    from . import manage_xyz
     filepath="tests/fluoroethene.xyz"
     geom=manage_xyz.read_xyz(filepath,scale=1)
     E = ElementData()
