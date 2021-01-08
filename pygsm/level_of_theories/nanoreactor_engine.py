@@ -25,7 +25,7 @@ from utilities import *
 class nanoreactor_engine(Lot):
 
     def __init__(self,options):
-        super(...)
+        super(nanoreactor_engine).__init__(options)
 
         # can we do a check here?
         engine=options['job_data']['engine']
@@ -46,13 +46,11 @@ class nanoreactor_engine(Lot):
 
 
 if __name__=="__main__":
-    from nanoreactor.engine import get_engine                      
+    from nanoreactor.engine import get_engine
     from nanoreactor.parsing import load_settings_from_args
-    from nanoreactor.engine import TCPBEngine
-
 
     # read settings from name
-    db, setting_name, settings = load_settings_from_args(kind='refine', create=False,  
+    db, setting_name, settings = load_settings_from_args(kind='refine', create=False,
               description='Refining reactions paths.')
 
     # Create the nanoreactor TCPB engine
