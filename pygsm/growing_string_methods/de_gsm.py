@@ -134,6 +134,49 @@ class DE_GSM(Base_Method):
                         new_node_id = self.nnodes-1
                         )
 
+            #TODO 01/13/2021 write a function to determine whether to ts_continue
+
+            # if reactant_geom_fixed and energy decreases from nodes 0 to 1 and 2 
+            # if allup
+            # if all down
+
+            tol1=0.5
+            tol2=2.
+            allup=True
+            alldown=True
+            energies = self.energies
+            nnodes = self.nnodes
+
+            # if allup
+            for n in range(1,len(energies[:nnodes])):
+                if energies[n]+tol1<energies[n-1]:
+                    allup=False
+                    break
+
+            # alldown
+            for n in range(1,len(energies[:nnodes])):
+                if energies[n+1]+tol>energies[n-1]:
+                    alldown=False
+                    break
+        
+            # check on dissociative
+            if energies[nnodes-1]>15.0:
+                if nnodes-3>0:
+                    if (abs(energies[nnodes-1]-energies[nnodes-2])<tol2 and
+                    abs(energies[nnodes-2]-energies[nnodes-3])<tol2 and
+                    abs(energies[nnodes-3]-energies[nnodes-4])<tol2):
+                        print(" possible dissociative profile")
+                        diss=True
+
+            # reverse dissociative
+            if ((energies[1] - energies[0]) < tol1 and
+            (energies[2] - energies[1]) < tol1 and
+            (energies[3] - energies[2]) < tol1):
+                diss=True
+        
+        if diss or allup or alldown:
+            self.tscontinue=False
+
         return isDone
 
     def check_add_node(self):

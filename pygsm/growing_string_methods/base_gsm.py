@@ -261,8 +261,9 @@ class Base_Method(Print,Analyze,object):
                     energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
             return np.argmax(energies)
         else:
-            #return np.argmax(self.energies[:self.nnodes-1])
-            return np.argmax(self.energies[:self.nnodes])
+            # make sure TS is not zero or last node
+            return np.argmax(self.energies[1:self.nnodes-1])
+            #return np.argmax(self.energies[:self.nnodes])
 
     @property
     def npeaks(self):
