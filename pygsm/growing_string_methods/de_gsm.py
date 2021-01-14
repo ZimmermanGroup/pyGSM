@@ -175,8 +175,8 @@ class DE_GSM(Base_Method):
             (energies[3] - energies[2]) < tol1):
                 diss=True
         
-        if diss or allup or alldown:
-            self.tscontinue=False
+            if diss or allup or alldown:
+                self.tscontinue=False
 
         return isDone
 
