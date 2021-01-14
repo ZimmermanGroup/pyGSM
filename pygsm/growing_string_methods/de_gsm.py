@@ -144,6 +144,7 @@ class DE_GSM(Base_Method):
             tol2=2.
             allup=True
             alldown=True
+            diss=False
             energies = self.energies
             nnodes = self.nnodes
 
