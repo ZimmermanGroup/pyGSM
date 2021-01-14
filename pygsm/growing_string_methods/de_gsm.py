@@ -156,7 +156,7 @@ class DE_GSM(Base_Method):
 
             # alldown
             for n in range(1,len(energies[:nnodes])):
-                if energies[n+1]+tol>energies[n-1]:
+                if energies[n+1]+tol1>energies[n]:
                     alldown=False
                     break
         
