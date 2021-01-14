@@ -38,6 +38,7 @@ class OpenMM(Lot):
             self.file_options.set_active('cutoff',1.0,float,'',depend=(self.file_options.use_pme),msg="Requires PME")
             self.file_options.set_active('prmtopfile',None,str,"parameter file")
             self.file_options.set_active('inpcrdfile',None,str,"inpcrd file")
+            self.file_options.set_active('restrain_bondfile',None,str,'list of bonds to restrain')
             self.file_options.set_active('restrain_torfile',None,str,"list of torsions to restrain")
             self.file_options.set_active('restrain_tranfile',None,str,"list of translations to restrain")
 
@@ -68,49 +69,8 @@ class OpenMM(Lot):
                         nonbondedMethod=openmm_app.NoCutoff,
                         )
 
-                # Torsion restraint
-                if self.restrain_torfile is not None:
-                    nifty.printcool(" Adding torsional restraints!")
-
-                    # Harmonic constraint
-                    tforce = openmm.CustomTorsionForce("0.5*k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535")
-                    tforce.addPerTorsionParameter("k")
-                    tforce.addPerTorsionParameter("theta0")
-                    system.addForce(tforce)
-                    
-                    xyz = manage_xyz.xyz_to_np(self.geom)
-                    with open(self.restrain_torfile,'r') as input_file:
-                        for line in input_file:
-                            columns = line.split()
-                            a = int(columns[0])
-                            b = int(columns[1])
-                            c = int(columns[2])
-                            d = int(columns[3])
-                            k = float(columns[4])
-                            dih = Dihedral(a,b,c,d)
-                            theta0 = dih.value(xyz)
-                            tforce.addTorsion(a,b,c,d,[k,theta0])
-
-                # Translation restraint
-                if self.restrain_tranfile is not None:
-                    nifty.printcool(" Adding translational restraints!")
-                    trforce = openmm.CustomExternalForce("k*periodicdistance(x, y, z, x0, y0, z0)^2")
-                    trforce.addPerParticleParameter("k")
-                    trforce.addPerParticleParameter("x0")
-                    trforce.addPerParticleParameter("y0")
-                    trforce.addPerParticleParameter("z0")
-                    system.addForce(trforce)
-
-                    xyz = manage_xyz.xyz_to_np(self.geom)
-                    with open(self.restrain_tranfile,'r') as input_file:
-                        for line in input_file:
-                            columns = line.split()
-                            a = int(columns[0])
-                            k = float(columns[1])
-                            x0=xyz[a,0]*0.1  # Units are in nm 
-                            y0=xyz[a,1]*0.1  # Units are in nm 
-                            z0=xyz[a,2]*0.1  # Units are in nm 
-                            trforce.addParticle(a,[k,x0,y0,z0])
+                # Add restraints
+                self.add_restraints(system)
 
                 self.simulation = openmm_app.Simulation(crystal.topology, system, integrator)
                 # set the box vectors
@@ -131,55 +91,82 @@ class OpenMM(Lot):
                         nonbondedMethod=openmm_app.NoCutoff,
                         )
    
-                # Torsion restraint
-                if self.restrain_torfile is not None:
-                    nifty.printcool(" Adding torsional restraints!")
-
-                    # Harmonic constraint
-                    tforce = openmm.CustomTorsionForce("0.5*k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535")
-                    tforce.addPerTorsionParameter("k")
-                    tforce.addPerTorsionParameter("theta0")
-                    system.addForce(tforce)
-                    
-                    xyz = manage_xyz.xyz_to_np(self.geom)
-                    with open(self.restrain_torfile,'r') as input_file:
-                        for line in input_file:
-                            columns = line.split()
-                            a = int(columns[0])
-                            b = int(columns[1])
-                            c = int(columns[2])
-                            d = int(columns[3])
-                            k = float(columns[4])
-                            dih = Dihedral(a,b,c,d)
-                            theta0 = dih.value(xyz)
-                            tforce.addTorsion(a,b,c,d,[k,theta0])
-
-                # Translation restraint
-                if self.restrain_tranfile is not None:
-                    nifty.printcool(" Adding translational restraints!")
-                    trforce = openmm.CustomExternalForce("k*distance(x, y, z, x0, y0, z0)^2")
-                    trforce.addPerParticleParameter("k")
-                    trforce.addPerParticleParameter("x0")
-                    trforce.addPerParticleParameter("y0")
-                    trforce.addPerParticleParameter("z0")
-                    system.addForce(trforce)
-
-                    xyz = manage_xyz.xyz_to_np(self.geom)
-                    with open(self.restrain_tranfile,'r') as input_file:
-                        for line in input_file:
-                            columns = line.split()
-                            a = int(columns[0])
-                            k = float(columns[1])
-                            x0=xyz[a,0]*0.1  # Units are in nm 
-                            y0=xyz[a,1]*0.1  # Units are in nm 
-                            z0=xyz[a,2]*0.1  # Units are in nm 
-                            trforce.addParticle(a,[k,x0,y0,z0])
+                # add restraints
+                self.add_restraints(system)
 
                 self.simulation = openmm_app.Simulation(
                     prmtop.topology,
                     system,
                     integrator,
                     )
+
+    def add_restraints(self,system):
+        # Bond Restraints
+        if self.restrain_bondfile is not None:
+            nifty.printcool(" Adding bonding restraints!")
+            # Harmonic constraint
+
+            flat_bottom_force = openmm.CustomBondForce(
+                'step(r-r0) * (k/2) * (r-r0)^2')
+            flat_bottom_force.addPerBondParameter('r0')
+            flat_bottom_force.addPerBondParameter('k')
+            system.addForce(flat_bottom_force)
+
+            with open(self.restrain_bondfile,'r') as input_file:
+                for line in input_file:
+                    print(line)
+                    columns = line.split()
+                    atom_index_i = int(columns[0])
+                    atom_index_j = int(columns[1])
+                    r0 = float(columns[2])
+                    k = float(columns[3])
+                    flat_bottom_force.addBond(
+                        atom_index_i, atom_index_j, [r0, k])
+
+        # Torsion restraint
+        if self.restrain_torfile is not None:
+            nifty.printcool(" Adding torsional restraints!")
+
+            # Harmonic constraint
+            tforce = openmm.CustomTorsionForce("0.5*k*min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535")
+            tforce.addPerTorsionParameter("k")
+            tforce.addPerTorsionParameter("theta0")
+            system.addForce(tforce)
+            
+            xyz = manage_xyz.xyz_to_np(self.geom)
+            with open(self.restrain_torfile,'r') as input_file:
+                for line in input_file:
+                    columns = line.split()
+                    a = int(columns[0])
+                    b = int(columns[1])
+                    c = int(columns[2])
+                    d = int(columns[3])
+                    k = float(columns[4])
+                    dih = Dihedral(a,b,c,d)
+                    theta0 = dih.value(xyz)
+                    tforce.addTorsion(a,b,c,d,[k,theta0])
+
+        # Translation restraint
+        if self.restrain_tranfile is not None:
+            nifty.printcool(" Adding translational restraints!")
+            trforce = openmm.CustomExternalForce("k*periodicdistance(x, y, z, x0, y0, z0)^2")
+            trforce.addPerParticleParameter("k")
+            trforce.addPerParticleParameter("x0")
+            trforce.addPerParticleParameter("y0")
+            trforce.addPerParticleParameter("z0")
+            system.addForce(trforce)
+
+            xyz = manage_xyz.xyz_to_np(self.geom)
+            with open(self.restrain_tranfile,'r') as input_file:
+                for line in input_file:
+                    columns = line.split()
+                    a = int(columns[0])
+                    k = float(columns[1])
+                    x0=xyz[a,0]*0.1  # Units are in nm 
+                    y0=xyz[a,1]*0.1  # Units are in nm 
+                    z0=xyz[a,2]*0.1  # Units are in nm 
+                    trforce.addParticle(a,[k,x0,y0,z0])
+
     @property
     def simulation(self):
         return self.options['job_data']['simulation']
@@ -209,13 +196,13 @@ class OpenMM(Lot):
                 )
         tmp = s.getPotentialEnergy()
         E = tmp.value_in_unit(openmm_units.kilocalories / openmm_units.moles)
-        self._Energies[(multiplicity,ad_idx)] = self.Energy(E,'kcal/mol')
+        self._Energies[(mult,ad_idx)] = self.Energy(E,'kcal/mol')
 
         F = s.getForces()
         G = F.value_in_unit(openmm_units.kilocalories/openmm_units.moles / openmm_units.angstroms)
         G = -1.0*np.asarray(G)
              
-        self.Gradients[(multiplicity,ad_idx)] = self.Gradient(G,'kcal/mol/Angstrom')
+        self._Gradients[(mult,ad_idx)] = self.Gradient(G,'kcal/mol/Angstrom')
         self.hasRanForCurrentCoords=True
 
         return 
