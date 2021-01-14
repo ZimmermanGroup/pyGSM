@@ -111,7 +111,7 @@ class QChem(Lot):
             for lines in elines:
                 if temp == 1:
                     # defaulting to the ground-state
-                    self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree')
+                    self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree'))
                     break
                 if "$" in lines:
                     temp += 1

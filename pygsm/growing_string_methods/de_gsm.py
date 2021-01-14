@@ -149,13 +149,13 @@ class DE_GSM(Base_Method):
             nnodes = self.nnodes
 
             # if allup
-            for n in range(1,len(energies[:nnodes])):
+            for n in range(1,nnodes):
                 if energies[n]+tol1<energies[n-1]:
                     allup=False
                     break
 
             # alldown
-            for n in range(1,len(energies[:nnodes])):
+            for n in range(1,nnodes-1):
                 if energies[n+1]+tol1>energies[n]:
                     alldown=False
                     break

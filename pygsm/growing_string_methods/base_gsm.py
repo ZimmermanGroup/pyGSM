@@ -243,7 +243,7 @@ class Base_Method(Print,Analyze,object):
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
-        self.hess_consistently_neg = 0
+        self.hess_counter = 0   # it is probably good to reset the hessian
         self.newclimbscale=2.
 
         # create newic object
@@ -262,7 +262,7 @@ class Base_Method(Print,Analyze,object):
             return np.argmax(energies)
         else:
             # make sure TS is not zero or last node
-            return np.argmax(self.energies[1:self.nnodes-1])
+            return np.argmax(self.energies[1:self.nnodes-1])+1
             #return np.argmax(self.energies[:self.nnodes])
 
     @property
@@ -393,20 +393,22 @@ class Base_Method(Print,Analyze,object):
             if oi!=max_iter-1:
                 self.ic_reparam(nconstraints=nconstraints)
 
-            # Modify TS Hess if necessary
+            ## Modify TS Hess if necessary ##
+
+            # from set stage
             if form_TS_hess:
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.1:
                     self.optimizer[self.TSnode].options['DMAX']=0.1
 
+            # opt decided Hess is not good because of overlap
             elif self.find and not self.optimizer[n].maxol_good:
-                # reform Hess for TS if not good
                 self.get_tangents_1e()
                 self.get_eigenv_finite(self.TSnode)
 
-
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_consistently_neg > 3) and ts_gradrms >self.options['CONV_TOL']:
+            # 
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 10) and ts_gradrms >self.options['CONV_TOL']:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
@@ -419,17 +421,14 @@ class Base_Method(Print,Analyze,object):
                     #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     self.nclimb=2
 
-            elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
-                 print(" nneg > 1 and close to converging -- reforming Hessian")                
-                 self.get_tangents_1e()                                                         
-                 self.get_eigenv_finite(self.TSnode)                    
+            #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
+            #     print(" nneg > 1 and close to converging -- reforming Hessian")                
+            #     self.get_tangents_1e()                                                         
+            #     self.get_eigenv_finite(self.TSnode)                    
+
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
-
-            if self.find and self.optimizer[self.TSnode].nneg > 1:
-                self.hess_consistently_neg += 1
-            elif self.find and self.optimizer[self.TSnode].nneg==1: 
-                self.hess_consistently_neg -= 1
+                self.hess_counter += 1
 
             # store reparam energies
             #self.store_energies()
@@ -1629,6 +1628,9 @@ class Base_Method(Print,Analyze,object):
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
         print("modifying %i Hessian with RP" % en)
+    
+        # a variable to determine how many time since last modify
+        self.hess_counter = 0
 
         E0 = self.energies[en]/units.KCAL_MOL_PER_AU
         Em1 = self.energies[en-1]/units.KCAL_MOL_PER_AU

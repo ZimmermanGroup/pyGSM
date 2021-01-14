@@ -85,7 +85,7 @@ class Orca(Lot):
             if '# The current total energy in Eh\n' in lines:
                 temp = i
             if i > temp+1:
-                self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree')
+                self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree'))
                 break
 
         temp = 100000
