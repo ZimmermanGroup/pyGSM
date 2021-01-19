@@ -34,7 +34,7 @@ class nanoreactor_engine(Lot):
         self.Gradients={}
         self.Energies = {}
 
-        xyz = manage_xyz.xyz_to_np(geom)*units.ANGSTROM_TO_BOHR
+        xyz = manage_xyz.xyz_to_np(geom)*units.ANGSTROM_TO_AU
 
         # Call the engine
         try:
