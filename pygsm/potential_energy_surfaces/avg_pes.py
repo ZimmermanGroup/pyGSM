@@ -249,8 +249,10 @@ class Avg_PES(PES):
             cc=0
             for row in mat:
                 xyz = np.reshape(row,(-1,3))
-                E1[rc,cc] = self.PES1.get_energy(xyz)
-                E2[rc,cc] = self.PES2.get_energy(xyz)
+                #E1[rc,cc] = self.PES1.get_energy(xyz)
+                #E2[rc,cc] = self.PES2.get_energy(xyz)
+                E1[rc,cc] = self.lot.get_energy(xyz,self.PES1.multiplicity,self.PES1.ad_idx,runtype='energy')
+                E2[rc,cc] = self.lot.get_energy(xyz,self.PES2.multiplicity,self.PES2.ad_idx,runtype='energy')
                 cc+=1
             rc+=1
          

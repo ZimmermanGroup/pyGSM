@@ -161,7 +161,6 @@ class PES(object):
         fdE=0.
         if self.FORCE is not None:
             for i in self.FORCE:
-                #atoms=[i[0],i[1]]
                 force=i[2]
                 diff = (xyz[i[0]]- xyz[i[1]])
                 d = np.linalg.norm(diff)*units.ANGSTROM_TO_AU  # AU
