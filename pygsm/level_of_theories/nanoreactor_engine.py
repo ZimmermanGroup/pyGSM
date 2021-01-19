@@ -25,7 +25,7 @@ from utilities import *
 class nanoreactor_engine(Lot):
 
     def __init__(self,options):
-        super(nanoreactor_engine).__init__(options)
+        super(nanoreactor_engine,self).__init__(options)
 
         # can we do a check here?
         engine=options['job_data']['engine']
@@ -37,12 +37,21 @@ class nanoreactor_engine(Lot):
         xyz = manage_xyz.xyz_to_np(geom)*units.ANGSTROM_TO_BOHR
 
         # Call the engine
-        energy,gradient = self.engine.compute_gradient(xyz)
+        try:
+            energy,gradient = self.engine.compute_gradient(xyz)
+        except:
+            # The calculation failed
+            # set energy to a large number so the optimizer attempts to slow down
+            print(" SCF FAILURE")
+            self.nscffail+=1
+            energy,gradient = 999,self._Gradients[(mult,ad_idx)].value
 
+            if self.nscfail>25:
+                raise RuntimeError
   
         # Store the values in memory 
-        self._Energies = self.Energy(energy,'Hartree')
-        self._Gradients = self.Gradient(gradient,'Hartree/Bohr')
+        self._Energies[(mult,ad_idx)] = self.Energy(energy,'Hartree')
+        self._Gradients[(mult,ad_idx)] = self.Gradient(gradient,'Hartree/Bohr')
 
 
 if __name__=="__main__":
