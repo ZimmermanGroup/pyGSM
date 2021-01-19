@@ -104,6 +104,49 @@ def read_molden_geoms(
         sa=ea+2
         geoms.append(geom)
     return geoms
+
+def read_molden_Energy(
+        filename,
+        ):
+    with open(filename) as f:
+        nlines = sum(1 for _ in f)
+    #print "number of lines is ", nlines
+    with open(filename) as f:
+        natoms = int(f.readlines()[2])
+
+    #print "number of atoms is ",natoms
+    nstructs = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
+    nstructs = int(nstructs)
+    
+    #print "number of structures in restart file is %i" % nstructs
+    coords=[]
+    E = [0.]*nstructs
+    grmss = []
+    atomic_symbols=[]
+    dE = []
+    with open(filename) as f:
+        f.readline()
+        f.readline() #header lines
+        # get coords
+        for struct in range(nstructs):
+            tmpcoords=np.zeros((natoms,3))
+            f.readline() #natoms
+            f.readline() #space
+            for a in range(natoms):
+                line=f.readline()
+                tmp = line.split()
+                tmpcoords[a,:] = [float(i) for i in tmp[1:]]
+                if struct==0:
+                    atomic_symbols.append(tmp[0])
+        coords.append(tmpcoords)
+        # Get energies
+        f.readline() # line
+        f.readline() #energy
+        for struct in range(nstructs):
+            E[struct] = float(f.readline())
+
+    return E
+
         
 def write_molden_geoms(
         filename,
