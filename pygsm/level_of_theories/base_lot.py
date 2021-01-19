@@ -396,9 +396,12 @@ class Lot(object):
         raise NotImplementedError
 
     def runall(self,geom,runtype=None):
+        self.Gradients={}
+        self.Energies = {}
+        self.Couplings = {}
         for state in self.states:
             mult,ad_idx = state
-            if state in self.gradient_states:
+            if state in self.gradient_states or runtype=="gradient":
                 self.run(geom,mult,ad_idx)
             elif state in self.coupling_states:
                 self.run(geom,mult,ad_idx,'coupling')

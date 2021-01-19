@@ -178,9 +178,6 @@ class OpenMM(Lot):
     def run(self,geom,mult,ad_idx,runtype='gradient'):
 
         coords  = manage_xyz.xyz_to_np(geom)
-        self.Gradients={}
-        self.Energies = {}
-        self.Couplings = {}
 
         # Update coordinates of simulation (shallow-copied object)
         xyz_nm = 0.1 * coords  # coords are in angstrom
@@ -199,8 +196,7 @@ class OpenMM(Lot):
         self._Energies[(mult,ad_idx)] = self.Energy(E,'kcal/mol')
 
         F = s.getForces()
-        G = F.value_in_unit(openmm_units.kilocalories/openmm_units.moles / openmm_units.angstroms)
-        G = -1.0*np.asarray(G)
+        G = -1.0 * np.asarray(F.value_in_unit(openmm_units.kilocalories/openmm_units.moles / openmm_units.angstroms))
              
         self._Gradients[(mult,ad_idx)] = self.Gradient(G,'kcal/mol/Angstrom')
         self.hasRanForCurrentCoords=True
