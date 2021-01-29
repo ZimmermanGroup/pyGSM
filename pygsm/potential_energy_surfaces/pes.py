@@ -102,11 +102,13 @@ class PES(object):
 
     @property
     def energy(self):
-        if self.lot.Energies:
-            # if E is property and a dictionary
-            return self.lot.Energies[(self.multiplicity,self.ad_idx)]
-        else:
-            return 0.
+        return self.get_energy(self.lot.currentCoords)
+    #def energy(self):
+    #    if self.lot.Energies:
+    #        # if E is property and a dictionary
+    #        return self.lot.Energies[(self.multiplicity,self.ad_idx)].value
+    #    else:
+    #        return 0.
 
     def create_2dgrid(self,
             xyz,
