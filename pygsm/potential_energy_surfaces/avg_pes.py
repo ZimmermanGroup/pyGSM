@@ -48,7 +48,7 @@ class Avg_PES(PES):
     def get_coupling(self,xyz):
         assert self.PES1.multiplicity==self.PES2.multiplicity,"coupling is 0"
         assert self.PES1.ad_idx!=self.PES2.ad_idx,"coupling is 0"
-        return self.lot.get_coupling(xyz,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx)
+        return np.reshape(self.lot.get_coupling(xyz,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx),(-1,1))
 
     def get_dgrad(self,xyz):
         if self.PES1.multiplicity==self.PES2.multiplicity:
