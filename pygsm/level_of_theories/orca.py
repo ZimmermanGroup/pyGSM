@@ -13,7 +13,7 @@ from utilities import *
 
 class Orca(Lot):
    
-    def write_input_file(self):
+    def write_input_file(self, geom, multiplicity):
         if self.lot_inp_file == False:
             inpstring = '!'
             inpstring += ' '+self.functional
@@ -41,13 +41,14 @@ class Orca(Lot):
         tempfile = open(tempfilename,'w')
         tempfile.write(inpstring)
         tempfile.close()
+        return tempfilename
 
     def run(self,geom,multiplicity,ad_idx,runtype='gradient'):
 
         assert ad_idx == 0,"pyGSM ORCA doesn't currently support ad_idx!=0"
         
         # Write input file
-        self.write_input_file()
+        tempfilename = self.write_input_file(geom, multiplicity)
 
         path2orca = os.popen('which orca').read().rstrip()
         user = os.environ['USER']
@@ -63,7 +64,7 @@ class Orca(Lot):
             pbsID = os.environ['PBS_JOBID']
             orcascr = 'temporcarun'
             #runscr = '/tmp/'+user+'/'+orcascr
-            runscr ='/tmp/'+pbsID+'/'+orcasc
+            runscr ='/tmp/'+pbsID+'/'+orcascr
 
         os.system('mkdir -p {}'.format(runscr))
         os.system('mv {} {}/'.format(tempfilename,runscr))
@@ -71,11 +72,11 @@ class Orca(Lot):
         os.system(cmd)
 
         # parse output
-        self.parse()
+        self.parse(multiplicity, runscr, tempfilename)
 
         return
 
-    def parse(self):
+    def parse(self, multiplicity, runscr, tempfilename):
         engradpath = runscr+'/{}.engrad'.format(tempfilename) 
         with open(engradpath) as engradfile:
             engradlines = engradfile.readlines()
@@ -85,7 +86,7 @@ class Orca(Lot):
             if '# The current total energy in Eh\n' in lines:
                 temp = i
             if i > temp+1:
-                self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree'))
+                self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0]),'Hartree')
                 break
 
         temp = 100000
