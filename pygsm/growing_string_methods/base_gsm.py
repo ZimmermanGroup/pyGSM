@@ -417,7 +417,7 @@ class Base_Method(Print,Analyze,object):
                 self.get_eigenv_finite(self.TSnode)
 
             # 
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 10 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.options['CONV_TOL']:
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.options['CONV_TOL']:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
@@ -889,7 +889,7 @@ class Base_Method(Print,Analyze,object):
                     (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
                     (sumgradrms< sum_conv_tol) or
                     (ts_gradrms<self.options['CONV_TOL']*5.)  #  used to be 5
-                    )): #and self.dE_iter<4. 
+                    )) and self.dE_iter<1. :
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
