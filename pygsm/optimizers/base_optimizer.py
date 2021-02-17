@@ -382,11 +382,18 @@ class base_optimizer(object):
         # => seam climb
         elif opt_type=='TS-SEAM':
             gts = np.dot(g.T,molecule.constraints[:,0])
-            constraint_stepsi[:,0] = gts*molecule.constraints[:,0]
-            stepsize=np.linalg.norm(constraint_steps)
+    
+            # climbing step
+            max_step = 0.05/self.SCALE_CLIMB
+            if gts > np.abs(max_step):
+                gts = np.sign(gts)*max_step
+                #constraint_steps = constraint_steps*max_step/stepsize
             print(" gts %1.4f" % gts)
-            if stepsize > 0.05:
-                constraint_steps[:,0] = constraint_steps*0.05/stepsize
+            constraint_steps = gts*molecule.constraints[:,0]
+            constraint_steps = constraint_steps[:,np.newaxis]
+
+            # to CI step
+            dq = self.dgrad_step(molecule)
             constraint_steps[:,0] += dq*molecule.constraints[:,1]
 
         return constraint_steps

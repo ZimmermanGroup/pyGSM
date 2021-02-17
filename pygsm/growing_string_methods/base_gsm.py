@@ -1735,15 +1735,15 @@ class Base_Method(Print,Analyze,object):
     def set_opt_type(self,n,quiet=False):
         #TODO error for seam climb
         opt_type='ICTAN' 
-        if self.climb and n==self.TSnode and not self.find:
+        if self.climb and n==self.TSnode and not self.find and self.nodes[n].PES.__class__.__name__!="Avg_PES":
             opt_type='CLIMB'
             #opt_type='BEALES_CG'
         elif self.find and n==self.TSnode:
             opt_type='TS'
-        elif self.nodes[n].PES.lot.do_coupling:
+        elif self.nodes[n].PES.__class__.__name__=="Avg_PES":
             opt_type='SEAM'
-        elif self.climb and n==self.TSnode and opt_type=='SEAM':
-            opt_type='TS-SEAM'
+            if self.climb and n==self.TSnode:
+                opt_type='TS-SEAM'
         if not quiet:
             print((" setting node %i opt_type to %s" %(n,opt_type)))
 

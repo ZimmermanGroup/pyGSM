@@ -54,7 +54,7 @@ class eigenvector_follow(base_optimizer):
 
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
-        if opt_type=='SEAM' or opt_type=='MECI':
+        if opt_type=='SEAM' or opt_type=='MECI' or opt_type=="TS-SEAM":
             self.opt_cross=True
 
         # TODO are these used? -- n is used for gradrms,linesearch
@@ -228,7 +228,14 @@ class eigenvector_follow(base_optimizer):
 
             #TODO turn back on conv_DE
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                self.converged=True
+                print(f'opt_climb {self.opt_climb}')
+                if opt_type=="TS-SEAM":
+                    gts = np.dot(g.T,molecule.constraints[:,0])
+                    print(" gts %1.4f" % gts)
+                    if abs(gts)<self.conv_grms:
+                        self.converged=True
+                else:
+                    self.converged=True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if self.opt_climb and opt_type=="CLIMB":
                     gts = np.dot(g.T,molecule.constraints[:,0])
