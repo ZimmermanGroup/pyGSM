@@ -14,7 +14,7 @@ try:
     from .base_lot import Lot
     from .file_options import File_Options
 except:
-    from base_lot import Lot
+    from base_lot import Lot,copy_file
     from file_options import File_Options
 from utilities import *
 
@@ -187,13 +187,27 @@ class TeraChem(Lot):
             if "casscf" in lot.file_options.ActiveOptions:
                 old_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,lot.node_id)
                 new_path = 'scratch/{}/'.format(lot.ID,node_id)
+                copy_file(old_path,new_path)
             else:
-                old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
-                new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
-            cmd = 'cp -r ' + old_path +' ' + new_path
-            print(" copying scr files\n {}".format(cmd))
-            os.system(cmd)
-            os.system('wait')
+                use_alpha=False
+                for state in lot.states:
+                  if state[1] == 2:
+                      use_alpha=True
+                if use_alpha:
+                  old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+                  old_path = 'scratch/{:03}/{}/cb0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+                else:
+                  old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+            #cmd = 'cp -r ' + old_path +' ' + new_path
+            #print(" copying scr files\n {}".format(cmd))
+            #os.system(cmd)
+            #os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
     def write_input(self,inpfilename,geom,mult,ad_idx,runtype='gradient'):
@@ -250,7 +264,7 @@ class TeraChem(Lot):
         # Turn on C0 for non-CASSCF calculations after running
         if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
             if mult == 2:
-                self.file_options.set_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.node_id),str,'')
+                self.file_options.set_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.ID,self.node_id),str,'')
             else:
                 self.file_options.set_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id),str,'')
 

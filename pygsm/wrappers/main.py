@@ -15,9 +15,7 @@ import textwrap
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
-from potential_energy_surfaces import PES
-from potential_energy_surfaces import Avg_PES
-from potential_energy_surfaces import Penalty_PES
+from potential_energy_surfaces import PES,Avg_PES,Penalty_PES
 from wrappers import Molecule
 from optimizers import *
 from growing_string_methods import *
@@ -519,20 +517,24 @@ def main():
     if inpfileq['gsm_type']!='SE_Cross' and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
         optimizer.opt_cross = True
 
+    path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,0))
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
         nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
            refE = reactant.energy,
            opt_steps=100,
+           path=path
            )
 
+    path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,args.num_nodes-1))
     if not inpfileq['product_geom_fixed'] and inpfileq['gsm_type']=='DE_GSM':
         nifty.printcool("PRODUCT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = product,
            refE = reactant.energy,
            opt_steps=100,
+           path=path
            )
 
     rtype=2

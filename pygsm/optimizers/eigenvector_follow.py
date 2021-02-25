@@ -27,6 +27,7 @@ class eigenvector_follow(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
+            path=path,
             ):
 
         #print " refE %5.4f" % refE
@@ -190,7 +191,7 @@ class eigenvector_follow(base_optimizer):
             if ostep % xyzframerate==0:
                 geoms.append(molecule.geometry)
                 energies.append(molecule.energy-refE)
-                manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
 
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
@@ -249,7 +250,7 @@ class eigenvector_follow(base_optimizer):
                 if ostep % xyzframerate!=0:
                     geoms.append(molecule.geometry)
                     energies.append(molecule.energy-refE)
-                    manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                    manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
                 break
 
             #update DLC  --> this changes q, g, Hint

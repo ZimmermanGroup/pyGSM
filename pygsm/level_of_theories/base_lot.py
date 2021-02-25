@@ -19,6 +19,13 @@ from collections import namedtuple
 
 #TODO Make energies,grada dictionaries
 
+def copy_file(path1,path2):
+   cmd = 'cp -r ' + path1 +' ' + path2
+   print(" copying scr files\n {}".format(cmd))
+   os.system(cmd)
+   os.system('wait')
+
+
 
 class Lot(object):
     """ Lot object for level of theory calculators """

@@ -840,6 +840,7 @@ class Base_Method(Print,Analyze,object):
             for n in range(self.nnodes):
                 if self.nodes[n] and self.active[n]:
                     print()
+                    path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,n))
                     nifty.printcool("Optimizing node {}".format(n))
                     opt_type = self.set_opt_type(n)
                     osteps = self.mult_steps(n,opt_steps)
@@ -850,6 +851,7 @@ class Base_Method(Print,Analyze,object):
                             opt_steps=osteps,
                             ictan=self.ictan[n],
                             xyzframerate=1,
+                            path=path,
                             )
 
         if self.product_geom_fixed==False and self.done_growing:
@@ -1229,7 +1231,7 @@ class Base_Method(Print,Analyze,object):
             #print("%i %i %i" %(iR,iP,iN))
 
             #print(" Aligning")
-            #self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
+            self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
 
         return success
 
@@ -1269,7 +1271,7 @@ class Base_Method(Print,Analyze,object):
             # align center of mass  and rotation
             #print("%i %i %i" %(n1,n3,n2))
             #print(" Aligning")
-            #self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
+            self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
             #print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
 
         return success
@@ -1997,25 +1999,25 @@ class Base_Method(Print,Analyze,object):
 
         # rotate to be in maximal coincidence with 0
         # assumes iP i.e. 2 is also in maximal coincidence
-        #U = rotate.get_rot(xyz0,xyz1)
-        #xyz1 = np.dot(xyz1,U)
+        U = rotate.get_rot(xyz0,xyz1)
+        xyz1 = np.dot(xyz1,U)
 
-        # align 
-        if self.nodes[iP] != None:
-            xyz2 = self.nodes[iP].xyz.copy()
-            com2 = self.nodes[iP].center_of_mass
+        ## align 
+        #if self.nodes[iP] != None:
+        #    xyz2 = self.nodes[iP].xyz.copy()
+        #    com2 = self.nodes[iP].center_of_mass
 
-            if abs(iN-iR) > abs(iN-iP):
-                avg_com = mfrac*com2 + (1.-mfrac)*com0
-            else:
-                avg_com = mfrac*com0 + (1.-mfrac)*com2
-            dist = avg_com - com1  #final minus initial
-        else:
-            dist = com0 - com1  #final minus initial
+        #    if abs(iN-iR) > abs(iN-iP):
+        #        avg_com = mfrac*com2 + (1.-mfrac)*com0
+        #    else:
+        #        avg_com = mfrac*com0 + (1.-mfrac)*com2
+        #    dist = avg_com - com1  #final minus initial
+        #else:
+        #    dist = com0 - com1  #final minus initial
 
-        print("aligning to com")
-        print(dist)
-        xyz1 += dist
+        #print("aligning to com")
+        #print(dist)
+        #xyz1 += dist
 
 
 
