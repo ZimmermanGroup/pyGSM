@@ -145,7 +145,7 @@ class SE_GSM(Base_Method):
 
         if not self.isRestarted:
             print(" initial ic_reparam")
-            self.ic_reparam(25)
+            self.reparameterize(ic_reparam_steps=25)
             print(" V_profile (after reparam): ", end=' ')
             energies = self.energies
             for n in range(self.nnodes):
