@@ -9,7 +9,7 @@ from os import path
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 
 # third party
-from copy import deepcopy
+from copy import deepcopy,copy
 import numpy as np
 import networkx as nx
 np.set_printoptions(precision=4,suppress=True)
@@ -99,7 +99,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims.topology = deepcopy(Prims.topology)
         newPrims.Internals = deepcopy(Prims.Internals)
         newPrims.block_info = deepcopy(Prims.block_info)
-        newPrims.prim_only_block_info = Prims.prim_only_block_info.copy()
+        newPrims.prim_only_block_info = copy(Prims.prim_only_block_info)
         newPrims.atoms = newPrims.options['atoms']
         newPrims.fragments = [Prims.topology.subgraph(c).copy() for c in nx.connected_components(Prims.topology)]
         for g in newPrims.fragments: g.__class__ = MyG
@@ -936,7 +936,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
             # Add all elements in tmp_Internals to Internals and then clear list
             self.Internals += self.tmp_Internals
-            self.tmp_Internals.clear()
+            self.tmp_Internals = []
 
             ep = sp+nprims
             self.block_info.append((info[0],info[1],sp,ep))
@@ -1414,8 +1414,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # NEW
         # will be changing block info and self.Internals therefore
         # need to create temporary Internals list to check other against
-        tmp_internals = self.Internals.copy()
-        block_info = self.block_info.copy()
+        #tmp_internals = self.Internals.copy()
+        tmp_internals = copy(self.Internals)
+        block_info = copy(self.block_info)
         count=0
         for info1,info2 in zip(block_info,other.block_info):
             sa1,ea1,sp1,ep1 = info1

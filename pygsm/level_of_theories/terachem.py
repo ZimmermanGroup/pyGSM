@@ -11,7 +11,7 @@ import numpy as np
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 
 try:
-    from .base_lot import Lot
+    from .base_lot import Lot,copy_file
     from .file_options import File_Options
 except:
     from base_lot import Lot,copy_file

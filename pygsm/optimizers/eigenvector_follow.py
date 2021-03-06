@@ -229,7 +229,7 @@ class eigenvector_follow(base_optimizer):
 
             #TODO turn back on conv_DE
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                print(f'opt_climb {self.opt_climb}')
+                print('opt_climb {}'.format(self.opt_climb))
                 if opt_type=="TS-SEAM":
                     gts = np.dot(g.T,molecule.constraints[:,0])
                     print(" gts %1.4f" % gts)

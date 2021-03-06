@@ -209,7 +209,7 @@ class Base_Method(object):
                 )
 
         opt.add_option(
-                key='interp_mehod',
+                key='interp_method',
                 value='DLC',
                 allowed_values=['Geodesic','DLC'],
                 required=False,
@@ -1329,7 +1329,7 @@ class Base_Method(object):
             nodeP,
             stepsize,
             node_id,
-            **kwargs,
+            **kwargs
             ):
 
         #get driving coord
@@ -1389,11 +1389,12 @@ class Base_Method(object):
 
 
     def reparameterize(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
-
+        print(self.interp_method)
         if self.interp_method == 'DLC':
-            return self.ic_reparam(nconstraints=nconstraints)
+            print('reparameterizing')
+            self.ic_reparam(nconstraints=nconstraints)
         elif self.interp_method == 'Geodesic':
-            return self.geodesic_reparam()
+             self.geodesic_reparam()
 
         return
 
@@ -2203,9 +2204,9 @@ class Base_Method(object):
 
         if energies[nnodes-1]>15.0:
             if nnodes-3>0:
-                if (abs(energies[nnodes-1]-energies[nnodes-2])<alluptol2 and
-                abs(energies[nnodes-2]-energies[nnodes-3])<alluptol2 and
-                abs(energies[nnodes-3]-energies[nnodes-4])<alluptol2):
+                if (energies[nnodes-1]-energies[nnodes-2])<alluptol2 and
+                (energies[nnodes-2]-energies[nnodes-3])<alluptol2 and
+                (energies[nnodes-3]-energies[nnodes-4])<alluptol2):
                     print(" possible dissociative profile")
                     diss=True
 

@@ -80,6 +80,7 @@ def main():
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
+    parser.add_argument('-interp_method',default='DLC',type=str,help='')
     parser.add_argument('-bonds_file',type=str,help="A file which contains the bond indices (0-based)")
 
 
@@ -161,6 +162,7 @@ def main():
               }
 
     nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
+
 
     #LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
@@ -480,6 +482,7 @@ def main():
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
     else:
         gsm = gsm_class.from_options(
@@ -494,6 +497,7 @@ def main():
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
 
 

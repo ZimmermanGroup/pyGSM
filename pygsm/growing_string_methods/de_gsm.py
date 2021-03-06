@@ -12,7 +12,7 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
 try:
-    from .base_gsm import Base_Method
+    from .base_gsm import Base_Method,geodesic_reparam
 except:
     from base_gsm import Base_Method,geodesic_reparam
 
