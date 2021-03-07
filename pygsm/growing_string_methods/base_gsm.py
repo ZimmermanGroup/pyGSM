@@ -21,8 +21,13 @@ from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
-#from .eckart_align import Eckart_align
-from geodesic_interpolate import Geodesic
+from string_utils import *
+
+try:
+    from geodesic_interpolate import Geodesic,redistribute
+except ImportError:
+    nifty.logger.warning("Geodesic interpolation cannot be imported. Don't use geodesic interpolation.")
+    
 
 # TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
 # but should create the xyz. GSM should create the new molecule based off that xyz.
@@ -92,7 +97,6 @@ class Base_Method(object):
             required=False,
             value=1,
             allowed_types=[int],
-            #TODO I don't want nnodes to include the endpoints!
             doc="number of string nodes"
             )
 
@@ -151,13 +155,6 @@ class Base_Method(object):
             doc='Convergence threshold')
 
         opt.add_option(
-                key="product_geom_fixed",
-                value=True,
-                required=False,
-                doc="Fix last node?"
-                )
-
-        opt.add_option(
                 key="growth_direction",
                 value=0,
                 required=False,
@@ -190,8 +187,6 @@ class Base_Method(object):
                         that parallelizes optimization cycles on a single compute node'
                 )
 
-#BDIST_RATIO controls when string will terminate, good when know exactly what you want
-#DQMAG_MAX controls max step size for adding node
         opt.add_option(
                 key="BDIST_RATIO",
                 value=0.5,
@@ -205,7 +200,7 @@ class Base_Method(object):
                 key='ID',
                 value=0,
                 required=False,
-                doc='A number for identification'
+                doc='A number for identification of Strings'
                 )
 
         opt.add_option(
@@ -239,7 +234,6 @@ class Base_Method(object):
         self.nodes[0] = self.options['reactant']
         self.nodes[-1] = self.options['product']
         self.driving_coords = self.options['driving_coords']
-        self.product_geom_fixed = self.options['product_geom_fixed']
         self.growth_direction=self.options['growth_direction']
         self.isRestarted=False
         self.DQMAG_MAX=self.options['DQMAG_MAX']
@@ -249,6 +243,7 @@ class Base_Method(object):
         self.use_multiprocessing = self.options['use_multiprocessing']
         self.optimizer=[]
         self.interp_method = self.options['interp_method']
+        self.CONV_TOL = self.options['CONV_TOL']
 
         optimizer = options['optimizer']
         for count in range(self.nnodes):
@@ -256,12 +251,11 @@ class Base_Method(object):
         self.print_level = options['print_level']
 
         # Set initial values
-        self.nn = 2
+        self.current_nnodes = 2  
         self.nR = 1
         self.nP = 1        
         self.emax = 0.0
 
-        # TSnode is now a property
         self.climb = False 
         self.find = False 
         self.ts_exsteps = 3 # multiplier for ts node
@@ -286,12 +280,15 @@ class Base_Method(object):
         self.TS_E_0 = None 
 
 
-        # create newic object
+        # newic object is used for coordinate transformations
         self.newic  = Molecule.copy_from_options(self.nodes[0])
 
 
     @property
     def TSnode(self):
+        '''
+        The current node with maximum energy
+        '''
         # Treat GSM with penalty a little different since penalty will increase energy based on energy 
         # differences, which might not be great for Climbing Image
         if self.__class__.__name__ != "SE_Cross" and self.nodes[0].PES.__class__.__name__ =="Penalty_PES":
@@ -303,10 +300,15 @@ class Base_Method(object):
         else:
             # make sure TS is not zero or last node
             return np.argmax(self.energies[1:self.nnodes-1])+1
-            #return np.argmax(self.energies[:self.nnodes])
+
+    @property
+    def emax(self):
+        return self.energies[self.TSnode]
 
     @property
     def npeaks(self):
+        '''
+        '''
         minnodes=[]
         maxnodes=[]
         energies = self.energies
@@ -324,8 +326,12 @@ class Base_Method(object):
 
         return len(maxnodes)
 
+
     @property
     def energies(self):
+        '''
+        Energies of string
+        '''
         E = np.asarray([0.]*self.nnodes)
         for i,ico in enumerate(self.nodes):
             if ico != None:
@@ -341,6 +347,20 @@ class Base_Method(object):
 
 
     def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
+        '''
+        Optimize the grown string until convergence
+
+        Parameters
+        ----------
+        max_iter : int
+             Maximum number of GSM iterations 
+        nconstraints : int
+        optsteps : int
+            Maximum number of optimization steps per node of string
+        rtype : int
+            An option to change how GSM optimizes  
+            
+        '''
         nifty.printcool("In opt_iters")
 
         self.nclimb=0
@@ -349,7 +369,6 @@ class Base_Method(object):
         self.newclimbscale=2.
 
         self.set_finder(rtype)
-        #self.store_energies()
         self.emax = self.energies[self.TSnode]
 
         # set convergence for nodes
@@ -359,7 +378,7 @@ class Base_Method(object):
             factor = 1.
         for i in range(self.nnodes):
             if self.nodes[i] !=None:
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']*factor
+                self.optimizer[i].conv_grms = self.CONV_TOL*factor
                 self.optimizer[i].conv_gmax = self.options['CONV_gmax']*factor
                 self.optimizer[i].conv_Ediff = self.options['CONV_Ediff']*factor
 
@@ -421,9 +440,14 @@ class Base_Method(object):
                 self.found_ts=True
                 break
 
-            sum_conv_tol = (self.nnodes-2)*self.options['CONV_TOL'] 
+            # => Check if intermediate exists 
+            if check_for_intermediate():
+                self.exit_early
+                return 
+
+            sum_conv_tol = (self.nnodes-2)*self.CONV_TOL 
             if not self.climber and not self.finder:
-                print(" CONV_TOL=%.4f" %self.options['CONV_TOL'])
+                print(" CONV_TOL=%.4f" %self.CONV_TOL)
                 print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
                 all_conv=True
                 for  n in range(1,self.nnodes-1):
@@ -464,7 +488,7 @@ class Base_Method(object):
                 self.get_eigenv_finite(self.TSnode)
 
             # 
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.options['CONV_TOL']:
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.get_tangents_1e()
@@ -477,7 +501,7 @@ class Base_Method(object):
                     #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     self.nclimb=2
 
-            #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.options['CONV_TOL']:
+            #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.CONV_TOL:
             #     print(" nneg > 1 and close to converging -- reforming Hessian")                
             #     self.get_tangents_1e()                                                         
             #     self.get_eigenv_finite(self.TSnode)                    
@@ -518,8 +542,6 @@ class Base_Method(object):
 
         ## Optimize TS node to a finer convergence
         #if rtype==2:
-        #    # Change convergence
-        #    self.nodes[self.TSnode].optimizer.optimize[]
 
         #    # loop 10 times, 5 optimization steps each
         #    for i in range(10):
@@ -772,21 +794,34 @@ class Base_Method(object):
                 print("tan %i of the tangents is 0" %i)
                 raise RuntimeError
 
-    def growth_iters(self,iters=1,maxopt=1,nconstraints=1,current=0):
+    def grow_string(self,max_iters=30,maxoptsteps=3,nconstraints=1):
+        '''
+        Grow the string 
+
+        Parameters
+        ----------
+        max_iter : int
+             Maximum number of GSM iterations 
+        nconstraints : int
+        optsteps : int
+            Maximum number of optimization steps per node of string
+            
+        '''
         nifty.printcool("In growth_iters")
 
         self.get_tangents_1g()
         self.set_active(self.nR-1, self.nnodes-self.nP)
 
-        for n in range(iters):
-            nifty.printcool("Starting growth iter %i" % n)
-            sys.stdout.flush()
+        isGrown=False
+        iteration=0
+        while not isGrown:
+            if iteration>max_iters:
+                raise RuntimeError
+            nifty.printcool("Starting growth iteration %i" % iteration)
             self.opt_steps(maxopt)
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.emax = self.energies[self.TSnode]
-            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,n))
-            if self.check_if_grown(): 
-                break
+            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration))
+            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
 
             success = self.check_add_node()
             if not success:
@@ -800,7 +835,7 @@ class Base_Method(object):
                        opt_type='UNCONSTRAINED'
 
                     print(" optimizing last node")
-                    self.optimizer[self.nR-1].conv_grms = self.options['CONV_TOL']
+                    self.optimizer[self.nR-1].conv_grms = self.CONV_TOL
                     print(self.optimizer[self.nR-1].conv_grms)
                     self.optimizer[self.nR-1].optimize(
                             molecule=self.nodes[self.nR-1],
@@ -813,19 +848,27 @@ class Base_Method(object):
                 else:
                     raise RuntimeError
 
-                # check if grown will set some variables like 
-                # tscontinue and end_early
-                self.check_if_grown()
-                break
 
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
             self.get_tangents_1g()
-            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(n,float(totalgrad),float(gradrms),float(self.emax)))
+
+            iteration+=1
+            isGrown = self.check_if_grown()
 
         # create newic object
         print(" creating newic molecule--used for ic_reparam")
         self.newic  = Molecule.copy_from_options(self.nodes[0])
+
+        # TODO should something be done for growthdirection 2?
+        if self.growth_direction==1:
+            print("Setting LOT of last node")
+            self.nodes[-1] = Molecule.copy_from_options(
+                    MoleculeA = self.nodes[-2],
+                    xyz = self.nodes[-1].xyz,
+                    new_node_id = self.nnodes-1
+                    )
+
         return n
 
     @staticmethod
@@ -866,24 +909,7 @@ class Base_Method(object):
             for j in range(len(workers)):
                 res_lst.append(out_queue.get())                                                
                                              
-            #pool = mp.Pool(processes=cpus)
-            #print("Created the pool")
-            #results=pool.map(
-            #        run, 
-            #        [[self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim] for n in range(self.nnodes) if (self.nodes[n] and self.active[n])],
-            #        )
-
-            #pool.close()
-            #print("Calling join()...")
-            #sys.stdout.flush()
-            #pool.join()
-            #print("Joined")
-
-            #for (node,optimizer,n) in results:
-            #    self.nodes[n]=node
-            #    self.optimizer[n]=optimizer
         else:
-
             for n in range(self.nnodes):
                 if self.nodes[n] and self.active[n]:
                     print()
@@ -901,10 +927,9 @@ class Base_Method(object):
                             path=path,
                             )
 
-        if self.product_geom_fixed==False and self.done_growing:
+        if self.__class__.__name__=="SE-GSM" and self.done_growing:
             fp = self.find_peaks(2)
-            #BUG 1/24/2020
-            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.options['CONV_TOL']:
+            if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.CONV_TOL:
                 self.optimizer[self.nnodes-1].optimize(
                         molecule=self.nodes[self.nnodes-1],
                         refE=refE,
@@ -1185,6 +1210,23 @@ class Base_Method(object):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
 
+    def upsample(self):
+        '''
+        Upsample a string by one node, reparameterize the string to take into account the new node
+        '''
+
+        raise NotImplementedError
+        # Add node in the middle
+        if self.nnodes % 2 == 0:
+            new_node_id = self.nnodes/2 +1
+        else:
+            new_node_id = self.nnodes//2 + 1
+
+        # for node before middle
+
+        return
+
+
     @staticmethod
     def interpolate(start_node,end_node,num_interp):
         nifty.printcool(" interpolate")
@@ -1197,12 +1239,10 @@ class Base_Method(object):
         nR = 1
         nP = 1
         nn = nR + nP
-        #E0=start_node.energy
 
         for n in range(num_interp):
             if num_nodes - nn > 1:
                 stepsize = 1./float(num_nodes - nn)
-                #stepsize = 1./float(self.nnodes-self.nn)
             else:
                 stepsize = 0.5
             if sign == 1:
@@ -1242,7 +1282,7 @@ class Base_Method(object):
             iN = self.nR
             print(" adding node: %i between %i %i from %i" %(iN,iR,iP,iR))
             if self.nnodes - self.nn > 1:
-                stepsize = 1./float(self.nnodes-self.nn+1)
+                stepsize = 1./float(self.nnodes-self.current_nnodes+1)
             else:
                 stepsize = 0.5
 
@@ -1269,9 +1309,9 @@ class Base_Method(object):
                 self.nodes[self.nR].bdist = bdist
 
             self.optimizer[self.nR].DMAX = self.optimizer[self.nR-1].DMAX
-            self.nn+=1
+            self.current_nnodes+=1
             self.nR+=1
-            print(" nn=%i,nR=%i" %(self.nn,self.nR))
+            print(" nn=%i,nR=%i" %(self.ncurrent_nnodesself.nR))
             self.active[self.nR-1] = True
 
             # align center of mass  and rotation
@@ -1284,7 +1324,7 @@ class Base_Method(object):
 
     def add_GSM_nodeP(self,newnodes=1):
         nifty.printcool("Adding product node")
-        if self.nn+newnodes > self.nnodes:
+        if self.current_nnodes+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
 
         success=True
@@ -1294,8 +1334,8 @@ class Base_Method(object):
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
             print(" adding node: %i between %i %i from %i" %(n2,n1,n3,n1))
-            if self.nnodes - self.nn > 1:
-                stepsize = 1./float(self.nnodes-self.nn+1)
+            if self.nnodes - self.current_nnodes > 1:
+                stepsize = 1./float(self.nnodes-self.current_nnodes+1)
             else:
                 stepsize = 0.5
 
@@ -1310,9 +1350,9 @@ class Base_Method(object):
                 break
 
             self.optimizer[n2].DMAX = self.optimizer[n1].DMAX
-            self.nn+=1
+            self.current_nnodes+=1
             self.nP+=1
-            print(" nn=%i,nP=%i" %(self.nn,self.nP))
+            print(" nn=%i,nP=%i" %(self.ncurrent_nnodesself.nP))
             self.active[-self.nP] = True
 
             # align center of mass  and rotation
@@ -1826,15 +1866,28 @@ class Base_Method(object):
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
   
-    def restart_from_geoms(self,geoms,reparametrize=False,restart_energies=True):
+    def restart_from_geoms(self,input_geoms,reparametrize=False,restart_energies=True):
         '''
         '''
 
         nifty.printcool("Restarting GSM from geometries")
         self.growth_direction=0
+        nstructs=len(input_geoms)
 
-        nstructs=len(geoms)
-        print(nstructs)
+        if nstructs != self.nnodes:
+            print('need to interpolate')
+            #if self.interp_method=="DLC":
+            #    # determine how many times to upsample, then upsample that many times
+            #    #self.upsample()
+            #    raise NotImplementedError
+            #elif self.interp_method=="Geodesic":
+            old_xyzs = [ manage_xyz.xyz_to_np(geom) for geom in input_geoms ]
+            symbols = manage_xyz.get_atoms(input_geoms[0])
+            xyzs = redistribute(symbols,old_xyzs,self.nnodes,tol=2e-3*5)
+            geoms = [ manage_xyz.np_to_xyz(input_geoms[0],xyz) for xyz in xyzs ]
+            nstructs = len(geoms)
+        else:
+            geoms = input_geoms
 
         self.gradrms = [0.]*nstructs
         self.dE = [1000.]*nstructs
@@ -2204,7 +2257,7 @@ class Base_Method(object):
 
         if energies[nnodes-1]>15.0:
             if nnodes-3>0:
-                if (energies[nnodes-1]-energies[nnodes-2])<alluptol2 and
+                if ((energies[nnodes-1]-energies[nnodes-2])<alluptol2 and 
                 (energies[nnodes-2]-energies[nnodes-3])<alluptol2 and
                 (energies[nnodes-3]-energies[nnodes-4])<alluptol2):
                     print(" possible dissociative profile")
@@ -2347,6 +2400,7 @@ class Base_Method(object):
                 ispast=3
         print(" ispast=",ispast)
         return ispast
+
 
     def check_for_reaction_g(self,rtype):
 

@@ -64,7 +64,7 @@ class DE_GSM(Base_Method):
                 self.add_GSM_nodeR(1)
             elif self.growth_direction==2:
                 self.add_GSM_nodeP(1)
-            oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
+            oi = self.growth_iters(max_iters=max_iters,maxopt=opt_steps) 
             nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
             #nifty.printcool("initial ic_reparam")
@@ -87,7 +87,7 @@ class DE_GSM(Base_Method):
         return self.nnodes,self.energies
 
     def add_GSM_nodes(self,newnodes=1):
-        if self.nn+newnodes > self.nnodes:
+        if self.current_nnodes+newnodes > self.nnodes:
             print("Adding too many nodes, cannot add_GSM_node")
         sign = -1
         for i in range(newnodes):
@@ -124,75 +124,57 @@ class DE_GSM(Base_Method):
             self.active[nR]=False
         #print(" Here is new active:",self.active)
 
+
     def check_if_grown(self):
-        isDone=False
-        if self.nn==self.nnodes:
-            isDone=True
+        '''
+        Check if the string is grown
+        Returns True if grown 
+        '''
 
-            # TODO should something be done for growthdirection 2?
-            if self.growth_direction==1:
-                print("Setting LOT of last node")
-                self.nodes[-1] = Molecule.copy_from_options(
-                        MoleculeA = self.nodes[-2],
-                        xyz = self.nodes[-1].xyz,
-                        new_node_id = self.nnodes-1
-                        )
+        return self.current_nnodes==self.nnodes
 
-            #TODO 01/13/2021 write a function to determine whether to ts_continue
 
-            # if reactant_geom_fixed and energy decreases from nodes 0 to 1 and 2 
-            # if allup
-            # if all down
+    def check_tscontinue(self):
+        tol1=0.5
+        tol2=2.
+        allup=True
+        alldown=True
+        diss=False
+        energies = self.energies
+        nnodes = self.nnodes
 
-            tol1=0.5
-            tol2=2.
-            allup=True
-            alldown=True
-            diss=False
-            energies = self.energies
-            nnodes = self.nnodes
+        # if allup
+        for n in range(1,nnodes):
+            if energies[n]+tol1<energies[n-1]:
+                allup=False
+                break
 
-            # if allup
-            for n in range(1,nnodes):
-                if energies[n]+tol1<energies[n-1]:
-                    allup=False
-                    break
-
-            # alldown
-            for n in range(1,nnodes-1):
-                if energies[n+1]+tol1>energies[n]:
-                    alldown=False
-                    break
+        # alldown
+        for n in range(1,nnodes-1):
+            if energies[n+1]+tol1>energies[n]:
+                alldown=False
+                break
         
-            # check on dissociative
-            if energies[nnodes-1]>15.0:
-                if nnodes-3>0:
-                    if (abs(energies[nnodes-1]-energies[nnodes-2])<tol2 and
-                    abs(energies[nnodes-2]-energies[nnodes-3])<tol2 and
-                    abs(energies[nnodes-3]-energies[nnodes-4])<tol2):
-                        print(" possible dissociative profile")
-                        diss=True
+        if allup or alldown:
+            self.tscontinue=False
+        return
 
-            # reverse dissociative
-            if ((energies[1] - energies[0]) < tol1 and
-            (energies[2] - energies[1]) < tol1 and
-            (energies[3] - energies[2]) < tol1):
-                diss=True
-        
-            if diss or allup or alldown:
-                self.tscontinue=False
 
-        return isDone
+    def grow_nodes(self):
+        '''
+        Grow nodes
+        '''
 
-    def check_add_node(self):
-        success=True 
+        #TODO
+        # This always evaluates to successful
+        success=True
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             if self.nodes[self.nR] == None:
-                self.add_GSM_nodeR()
+                success=self.add_GSM_nodeR()
                 print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
         if self.nodes[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
             if self.nodes[-self.nP-1] == None:
-                self.add_GSM_nodeP()
+                success=self.add_GSM_nodeP()
                 print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
         return success
 

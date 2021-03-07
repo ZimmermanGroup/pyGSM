@@ -22,9 +22,6 @@ from growing_string_methods import *
 from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
-
-#TODO can use the "dest" keyword in parser to automatically save the variable
-
 def main():
     parser = argparse.ArgumentParser(
         description="Reaction path transition state and photochemistry tool",
@@ -102,13 +99,6 @@ def main():
         except: 
             nproc = 1
         print(" Using {} processors".format(nproc))
-
-    #print(args.states)
-    #if args.states is not None:
-    #    states = [tuple(int(s) for s in my_tup.strip("()").split(",")) for my_tup in args.states ]
-    #    print(states)
-    #else:
-    #    states=None
 
     inpfileq = {
                # LOT
@@ -560,7 +550,8 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        gsm.restart_from_geoms(geoms)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

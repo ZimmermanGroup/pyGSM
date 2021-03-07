@@ -22,7 +22,7 @@ class SE_GSM(Base_Method):
             options,
             ):
         super(SE_GSM,self).__init__(options)
-        self.nn=1
+        self.current_nnodes=1
 
         print(" Assuming the isomers are initialized!")
         #self.isomer_init()
@@ -207,7 +207,7 @@ class SE_GSM(Base_Method):
         #self.nodes[self.nR-1].xyz = self.com_rotate_move(self.nR-2,self.nR,self.nR-1) 
         return
 
-    def check_add_node(self):
+    def grow_nodes(self):
         success=True
         if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
@@ -262,6 +262,11 @@ class SE_GSM(Base_Method):
         return ncurrent,nlist
 
     def check_if_grown(self):
+        '''
+        Check if the string is grown
+        Returns True if grown 
+        '''
+
         self.pastts = self.past_ts()
         isDone=False
         #TODO break planes
