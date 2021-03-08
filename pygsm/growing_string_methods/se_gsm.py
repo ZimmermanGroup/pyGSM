@@ -36,7 +36,7 @@ class SE_GSM(Base_Method):
         sys.stdout.flush()
         
         # stash bdist for node 0
-        ictan,self.nodes[0].bdist = Base_Method.tangent(
+        ictan,self.nodes[0].bdist = get_tangent(
                 self.nodes[0],
                 None,
                 driving_coords=self.driving_coords,
@@ -109,7 +109,7 @@ class SE_GSM(Base_Method):
             self.nodes[0].V0 = self.nodes[0].energy
             print(" Initial energy is %1.4f" % self.nodes[0].energy)
             self.add_GSM_nodeR()
-            self.growth_iters(iters=max_iters,maxopt=opt_steps)
+            self.grow_string(max_iters=max_iters,max_opt_steps=opt_steps)
             if self.tscontinue:
                 if self.pastts==1: #normal over the hill
                     self.add_GSM_nodeR(1)
@@ -154,7 +154,7 @@ class SE_GSM(Base_Method):
             self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if self.tscontinue:
-            self.opt_iters(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
+            self.optimize_string(max_iter=max_iters,optsteps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
         else:
             print("Exiting early")
             self.end_early=True
@@ -208,18 +208,14 @@ class SE_GSM(Base_Method):
         return
 
     def grow_nodes(self):
-        success=True
         if self.nodes[self.nR-1].gradrms < self.options['ADD_NODE_TOL']:
             if self.nR == self.nnodes:
                 print(" Ran out of nodes, exiting GSM")
                 raise ValueError
             if self.nodes[self.nR] == None:
-                success=self.add_GSM_nodeR()
-                if success:
-                    print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
-            else:
-                self.active[self.nR-1] = False
-        return success
+                self.add_GSM_nodeR()
+                print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
+        return 
 
     def add_GSM_nodes(self,newnodes=1):
         if self.nn+newnodes > self.nnodes:
@@ -260,6 +256,81 @@ class SE_GSM(Base_Method):
         nlist[2*ncurrent] = self.nR -1
         ncurrent += 1
         return ncurrent,nlist
+
+
+    def past_ts(self):
+        '''
+        '''
+        ispast=ispast1=ispast2=ispast3=0
+        THRESH1=5.
+        THRESH2=3.
+        THRESH3=-1.
+        THRESHB=0.05
+        CTHRESH=0.005
+        OTHRESH=-0.015
+        emax = -100.
+        nodemax =1
+        #n0 is zero until after finished growing
+        ns = self.n0-1
+        if ns<nodemax: ns=nodemax
+
+        print(" Energies",end=' ')
+        energies = self.energies
+        for n in range(ns,self.nR):
+            print(" {:4.3f}".format(energies[n]),end=' ')
+            if energies[n]>emax:
+                nodemax=n
+                emax=energies[n]
+        print("\n nodemax ",nodemax)
+
+        for n in range(nodemax,self.nR):
+            if energies[n]<emax-THRESH1:
+                ispast1+=1
+            if energies[n]<emax-THRESH2:
+                ispast2+=1
+            if energies[n]<emax-THRESH3:
+                ispast3+=1
+            if ispast1>1:
+                break
+        print(" ispast1",ispast1)
+        print(" ispast2",ispast2)
+        print(" ispast3",ispast3)
+
+        #TODO 5/9/2019 what about multiple constraints
+        # Done 6/23/2019
+        constraints = self.nodes[self.nR-1].constraints[:,0]
+        gradient = self.nodes[self.nR-1].gradient
+
+        overlap = np.dot(gradient.T,constraints)
+        cgrad = overlap*constraints
+
+        cgrad = np.linalg.norm(cgrad)*np.sign(overlap)
+        #cgrad = np.sum(cgrad)
+
+        print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
+
+
+        # 6/17 THIS should check if the last node is high in energy
+        if cgrad>CTHRESH and not self.nodes[self.nR-1].PES.lot.do_coupling and nodemax != self.TSnode:
+            print(" constraint gradient positive")
+            ispast=2
+        elif ispast1>0 and cgrad>OTHRESH:
+            print(" over the hill(1)")
+            ispast=1
+        elif ispast2>1:
+            print(" over the hill(2)")
+            ispast=1
+        else:
+            ispast=0
+
+        if ispast==0:
+            bch=self.check_for_reaction_g(1)
+            if ispast3>1 and bch:
+                print("over the hill(3) connection changed %r " %bch)
+                ispast=3
+        print(" ispast=",ispast)
+        return ispast
+
 
     def check_if_grown(self):
         '''
@@ -311,7 +382,7 @@ class SE_GSM(Base_Method):
                 added=True
                 print("done adding node")
                 print("nnodes = ",self.nnodes)
-                self.get_tangents_1()
+                self.ictan,self.dqmaga = self.get_tangents_1(self.nodes)
                 
             return isDone
 

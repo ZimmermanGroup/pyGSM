@@ -21,7 +21,9 @@ from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
-from string_utils import *
+from .string_utils import *
+from .tangent_utils import *
+from .interpolation_utils import *
 
 try:
     from geodesic_interpolate import Geodesic,redistribute
@@ -34,49 +36,12 @@ except ImportError:
 
 # TODO nconstraints in ic_reparam and write_iters is irrelevant
 
-# THis can help us parallelize things
-def worker(arg):
-    obj, methname = arg[:2]
-    return getattr(obj, methname)(*arg[2:])
-# e.g. list_of_results = pool.map(worker, ((obj, "my_process", 100, 1) for obj in list_of_objects))
 
-
-
-def geodesic_reparam(molecules):
-    '''
-    takes gsm nodes and reparameterizes the geometries using geodesic interpolation
-
-    '''
-
-    xyzs = []
-    for mol in molecules:
-        xyzs.append( mol.xyz ) 
-    symbols = molecules[0].atom_symbols
-
-    # Perform smoothing by minimizing distance in Cartesian coordinates with redundant internal metric
-    # to find the appropriate geodesic curve on the hyperspace.
-    smoother = Geodesic(symbols, xyzs, 1.7, threshold=3, friction=1e-2)
-    try:
-        smoother.smooth(tol=1.7, max_iter=15)
-    finally:
-        # Save the smoothed path to output file.  try block is to ensure output is saved if one ^C the
-        # process, or there is an error
-        new_geoms = []
-        for xyz in smoother.path:
-            new_geoms.append( manage_xyz.combine_atom_xyz(symbols,xyz))
-
-        manage_xyz.write_xyzs('tmp.xyz', new_geoms)
-
-    print(smoother.path.shape)
-    return smoother.path
-
-
-
-class Base_Method(object):
+class BaseClass(object):
 
     @staticmethod
     def default_options():
-        if hasattr(Base_Method, '_default_options'): return Base_Method._default_options.copy()
+        if hasattr(BaseClass, '_default_options'): return BaseClass._default_options.copy()
 
         opt = options.Options() 
         
@@ -211,8 +176,8 @@ class Base_Method(object):
                 doc='Which reparameterization method to use',
                 )
 
-        Base_Method._default_options = opt
-        return Base_Method._default_options.copy()
+        BaseClass._default_options = opt
+        return BaseClass._default_options.copy()
 
 
     @classmethod
@@ -254,8 +219,6 @@ class Base_Method(object):
         self.current_nnodes = 2  
         self.nR = 1
         self.nP = 1        
-        self.emax = 0.0
-
         self.climb = False 
         self.find = False 
         self.ts_exsteps = 3 # multiplier for ts node
@@ -271,17 +234,13 @@ class Base_Method(object):
         self.climber=False  #is this string a climber?
         self.finder=False   # is this string a finder?
         self.done_growing = False
-
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
         self.hess_counter = 0   # it is probably good to reset the hessian
         self.newclimbscale=2.
         self.TS_E_0 = None 
-
-
-        # newic object is used for coordinate transformations
-        self.newic  = Molecule.copy_from_options(self.nodes[0])
+        self.newic  = Molecule.copy_from_options(self.nodes[0]) # newic object is used for coordinate transformations
 
 
     @property
@@ -345,8 +304,24 @@ class Base_Method(object):
             geoms.append(m.geometry)
         return geoms
 
+    @property
+    def ictan(self):
+        return self._ictan
 
-    def opt_iters(self,max_iter=30,nconstraints=1,optsteps=1,rtype=2):
+    @ictan.setter
+    def ictan(self,value):
+        self._ictan = value
+
+    @property
+    def dqmaga(self):
+        return self._dqmaga
+
+    @dqmaga.setter(self):
+        self._dqmaga = value
+
+
+
+    def optimize_string(self,max_iter=30,nconstraints=1,opt_steps=1,rtype=2):
         '''
         Optimize the grown string until convergence
 
@@ -367,9 +342,7 @@ class Base_Method(object):
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
         self.newclimbscale=2.
-
         self.set_finder(rtype)
-        self.emax = self.energies[self.TSnode]
 
         # set convergence for nodes
         if (self.climber or self.finder):
@@ -396,13 +369,12 @@ class Base_Method(object):
             self.emaxp = self.emax
 
             # => Get all tangents 3-way <= #
-            self.get_tangents_1e()
+            self.ictan,self.dqmaga = get_three_way_tangents(self.nodes,self.energies)
            
             # => do opt steps <= #
-            self.opt_steps(optsteps)
+            self.optimize_iteration(optsteps)
             #self.store_energies()
 
-            print()
             print(" V_profile: ", end=' ')
             energies = self.energies
             for n in range(self.nnodes):
@@ -571,116 +543,24 @@ class Base_Method(object):
         sys.stdout.flush()
         return
 
-    def get_tangents_1(self,n0=0):
-        dqmaga = [0.]*self.nnodes
-        dqa = np.zeros((self.nnodes+1,self.nnodes))
-        ictan = [[]]*self.nnodes
-
-        for n in range(n0+1,self.nnodes):
-            #print "getting tangent between %i %i" % (n,n-1)
-            assert self.nodes[n]!=None,"n is bad"
-            assert self.nodes[n-1]!=None,"n-1 is bad"
-            ictan[n],_ = Base_Method.tangent(self.nodes[n-1],self.nodes[n])
-
-            dqmaga[n] = 0.
-            #ictan0= np.copy(ictan[n])
-            dqmaga[n] = np.linalg.norm(ictan[n])
-           
-            ictan[n] /= dqmaga[n]
-             
-            # NOTE:
-            # vanilla GSM has a strange metric for distance
-            # no longer following 7/1/2020
-            #constraint = self.newic.constraints[:,0]
-            # just a fancy way to get the normalized tangent vector
-            #prim_constraint = block_matrix.dot(Vecs,constraint)
-            #for prim in self.newic.primitive_internal_coordinates:
-            #    if type(prim) is Distance:
-            #        index = self.newic.coord_obj.Prims.dof_index(prim)
-            #        prim_constraint[index] *= 2.5
-            #dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
-            #dqmaga[n] = float(np.sqrt(dqmaga[n]))
-
-            if dqmaga[n]<0.:
-                raise RuntimeError
-
-
-        # TEMPORORARY parallel idea 
-        #ictan = [0.]
-        #ictan += [ Process(target=get_tangent,args=(n,)) for n in range(n0+1,self.nnodes)]
-        #dqmaga = [ Process(target=get_dqmag,args=(n,ictan[n])) for n in range(n0+1,self.nnodes)]
-
-        self.dqmaga = dqmaga
-        self.ictan = ictan
-
-        if self.print_level>1:
-            print('------------printing ictan[:]-------------')
-            for n in range(n0+1,self.nnodes):
-                print("ictan[%i]" %n)
-                print(ictan[n].T)
-        if self.print_level>0:
-            print('------------printing dqmaga---------------')
-            for n in range(n0+1,self.nnodes):
-                print(" {:5.4}".format(dqmaga[n]),end='')
-                if (n)%5==0:
-                    print()
-            print()
-
-
-    # for some reason this fxn doesn't work when called outside gsm
-    def get_tangents_1e(self,n0=0,update_TS=False):
-        ictan0 = np.zeros((self.newic.num_primitives,1))
-        dqmaga = [0.]*self.nnodes
+    
+    #TODO
+    def refresh_coordinates(self,update_TS=True):
+        '''
+        Refresh the DLC coordinates for the string
+        '''
         energies = self.energies
-        TSnode = self.TSnode
-        for n in range(n0+1,self.nnodes-1):
-            do3 = False
-            if not self.find:
-                if energies[n+1] > energies[n] and energies[n] > energies[n-1]:
-                    intic_n = n
-                    newic_n = n+1
-                elif energies[n-1] > energies[n] and energies[n] > energies[n+1]:
-                    intic_n = n-1
-                    newic_n = n
-                else:
-                    do3 = True
-                    newic_n = n
-                    intic_n = n+1
-                    int2ic_n = n-1
-            else:
-                if n < TSnode:
-                    intic_n = n
-                    newic_n = n+1
-                elif n> TSnode:
-                    intic_n = n-1
-                    newic_n = n
-                else:
-                    do3 = True
-                    newic_n = n
-                    intic_n = n+1
-                    int2ic_n = n-1
-            if not do3:
-                ictan0,_ = Base_Method.tangent(self.nodes[newic_n],self.nodes[intic_n])
-            else:
-                f1 = 0.
-                dE1 = abs(energies[n+1]-energies[n])
-                dE2 = abs(energies[n] - energies[n-1])
-                dEmax = max(dE1,dE2)
-                dEmin = min(dE1,dE2)
-                if energies[n+1]>energies[n-1]:
-                    f1 = dEmax/(dEmax+dEmin+0.00000001)
-                else:
-                    f1 = 1 - dEmax/(dEmax+dEmin+0.00000001)
 
-                print(' 3 way tangent ({}): f1:{:3.2}'.format(n,f1))
+        if growing:
+            self.ictan,self.dqmaga = get_tangents_growing()
 
-                t1,_ = Base_Method.tangent(self.nodes[intic_n],self.nodes[newic_n])
-                t2,_ = Base_Method.tangent(self.nodes[newic_n],self.nodes[int2ic_n])
-                print(" done 3 way tangent")
-                ictan0 = f1*t1 +(1.-f1)*t2
-            self.ictan[n] = ictan0/np.linalg.norm(ictan0)
-            
-            dqmaga[n]=0.0
+        else:
+
+            self.ictan,self.dqmaga = get_three_way_tangents(self.nodes,self.energies)
+        
+            for n in range(1,self.nnodes-1):
+                if n==self.TSnode and update_TS:
+                    print()
 
             # update newic coordinate basis
             self.newic.xyz = self.nodes[newic_n].xyz
@@ -725,76 +605,9 @@ class Base_Method(object):
             print()
         self.dqmaga = dqmaga
 
-    def get_tangents_1g(self):
-        """
-        Finds the tangents during the growth phase. 
-        Tangents referenced to left or right during growing phase.
-        Also updates coordinates
-        """
-        dqmaga = [0.]*self.nnodes
-        ncurrent,nlist = self.make_nlist()
 
-        if self.print_level>1:
-            print("ncurrent, nlist")
-            print(ncurrent)
-            print(nlist)
 
-        for n in range(ncurrent):
-            print(" ictan[{}]".format(nlist[2*n]))
-            ictan0,_ = Base_Method.tangent(
-                    node1=self.nodes[nlist[2*n]],
-                    node2=self.nodes[nlist[2*n+1]],
-                    driving_coords=self.driving_coords,
-                    )
-
-            if self.print_level>1:
-                print("forming space for", nlist[2*n+1])
-            if self.print_level>1:
-                print("forming tangent for ",nlist[2*n])
-
-            if (ictan0[:]==0.).all():
-                print(" ICTAN IS ZERO!")
-                print(nlist[2*n])
-                print(nlist[2*n+1])
-                raise RuntimeError
-
-            #normalize ictan
-            norm = np.linalg.norm(ictan0)  
-            self.ictan[nlist[2*n]] = ictan0/norm
-           
-            Vecs = self.nodes[nlist[2*n]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
-            constraint = self.nodes[nlist[2*n]].constraints
-            prim_constraint = block_matrix.dot(Vecs,constraint)
-
-            # NOTE regular GSM does something weird here 
-            # but this is not followed here anymore 7/1/2020
-            #dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
-            #dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
-            tmp_dqmaga = np.dot(prim_constraint.T,ictan0)
-            tmp_dqmaga = np.sqrt(tmp_dqmaga)
-            dqmaga[nlist[2*n]] = norm
-
-        self.dqmaga = dqmaga
-
-        if self.print_level>0:
-            print('------------printing dqmaga---------------')
-            for n in range(self.nnodes):
-                print(" {:5.3}".format(dqmaga[n]), end=' ')
-                if (n+1)%5==0:
-                    print()
-            print() 
-       
-        if False:
-            for n in range(ncurrent):
-                print("dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]]))
-                print("printing ictan[%i]" %nlist[2*n])       
-                print(self.ictan[nlist[2*n]].T)
-        for i,tan in enumerate(self.ictan):
-            if np.all(tan==0.0):
-                print("tan %i of the tangents is 0" %i)
-                raise RuntimeError
-
-    def grow_string(self,max_iters=30,maxoptsteps=3,nconstraints=1):
+    def grow_string(self,max_iters=30,max_opt_steps=3,nconstraints=1):
         '''
         Grow the string 
 
@@ -818,13 +631,14 @@ class Base_Method(object):
             if iteration>max_iters:
                 raise RuntimeError
             nifty.printcool("Starting growth iteration %i" % iteration)
-            self.opt_steps(maxopt)
+            self.optimize_iteration(max_opt_steps)
             totalgrad,gradrms,sum_gradrms = self.calc_grad()
             self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration))
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
-
-            success = self.check_add_node()
-            if not success:
+                
+            try:
+                self.grow_nodes()
+            except Exception as error:
                 print("can't add anymore nodes, bdist too small")
 
                 if self.__class__.__name__=="SE_GSM": # or self.__class__.__name__=="SE_Cross":
@@ -848,7 +662,6 @@ class Base_Method(object):
                 else:
                     raise RuntimeError
 
-
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
             self.get_tangents_1g()
@@ -868,29 +681,13 @@ class Base_Method(object):
                     xyz = self.nodes[-1].xyz,
                     new_node_id = self.nnodes-1
                     )
+        return 
 
-        return n
 
-    @staticmethod
-    def interpolate_xyz(nodeR,nodeP,stepsize):
-        ictan,_ =  Base_Method.tangent(nodeR,nodeP)
-        Vecs = nodeR.update_coordinate_basis(constraints=ictan)
-        constraint = nodeR.constraints[:,0]
-        prim_constraint = block_matrix.dot(Vecs,constraint)
-        dqmag = np.dot(prim_constraint.T,ictan)
-        print(" dqmag: %1.3f"%dqmag)
-        #sign=-1
-        sign=1.
-        dqmag *= (sign*stepsize)
-        print(" scaled dqmag: %1.3f"%dqmag)
-
-        dq0 = dqmag*constraint
-        old_xyz = nodeR.xyz.copy()
-        new_xyz = nodeR.coord_obj.newCartesian(old_xyz,dq0)
-
-        return new_xyz 
-
-    def opt_steps(self,opt_steps):
+    def optimize_iteration(self,opt_steps):
+        '''
+        Optimize string iteration
+        '''
 
         refE=self.nodes[0].energy
 
@@ -939,6 +736,7 @@ class Base_Method(object):
                         )
 
 
+    # TODO remove return form_TS hess  3/2021
     def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
         form_TS_hess=False
 
@@ -983,310 +781,23 @@ class Base_Method(object):
 
         return form_TS_hess
 
-    @staticmethod
-    def tangent(node1,node2,**kwargs):
-        #if self.print_level>1:
-        #    print(" getting tangent from between %i %i pointing towards %i"%(n2,n1,n2))
-        # this could have been done easier but it is nicer to do it this way
-        print_level = 1
-
-        if node2 is not None and node1.node_id!=node2.node_id:
-            print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
-            assert node2!=None,'node n2 is None'
-           
-            PMDiff = np.zeros(node2.num_primitives)
-            for k,prim in enumerate(node2.primitive_internal_coordinates):
-                PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
-
-            return np.reshape(PMDiff,(-1,1)),None
-        else:
-            print(" getting tangent from node ",node1.node_id)
-
-            driving_coords = kwargs.get('driving_coords',None)
-            assert driving_coords is not None, " Driving coord is None!"
-
-            c = Counter(elem[0] for elem in driving_coords)
-            nadds = c['ADD']
-            nbreaks = c['BREAK']
-            nangles = c['nangles']
-            ntorsions = c['ntorsions']
-
-            ictan = np.zeros((node1.num_primitives,1),dtype=float)
-            breakdq = 0.3
-            bdist=0.0
-            atoms = node1.atoms
-            xyz = node1.xyz.copy()
-
-            for i in driving_coords:
-                if "ADD" in i:
-
-                    #order indices to avoid duplicate bonds
-                    if i[1]<i[2]:
-                        index = [i[1]-1, i[2]-1]
-                    else:
-                        index = [i[2]-1, i[1]-1]
-
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        #TODO why not just use the covalent radii?
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
-                    elif len(i)==4:
-                        d0=i[3]
-                    current_d =  bond.value(xyz)
-
-                    #TODO don't set tangent if value is too small
-                    ictan[prim_idx] = -1*(d0-current_d)
-                    #if nbreaks>0:
-                    #    ictan[prim_idx] *= 2
-                    # => calc bdist <=
-                    if current_d>d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-
-                elif "BREAK" in i:
-                    #order indices to avoid duplicate bonds
-                    if i[1]<i[2]:
-                        index = [i[1]-1, i[2]-1]
-                    else:
-                        index = [i[2]-1, i[1]-1]
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
-                    elif len(i)==4:
-                        d0=i[3]
-
-                    current_d =  bond.value(xyz)
-                    ictan[prim_idx] = -1*(d0-current_d) 
-
-                    # => calc bdist <=
-                    if current_d<d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-
-                    if print_level>0:
-                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-                elif "ANGLE" in i:
-
-                    if i[1]<i[3]:
-                        index = [i[1]-1, i[2]-1,i[3]-1]
-                    else:
-                        index = [i[3]-1, i[2]-1,i[1]-1]
-                    angle = Angle(index[0],index[1],index[2])
-                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
-                    anglet = i[4]
-                    ang_value = angle.value(xyz)
-                    ang_diff = anglet*np.pi/180. - ang_value
-                    #print(" angle: %s is index %i " %(angle,ang_idx))
-                    if print_level>0:
-                        print((" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff)))
-                    ictan[prim_idx] = -ang_diff
-                    #TODO need to come up with an adist
-                    #if abs(ang_diff)>0.1:
-                    #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
-                elif "TORSION" in i:
-
-                    if i[1]<i[4]:
-                        index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
-                    else:
-                        index = [i[4]-1,i[3]-1,i[2]-1,i[1]-1]
-                    torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
-                    tort = i[5]
-                    torv = torsion.value(xyz)
-                    tor_diff = tort - torv*180./np.pi
-                    if tor_diff>180.:
-                        tor_diff-=360.
-                    elif tor_diff<-180.:
-                        tor_diff+=360.
-                    ictan[prim_idx] = -tor_diff*np.pi/180.
-
-                    if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
-
-                elif "OOP" in i:
-                    index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
-                    oop = OutOfPlane(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(oop)
-                    oopt = i[5]
-                    oopv = oop.value(xyz)
-                    oop_diff = oopt - oopv*180./np.pi
-                    if oop_diff>180.:
-                        oop_diff-=360.
-                    elif oop_diff<-180.:
-                        oop_diff+=360.
-                    ictan[prim_idx] = -oop_diff*np.pi/180.
-
-                    if oop_diff*np.pi/180.>0.1 or oop_diff*np.pi/180.<0.1:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current oopv: %4.3f align to %4.3f diff(deg): %4.3f" %(oopv*180./np.pi,oopt,oop_diff)))
-
-                # Doesn't work
-                #elif "ROTATE" in i:
-                #    frag = i[1]
-                #    a1 = i[2]  #atom 1
-                #    a2 = i[3]  #atom 2
-                #     
-                #    sa,ea,sp,ep = node1.coord_obj.Prims.prim_only_block_info[frag]
-
-                #    # NEW bdist is just theta_to_go, ictan is axis
-                #    # The direction of the vector is the rotation axis, norm is the rotation angle
-
-                #    theta_target = i[4]*np.pi/180.    # radians
-
-                #    #data = [tup for tup in node1.frag_rotations if frag==tup[0]]
-                #    if node1.frag_rotations is None:
-                #        raise RuntimeError("frag rotations is a pain in the but, it needs to be saved before running tangents because it relies on the path history")
-                #    found=False
-                #    for tup in node1.frag_rotations:
-                #        if frag==tup[0]:
-                #            current_rotation = tup[1]
-                #            found=True
-                #            break
-                #    if not found:
-                #        raise RuntimeError(" Didn't find current rotation.")
-                #    axis = node1.xyz[a2] - node1.xyz[a1]
-                #    axis /= np.linalg.norm(axis)
-
-                #    theta_to_go = theta_target - current_rotation
-
-                #    # theta in pi sphere
-                #    #dtheta = theta_to_go + np.pi % (2*np.pi) - np.pi
-                #    #dtheta = theta_to_go/
-                #    dtheta = 5.*np.pi/180.
-                #    new_theta = current_rotation + dtheta
-                #    theta3 = (new_theta + np.pi) % (2*np.pi) - np.pi
-
-                #    xyz_frag = node1.xyz[sa:ea].copy()
-                #    sel = xyz_frag.reshape(-1,3)
-                #    sel -= np.mean(sel, axis=0)
-                #    rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                #    #c = np.cos(new_theta/2.0)
-                #    #s = np.sin(new_theta/2.0)
-                #    c = np.cos(dtheta/2.0)
-                #    s = np.sin(dtheta/2.0)
-                #    #c = np.cos(theta3/2.0)
-                #    #s = np.sin(theta3/2.0)
-                #    #c = np.cos(theta_to_go/2.0)
-                #    #s = np.sin(theta_to_go/2.0)
-                #    q = np.array([c, axis[0]*s, axis[1]*s, axis[2]*s])
-                #    fac, _ = calc_fac_dfac(c)
-
-                #    #ictan[sp+3] =  axis[0]
-                #    #ictan[sp+4] =  axis[1]
-                #    #ictan[sp+5] =  axis[2]
-                #    ictan[sp+3] = fac*rg*q[1]
-                #    ictan[sp+4] = fac*rg*q[2]
-                #    ictan[sp+5] = fac*rg*q[3]
-
-                #    print(q)
-                #    bdist += theta_to_go
-
-
-                #trans = ['TranslationX', 'TranslationY', 'TranslationZ']
-                #if any(elem in trans for elem in i):
-                #    fragid = i[1]
-                #    destination = i[2]
-                #    indices = node1.get_frag_atomic_index(fragid)
-                #    atoms=range(indices[0]-1,indices[1])
-                #    #print('indices of frag %i is %s' % (fragid,indices))
-                #    T_class = getattr(sys.modules[__name__], i[0])
-                #    translation = T_class(atoms,w=np.ones(len(atoms))/len(atoms))
-                #    prim_idx = node1.coord_obj.Prims.dof_index(translation)
-                #    trans_curr = translation.value(xyz)
-                #    trans_diff = destination-trans_curr
-                #    ictan[prim_idx] = -trans_diff
-                #    bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                #    if print_level>0:
-                #        print((" current trans: %4.3f align to %4.3f diff: %4.3f" %(trans_curr,destination,trans_diff)))
-
-
-            bdist = np.sqrt(bdist)
-            if np.all(ictan==0.0):
-                raise RuntimeError(" All elements are zero")
-            return ictan,bdist
-
-    def upsample(self):
-        '''
-        Upsample a string by one node, reparameterize the string to take into account the new node
-        '''
-
-        raise NotImplementedError
-        # Add node in the middle
-        if self.nnodes % 2 == 0:
-            new_node_id = self.nnodes/2 +1
-        else:
-            new_node_id = self.nnodes//2 + 1
-
-        # for node before middle
-
-        return
-
-
-    @staticmethod
-    def interpolate(start_node,end_node,num_interp):
-        nifty.printcool(" interpolate")
-       
-        num_nodes = num_interp + 2
-        nodes = [None]*(num_nodes)
-        nodes[0] = start_node
-        nodes[-1] = end_node
-        sign=1
-        nR = 1
-        nP = 1
-        nn = nR + nP
-
-        for n in range(num_interp):
-            if num_nodes - nn > 1:
-                stepsize = 1./float(num_nodes - nn)
-            else:
-                stepsize = 0.5
-            if sign == 1:
-                iR = nR-1
-                iP = num_nodes - nP
-                iN = nR
-                nodes[nR] = Base_Method.add_node(nodes[iR],nodes[iP],stepsize,iN)
-                if nodes[nR] == None:
-                    raise RuntimeError
-
-                #print(" Energy of node {} is {:5.4}".format(nR,nodes[nR].energy-E0))
-                nR +=1 
-                nn += 1
-
-            else:
-                n1 = num_nodes - nP
-                n2 = n1 -1
-                n3 = nR -1
-                nodes[n2] = Base_Method.add_node(nodes[n1],nodes[n3],stepsize,n2)
-                if nodes[n2] == None:
-                    raise RuntimeError
-                #print(" Energy of node {} is {:5.4}".format(nR,nodes[nR].energy-E0))
-                nP +=1 
-                nn += 1
-            sign *= -1
-
-        return nodes
 
     def add_GSM_nodeR(self,newnodes=1):
         nifty.printcool("Adding reactant node")
-        success= True
-        if self.nn+newnodes > self.nnodes:
+
+        if self.current_nnodes+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
         for i in range(newnodes):
             iR = self.nR-1
             iP = self.nnodes-self.nP
             iN = self.nR
             print(" adding node: %i between %i %i from %i" %(iN,iR,iP,iR))
-            if self.nnodes - self.nn > 1:
+            if self.nnodes - self.current_nnodes > 1:
                 stepsize = 1./float(self.nnodes-self.current_nnodes+1)
             else:
                 stepsize = 0.5
 
-            self.nodes[self.nR] = Base_Method.add_node(
+            self.nodes[self.nR] = add_node(
                     self.nodes[iR],
                     self.nodes[iP],
                     stepsize,
@@ -1297,11 +808,10 @@ class Base_Method(object):
                     )
 
             if self.nodes[self.nR]==None:
-                success= False
-                return success
+                raise Exception('Ran out of space')
 
             if self.__class__.__name__!="DE_GSM":
-                ictan,bdist =  Base_Method.tangent(
+                ictan,bdist =  get_tangent(
                         self.nodes[self.nR],
                         None,
                         driving_coords=self.driving_coords,
@@ -1311,7 +821,7 @@ class Base_Method(object):
             self.optimizer[self.nR].DMAX = self.optimizer[self.nR-1].DMAX
             self.current_nnodes+=1
             self.nR+=1
-            print(" nn=%i,nR=%i" %(self.ncurrent_nnodesself.nR))
+            print(" nn=%i,nR=%i" %(self.current_nnodes,self.nR))
             self.active[self.nR-1] = True
 
             # align center of mass  and rotation
@@ -1320,16 +830,14 @@ class Base_Method(object):
             #print(" Aligning")
             self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
 
-        return success
 
     def add_GSM_nodeP(self,newnodes=1):
         nifty.printcool("Adding product node")
         if self.current_nnodes+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
 
-        success=True
         for i in range(newnodes):
-            #self.nodes[-self.nP-1] = Base_Method.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
+            #self.nodes[-self.nP-1] = BaseClass.add_node(self.nnodes-self.nP,self.nnodes-self.nP-1,self.nnodes-self.nP)
             n1=self.nnodes-self.nP
             n2=self.nnodes-self.nP-1
             n3=self.nR-1
@@ -1339,20 +847,19 @@ class Base_Method(object):
             else:
                 stepsize = 0.5
 
-            self.nodes[-self.nP-1] = Base_Method.add_node(
+            self.nodes[-self.nP-1] = add_node(
                     self.nodes[n1],
                     self.nodes[n3],
                     stepsize,
                     n2
                     )
             if self.nodes[-self.nP-1]==None:
-                success= False
-                break
+                raise Exception('Ran out of space')
 
             self.optimizer[n2].DMAX = self.optimizer[n1].DMAX
             self.current_nnodes+=1
             self.nP+=1
-            print(" nn=%i,nP=%i" %(self.ncurrent_nnodesself.nP))
+            print(" nn=%i,nP=%i" %(self.current_nnodes,self.nP))
             self.active[-self.nP] = True
 
             # align center of mass  and rotation
@@ -1360,72 +867,7 @@ class Base_Method(object):
             #print(" Aligning")
             self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
             #print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
-
-        return success
-
-    @staticmethod
-    def add_node(
-            nodeR,
-            nodeP,
-            stepsize,
-            node_id,
-            **kwargs
-            ):
-
-        #get driving coord
-        driving_coords  = kwargs.get('driving_coords',None)
-        DQMAG_MAX       =kwargs.get('DQMAG_MAX',0.8)
-        DQMAG_MIN       =kwargs.get('DQMAG_MIN',0.2)
-
-        if nodeP is None:
-            # nodeP is not used!
-            BDISTMIN=0.05
-            ictan,bdist =  Base_Method.tangent(nodeR,None,driving_coords=driving_coords)
-
-            if bdist<BDISTMIN:
-                print("bdist too small %.3f" % bdist)
-                return None
-            new_node = Molecule.copy_from_options(nodeR,new_node_id=node_id)
-            Vecs = new_node.update_coordinate_basis(constraints=ictan)
-            constraint = new_node.constraints[:,0]
-            sign=-1.
-
-            dqmag_scale=1.5
-            minmax = DQMAG_MAX - DQMAG_MIN
-            a = bdist/dqmag_scale
-            if a>1.:
-                a=1.
-            dqmag = sign*(DQMAG_MIN+minmax*a)
-            if dqmag > DQMAG_MAX:
-                dqmag = DQMAG_MAX
-            print(" dqmag: %4.3f from bdist: %4.3f" %(dqmag,bdist))
-
-            dq0 = dqmag*constraint
-            print(" dq0[constraint]: %1.3f" % dqmag)
-
-            new_node.update_xyz(dq0)
-            new_node.bdist = bdist
-
-            manage_xyz.write_xyz('tmp.xyz',new_node.geometry)
-
-            return new_node
-        else:
-            ictan,_ =  Base_Method.tangent(nodeR,nodeP)
-            Vecs = nodeR.update_coordinate_basis(constraints=ictan)
-            constraint = nodeR.constraints[:,0]
-            dqmag = np.linalg.norm(ictan)
-            print(" dqmag: %1.3f"%dqmag)
-            #sign=-1
-            sign=1.
-            dqmag *= (sign*stepsize)
-            print(" scaled dqmag: %1.3f"%dqmag)
-
-            dq0 = dqmag*constraint
-            old_xyz = nodeR.xyz.copy()
-            new_xyz = nodeR.coord_obj.newCartesian(old_xyz,dq0)
-            new_node = Molecule.copy_from_options(MoleculeA=nodeR,xyz=new_xyz,new_node_id=node_id)
-
-            return new_node
+        return
 
 
     def reparameterize(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
@@ -1435,8 +877,23 @@ class Base_Method(object):
             self.ic_reparam(nconstraints=nconstraints)
         elif self.interp_method == 'Geodesic':
              self.geodesic_reparam()
-
         return
+
+    def geodesic_reparam(self):
+        TSnode = self.TSnode
+        print(TSnode)
+        if self.climb or self.find:
+            a  = geodesic_reparam( self.nodes[0:self.TSnode] )
+            b = geodesic_reparam( self.nodes[self.TSnode:] )
+            new_xyzs = np.vstack((a,b))
+        else:
+            new_xyzs =  geodesic_reparam(self.nodes) 
+
+        print(new_xyzs)
+
+        for i,xyz in enumerate(new_xyzs):
+            self.nodes[i].xyz  = xyz
+
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
         nifty.printcool("reparametrizing string nodes")
@@ -1464,7 +921,8 @@ class Base_Method(object):
         TSnode = self.TSnode
 
         for i in range(ic_reparam_steps):
-            self.get_tangents_1(n0=n0)
+
+            self.ictan,self.dqmaga = get_tangents(self.nodes)
 
             # copies of original ictan
             ictan0 = np.copy(self.ictan)
@@ -1624,7 +1082,7 @@ class Base_Method(object):
         edist = np.zeros(self.nnodes)
         emax = -1000 # And this?
 
-        if self.nn==self.nnodes:
+        if self.current_nnodes==self.nnodes:
             self.ic_reparam(4)
             return
 
@@ -1642,12 +1100,12 @@ class Base_Method(object):
                 print() 
             
             if i == 0:
-                if self.nn!=self.nnodes:
+                if self.current_nnodes!=self.nnodes:
                     rpart = np.zeros(self.nnodes)
                     for n in range(n0+1,self.nR):
-                        rpart[n] = 1.0/(self.nn-2)
+                        rpart[n] = 1.0/(self.current_nnodes-2)
                     for n in range(self.nnodes-self.nP,self.nnodes-1):
-                        rpart[n] = 1.0/(self.nn-2)
+                        rpart[n] = 1.0/(self.current_nnodes-2)
                 else:
                     for n in range(n0+1,self.nnodes):
                         rpart[n] = 1./(self.nnodes-1)
@@ -1664,7 +1122,7 @@ class Base_Method(object):
 
             # TODO CRA 3/2019 why is this here?
             if not reparam_interior:
-                if self.nnodes-self.nn > 2:
+                if self.nnodes-self.current_nnodes > 2:
                     nR0 -= 1
                     nP0 -= 1
             
@@ -1724,6 +1182,8 @@ class Base_Method(object):
         #Failed = check_array(self.nnodes,self.dqmaga)
         #If failed, do exit 1
 
+
+    # TODO Move this to a util 
     def get_eigenv_finite(self,en):
         ''' Modifies Hessian using RP direction'''
         print("modifying %i Hessian with RP" % en)
@@ -1812,6 +1272,7 @@ class Base_Method(object):
     def set_V0(self):
         raise NotImplementedError 
 
+
     def mult_steps(self,n,opt_steps):
         exsteps=1
         tsnode = int(self.TSnode)
@@ -1830,6 +1291,7 @@ class Base_Method(object):
         #    exsteps=2
         #    print(" multiplying steps for node %i by %i" % (n,exsteps))
         return exsteps*opt_steps
+
 
     def set_opt_type(self,n,quiet=False):
         #TODO error for seam climb
@@ -1851,6 +1313,7 @@ class Base_Method(object):
 
         return opt_type
 
+
     def set_finder(self,rtype):
         assert rtype in [0,1,2], "rtype not defined"
         print('')
@@ -1865,7 +1328,8 @@ class Base_Method(object):
         else:
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
-  
+ 
+
     def restart_from_geoms(self,input_geoms,reparametrize=False,restart_energies=True):
         '''
         '''
@@ -1912,8 +1376,7 @@ class Base_Method(object):
 
         if reparametrize:
             nifty.printcool("Reparametrizing")
-            self.get_tangents_1()
-            self.ic_reparam(ic_reparam_steps=8)
+            self.reparameterize(ic_reparam_steps=8)
             self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if restart_energies:
@@ -2012,8 +1475,7 @@ class Base_Method(object):
 
         if reparametrize:
             nifty.printcool("Reparametrizing")
-            self.get_tangents_1()
-            self.ic_reparam(ic_reparam_steps=8)
+            self.reparameterize(ic_reparam_steps=8)
             self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
 
         if restart_energies:
@@ -2066,7 +1528,6 @@ class Base_Method(object):
 
                 fp = self.find_peaks(2)
                 totalgrad,gradrms,sumgradrms = self.calc_grad()
-                self.emax = self.energies[self.TSnode]
                 print(" totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
 
                 ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
@@ -2077,18 +1538,14 @@ class Base_Method(object):
             else:
                 return
 
-        #tmp for testing
-        #self.emax = self.energies[self.TSnode]
-        #self.climb=True
-        #self.optimizer[self.TSnode] = beales_cg(self.optimizer[0].options.copy().set_values({"Linesearch":"backtrack"}))
 
 
     def com_rotate_move(self,iR,iP,iN):
         print(" aligning com and to Eckart Condition")
 
         mfrac = 0.5
-        if self.nnodes - self.nn+1  != 1:
-            mfrac = 1./(self.nnodes - self.nn+1)
+        if self.nnodes - self.current_nnodes+1  != 1:
+            mfrac = 1./(self.nnodes - self.current_nnodes+1)
 
         #if self.__class__.__name__ != "DE_GSM":
         #    # no "product" structure exists, use initial structure
@@ -2135,6 +1592,7 @@ class Base_Method(object):
 
         return xyz1
 
+    # TODO move to string utils or delete altogether
     def get_current_rotation(self,frag,a1,a2):
         '''
         calculate current rotation for single-ended nodes
@@ -2197,6 +1655,7 @@ class Base_Method(object):
 
         return theta
 
+    #TODO Move to manage_xyz
     def write_xyz_files(self,filename):
         #xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}_{:03}.xyz'.format(self.ID,iters)
         geoms = []
@@ -2233,6 +1692,7 @@ class Base_Method(object):
                     f.write('{}\n'.format(float(ico.difference_energy)))
         f.close()
 
+    #TODO move to string_utils
     def find_peaks(self,rtype):
         #rtype 1: growing
         #rtype 2: opting
@@ -2330,78 +1790,8 @@ class Base_Method(object):
 
         return npeaks
 
-    def past_ts(self):
-        ispast=ispast1=ispast2=ispast3=0
-        THRESH1=5.
-        THRESH2=3.
-        THRESH3=-1.
-        THRESHB=0.05
-        CTHRESH=0.005
-        OTHRESH=-0.015
-        emax = -100.
-        nodemax =1
-        #n0 is zero until after finished growing
-        ns = self.n0-1
-        if ns<nodemax: ns=nodemax
 
-        print(" Energies",end=' ')
-        energies = self.energies
-        for n in range(ns,self.nR):
-            print(" {:4.3f}".format(energies[n]),end=' ')
-            if energies[n]>emax:
-                nodemax=n
-                emax=energies[n]
-        print("\n nodemax ",nodemax)
-
-        for n in range(nodemax,self.nR):
-            if energies[n]<emax-THRESH1:
-                ispast1+=1
-            if energies[n]<emax-THRESH2:
-                ispast2+=1
-            if energies[n]<emax-THRESH3:
-                ispast3+=1
-            if ispast1>1:
-                break
-        print(" ispast1",ispast1)
-        print(" ispast2",ispast2)
-        print(" ispast3",ispast3)
-
-        #TODO 5/9/2019 what about multiple constraints
-        # Done 6/23/2019
-        constraints = self.nodes[self.nR-1].constraints[:,0]
-        gradient = self.nodes[self.nR-1].gradient
-
-        overlap = np.dot(gradient.T,constraints)
-        cgrad = overlap*constraints
-
-        cgrad = np.linalg.norm(cgrad)*np.sign(overlap)
-        #cgrad = np.sum(cgrad)
-
-        print((" cgrad: %4.3f nodemax: %i nR: %i" %(cgrad,nodemax,self.nR)))
-
-
-        # 6/17 THIS should check if the last node is high in energy
-        if cgrad>CTHRESH and not self.nodes[self.nR-1].PES.lot.do_coupling and nodemax != self.TSnode:
-            print(" constraint gradient positive")
-            ispast=2
-        elif ispast1>0 and cgrad>OTHRESH:
-            print(" over the hill(1)")
-            ispast=1
-        elif ispast2>1:
-            print(" over the hill(2)")
-            ispast=1
-        else:
-            ispast=0
-
-        if ispast==0:
-            bch=self.check_for_reaction_g(1)
-            if ispast3>1 and bch:
-                print("over the hill(3) connection changed %r " %bch)
-                ispast=3
-        print(" ispast=",ispast)
-        return ispast
-
-
+    #TODO move to 
     def check_for_reaction_g(self,rtype):
 
         c = Counter(elem[0] for elem in self.driving_coords)
@@ -2483,58 +1873,5 @@ class Base_Method(object):
         gradrms = np.sqrt(gradrms/(self.nnodes-2))
         return totalgrad,gradrms,sum_gradrms
 
-
-    def geodesic_reparam(self):
-        TSnode = self.TSnode
-        print(TSnode)
-        if self.climb or self.find:
-            a  = geodesic_reparam( self.nodes[0:self.TSnode] )
-            b = geodesic_reparam( self.nodes[self.TSnode:] )
-            new_xyzs = np.vstack((a,b))
-        else:
-            new_xyzs =  geodesic_reparam(self.nodes) 
-
-        print(new_xyzs)
-
-        for i,xyz in enumerate(new_xyzs):
-            self.nodes[i].xyz  = xyz
-
-
-
-def run(args):
-
-    node,optimizer,ictan,opt_steps,opt_type,refE,n,s0,gp_prim = args
-    #print(" entering run: {}".format(n))
-    sys.stdout.flush()
-
-    print()
-    nifty.printcool("Optimizing node {}".format(n))
-
-    if opt_type=="BEALES_CG": 
-        print(opt_type)
-        print(type(optimizer))
-    else:
-        print(type(optimizer))
-
-    # => do constrained optimization
-    try:
-        optimizer.optimize(
-                molecule=node,
-                refE=refE,
-                opt_type=opt_type,
-                opt_steps=opt_steps,
-                ictan=ictan
-                )
-
-    except:
-        RuntimeError
-
-
-def mod(test,nn,out_queue):
-    print(test.num)
-    test.num = np.random.randn()
-    print(test.num)
-    test.name = nn
-    out_queue.put(test)
 
 

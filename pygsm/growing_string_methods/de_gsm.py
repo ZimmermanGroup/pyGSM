@@ -12,9 +12,11 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
 try:
-    from .base_gsm import Base_Method,geodesic_reparam
+    from .base_gsm import Base_Method
+    from .string_utils import *
 except:
-    from base_gsm import Base_Method,geodesic_reparam
+    from base_gsm import Base_Method
+    from string_utils import *
 
 
 class DE_GSM(Base_Method):
@@ -64,21 +66,19 @@ class DE_GSM(Base_Method):
                 self.add_GSM_nodeR(1)
             elif self.growth_direction==2:
                 self.add_GSM_nodeP(1)
-            oi = self.growth_iters(max_iters=max_iters,maxopt=opt_steps) 
+
+            self.grow_string(max_iters=max_iters,max_opt_steps=opt_steps) 
             nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
+
             #nifty.printcool("initial ic_reparam")
-            self.get_tangents_1()
             self.reparameterize()
             self.write_xyz_files('grown_string_{:03}.xyz'.format(self.ID))
         else:
-            oi=0
-            self.get_tangents_1()
+            self.ictan,self.dqmaga = self.get_tangents(self.nodes)
 
         if self.tscontinue:
-            if max_iters-oi>0:
-                opt_iters=max_iters-oi
-                self.opt_iters(max_iter=opt_iters,optsteps=opt_steps,rtype=rtype)
+            self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
         else:
             print("Exiting early")
             self.end_early=True
@@ -165,18 +165,15 @@ class DE_GSM(Base_Method):
         Grow nodes
         '''
 
-        #TODO
-        # This always evaluates to successful
-        success=True
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             if self.nodes[self.nR] == None:
-                success=self.add_GSM_nodeR()
+                self.add_GSM_nodeR()
                 print(" getting energy for node %d: %5.4f" %(self.nR-1,self.nodes[self.nR-1].energy - self.nodes[0].V0))
         if self.nodes[self.nnodes-self.nP].gradrms < self.gaddmax and self.growth_direction!=1:
             if self.nodes[-self.nP-1] == None:
-                success=self.add_GSM_nodeP()
+                self.add_GSM_nodeP()
                 print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
-        return success
+        return
 
 
     def make_nlist(self):
