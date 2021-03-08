@@ -11,11 +11,11 @@ import numpy as np
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
-from .base_gsm import Base_Method
+from .gsm import GSM
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
-class SE_GSM(Base_Method):
+class SE_GSM(GSM):
 
     def __init__(
             self,

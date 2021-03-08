@@ -1,324 +1,97 @@
 from __future__ import print_function
-# standard library imports
-import sys
-import os
-from os import path
-
-# third party
 import numpy as np
-import multiprocessing as mp
-from multiprocessing import Process 
-from collections import Counter
-
-# local application imports
-sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from utilities import *
-import wrappers
-from wrappers import Molecule
-from coordinate_systems import DelocalizedInternalCoordinates
-from coordinate_systems import rotate
-from optimizers import beales_cg,eigenvector_follow
-from optimizers._linesearch import double_golden_section
-from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
-from coordinate_systems.rotate import get_quat,calc_fac_dfac
-from .string_utils import *
-from .tangent_utils import *
-from .interpolation_utils import *
 
 try:
-    from geodesic_interpolate import Geodesic,redistribute
-except ImportError:
-    nifty.logger.warning("Geodesic interpolation cannot be imported. Don't use geodesic interpolation.")
+    from .gsm import GSM
+except:
+    from .gsm import GSM
+
+
+#######################################################################################
+############### This class contains the main GSM functions  ###########################
+#######################################################################################
+
+class MainGSM(GSM):
     
-
-# TODO interpolate is still sloppy. It shouldn't create a new molecule node itself 
-# but should create the xyz. GSM should create the new molecule based off that xyz.
-
-# TODO nconstraints in ic_reparam and write_iters is irrelevant
-
-
-class BaseClass(object):
-
-    @staticmethod
-    def default_options():
-        if hasattr(BaseClass, '_default_options'): return BaseClass._default_options.copy()
-
-        opt = options.Options() 
-        
-        opt.add_option(
-            key='reactant',
-            required=True,
-            #allowed_types=[Molecule,wrappers.Molecule],
-            doc='Molecule object as the initial reactant structure')
-
-        opt.add_option(
-            key='product',
-            required=False,
-            #allowed_types=[Molecule,wrappers.Molecule],
-            doc='Molecule object for the product structure (not required for single-ended methods.')
-
-        opt.add_option(
-            key='nnodes',
-            required=False,
-            value=1,
-            allowed_types=[int],
-            doc="number of string nodes"
-            )
-
-        opt.add_option(
-                key='optimizer',
-                required=True,
-                doc='Optimzer object  to use e.g. eigenvector_follow, conjugate_gradient,etc. \
-                        most of the default options are okay for here since GSM will change them anyway',
-                )
-
-        opt.add_option(
-            key='driving_coords',
-            required=False,
-            value=[],
-            allowed_types=[list],
-            doc='Provide a list of tuples to select coordinates to modify atoms\
-                 indexed at 1')
-
-        opt.add_option(
-            key='CONV_TOL',
-            value=0.0005,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold'
-            )
-
-        opt.add_option(
-            key='CONV_gmax',
-            value=0.0005,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold'
-            )
-
-        opt.add_option(
-            key='CONV_Ediff',
-            value=0.1,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold'
-            )
-
-        opt.add_option(
-            key='CONV_dE',
-            value=0.5,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold'
-            )
-
-        opt.add_option(
-            key='ADD_NODE_TOL',
-            value=0.1,
-            required=False,
-            allowed_types=[float],
-            doc='Convergence threshold')
-
-        opt.add_option(
-                key="growth_direction",
-                value=0,
-                required=False,
-                doc="how to grow string,0=Normal,1=from reactant"
-                )
-
-        opt.add_option(
-                key="DQMAG_MAX",
-                value=0.8,
-                required=False,
-                doc="max step along tangent direction for SSM"
-                )
-        opt.add_option(
-                key="DQMAG_MIN",
-                value=0.2,
-                required=False,
-                doc=""
-                )
-
-        opt.add_option(
-                key='print_level',
-                value=1,
-                required=False
-                )
-
-        opt.add_option(
-                key='use_multiprocessing',
-                value=False,
-                doc='Use python multiprocessing module, an OpenMP like implementation \
-                        that parallelizes optimization cycles on a single compute node'
-                )
-
-        opt.add_option(
-                key="BDIST_RATIO",
-                value=0.5,
-                required=False,
-                doc="SE-Crossing uses this \
-                        bdist must be less than 1-BDIST_RATIO of initial bdist in order to be \
-                        to be considered grown.",
-                        )
-
-        opt.add_option(
-                key='ID',
-                value=0,
-                required=False,
-                doc='A number for identification of Strings'
-                )
-
-        opt.add_option(
-                key='interp_method',
-                value='DLC',
-                allowed_values=['Geodesic','DLC'],
-                required=False,
-                doc='Which reparameterization method to use',
-                )
-
-        BaseClass._default_options = opt
-        return BaseClass._default_options.copy()
-
-
-    @classmethod
-    def from_options(cls,**kwargs):
-        return cls(cls.default_options().set_values(kwargs))
-
-    def __init__(
-            self,
-            options,
-            ):
-        """ Constructor """
-        self.options = options
-
-        os.system('mkdir -p scratch')
-
-        # Cache attributes
-        self.nnodes = self.options['nnodes']
-        self.nodes = [None]*self.nnodes
-        self.nodes[0] = self.options['reactant']
-        self.nodes[-1] = self.options['product']
-        self.driving_coords = self.options['driving_coords']
-        self.growth_direction=self.options['growth_direction']
-        self.isRestarted=False
-        self.DQMAG_MAX=self.options['DQMAG_MAX']
-        self.DQMAG_MIN=self.options['DQMAG_MIN']
-        self.BDIST_RATIO=self.options['BDIST_RATIO']
-        self.ID = self.options['ID']
-        self.use_multiprocessing = self.options['use_multiprocessing']
-        self.optimizer=[]
-        self.interp_method = self.options['interp_method']
-        self.CONV_TOL = self.options['CONV_TOL']
-
-        optimizer = options['optimizer']
-        for count in range(self.nnodes):
-            self.optimizer.append(optimizer.__class__(optimizer.options.copy()))
-        self.print_level = options['print_level']
-
-        # Set initial values
-        self.current_nnodes = 2  
-        self.nR = 1
-        self.nP = 1        
-        self.climb = False 
-        self.find = False 
-        self.ts_exsteps = 3 # multiplier for ts node
-        self.n0 = 1 # something to do with added nodes? "first node along current block"
-        self.end_early=False
-        self.tscontinue=True # whether to continue with TS opt or not
-        self.found_ts=False
-        self.rn3m6 = np.sqrt(3.*self.nodes[0].natoms-6.);
-        self.gaddmax = self.options['ADD_NODE_TOL'] #self.options['ADD_NODE_TOL']/self.rn3m6;
-        print(" gaddmax:",self.gaddmax)
-        self.ictan = [None]*self.nnodes
-        self.active = [False] * self.nnodes
-        self.climber=False  #is this string a climber?
-        self.finder=False   # is this string a finder?
-        self.done_growing = False
-        self.nclimb=0
-        self.nhessreset=10  # are these used??? TODO 
-        self.hessrcount=0   # are these used?!  TODO
-        self.hess_counter = 0   # it is probably good to reset the hessian
-        self.newclimbscale=2.
-        self.TS_E_0 = None 
-        self.newic  = Molecule.copy_from_options(self.nodes[0]) # newic object is used for coordinate transformations
-
-
-    @property
-    def TSnode(self):
+    def grow_string(self,max_iters=30,max_opt_steps=3,nconstraints=1):
         '''
-        The current node with maximum energy
+        Grow the string 
+
+        Parameters
+        ----------
+        max_iter : int
+             Maximum number of GSM iterations 
+        nconstraints : int
+        optsteps : int
+            Maximum number of optimization steps per node of string
+            
         '''
-        # Treat GSM with penalty a little different since penalty will increase energy based on energy 
-        # differences, which might not be great for Climbing Image
-        if self.__class__.__name__ != "SE_Cross" and self.nodes[0].PES.__class__.__name__ =="Penalty_PES":
-            energies = np.asarray([0.]*self.nnodes)
-            for i,node in enumerate(self.nodes):
-                if node!=None:
-                    energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
-            return np.argmax(energies)
-        else:
-            # make sure TS is not zero or last node
-            return np.argmax(self.energies[1:self.nnodes-1])+1
+        nifty.printcool("In growth_iters")
 
-    @property
-    def emax(self):
-        return self.energies[self.TSnode]
+        #TODO
 
-    @property
-    def npeaks(self):
-        '''
-        '''
-        minnodes=[]
-        maxnodes=[]
-        energies = self.energies
-        if energies[1]>energies[0]:
-            minnodes.append(0)
-        if energies[self.nnodes-1]<energies[self.nnodes-2]:
-            minnodes.append(self.nnodes-1)
-        for n in range(self.n0,self.nnodes-1):
-            if energies[n+1]>energies[n]:
-                if energies[n]<energies[n-1]:
-                    minnodes.append(n)
-            if energies[n+1]<energies[n]:
-                if energies[n]>energies[n-1]:
-                    maxnodes.append(n)
+        ncurrent,nlist = self.make_nlist()
+        self.ictan,self.dqmaga = self.get_tangents_growing()
+        self.set_active(self.nR-1, self.nnodes-self.nP)
 
-        return len(maxnodes)
+        isGrown=False
+        iteration=0
+        while not isGrown:
+            if iteration>max_iters:
+                raise RuntimeError
+            nifty.printcool("Starting growth iteration %i" % iteration)
+            self.optimize_iteration(max_opt_steps)
+            totalgrad,gradrms,sum_gradrms = self.calc_grad()
+            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration))
+            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
+                
+            try:
+                self.grow_nodes()
+            except Exception as error:
+                print("can't add anymore nodes, bdist too small")
 
+                if self.__class__.__name__=="SE_GSM": # or self.__class__.__name__=="SE_Cross":
+                    # Don't do SE_cross because that already does optimization later
+                    if self.nodes[self.nR-1].PES.lot.do_coupling:
+                        opt_type='MECI'
+                    else:
+                       opt_type='UNCONSTRAINED'
 
-    @property
-    def energies(self):
-        '''
-        Energies of string
-        '''
-        E = np.asarray([0.]*self.nnodes)
-        for i,ico in enumerate(self.nodes):
-            if ico != None:
-                E[i] = ico.energy - self.nodes[0].energy
-        return E
+                    print(" optimizing last node")
+                    self.optimizer[self.nR-1].conv_grms = self.CONV_TOL
+                    print(self.optimizer[self.nR-1].conv_grms)
+                    self.optimizer[self.nR-1].optimize(
+                            molecule=self.nodes[self.nR-1],
+                            refE=self.nodes[0].V0,
+                            opt_steps=50,
+                            opt_type=opt_type,
+                            )
+                elif self.__class__.__name__=="SE_Cross":
+                    print(" Will do extra optimization of this node in SE-Cross")
+                else:
+                    raise RuntimeError
 
-    @property
-    def geometries(self):
-        geoms = []
-        for m in self.nodes:
-            geoms.append(m.geometry)
-        return geoms
+            self.set_active(self.nR-1, self.nnodes-self.nP)
+            self.ic_reparam_g()
+            #TODO
+            self.ictan,self.dqmaga = self.get_tangents_growing()
 
-    @property
-    def ictan(self):
-        return self._ictan
+            iteration+=1
+            isGrown = self.check_if_grown()
 
-    @ictan.setter
-    def ictan(self,value):
-        self._ictan = value
+        # create newic object
+        print(" creating newic molecule--used for ic_reparam")
+        self.newic  = Molecule.copy_from_options(self.nodes[0])
 
-    @property
-    def dqmaga(self):
-        return self._dqmaga
-
-    @dqmaga.setter(self):
-        self._dqmaga = value
-
+        # TODO should something be done for growthdirection 2?
+        if self.growth_direction==1:
+            print("Setting LOT of last node")
+            self.nodes[-1] = Molecule.copy_from_options(
+                    MoleculeA = self.nodes[-2],
+                    xyz = self.nodes[-1].xyz,
+                    new_node_id = self.nnodes-1
+                    )
+        return 
 
 
     def optimize_string(self,max_iter=30,nconstraints=1,opt_steps=1,rtype=2):
@@ -369,7 +142,7 @@ class BaseClass(object):
             self.emaxp = self.emax
 
             # => Get all tangents 3-way <= #
-            self.ictan,self.dqmaga = get_three_way_tangents(self.nodes,self.energies)
+            self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
            
             # => do opt steps <= #
             self.optimize_iteration(optsteps)
@@ -449,21 +222,23 @@ class BaseClass(object):
             ## Modify TS Hess if necessary ##
             # from set stage
             if form_TS_hess:
-                self.get_tangents_1e()
+                #TODO
+                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                 self.get_eigenv_finite(self.TSnode)
                 if self.optimizer[self.TSnode].options['DMAX']>0.1:
                     self.optimizer[self.TSnode].options['DMAX']=0.1
 
             # opt decided Hess is not good because of overlap
             elif self.find and not self.optimizer[n].maxol_good:
-                self.get_tangents_1e()
+                #TODO
+                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                 self.get_eigenv_finite(self.TSnode)
 
             # 
             elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
-                    self.get_tangents_1e()
+                    self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                     self.get_eigenv_finite(self.TSnode)
                     self.nhessreset=10
                     self.hessrcount=1
@@ -475,7 +250,7 @@ class BaseClass(object):
 
             #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.CONV_TOL:
             #     print(" nneg > 1 and close to converging -- reforming Hessian")                
-            #     self.get_tangents_1e()                                                         
+            #         self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
             #     self.get_eigenv_finite(self.TSnode)                    
 
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
@@ -502,7 +277,7 @@ class BaseClass(object):
                     print(" Find bad, going back to climb")
                     #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
-                    #self.get_tangents_1e()
+                    #self.self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                     #self.get_eigenv_finite(self.TSnode)
 
             # => write Convergence to file <= #
@@ -526,7 +301,7 @@ class BaseClass(object):
         #                ictan=self.ictan[gsm.TSnode],
         #                verbose=True,
         #                )
-        #        self.get_tangents_1e()
+        #        self.self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
         #        tmp_geoms+=geoms
         #        tmp_E+=energies
         #        manage_xyz.write_xyzs_w_comments(
@@ -543,146 +318,27 @@ class BaseClass(object):
         sys.stdout.flush()
         return
 
-    
-    #TODO
+
     def refresh_coordinates(self,update_TS=True):
         '''
         Refresh the DLC coordinates for the string
         '''
         energies = self.energies
+        TSnode = self.TSnode
 
-        if growing:
-            self.ictan,self.dqmaga = get_tangents_growing()
-
+        if not self.done_growing:
+            self.ictan,self.dqmaga = self.get_tangents_growing(nodes,node_list)
+             #TODO
         else:
-
-            self.ictan,self.dqmaga = get_three_way_tangents(self.nodes,self.energies)
-        
+            self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
             for n in range(1,self.nnodes-1):
-                if n==self.TSnode and update_TS:
-                    print()
-
-            # update newic coordinate basis
-            self.newic.xyz = self.nodes[newic_n].xyz
-            Vecs = self.newic.update_coordinate_basis(self.ictan[n])
-
-            # don't update tsnode coord basis 
-            if n!=TSnode: 
-                self.nodes[n].coord_basis = Vecs
-            elif n==TSnode and update_TS:
-                self.nodes[n].coord_basis = Vecs
-
-            nbonds=self.nodes[0].num_bonds
-            # cnorms
-            constraint = self.newic.constraints[:,0]
-
-            # NOTE:
-            # regular GSM does something weird with the magnitude
-            # No longer followed 7/1/2020
-            # just a fancy way to get the tangent vector
-            #prim_constraint = block_matrix.dot(Vecs,constraint)
-            ## mult bonds
-            #for prim in self.newic.primitive_internal_coordinates:
-            #    if type(prim) is Distance:
-            #        index = self.newic.coord_obj.Prims.dof_index(prim)
-            #        prim_constraint[index] *= 2.5
-            #dqmaga[n] = np.dot(prim_constraint.T,ictan0) 
-            #dqmaga[n] = float(np.sqrt(dqmaga[n]))
-
-            dqmaga[n] = np.linalg.norm(ictan0)
-            if dqmaga[n]<0.:
-                raise RuntimeError
+                # don't update tsnode coord basis 
+                if n!=TSnode or (n==TSnode and update_TS): 
+                    # update newic coordinate basis
+                    self.newic.xyz = self.nodes[n].xyz
+                    Vecs = self.newic.update_coordinate_basis(self.ictan[n])
+                    self.nodes[n].coord_basis = Vecs
         
-
-        if self.print_level>1:
-            print('------------printing ictan[:]-------------')
-            for n in range(n0+1,self.nnodes):
-                print(self.ictan[n].T)
-        if self.print_level>0:
-            print('------------printing dqmaga---------------')
-            for n in range(n0+1,self.nnodes):
-                print(" {:5.4}".format(dqmaga[n]),end='')
-            print()
-        self.dqmaga = dqmaga
-
-
-
-    def grow_string(self,max_iters=30,max_opt_steps=3,nconstraints=1):
-        '''
-        Grow the string 
-
-        Parameters
-        ----------
-        max_iter : int
-             Maximum number of GSM iterations 
-        nconstraints : int
-        optsteps : int
-            Maximum number of optimization steps per node of string
-            
-        '''
-        nifty.printcool("In growth_iters")
-
-        self.get_tangents_1g()
-        self.set_active(self.nR-1, self.nnodes-self.nP)
-
-        isGrown=False
-        iteration=0
-        while not isGrown:
-            if iteration>max_iters:
-                raise RuntimeError
-            nifty.printcool("Starting growth iteration %i" % iteration)
-            self.optimize_iteration(max_opt_steps)
-            totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration))
-            print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
-                
-            try:
-                self.grow_nodes()
-            except Exception as error:
-                print("can't add anymore nodes, bdist too small")
-
-                if self.__class__.__name__=="SE_GSM": # or self.__class__.__name__=="SE_Cross":
-                    # Don't do SE_cross because that already does optimization later
-                    if self.nodes[self.nR-1].PES.lot.do_coupling:
-                        opt_type='MECI'
-                    else:
-                       opt_type='UNCONSTRAINED'
-
-                    print(" optimizing last node")
-                    self.optimizer[self.nR-1].conv_grms = self.CONV_TOL
-                    print(self.optimizer[self.nR-1].conv_grms)
-                    self.optimizer[self.nR-1].optimize(
-                            molecule=self.nodes[self.nR-1],
-                            refE=self.nodes[0].V0,
-                            opt_steps=50,
-                            opt_type=opt_type,
-                            )
-                elif self.__class__.__name__=="SE_Cross":
-                    print(" Will do extra optimization of this node in SE-Cross")
-                else:
-                    raise RuntimeError
-
-            self.set_active(self.nR-1, self.nnodes-self.nP)
-            self.ic_reparam_g()
-            self.get_tangents_1g()
-
-            iteration+=1
-            isGrown = self.check_if_grown()
-
-        # create newic object
-        print(" creating newic molecule--used for ic_reparam")
-        self.newic  = Molecule.copy_from_options(self.nodes[0])
-
-        # TODO should something be done for growthdirection 2?
-        if self.growth_direction==1:
-            print("Setting LOT of last node")
-            self.nodes[-1] = Molecule.copy_from_options(
-                    MoleculeA = self.nodes[-2],
-                    xyz = self.nodes[-1].xyz,
-                    new_node_id = self.nnodes-1
-                    )
-        return 
-
 
     def optimize_iteration(self,opt_steps):
         '''
@@ -734,6 +390,79 @@ class BaseClass(object):
                         opt_steps=osteps,
                         ictan=None,
                         )
+
+    def get_tangents_growing(self):
+        """
+        Finds the tangents during the growth phase. 
+        Tangents referenced to left or right during growing phase.
+        Also updates coordinates
+        Not a static method beause no one should ever call this outside of GSM
+        """
+
+        ncurrent,nlist = self.make_nlist()
+        dqmaga = [0.]*self.nnodes
+        ictan = [[]]*nnodes
+    
+        if self.print_level>1:
+            print("ncurrent, nlist")
+            print(ncurrent)
+            print(nlist)
+    
+        for n in range(ncurrent):
+            print(" ictan[{}]".format(nlist[2*n]))
+            ictan0,_ = get_tangent(
+                    node1=self.nodes[nlist[2*n]],
+                    node2=self.nodes[nlist[2*n+1]],
+                    driving_coords=self.driving_coords,
+                    )
+    
+            if self.print_level>1:
+                print("forming space for", nlist[2*n+1])
+            if self.print_level>1:
+                print("forming tangent for ",nlist[2*n])
+    
+            if (ictan0[:]==0.).all():
+                print(" ICTAN IS ZERO!")
+                print(nlist[2*n])
+                print(nlist[2*n+1])
+                raise RuntimeError
+    
+            #normalize ictan
+            norm = np.linalg.norm(ictan0)  
+            ictan[nlist[2*n]] = ictan0/norm
+           
+            Vecs = self.nodes[nlist[2*n]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
+            constraint = self.nodes[nlist[2*n]].constraints
+            prim_constraint = block_matrix.dot(Vecs,constraint)
+    
+            # NOTE regular GSM does something weird here 
+            # but this is not followed here anymore 7/1/2020
+            #dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
+            #dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
+            tmp_dqmaga = np.dot(prim_constraint.T,ictan0)
+            tmp_dqmaga = np.sqrt(tmp_dqmaga)
+            dqmaga[nlist[2*n]] = norm
+    
+    
+        if self.print_level>0:
+            print('------------printing dqmaga---------------')
+            for n in range(self.nnodes):
+                print(" {:5.3}".format(dqmaga[n]), end=' ')
+                if (n+1)%5==0:
+                    print()
+            print() 
+       
+        if print_level>1:
+            for n in range(ncurrent):
+                print("dqmag[%i] =%1.2f" %(nlist[2*n],self.dqmaga[nlist[2*n]]))
+                print("printing ictan[%i]" %nlist[2*n])       
+                print(self.ictan[nlist[2*n]].T)
+        for i,tan in enumerate(ictan):
+            if np.all(tan==0.0):
+                print("tan %i of the tangents is 0" %i)
+                raise RuntimeError
+   
+        return ictan,dqmaga
 
 
     # TODO remove return form_TS hess  3/2021
@@ -811,7 +540,7 @@ class BaseClass(object):
                 raise Exception('Ran out of space')
 
             if self.__class__.__name__!="DE_GSM":
-                ictan,bdist =  get_tangent(
+                ictan,bdist =  self.get_tangent(
                         self.nodes[self.nR],
                         None,
                         driving_coords=self.driving_coords,
@@ -922,7 +651,7 @@ class BaseClass(object):
 
         for i in range(ic_reparam_steps):
 
-            self.ictan,self.dqmaga = get_tangents(self.nodes)
+            self.ictan,self.dqmaga = self.get_tangents(self.nodes)
 
             # copies of original ictan
             ictan0 = np.copy(self.ictan)
@@ -1087,7 +816,7 @@ class BaseClass(object):
             return
 
         for i in range(ic_reparam_steps):
-            self.get_tangents_1g()
+            self.ictan,self.dqmaga = self.get_tangents_growing()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.print_level>0:
                 if i==0:
@@ -1516,7 +1245,7 @@ class BaseClass(object):
 
 
             if restart_energies:
-                self.get_tangents_1e(update_TS=True)
+                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                 num_coords =  self.nodes[0].num_coordinates - 1
 
                 # project out the constraint

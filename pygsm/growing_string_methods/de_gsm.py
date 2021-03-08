@@ -12,14 +12,12 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
 try:
-    from .base_gsm import Base_Method
-    from .string_utils import *
+    from .gsm import GSM
 except:
-    from base_gsm import Base_Method
-    from string_utils import *
+    from gsm import GSM
 
 
-class DE_GSM(Base_Method):
+class DE_GSM(GSM):
 
     def __init__(
             self,
@@ -176,7 +174,12 @@ class DE_GSM(Base_Method):
         return
 
 
-    def make_nlist(self):
+    def get_difference_node_list(self):
+        '''
+        Returns ncurrent and a list of indices that can be iterated over to produce
+        tangents for the string pathway.
+        '''
+        #TODO: THis can probably be done more succinctly using a list of tuples
         ncurrent = 0
         nlist = [0]*(2*self.nnodes)
         for n in range(self.nR-1):
