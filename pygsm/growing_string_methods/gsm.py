@@ -7,8 +7,8 @@ from os import path
 # third party
 import numpy as np
 import multiprocessing as mp
-from multiprocessing import Process 
 from collections import Counter
+from multiprocessing import Process 
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -16,8 +16,6 @@ from utilities import *
 import wrappers
 from wrappers import Molecule
 from coordinate_systems import DelocalizedInternalCoordinates
-from coordinate_systems import rotate
-from optimizers import beales_cg,eigenvector_follow
 from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
@@ -38,11 +36,11 @@ except ImportError:
 # TODO nconstraints in ic_reparam and write_iters is irrelevant
 
 
-class BaseClass(object):
+class GSM(object):
 
     @staticmethod
     def default_options():
-        if hasattr(BaseClass, '_default_options'): return BaseClass._default_options.copy()
+        if hasattr(GSM, '_default_options'): return GSM._default_options.copy()
 
         opt = options.Options() 
         
@@ -177,13 +175,29 @@ class BaseClass(object):
                 doc='Which reparameterization method to use',
                 )
 
-        BaseClass._default_options = opt
-        return BaseClass._default_options.copy()
+        opt.add_option(
+                key='noise',
+                value=1.0,
+                allowed_types=[float],
+                required=False,
+                doc='Noise to check for intermediate',
+                )
+
+        GSM._default_options = opt
+        return GSM._default_options.copy()
 
 
     @classmethod
     def from_options(cls,**kwargs):
         return cls(cls.default_options().set_values(kwargs))
+
+    @classmethod
+    def from_path(cls,*geoms,**kwargs):
+        gsm = cls(cls.default_options().set_values(kwargs))
+
+        gsm.restart_from_geoms(geoms)
+
+        return gsm
 
     def __init__(
             self,
@@ -210,6 +224,7 @@ class BaseClass(object):
         self.optimizer=[]
         self.interp_method = self.options['interp_method']
         self.CONV_TOL = self.options['CONV_TOL']
+        self.noise = self.options['noise']
 
         optimizer = options['optimizer']
         for count in range(self.nnodes):
@@ -292,18 +307,35 @@ class BaseClass(object):
         '''
         Energies of string
         '''
-        E = np.asarray([0.]*self.nnodes)
-        for i,ico in enumerate(self.nodes):
+        E = []
+        for ico in self.nodes:
             if ico != None:
-                E[i] = ico.energy - self.nodes[0].energy
+                E.append(ico.energy - self.nodes[0].energy)
         return E
 
     @property
     def geometries(self):
         geoms = []
-        for m in self.nodes:
-            geoms.append(m.geometry)
+        for ico in self.nodes:
+            if ico != None:
+                geoms.append(ico.geometry)
         return geoms
+
+    @property
+    def gradrmss(self):
+        self._gradrmss = []
+        for ico in self.nodes:
+            if ico != None:
+                self._gradrmss.append(ico.gradrms)
+        return self._gradrmss
+
+    @property
+    def dEs(self):
+        self._dEs = []
+        for ico in self.nodes:
+            if ico != None:
+                self._dEs.append(ico.difference_energy)
+        return self._dEs
 
     @property
     def ictan(self):
@@ -329,9 +361,9 @@ class BaseClass(object):
         '''
     
         xyzs = []
-        for mol in molecules:
+        for mol in nodes:
             xyzs.append( mol.xyz ) 
-        symbols = molecules[0].atom_symbols
+        symbols = nodes[0].atom_symbols
     
         # Perform smoothing by minimizing distance in Cartesian coordinates with redundant internal metric
         # to find the appropriate geodesic curve on the hyperspace.
@@ -372,7 +404,7 @@ class BaseClass(object):
     
         return new_xyz 
     
-   @staticmethod 
+    @staticmethod 
     def add_node(
             nodeR,
             nodeP,
@@ -395,7 +427,7 @@ class BaseClass(object):
                 raise RuntimeError("You didn't supply a driving coordinate and product node is None!")
     
             BDISTMIN=0.05
-            ictan,bdist =  get_tangent(nodeR,None,driving_coords=driving_coords)
+            ictan,bdist =  GSM.get_tangent(nodeR,None,driving_coords=driving_coords)
     
             if bdist<BDISTMIN:
                 print("bdist too small %.3f" % bdist)
@@ -422,7 +454,7 @@ class BaseClass(object):
             new_node.bdist = bdist
     
         else:
-            ictan,_ =  BaseClass.get_tangent(nodeR,nodeP)
+            ictan,_ =  GSM.get_tangent(nodeR,nodeP)
             Vecs = nodeR.update_coordinate_basis(constraints=ictan)
             constraint = nodeR.constraints[:,0]
             dqmag = np.linalg.norm(ictan)
@@ -465,7 +497,7 @@ class BaseClass(object):
                 iR = nR-1
                 iP = num_nodes - nP
                 iN = nR
-                nodes[nR] = BaseClass.add_node(nodes[iR],nodes[iP],stepsize,iN)
+                nodes[nR] = GSM.add_node(nodes[iR],nodes[iP],stepsize,iN)
                 if nodes[nR] == None:
                     raise RuntimeError
     
@@ -477,7 +509,7 @@ class BaseClass(object):
                 n1 = num_nodes - nP
                 n2 = n1 -1
                 n3 = nR -1
-                nodes[n2] = BaseClass.add_node(nodes[n1],nodes[n3],stepsize,n2)
+                nodes[n2] = GSM.add_node(nodes[n1],nodes[n3],stepsize,n2)
                 if nodes[n2] == None:
                     raise RuntimeError
                 #print(" Energy of node {} is {:5.4}".format(nR,nodes[nR].energy-E0))
@@ -487,44 +519,9 @@ class BaseClass(object):
     
         return nodes
     
-    @staticmethod
-    def check_for_intermediate(energies):
-        '''
-        Check string for intermediates
-        '''
-    
-        potential_min = []
-        for i in range(1, (len(energies) - 1)):
-            rnoise = 0
-            pnoise = 0
-            a = 1
-            b = 1
-            while (energies[i-a] >= energies[i]):
-                if (energies[i-a] - energies[i]) > rnoise:
-                    rnoise = energies[i-a] - energies[i]
-                if rnoise > noise:
-                    break
-                if (i-a) == 0:
-                    break
-                a += 1
-    
-            while (energies[i+b] >= energies[i]):
-                if (energies[i+b] - energies[i]) > pnoise:
-                    pnoise = energies[i+b] - energies[i]
-                if pnoise > noise:
-                    break
-                if (i+b) == len(energies) - 1:
-                    break
-                b += 1
-            if ((rnoise > noise) and (pnoise > noise)):
-                print('Potential minimum at image %s', str(i))
-                potential_min.append(i)
-    
-        return len(potential_min)>0            
-
 
     @staticmethod
-    def get_tangent(node1,node2,**kwargs):
+    def get_tangent(node1,node2,print_level=1,**kwargs):
         '''
         Get internal coordinate tangent between two nodes, assumes they have unique IDs
         '''
@@ -672,7 +669,7 @@ class BaseClass(object):
     
    
     @staticmethod
-    def get_tangents(nodes,print_level=0):
+    def get_tangents(nodes,n0=0,print_level=0):
         '''
         Get the normalized internal coordinate tangents and magnitudes between all nodes
         '''
@@ -685,7 +682,7 @@ class BaseClass(object):
             #print "getting tangent between %i %i" % (n,n-1)
             assert nodes[n]!=None,"n is bad"
             assert nodes[n-1]!=None,"n-1 is bad"
-            ictan[n],_ = BaseClass.get_tangent(nodes[n-1],nodes[n])
+            ictan[n],_ = GSM.get_tangent(nodes[n-1],nodes[n])
         
             dqmaga[n] = 0.
             #ictan0= np.copy(ictan[n])
@@ -729,7 +726,7 @@ class BaseClass(object):
    
 
     @staticmethod
-    def get_three_way_tangent(nodes,energies,find=True,n0=0):
+    def get_three_way_tangents(nodes,energies,find=True,n0=0):
         '''
         Calculates internal coordinate tangent with a three-way tangent at TS node
         '''
@@ -765,7 +762,7 @@ class BaseClass(object):
                     intic_n = n+1
                     int2ic_n = n-1
             if not do3:
-                ictan0 BaseClass.get_tangent(nodes[newic_n],nodes[intic_n])
+                ictan0,_ = GSM.get_tangent(nodes[newic_n],nodes[intic_n])
             else:
                 f1 = 0.
                 dE1 = abs(energies[n+1]-energies[n])
@@ -779,8 +776,8 @@ class BaseClass(object):
     
                 print(' 3 way tangent ({}): f1:{:3.2}'.format(n,f1))
     
-                t1,_ = BaseClass.get_tangent(self.nodes[intic_n],self.nodes[newic_n])
-                t2,_ = BaseClass.get_tangent(self.nodes[newic_n],self.nodes[int2ic_n])
+                t1,_ = GSM.get_tangent(nodes[intic_n],nodes[newic_n])
+                t2,_ = GSM.get_tangent(nodes[newic_n],nodes[int2ic_n])
                 print(" done 3 way tangent")
                 ictan0 = f1*t1 +(1.-f1)*t2
     
@@ -790,3 +787,91 @@ class BaseClass(object):
         return ictan,dqmaga
     
    
+    # TODO move to string utils or delete altogether
+    #def get_current_rotation(self,frag,a1,a2):
+    #    '''
+    #    calculate current rotation for single-ended nodes
+    #    '''
+    #
+    #    # Get the information on fragment to rotate
+    #    sa,ea,sp,ep = self.nodes[0].coord_obj.Prims.prim_only_block_info[frag]
+    #
+    #    theta = 0.
+    #    # Haven't added any nodes yet
+    #    if self.nR==1:
+    #        return theta
+   
+    #    for n in range(1,self.nR):
+    #        xyz_frag = self.nodes[n].xyz[sa:ea].copy()
+    #        axis = self.nodes[n].xyz[a2] - self.nodes[n].xyz[a1]
+    #        axis /= np.linalg.norm(axis)
+    #
+    #        # only want the fragment of interest
+    #        reference_xyz = self.nodes[n-1].xyz.copy()
+
+    #        # Turn off
+    #        ref_axis = reference_xyz[a2] - reference_xyz[a1]
+    #        ref_axis /= np.linalg.norm(ref_axis)
+   
+    #        # ALIGN previous and current node to get rotation around axis of rotation
+    #        #print(' Rotating reference axis to current axis')
+    #        I = np.eye(3)
+    #        v = np.cross(ref_axis,axis)
+    #        if v.all()==0.:
+    #            print('Rotation is identity')
+    #            R=I
+    #        else:
+    #            vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    #            c = np.dot(ref_axis,axis)
+    #            s = np.linalg.norm(v)
+    #            R = I + vx + np.dot(vx,vx) * (1. - c)/(s**2)
+    #        new_ref_axis = np.dot(ref_axis,R.T)
+    #        #print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
+    #        new_ref_xyz = np.dot(reference_xyz,R.T)
+
+    #        
+    #        # Calculate dtheta 
+    #        ca = self.nodes[n].primitive_internal_coordinates[sp+3]
+    #        cb = self.nodes[n].primitive_internal_coordinates[sp+4]
+    #        cc = self.nodes[n].primitive_internal_coordinates[sp+5]
+    #        dv12_a = ca.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+    #        dv12_b = cb.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+    #        dv12_c = cc.calcDiff(self.nodes[n].xyz,new_ref_xyz)
+    #        dv12 = np.array([dv12_a,dv12_b,dv12_c])
+    #        #print(dv12)
+    #        dtheta = np.linalg.norm(dv12)  #?
+    #    
+    #        dtheta = dtheta + np.pi % (2*np.pi) - np.pi
+    #        theta += dtheta
+   
+    #    theta = theta/ca.w
+    #    angle = theta * 180./np.pi
+    #    print(angle) 
+
+    #    return theta
+
+    
+
+    @staticmethod
+    def calc_optimization_metrics(nodes):
+        '''
+        '''
+
+        nnodes = len(nodes)
+        rn3m6 = np.sqrt(3*nodes[0].natoms-6)
+        totalgrad = 0.0
+        gradrms = 0.0
+        sum_gradrms = 0.0
+        for i,ico in zip(list(range(1,nnodes-1)),nodes[1:nnodes-1]):
+            if ico!=None:
+                print(" node: {:02d} gradrms: {:.6f}".format(i,float(ico.gradrms)),end='')
+                if i%5 == 0:
+                    print()
+                totalgrad += ico.gradrms*rn3m6
+                gradrms += ico.gradrms*ico.gradrms
+                sum_gradrms += ico.gradrms
+        print('')
+        #TODO wrong for growth
+        gradrms = np.sqrt(gradrms/(nnodes-2))
+        return totalgrad,gradrms,sum_gradrms
+

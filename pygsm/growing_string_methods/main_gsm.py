@@ -1,10 +1,17 @@
 from __future__ import print_function
 import numpy as np
+import os
 
 try:
     from .gsm import GSM
 except:
-    from .gsm import GSM
+    from gsm import GSM
+
+from wrappers.molecule import Molecule
+from utilities.nifty import printcool
+from utilities.manage_xyz import write_molden_geoms
+from coordinate_systems import rotate
+from optimizers import beales_cg,eigenvector_follow
 
 
 #######################################################################################
@@ -26,12 +33,11 @@ class MainGSM(GSM):
             Maximum number of optimization steps per node of string
             
         '''
-        nifty.printcool("In growth_iters")
+        printcool("In growth_iters")
 
-        #TODO
-
-        ncurrent,nlist = self.make_nlist()
+        ncurrent,nlist = self.make_difference_node_list()
         self.ictan,self.dqmaga = self.get_tangents_growing()
+        self.refresh_coordinates()
         self.set_active(self.nR-1, self.nnodes-self.nP)
 
         isGrown=False
@@ -39,10 +45,10 @@ class MainGSM(GSM):
         while not isGrown:
             if iteration>max_iters:
                 raise RuntimeError
-            nifty.printcool("Starting growth iteration %i" % iteration)
+            printcool("Starting growth iteration %i" % iteration)
             self.optimize_iteration(max_opt_steps)
-            totalgrad,gradrms,sum_gradrms = self.calc_grad()
-            self.write_xyz_files('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration))
+            totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
+            write_molden_geoms('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration),self.geometries,self.energies,self.gradrmss,self.dEs)
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
                 
             try:
@@ -56,15 +62,16 @@ class MainGSM(GSM):
                         opt_type='MECI'
                     else:
                        opt_type='UNCONSTRAINED'
-
                     print(" optimizing last node")
                     self.optimizer[self.nR-1].conv_grms = self.CONV_TOL
                     print(self.optimizer[self.nR-1].conv_grms)
+                    path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nR-1))
                     self.optimizer[self.nR-1].optimize(
                             molecule=self.nodes[self.nR-1],
                             refE=self.nodes[0].V0,
                             opt_steps=50,
                             opt_type=opt_type,
+                            path=path,
                             )
                 elif self.__class__.__name__=="SE_Cross":
                     print(" Will do extra optimization of this node in SE-Cross")
@@ -73,8 +80,8 @@ class MainGSM(GSM):
 
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
-            #TODO
             self.ictan,self.dqmaga = self.get_tangents_growing()
+            self.refresh_coordinates()
 
             iteration+=1
             isGrown = self.check_if_grown()
@@ -109,7 +116,7 @@ class MainGSM(GSM):
             An option to change how GSM optimizes  
             
         '''
-        nifty.printcool("In opt_iters")
+        printcool("In opt_iters")
 
         self.nclimb=0
         self.nhessreset=10  # are these used??? TODO 
@@ -131,11 +138,9 @@ class MainGSM(GSM):
         # enter loop
         for oi in range(max_iter):
 
-            nifty.printcool("Starting opt iter %i" % oi)
+            printcool("Starting opt iter %i" % oi)
             if self.climb and not self.find: print(" CLIMBING")
             elif self.find: print(" TS SEARCHING")
-
-            sys.stdout.flush()
 
             # stash previous TSnode  
             self.pTSnode = self.TSnode
@@ -145,27 +150,19 @@ class MainGSM(GSM):
             self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
            
             # => do opt steps <= #
-            self.optimize_iteration(optsteps)
-            #self.store_energies()
+            self.optimize_iteration(opt_steps)
 
             print(" V_profile: ", end=' ')
-            energies = self.energies
-            for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(energies[n])), end=' ')
-            print()
+            self.print_energies()
 
             #TODO resetting
             #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
             if self.TSnode == self.nnodes-2 and (self.climb or self.find):
-                nifty.printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
+                printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
 
             # => find peaks <= #
             fp = self.find_peaks(2)
-
-            # => get TS node <=
-            self.emax= self.energies[self.TSnode]
-            print(" max E({}) {:5.4}".format(self.TSnode,self.emax))
 
             ts_cgradq = 0.
             if not self.find:
@@ -177,31 +174,11 @@ class MainGSM(GSM):
             print(" dE_iter ={:2.2f}".format(self.dE_iter))
 
             # => calculate totalgrad <= #
-            totalgrad,gradrms,sum_gradrms = self.calc_grad()
+            totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
 
             # => Check Convergence <= #
-            isDone = self.check_opt(totalgrad,fp,rtype,ts_cgradq)
-            if isDone:
-                self.found_ts=True
+            if self.is_converged(totalgrad,fp,rtype,ts_cgradq):
                 break
-
-            # => Check if intermediate exists 
-            if check_for_intermediate():
-                self.exit_early
-                return 
-
-            sum_conv_tol = (self.nnodes-2)*self.CONV_TOL 
-            if not self.climber and not self.finder:
-                print(" CONV_TOL=%.4f" %self.CONV_TOL)
-                print(" convergence criteria is %.5f, current convergence %.5f" % (sum_conv_tol,sum_gradrms))
-                all_conv=True
-                for  n in range(1,self.nnodes-1):
-                    if not self.optimizer[n].converged:
-                        all_conv=False
-                        break
-
-                if sum_gradrms<sum_conv_tol and all_conv: #Break even if not climb/find
-                    break
 
             # => set stage <= #
             form_TS_hess = self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
@@ -211,35 +188,27 @@ class MainGSM(GSM):
                 self.reparameterize(nconstraints=nconstraints)
 
             # store reparam energies
-            #self.store_energies()
-            energies = self.energies
-            self.emax= energies[self.TSnode]
             print(" V_profile (after reparam): ", end=' ')
-            for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(energies[n])), end=' ')
-            print()
+            self.print_energies()
 
             ## Modify TS Hess if necessary ##
             # from set stage
             if form_TS_hess:
-                #TODO
                 self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                self.get_eigenv_finite(self.TSnode)
+                self.modify_TS_Hess()
                 if self.optimizer[self.TSnode].options['DMAX']>0.1:
                     self.optimizer[self.TSnode].options['DMAX']=0.1
 
             # opt decided Hess is not good because of overlap
             elif self.find and not self.optimizer[n].maxol_good:
-                #TODO
                 self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                self.get_eigenv_finite(self.TSnode)
+                self.modify_TS_Hess()
 
-            # 
             elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
                 if self.hessrcount<1 and self.pTSnode == self.TSnode:
                     print(" resetting TS node coords Ut (and Hessian)")
                     self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                    self.get_eigenv_finite(self.TSnode)
+                    self.modify_TS_Hess()
                     self.nhessreset=10
                     self.hessrcount=1
                 else:
@@ -251,7 +220,7 @@ class MainGSM(GSM):
             #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.CONV_TOL:
             #     print(" nneg > 1 and close to converging -- reforming Hessian")                
             #         self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-            #     self.get_eigenv_finite(self.TSnode)                    
+            #     self.modify_TS_Hess(self.TSnode)                    
 
             elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                 self.hessrcount-=1
@@ -278,48 +247,26 @@ class MainGSM(GSM):
                     #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
                     #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
                     #self.self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                    #self.get_eigenv_finite(self.TSnode)
+                    #self.modify_TS_Hess(self.TSnode)
 
             # => write Convergence to file <= #
-            self.write_xyz_files('scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi))
+            filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi)
+            write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
 
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
             print('\n')
 
-        ## Optimize TS node to a finer convergence
+        #TODO Optimize TS node to a finer convergence
         #if rtype==2:
-
-        #    # loop 10 times, 5 optimization steps each
-        #    for i in range(10):
-        #        nifty.printcool('cycle {}'.format(i))
-        #        geoms,energies = self.nodes[self.TSnode].optimizer.optimize(
-        #                molecule=self.nodes[gsm.TSnode],
-        #                refE=self.nodes[0].V0,
-        #                opt_steps=5,
-        #                opt_type="TS",
-        #                ictan=self.ictan[gsm.TSnode],
-        #                verbose=True,
-        #                )
-        #        self.self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-        #        tmp_geoms+=geoms
-        #        tmp_E+=energies
-        #        manage_xyz.write_xyzs_w_comments(
-        #                'optimization.xyz',
-        #                tmp_geoms,
-        #                tmp_E,
-        #                )
-        #        if self.nodes[self.TSnode].optimizer.converged:
-        #            break
 
         filename="opt_converged_{:03d}.xyz".format(self.ID)
         print(" Printing string to " + filename)
-        self.write_xyz_files(filename)
-        sys.stdout.flush()
+        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
         return
 
 
-    def refresh_coordinates(self,update_TS=True):
+    def refresh_coordinates(self,update_TS=False):
         '''
         Refresh the DLC coordinates for the string
         '''
@@ -327,17 +274,20 @@ class MainGSM(GSM):
         TSnode = self.TSnode
 
         if not self.done_growing:
-            self.ictan,self.dqmaga = self.get_tangents_growing(nodes,node_list)
-             #TODO
+            #TODO
+            for n in range(1,self.nnodes-1):
+                if self.nodes[n] is  not None:
+                    self.nodes[n].update_coordinate_basis(self.ictan[n])
         else:
-            self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+            
             for n in range(1,self.nnodes-1):
                 # don't update tsnode coord basis 
                 if n!=TSnode or (n==TSnode and update_TS): 
+                    self.nodes[n].update_coordinate_basis(self.ictan[n])
                     # update newic coordinate basis
-                    self.newic.xyz = self.nodes[n].xyz
-                    Vecs = self.newic.update_coordinate_basis(self.ictan[n])
-                    self.nodes[n].coord_basis = Vecs
+                    #self.newic.xyz = self.nodes[n].xyz
+                    #Vecs = self.newic.update_coordinate_basis(self.ictan[n])
+                    #self.nodes[n].coord_basis = Vecs
         
 
     def optimize_iteration(self,opt_steps):
@@ -367,7 +317,7 @@ class MainGSM(GSM):
                 if self.nodes[n] and self.active[n]:
                     print()
                     path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,n))
-                    nifty.printcool("Optimizing node {}".format(n))
+                    printcool("Optimizing node {}".format(n))
                     opt_type = self.set_opt_type(n)
                     osteps = self.mult_steps(n,opt_steps)
                     self.optimizer[n].optimize(
@@ -383,15 +333,18 @@ class MainGSM(GSM):
         if self.__class__.__name__=="SE-GSM" and self.done_growing:
             fp = self.find_peaks(2)
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.CONV_TOL:
+                path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nnodes-1))
                 self.optimizer[self.nnodes-1].optimize(
                         molecule=self.nodes[self.nnodes-1],
                         refE=refE,
                         opt_type='UNCONSTRAINED',
                         opt_steps=osteps,
                         ictan=None,
+                        path=path
                         )
 
-    def get_tangents_growing(self):
+
+    def get_tangents_growing(self,print_level=1):
         """
         Finds the tangents during the growth phase. 
         Tangents referenced to left or right during growing phase.
@@ -399,9 +352,9 @@ class MainGSM(GSM):
         Not a static method beause no one should ever call this outside of GSM
         """
 
-        ncurrent,nlist = self.make_nlist()
+        ncurrent,nlist = self.make_difference_node_list()
         dqmaga = [0.]*self.nnodes
-        ictan = [[]]*nnodes
+        ictan = [[]]*self.nnodes
     
         if self.print_level>1:
             print("ncurrent, nlist")
@@ -410,7 +363,7 @@ class MainGSM(GSM):
     
         for n in range(ncurrent):
             print(" ictan[{}]".format(nlist[2*n]))
-            ictan0,_ = get_tangent(
+            ictan0,_ = self.get_tangent(
                     node1=self.nodes[nlist[2*n]],
                     node2=self.nodes[nlist[2*n+1]],
                     driving_coords=self.driving_coords,
@@ -431,20 +384,20 @@ class MainGSM(GSM):
             norm = np.linalg.norm(ictan0)  
             ictan[nlist[2*n]] = ictan0/norm
            
-            Vecs = self.nodes[nlist[2*n]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
-            constraint = self.nodes[nlist[2*n]].constraints
-            prim_constraint = block_matrix.dot(Vecs,constraint)
-    
             # NOTE regular GSM does something weird here 
+            #Vecs = self.nodes[nlist[2*n]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
+            #constraint = self.nodes[nlist[2*n]].constraints
+            #prim_constraint = block_matrix.dot(Vecs,constraint)
             # but this is not followed here anymore 7/1/2020
             #dqmaga[nlist[2*n]] = np.dot(prim_constraint.T,ictan0) 
             #dqmaga[nlist[2*n]] = float(np.sqrt(abs(dqmaga[nlist[2*n]])))
-            tmp_dqmaga = np.dot(prim_constraint.T,ictan0)
-            tmp_dqmaga = np.sqrt(tmp_dqmaga)
+            #tmp_dqmaga = np.dot(prim_constraint.T,ictan0)
+            #tmp_dqmaga = np.sqrt(tmp_dqmaga)
+
             dqmaga[nlist[2*n]] = norm
     
     
-        if self.print_level>0:
+        if print_level>0:
             print('------------printing dqmaga---------------')
             for n in range(self.nnodes):
                 print(" {:5.3}".format(dqmaga[n]), end=' ')
@@ -465,6 +418,7 @@ class MainGSM(GSM):
         return ictan,dqmaga
 
 
+    # Refactor this code!
     # TODO remove return form_TS hess  3/2021
     def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
         form_TS_hess=False
@@ -512,7 +466,10 @@ class MainGSM(GSM):
 
 
     def add_GSM_nodeR(self,newnodes=1):
-        nifty.printcool("Adding reactant node")
+        '''
+        Add a node between endpoints on the reactant side, should only be called inside GSM
+        '''
+        printcool("Adding reactant node")
 
         if self.current_nnodes+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
@@ -526,7 +483,7 @@ class MainGSM(GSM):
             else:
                 stepsize = 0.5
 
-            self.nodes[self.nR] = add_node(
+            self.nodes[self.nR] = GSM.add_node(
                     self.nodes[iR],
                     self.nodes[iP],
                     stepsize,
@@ -561,7 +518,10 @@ class MainGSM(GSM):
 
 
     def add_GSM_nodeP(self,newnodes=1):
-        nifty.printcool("Adding product node")
+        '''
+        Add a node between endpoints on the product side, should only be called inside GSM
+        '''
+        printcool("Adding product node")
         if self.current_nnodes+newnodes > self.nnodes:
             raise ValueError("Adding too many nodes, cannot interpolate")
 
@@ -576,7 +536,7 @@ class MainGSM(GSM):
             else:
                 stepsize = 0.5
 
-            self.nodes[-self.nP-1] = add_node(
+            self.nodes[-self.nP-1] = GSM.add_node(
                     self.nodes[n1],
                     self.nodes[n3],
                     stepsize,
@@ -600,6 +560,9 @@ class MainGSM(GSM):
 
 
     def reparameterize(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
+        '''
+        Reparameterize the string
+        '''
         print(self.interp_method)
         if self.interp_method == 'DLC':
             print('reparameterizing')
@@ -608,24 +571,27 @@ class MainGSM(GSM):
              self.geodesic_reparam()
         return
 
+    
     def geodesic_reparam(self):
+        '''
+        Reparameterize using Geodesic interpolation
+        '''
+        printcool(' Reparameterizing using Geodesic Interpolation.')
         TSnode = self.TSnode
-        print(TSnode)
         if self.climb or self.find:
-            a  = geodesic_reparam( self.nodes[0:self.TSnode] )
-            b = geodesic_reparam( self.nodes[self.TSnode:] )
+            a  = GSM.geodesic_reparam( self.nodes[0:self.TSnode] )
+            b = GSM.geodesic_reparam( self.nodes[self.TSnode:] )
             new_xyzs = np.vstack((a,b))
         else:
-            new_xyzs =  geodesic_reparam(self.nodes) 
-
-        print(new_xyzs)
+            new_xyzs =  GSM.geodesic_reparam(self.nodes) 
 
         for i,xyz in enumerate(new_xyzs):
             self.nodes[i].xyz  = xyz
 
+        self.refresh_coordinates()
 
     def ic_reparam(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
-        nifty.printcool("reparametrizing string nodes")
+        printcool("reparametrizing string nodes")
         ictalloc = self.nnodes+1
         rpmove = np.zeros(ictalloc)
         rpart = np.zeros(ictalloc)
@@ -640,7 +606,6 @@ class MainGSM(GSM):
         # align first and last nodes
         # assuming they are aligned
         #self.nodes[self.nnodes-1].xyz = self.com_rotate_move(0,self.nnodes-1,self.nnodes-2)
-
         #for n in range(1,self.nnodes-1):
         #    self.nodes[n].xyz = self.com_rotate_move(n-1,n+1,n)
 
@@ -652,6 +617,7 @@ class MainGSM(GSM):
         for i in range(ic_reparam_steps):
 
             self.ictan,self.dqmaga = self.get_tangents(self.nodes)
+            self.refresh_coordinates()
 
             # copies of original ictan
             ictan0 = np.copy(self.ictan)
@@ -795,11 +761,13 @@ class MainGSM(GSM):
         print()
         print("  disprms: {:1.3}\n".format(disprms))
 
+
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,reparam_interior=True):  #see line 3863 of gstring.cpp
         """
-        
+        Reparameterize during growth phase        
         """
-        nifty.printcool("Reparamerizing string nodes")
+
+        printcool("Reparamerizing string nodes")
         #close_dist_fix(0) #done here in GString line 3427.
         rpmove = np.zeros(self.nnodes)
         rpart = np.zeros(self.nnodes)
@@ -817,6 +785,7 @@ class MainGSM(GSM):
 
         for i in range(ic_reparam_steps):
             self.ictan,self.dqmaga = self.get_tangents_growing()
+            self.refresh_coordinates()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.print_level>0:
                 if i==0:
@@ -882,7 +851,7 @@ class MainGSM(GSM):
             if disprms < 1e-2:
                 break
 
-            ncurrent,nlist = self.make_nlist()
+            ncurrent,nlist = self.make_difference_node_list()
             param_list=[]
             for n in range(ncurrent):
                 if nlist[2*n+1] not in param_list:
@@ -912,52 +881,51 @@ class MainGSM(GSM):
         #If failed, do exit 1
 
 
-    # TODO Move this to a util 
-    def get_eigenv_finite(self,en):
+    def modify_TS_Hess(self):
         ''' Modifies Hessian using RP direction'''
-        print("modifying %i Hessian with RP" % en)
-    
+        print("modifying %i Hessian with RP" % self.TSnode)
+  
+        TSnode = self.TSnode
         # a variable to determine how many time since last modify
         self.hess_counter = 0
         self.TS_E_0 = self.energies[self.TSnode]
 
-        E0 = self.energies[en]/units.KCAL_MOL_PER_AU
-        Em1 = self.energies[en-1]/units.KCAL_MOL_PER_AU
-        if en+1<self.nnodes:
-            Ep1 = self.energies[en+1]/units.KCAL_MOL_PER_AU
+        E0 = self.energies[TSnode]/units.KCAL_MOL_PER_AU
+        Em1 = self.energies[TSnode-1]/units.KCAL_MOL_PER_AU
+        if self.TSnode+1<self.nnodes:
+            Ep1 = self.energies[TSnode+1]/units.KCAL_MOL_PER_AU
         else:
             Ep1 = Em1
 
         # Update TS node coord basis
-        Vecs = self.nodes[en].update_coordinate_basis(constraints=None)
+        Vecs = self.nodes[TSnode].update_coordinate_basis(constraints=None)
 
         # get constrained coord basis
-        self.newic.xyz = self.nodes[en].xyz.copy()
-        const_vec = self.newic.update_coordinate_basis(constraints=self.ictan[en])
+        self.newic.xyz = self.nodes[TSnode].xyz.copy()
+        const_vec = self.newic.update_coordinate_basis(constraints=self.ictan[TSnode])
         q0 = self.newic.coordinates[0]
         constraint = self.newic.constraints[:,0]
 
-        # this should just give back ictan[en]? 
+        # this should just give back ictan[TSnode]? 
         tan0 = block_matrix.dot(const_vec,constraint)
 
         # get qm1 (don't update basis)
-        self.newic.xyz = self.nodes[en-1].xyz.copy()
+        self.newic.xyz = self.nodes[TSnode-1].xyz.copy()
         qm1 = self.newic.coordinates[0]
 
-        if en+1<self.nnodes:
+        if TSnode+1<self.nnodes:
             # get qp1 (don't update basis)
-            self.newic.xyz = self.nodes[en+1].xyz.copy()
+            self.newic.xyz = self.nodes[TSnode+1].xyz.copy()
             qp1 = self.newic.coordinates[0]
         else:
             qp1 = qm1
 
-        if en == self.TSnode:
-            print(" TS Hess init'd w/ existing Hintp")
+        print(" TS Hess init'd w/ existing Hintp")
 
         # Go to non-constrained basis
-        self.newic.xyz = self.nodes[en].xyz.copy()
+        self.newic.xyz = self.nodes[TSnode].xyz.copy()
         self.newic.coord_basis = Vecs
-        self.newic.Primitive_Hessian = self.nodes[en].Primitive_Hessian.copy()
+        self.newic.Primitive_Hessian = self.nodes[TSnode].Primitive_Hessian.copy()
         self.newic.form_Hessian_in_basis()
 
         tan = block_matrix.dot(block_matrix.transpose(Vecs),tan0)   # (nicd,1
@@ -980,26 +948,22 @@ class MainGSM(GSM):
       
         # Finalize Hessian
         self.newic.Hessian += (c-tHt)*ttt
-        self.nodes[en].Hessian = self.newic.Hessian.copy()
+        self.nodes[TSnode].Hessian = self.newic.Hessian.copy()
 
         # Hint after
         #with np.printoptions(threshold=np.inf):
-        #    print self.nodes[en].Hessian
-        #print "shape of Hessian is %s" % (np.shape(self.nodes[en].Hessian),)
+        #    print self.nodes[TSnode].Hessian
+        #print "shape of Hessian is %s" % (np.shape(self.nodes[TSnode].Hessian),)
 
-        self.nodes[en].newHess = 5
+        self.nodes[TSnode].newHess = 5
 
         if False:
-            print("newHess of node %i %i" % (en,self.nodes[en].newHess))
-            eigen,tmph = np.linalg.eigh(self.nodes[en].Hessian) #nicd,nicd
+            print("newHess of node %i %i" % (TSnode,self.nodes[TSnode].newHess))
+            eigen,tmph = np.linalg.eigh(self.nodes[TSnode].Hessian) #nicd,nicd
             print("eigenvalues of new Hess")
             print(eigen)
 
         # reset pgradrms ? 
-
-
-    def set_V0(self):
-        raise NotImplementedError 
 
 
     def mult_steps(self,n,opt_steps):
@@ -1037,12 +1001,13 @@ class MainGSM(GSM):
         if not quiet:
             print((" setting node %i opt_type to %s" %(n,opt_type)))
 
-        if isinstance(self.optimizer[n],beales_cg) and opt_type!="BEALES_CG":
-            raise RuntimeError("This shouldn't happen")
+        #if isinstance(self.optimizer[n],beales_cg) and opt_type!="BEALES_CG":
+        #    raise RuntimeError("This shouldn't happen")
 
         return opt_type
 
 
+    #TODO Remove me does not deserve to be a function
     def set_finder(self,rtype):
         assert rtype in [0,1,2], "rtype not defined"
         print('')
@@ -1058,215 +1023,6 @@ class MainGSM(GSM):
             print("******** Turning off climbing image and exact TS search **********")
         print("*********************************************************************")
  
-
-    def restart_from_geoms(self,input_geoms,reparametrize=False,restart_energies=True):
-        '''
-        '''
-
-        nifty.printcool("Restarting GSM from geometries")
-        self.growth_direction=0
-        nstructs=len(input_geoms)
-
-        if nstructs != self.nnodes:
-            print('need to interpolate')
-            #if self.interp_method=="DLC":
-            #    # determine how many times to upsample, then upsample that many times
-            #    #self.upsample()
-            #    raise NotImplementedError
-            #elif self.interp_method=="Geodesic":
-            old_xyzs = [ manage_xyz.xyz_to_np(geom) for geom in input_geoms ]
-            symbols = manage_xyz.get_atoms(input_geoms[0])
-            xyzs = redistribute(symbols,old_xyzs,self.nnodes,tol=2e-3*5)
-            geoms = [ manage_xyz.np_to_xyz(input_geoms[0],xyz) for xyz in xyzs ]
-            nstructs = len(geoms)
-        else:
-            geoms = input_geoms
-
-        self.gradrms = [0.]*nstructs
-        self.dE = [1000.]*nstructs
-
-        self.isRestarted=True
-        self.done_growing=True
-
-        # set coordinates from geoms
-        self.nodes[0].xyz = manage_xyz.xyz_to_np(geoms[0])
-        self.nodes[nstructs-1].xyz = manage_xyz.xyz_to_np(geoms[-1])
-        for struct in range(1,nstructs-1):
-            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],
-                    manage_xyz.xyz_to_np(geoms[struct]),
-                    new_node_id=struct,
-                    copy_wavefunction=False)
-            self.nodes[struct].newHess=5
-            # Turning this off
-            #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
-            #self.nodes[struct].gradrms=grmss[struct]
-            #self.nodes[struct].PES.dE = dE[struct]
-        self.nnodes=self.nR=nstructs
-
-        if reparametrize:
-            nifty.printcool("Reparametrizing")
-            self.reparameterize(ic_reparam_steps=8)
-            self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
-
-        if restart_energies:
-            # initial energy
-            self.nodes[0].V0 = self.nodes[0].energy 
-            self.energies[0] = 0.
-            print(" initial energy is %3.4f" % self.nodes[0].energy)
-
-            for struct in range(1,nstructs-1):
-                print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
-                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
-                print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
-
-            print(" V_profile: ", end=' ')
-            energies= self.energies
-            for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(energies[n])), end=' ')
-            print()
-
-        print(" setting all interior nodes to active")
-        for n in range(1,self.nnodes-1):
-            self.active[n]=True
-            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
-            self.optimizer[n].options['DMAX'] = 0.05
-
-
-        return
-
-    def restart_string(self,xyzfile='restart.xyz',rtype=2,reparametrize=False,restart_energies=True):
-        nifty.printcool("Restarting string from file")
-        self.growth_direction=0
-        with open(xyzfile) as f:
-            nlines = sum(1 for _ in f)
-        #print "number of lines is ", nlines
-        with open(xyzfile) as f:
-            natoms = int(f.readlines()[2])
-
-        #print "number of atoms is ",natoms
-        nstructs = (nlines-6)/ (natoms+5) #this is for three blocks after GEOCON
-        nstructs = int(nstructs)
-        
-        #print "number of structures in restart file is %i" % nstructs
-        coords=[]
-        grmss = []
-        atomic_symbols=[]
-        dE = []
-        with open(xyzfile) as f:
-            f.readline()
-            f.readline() #header lines
-            # get coords
-            for struct in range(nstructs):
-                tmpcoords=np.zeros((natoms,3))
-                f.readline() #natoms
-                f.readline() #space
-                for a in range(natoms):
-                    line=f.readline()
-                    tmp = line.split()
-                    tmpcoords[a,:] = [float(i) for i in tmp[1:]]
-                    if struct==0:
-                        atomic_symbols.append(tmp[0])
-                coords.append(tmpcoords)
-            ## Get energies
-            #f.readline() # line
-            #f.readline() #energy
-            #for struct in range(nstructs):
-            #    self.energies[struct] = float(f.readline())
-            ## Get grms
-            #f.readline() # max-force
-            #for struct in range(nstructs):
-            #    grmss.append(float(f.readline()))
-            ## Get dE
-            #f.readline()
-            #for struct in range(nstructs):
-            #    dE.append(float(f.readline()))
-
-
-        # initialize lists
-        self.gradrms = [0.]*nstructs
-        self.dE = [1000.]*nstructs
-
-        self.isRestarted=True
-        self.done_growing=True
-        # TODO
-
-        # set coordinates from restart file
-        self.nodes[0].xyz = coords[0].copy()
-        self.nodes[nstructs-1].xyz = coords[nstructs-1].copy()
-        for struct in range(1,nstructs):
-            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],coords[struct],new_node_id=struct,copy_wavefunction=False)
-            self.nodes[struct].newHess=5
-            # Turning this off
-            #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
-            #self.nodes[struct].gradrms=grmss[struct]
-            #self.nodes[struct].PES.dE = dE[struct]
-        self.nnodes=self.nR=nstructs
-
-        if reparametrize:
-            nifty.printcool("Reparametrizing")
-            self.reparameterize(ic_reparam_steps=8)
-            self.write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
-
-        if restart_energies:
-            # initial energy
-            self.nodes[0].V0 = self.nodes[0].energy 
-            self.energies[0] = 0.
-            print(" initial energy is %3.4f" % self.nodes[0].energy)
-
-            for struct in range(1,nstructs-1):
-                print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
-                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
-                print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
-
-            print(" V_profile: ", end=' ')
-            energies= self.energies
-            for n in range(self.nnodes):
-                print(" {:7.3f}".format(float(energies[n])), end=' ')
-            print()
-
-            #print(" grms_profile: ", end=' ')
-            #for n in range(self.nnodes):
-            #    print(" {:7.3f}".format(float(self.nodes[n].gradrms)), end=' ')
-            #print()
-            #print(" dE_profile: ", end=' ')
-            #for n in range(self.nnodes):
-            #    print(" {:7.3f}".format(float(self.nodes[n].difference_energy)), end=' ')
-            #print()
-
-        print(" setting all interior nodes to active")
-        for n in range(1,self.nnodes-1):
-            self.active[n]=True
-            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
-            self.optimizer[n].options['DMAX'] = 0.05
-
-
-        if self.__class__.__name__!="SE_Cross":
-            self.set_finder(rtype)
-
-
-            if restart_energies:
-                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                num_coords =  self.nodes[0].num_coordinates - 1
-
-                # project out the constraint
-                for n in range(0,self.nnodes):
-                    gc=self.nodes[n].gradient.copy()
-                    for c in self.nodes[n].constraints.T:
-                        gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
-                    self.nodes[n].gradrms = np.sqrt(np.dot(gc.T,gc)/num_coords)
-
-                fp = self.find_peaks(2)
-                totalgrad,gradrms,sumgradrms = self.calc_grad()
-                print(" totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
-
-                ts_cgradq = np.linalg.norm(np.dot(self.nodes[self.TSnode].gradient.T,self.nodes[self.TSnode].constraints[:,0])*self.nodes[self.TSnode].constraints[:,0])
-                print(" ts_cgradq %5.4f" % ts_cgradq)
-                ts_gradrms=self.nodes[self.TSnode].gradrms
-
-                self.set_stage(totalgrad,sumgradrms,ts_cgradq,ts_gradrms,fp)
-            else:
-                return
-
 
 
     def com_rotate_move(self,iR,iP,iN):
@@ -1316,113 +1072,14 @@ class MainGSM(GSM):
         #print(dist)
         #xyz1 += dist
 
-
-
-
         return xyz1
 
-    # TODO move to string utils or delete altogether
-    def get_current_rotation(self,frag,a1,a2):
-        '''
-        calculate current rotation for single-ended nodes
-        '''
-    
-        # Get the information on fragment to rotate
-        sa,ea,sp,ep = self.nodes[0].coord_obj.Prims.prim_only_block_info[frag]
-    
-        theta = 0.
-        # Haven't added any nodes yet
-        if self.nR==1:
-            return theta
-   
-        for n in range(1,self.nR):
-            xyz_frag = self.nodes[n].xyz[sa:ea].copy()
-            axis = self.nodes[n].xyz[a2] - self.nodes[n].xyz[a1]
-            axis /= np.linalg.norm(axis)
-    
-            # only want the fragment of interest
-            reference_xyz = self.nodes[n-1].xyz.copy()
 
-            # Turn off
-            ref_axis = reference_xyz[a2] - reference_xyz[a1]
-            ref_axis /= np.linalg.norm(ref_axis)
-   
-            # ALIGN previous and current node to get rotation around axis of rotation
-            #print(' Rotating reference axis to current axis')
-            I = np.eye(3)
-            v = np.cross(ref_axis,axis)
-            if v.all()==0.:
-                print('Rotation is identity')
-                R=I
-            else:
-                vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-                c = np.dot(ref_axis,axis)
-                s = np.linalg.norm(v)
-                R = I + vx + np.dot(vx,vx) * (1. - c)/(s**2)
-            new_ref_axis = np.dot(ref_axis,R.T)
-            #print(' overlap of ref-axis and axis (should be 1.) %1.2f' % np.dot(new_ref_axis,axis))
-            new_ref_xyz = np.dot(reference_xyz,R.T)
-
-            
-            # Calculate dtheta 
-            ca = self.nodes[n].primitive_internal_coordinates[sp+3]
-            cb = self.nodes[n].primitive_internal_coordinates[sp+4]
-            cc = self.nodes[n].primitive_internal_coordinates[sp+5]
-            dv12_a = ca.calcDiff(self.nodes[n].xyz,new_ref_xyz)
-            dv12_b = cb.calcDiff(self.nodes[n].xyz,new_ref_xyz)
-            dv12_c = cc.calcDiff(self.nodes[n].xyz,new_ref_xyz)
-            dv12 = np.array([dv12_a,dv12_b,dv12_c])
-            #print(dv12)
-            dtheta = np.linalg.norm(dv12)  #?
-        
-            dtheta = dtheta + np.pi % (2*np.pi) - np.pi
-            theta += dtheta
-   
-        theta = theta/ca.w
-        angle = theta * 180./np.pi
-        print(angle) 
-
-        return theta
-
-    #TODO Move to manage_xyz
-    def write_xyz_files(self,filename):
-        #xyzfile = os.getcwd()+'/scratch/'+base+'_{:03}_{:03}.xyz'.format(self.ID,iters)
-        geoms = []
-        for ico in self.nodes:
-            if ico != None:
-                geoms.append(ico.geometry)
-
-        with open(filename,'w') as f:
-            f.write("[Molden Format]\n[Geometries] (XYZ)\n")
-            for geom in geoms:
-                f.write('%d\n\n' % len(geom))
-                for atom in geom:
-                    f.write('%-2s %14.6f %14.6f %14.6f\n' % (
-                        atom[0],
-                        atom[1],
-                        atom[2],
-                        atom[3],
-                        ))
-            f.write("[GEOCONV]\n")
-            f.write('energy\n')
-            V0=self.nodes[0].energy
-            for n,ico in enumerate(self.nodes):
-                if ico!=None:
-                    f.write('{}\n'.format(ico.energy-V0))
-                    #f.write('{}\n'.format(self.energies[n]))
-            f.write("max-force\n")
-            for ico in self.nodes:
-                if ico != None:
-                    f.write('{}\n'.format(float(ico.gradrms)))
-            #print(" WARNING: Printing dE as max-step in molden output ")
-            f.write("max-step\n")
-            for ico,act in zip(self.nodes,self.active):
-                if ico!=None:
-                    f.write('{}\n'.format(float(ico.difference_energy)))
-        f.close()
-
-    #TODO move to string_utils
+    #TODO
     def find_peaks(self,rtype):
+        '''
+        This doesnt actually calculate peaks, it calculates some other thing
+        '''
         #rtype 1: growing
         #rtype 2: opting
         #rtype 3: intermediate check
@@ -1520,87 +1177,75 @@ class MainGSM(GSM):
         return npeaks
 
 
-    #TODO move to 
-    def check_for_reaction_g(self,rtype):
 
-        c = Counter(elem[0] for elem in self.driving_coords)
-        nadds = c['ADD']
-        nbreaks = c['BREAK']
-        isrxn=False
+    def is_converged(self,totalgrad,fp,rtype,ts_cgradq):
+        '''
+        Check if optimization is converged
+        '''
+        TS_conv = self.options['CONV_TOL']
+        #if self.find and self.optimizer[self.TSnode].nneg>1:
+        #    print(" reducing TS convergence because nneg>1")
+        #    TS_conv = self.options['CONV_TOL']/2.
+        self.optimizer[self.TSnode].conv_grms = TS_conv
 
-        if (nadds+nbreaks) <1:
-            return False
-        nadded=0
-        nbroken=0 
-        nnR = self.nR-1
-        xyz = self.nodes[nnR].xyz
-        atoms = self.nodes[nnR].atoms
+        #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
+        if (rtype == 2 and self.find):
+            return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02)  #TODO extra crit here
+        elif rtype==1 and self.climb:
+            return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2
 
-        for i in self.driving_coords:
-            if "ADD" in i:
-                index = [i[1]-1, i[2]-1]
-                bond = Distance(index[0],index[1])
-                d = bond.value(xyz)
-                d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2
-                if d<d0:
-                    nadded+=1
-            if "BREAK" in i:
-                index = [i[1]-1, i[2]-1]
-                bond = Distance(index[0],index[1])
-                d = bond.value(xyz)
-                d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2
-                if d>d0:
-                    nbroken+=1
-        if rtype==1:
-            if (nadded+nbroken)>=(nadds+nbreaks): 
-                isrxn=True
-                #isrxn=nadded+nbroken
-        else:
-            isrxn=True
-            #isrxn=nadded+nbroken
-        print(" check_for_reaction_g isrxn: %r nadd+nbrk: %i" %(isrxn,nadds+nbreaks))
-        return isrxn
+        elif not self.climber and not self.finder:
+            print(" CONV_TOL=%.4f" %self.CONV_TOL)
+            return all([self.optimizer[n].converged for n in range(self.nnodes)])
 
-    def check_for_reaction(self):
-        isrxn = self.check_for_reaction_g(1)
-        minnodes=[]
-        maxnodes=[]
-        wint=0
+        # => Check if intermediate exists 
+        if self.has_intermediate():
+            self.endearly=True #bools
+            self.tscontinue=False
+            return True
+
+
+        return False
+
+
+    def print_energies(self):
+        for n in range(len(self.energies)):
+            print(" {:7.3f}".format(float(self.energies[n])), end=' ')
+        print()
+
+
+    def has_intermediate(self):
+        '''
+        Check string for intermediates
+        '''
+   
         energies = self.energies
-        if energies[1]>energies[0]:
-            minnodes.append(0)
-        if energies[self.nnodes-1]<energies[self.nnodes-2]:
-            minnodes.append(self.nnodes-1)
-        for n in range(self.n0,self.nnodes-1):
-            if energies[n+1]>energies[n]:
-                if energies[n]<energies[n-1]:
-                    minnodes.append(n)
-            if energies[n+1]<energies[n]:
-                if energies[n]>energies[n-1]:
-                    maxnodes.append(n)
-        if len(minnodes)>2 and len(maxnodes)>1:
-            wint=minnodes[1] # the real reaction ends at first minimum
-            print(" wint ", wint)
-
-        return isrxn,wint
-
-
-    def calc_grad(self):
-        totalgrad = 0.0
-        gradrms = 0.0
-        sum_gradrms = 0.0
-        for i,ico in zip(list(range(1,self.nnodes-1)),self.nodes[1:self.nnodes-1]):
-            if ico!=None:
-                print(" node: {:02d} gradrms: {:.6f}".format(i,float(ico.gradrms)),end='')
-                if i%5 == 0:
-                    print()
-                totalgrad += ico.gradrms*self.rn3m6
-                gradrms += ico.gradrms*ico.gradrms
-                sum_gradrms += ico.gradrms
-        print('')
-        #TODO wrong for growth
-        gradrms = np.sqrt(gradrms/(self.nnodes-2))
-        return totalgrad,gradrms,sum_gradrms
-
-
+        potential_min = []
+        for i in range(1, (len(energies) - 1)):
+            rnoise = 0
+            pnoise = 0
+            a = 1
+            b = 1
+            while (energies[i-a] >= energies[i]):
+                if (energies[i-a] - energies[i]) > rnoise:
+                    rnoise = energies[i-a] - energies[i]
+                if rnoise > self.noise:
+                    break
+                if (i-a) == 0:
+                    break
+                a += 1
+    
+            while (energies[i+b] >= energies[i]):
+                if (energies[i+b] - energies[i]) > pnoise:
+                    pnoise = energies[i+b] - energies[i]
+                if pnoise > self.noise:
+                    break
+                if (i+b) == len(energies) - 1:
+                    break
+                b += 1
+            if ((rnoise > self.noise) and (pnoise > self.noise)):
+                print('Potential minimum at image %s', str(i))
+                potential_min.append(i)
+    
+        return len(potential_min)>0            
 

@@ -10,14 +10,15 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+from utilities.manage_xyz import write_molden_geoms
 from wrappers import Molecule
 try:
-    from .gsm import GSM
+    from .main_gsm import MainGSM
 except:
-    from gsm import GSM
+    from main_gsm import MainGSM
 
 
-class DE_GSM(GSM):
+class DE_GSM(MainGSM):
 
     def __init__(
             self,
@@ -26,29 +27,11 @@ class DE_GSM(GSM):
 
         super(DE_GSM,self).__init__(options)
 
-        #print(" Forming Union of primitive coordinates")
-        #self.nodes[0].coord_obj = self.nodes[0].coord_obj.make_union_primitives(self.nodes[-1].coord_obj,self.nodes[0].xyz)
-
-        #print('coordinates')
-        #print(self.nodes[0].coord_obj.Prims.Internals[:100])
-        #self.nodes[0].form_Primitive_Hessian()
-        #print(" Done forming union")
-        #self.nodes[-1].PES.lot.node_id = self.nnodes-1
-        #self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
-        #self.nodes[-1].form_Primitive_Hessian()
-
         print(" Assuming primitives are union!")
-        #self.nodes[0].form_Primitive_Hessian()
-        #self.nodes[-1].form_Primitive_Hessian()
-
-        # this tests if the primitives are the same
-        #assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
-
-        #print(" Primitive Internal Coordinates")
-        #print(self.nodes[0].primitive_internal_coordinates)
         print(" number of primitives is", self.nodes[0].num_primitives)
-        #self.set_V0()
 
+
+    #TODO Change rtype to a more meaningful argument name
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         """
         rtype=2 Find and Climb TS,
@@ -65,15 +48,17 @@ class DE_GSM(GSM):
             elif self.growth_direction==2:
                 self.add_GSM_nodeP(1)
 
+            # Grow String
             self.grow_string(max_iters=max_iters,max_opt_steps=opt_steps) 
             nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
 
             #nifty.printcool("initial ic_reparam")
             self.reparameterize()
-            self.write_xyz_files('grown_string_{:03}.xyz'.format(self.ID))
+            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
         else:
             self.ictan,self.dqmaga = self.get_tangents(self.nodes)
+            self.refresh_coordinates()
 
         if self.tscontinue:
             self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
@@ -174,7 +159,7 @@ class DE_GSM(GSM):
         return
 
 
-    def get_difference_node_list(self):
+    def make_difference_node_list(self):
         '''
         Returns ncurrent and a list of indices that can be iterated over to produce
         tangents for the string pathway.
@@ -211,33 +196,6 @@ class DE_GSM(GSM):
 
         return ncurrent,nlist
 
-    def check_opt(self,totalgrad,fp,rtype,ts_cgradq):
-        isDone=False
-        #if rtype==self.stage: 
-        # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
-        #if True:
-
-        TS_conv = self.options['CONV_TOL']
-        #if self.find and self.optimizer[self.TSnode].nneg>1:
-        #    print(" reducing TS convergence because nneg>1")
-        #    TS_conv = self.options['CONV_TOL']/2.
-        self.optimizer[self.TSnode].conv_grms = TS_conv
-
-        if (rtype == 2 and self.find):
-            if self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff: 
-                isDone=True
-                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-                self.tscontinue=False
-            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02: #TODO extra crit here
-                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-                isDone=True
-                self.tscontinue=False
-
-        if rtype==1 and self.climb:
-            if self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2: 
-                isDone=True
-
-        return isDone
 
     def set_V0(self):
         self.nodes[0].V0 = self.nodes[0].energy
