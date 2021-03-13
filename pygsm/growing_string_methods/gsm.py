@@ -12,8 +12,7 @@ from multiprocessing import Process
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from utilities import *
-import wrappers
+from utilities import nifty,options,manage_xyz
 from wrappers import Molecule
 from coordinate_systems import DelocalizedInternalCoordinates
 from optimizers._linesearch import double_golden_section
@@ -37,6 +36,8 @@ except ImportError:
 
 
 class GSM(object):
+    
+    from utilities import units
 
     @staticmethod
     def default_options():
@@ -191,13 +192,6 @@ class GSM(object):
     def from_options(cls,**kwargs):
         return cls(cls.default_options().set_values(kwargs))
 
-    @classmethod
-    def from_path(cls,*geoms,**kwargs):
-        gsm = cls(cls.default_options().set_values(kwargs))
-
-        gsm.restart_from_geoms(geoms)
-
-        return gsm
 
     def __init__(
             self,
@@ -256,6 +250,7 @@ class GSM(object):
         self.hess_counter = 0   # it is probably good to reset the hessian
         self.newclimbscale=2.
         self.TS_E_0 = None 
+        self.dE_iter = 100.  # change in max TS node
         self.newic  = Molecule.copy_from_options(self.nodes[0]) # newic object is used for coordinate transformations
 
 

@@ -467,7 +467,6 @@ def main():
                 CONV_dE=inpfileq['conv_dE'],
                 ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
                 growth_direction=inpfileq['growth_direction'],
-                product_geom_fixed=inpfileq['product_geom_fixed'],
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
@@ -551,7 +550,8 @@ def main():
    
     if args.restart_file is not None:
         #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
-        gsm.restart_from_geoms(geoms)
+        geometries = manage_xyz.read_molden_geoms(args.restart_file)
+        gsm.setup_from_geometries(geometries,reparametrize=args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

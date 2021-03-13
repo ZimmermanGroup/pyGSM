@@ -9,9 +9,11 @@ except:
 
 from wrappers.molecule import Molecule
 from utilities.nifty import printcool
-from utilities.manage_xyz import write_molden_geoms
+from utilities.manage_xyz import write_molden_geoms,xyz_to_np,get_atoms
+from utilities import block_matrix
 from coordinate_systems import rotate
-from optimizers import beales_cg,eigenvector_follow
+from optimizers import eigenvector_follow
+from geodesic_interpolate import redistribute
 
 
 #######################################################################################
@@ -426,7 +428,7 @@ class MainGSM(GSM):
         sum_conv_tol = np.sum([self.optimizer[n].conv_grms for n in range(1,self.nnodes-1)])+ 0.0005
 
         #TODO totalgrad is not a good criteria for large systems
-        if (totalgrad < 0.3 or sumgradrms<sum_conv_tol or ts_cgradq < 0.01)  and fp>0: # extra criterion in og-gsm for added
+        if (totalgrad < 0.15 or sumgradrms<sum_conv_tol or ts_cgradq < 0.01)  and fp>0 and self.dE_iter < 1.: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
@@ -890,10 +892,10 @@ class MainGSM(GSM):
         self.hess_counter = 0
         self.TS_E_0 = self.energies[self.TSnode]
 
-        E0 = self.energies[TSnode]/units.KCAL_MOL_PER_AU
-        Em1 = self.energies[TSnode-1]/units.KCAL_MOL_PER_AU
+        E0 = self.energies[TSnode]/GSM.units.KCAL_MOL_PER_AU
+        Em1 = self.energies[TSnode-1]/GSM.units.KCAL_MOL_PER_AU
         if self.TSnode+1<self.nnodes:
-            Ep1 = self.energies[TSnode+1]/units.KCAL_MOL_PER_AU
+            Ep1 = self.energies[TSnode+1]/GSM.units.KCAL_MOL_PER_AU
         else:
             Ep1 = Em1
 
@@ -970,15 +972,15 @@ class MainGSM(GSM):
         exsteps=1
         tsnode = int(self.TSnode)
 
-        if (self.find or self.climb) and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
+        if (self.find) and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
             self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
             self.optimizer[n].conv_gmax = self.options['CONV_gmax']
             self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
-        if (self.find or (self.climb and self.energies[tsnode]>self.energies[tsnode-1]+5 and self.energies[tsnode]>self.energies[tsnode+1]+5.)) and n==tsnode: #or self.climb
-            exsteps=2
-            print(" multiplying steps for node %i by %i" % (n,exsteps))
+        #if (self.find or (self.climb and self.energies[tsnode]>self.energies[tsnode-1]+5 and self.energies[tsnode]>self.energies[tsnode+1]+5.)) and n==tsnode: #or self.climb
+        #    exsteps=2
+        #    print(" multiplying steps for node %i by %i" % (n,exsteps))
 
         #elif not (self.find and self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode:  #or self.climb
         #    exsteps=2
@@ -1249,3 +1251,74 @@ class MainGSM(GSM):
     
         return len(potential_min)>0            
 
+
+    def setup_from_geometries(self,input_geoms,reparametrize=False,restart_energies=True):
+        '''
+        Restart
+        '''
+
+        printcool("Restarting GSM from geometries")
+        self.growth_direction=0
+        nstructs=len(input_geoms)
+
+        if nstructs != self.nnodes:
+            print('need to interpolate')
+            #if self.interp_method=="DLC": TODO
+            symbols = get_atoms(input_geoms[0])
+            xyzs = redistribute(symbols,old_xyzs,self.nnodes,tol=2e-3*5)
+            geoms = [ np_to_xyz(input_geoms[0],xyz) for xyz in xyzs ]
+            nstructs = len(geoms)
+        else:
+            geoms = input_geoms
+
+        self.gradrms = [0.]*nstructs
+        self.dE = [1000.]*nstructs
+
+        self.isRestarted=True
+        self.done_growing=True
+
+        # set coordinates from geoms
+        self.nodes[0].xyz = xyz_to_np(geoms[0])
+        self.nodes[nstructs-1].xyz = xyz_to_np(geoms[-1])
+        for struct in range(1,nstructs-1):
+            self.nodes[struct] = Molecule.copy_from_options(self.nodes[struct-1],
+                    xyz_to_np(geoms[struct]),
+                    new_node_id=struct,
+                    copy_wavefunction=False)
+            self.nodes[struct].newHess=5
+            # Turning this off
+            #self.nodes[struct].gradrms = np.sqrt(np.dot(self.nodes[struct].gradient,self.nodes
+            #self.nodes[struct].gradrms=grmss[struct]
+            #self.nodes[struct].PES.dE = dE[struct]
+        self.nnodes=self.nR=nstructs
+
+        if reparametrize:
+            printcool("Reparametrizing")
+            self.reparameterize(ic_reparam_steps=8)
+            write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
+
+        if restart_energies:
+            # initial energy
+            self.nodes[0].V0 = self.nodes[0].energy 
+            self.energies[0] = 0.
+            print(" initial energy is %3.4f" % self.nodes[0].energy)
+
+            for struct in range(1,nstructs-1):
+                print(" energy of node %i is %5.4f" % (struct,self.nodes[struct].energy))
+                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
+                print(" Relative energy of node %i is %5.4f" % (struct,self.energies[struct]))
+
+            print(" V_profile: ", end=' ')
+            energies= self.energies
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
+            print()
+
+        print(" setting all interior nodes to active")
+        for n in range(1,self.nnodes-1):
+            self.active[n]=True
+            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
+            self.optimizer[n].options['DMAX'] = 0.05
+
+
+        return
