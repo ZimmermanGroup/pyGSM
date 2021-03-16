@@ -111,7 +111,7 @@ class QChem(Lot):
             for lines in elines:
                 if temp == 1:
                     # defaulting to the ground-state
-                    self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0],'Hartree'))
+                    self._Energies[(multiplicity,0)] = self.Energy(float(lines.split()[0]),'Hartree')
                     break
                 if "$" in lines:
                     temp += 1
@@ -128,7 +128,7 @@ class QChem(Lot):
                     tmp.append([float(i) for i in tmpline])
                 elif temp == 3:
                     break
-            self._Gradients[(multiplicity,0)] = self.Gradient(tmp,'Hartree/Bohr')
+            self._Gradients[(multiplicity,0)] = self.Gradient(np.asarray(tmp),'Hartree/Bohr')
         else:
             raise NotImplementedError
         self.write_E_to_file()
