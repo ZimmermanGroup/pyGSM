@@ -158,10 +158,61 @@ class MainGSM(GSM):
             self.print_energies()
 
             #TODO resetting
-            #TODO special SSM criteria if TSNode is second to last node
             #TODO special SSM criteria if first opt'd node is too high?
-            if self.TSnode == self.nnodes-2 and (self.climb or self.find):
+            if (self.TSnode == self.nnodes-2 or self.TSnode == self.nnodes-3) and (self.climb or self.find):
                 printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
+                new_node = GSM.add_node(
+                        self.nodes[self.TSnode],
+                        self.nodes[self.TSnode+1],
+                        stepsize=0.5,
+                        node_id = self.TSnode+1,
+                        )
+                new_node_list = [None]*(self.nnodes+1)
+                new_optimizers = [None]*(self.nnodes+1)
+                for n in range(0,self.TSnode+1):
+                    new_node_list[n] = self.nodes[n]
+                    new_optimizers[n] = self.optimizer[n]
+                new_node_list[self.TSnode+1] = new_node
+                new_optimizers[self.TSnode+1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
+
+                for n in range(self.TSnode+2,self.nnodes+1):
+                    new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
+                    new_optimizers[n] = self.optimizer[n-1]
+                self.nodes = new_node_list
+                self.optimizer = new_optimizers
+                self.nnodes = len(self.nodes)
+                print('New number of nodes %d' % self.nnodes)
+                self.active = [True] * self.nnodes
+                self.active[0] = False
+                self.active[self.nnodes-1] = False
+
+            if (self.TSnode == 1 or self.TSnode==2) and  (self.climb or self.find):
+                printcool("WARNING\n: TS node shouldn't be first or second node for tangent reasons")
+                new_node = GSM.add_node(
+                        self.nodes[self.TSnode-1],
+                        self.nodes[self.TSnode],
+                        stepsize=0.5,
+                        node_id = self.TSnode-1,
+                        )
+                new_node_list = [None]*(self.nnodes+1)
+                new_optimizers = [None]*(self.nnodes+1)
+                for n in range(0,self.TSnode-1):
+                    new_node_list[n] = self.nodes[n]
+                    new_optimizers[n] = self.optimizer[n]
+                new_node_list[self.TSnode-1] = new_node
+                new_optimizers[self.TSnode-1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
+
+                for n in range(self.TSnode,self.nnodes+1):
+                    new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
+                    new_optimizers[n] = self.optimizer[n-1]
+                self.nodes = new_node_list
+                self.optimizer = new_optimizers
+                self.nnodes = len(self.nodes)
+                print('New number of nodes %d' % self.nnodes)
+                self.active = [True] * self.nnodes
+                self.active[0] = False
+                self.active[self.nnodes-1] = False
+
 
             # => find peaks <= #
             fp = self.find_peaks(2)
@@ -202,7 +253,7 @@ class MainGSM(GSM):
                     self.optimizer[self.TSnode].options['DMAX']=0.1
 
             # opt decided Hess is not good because of overlap
-            elif self.find and not self.optimizer[n].maxol_good:
+            elif self.find and not self.optimizer[self.TSnode].maxol_good:
                 self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                 self.modify_TS_Hess()
 
@@ -1192,7 +1243,7 @@ class MainGSM(GSM):
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
         if (rtype == 2 and self.find):
-            return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02)  #TODO extra crit here
+            return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
         elif rtype==1 and self.climb:
             return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2
 
@@ -1265,6 +1316,7 @@ class MainGSM(GSM):
             print('need to interpolate')
             #if self.interp_method=="DLC": TODO
             symbols = get_atoms(input_geoms[0])
+            old_xyzs = [ xyz_to_np( geom ) for geom in input_geoms ]
             xyzs = redistribute(symbols,old_xyzs,self.nnodes,tol=2e-3*5)
             geoms = [ np_to_xyz(input_geoms[0],xyz) for xyz in xyzs ]
             nstructs = len(geoms)
