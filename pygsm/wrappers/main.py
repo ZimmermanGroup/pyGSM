@@ -22,9 +22,6 @@ from growing_string_methods import *
 from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
-
-#TODO can use the "dest" keyword in parser to automatically save the variable
-
 def main():
     parser = argparse.ArgumentParser(
         description="Reaction path transition state and photochemistry tool",
@@ -80,6 +77,7 @@ def main():
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
+    parser.add_argument('-interp_method',default='DLC',type=str,help='')
     parser.add_argument('-bonds_file',type=str,help="A file which contains the bond indices (0-based)")
 
 
@@ -101,13 +99,6 @@ def main():
         except: 
             nproc = 1
         print(" Using {} processors".format(nproc))
-
-    #print(args.states)
-    #if args.states is not None:
-    #    states = [tuple(int(s) for s in my_tup.strip("()").split(",")) for my_tup in args.states ]
-    #    print(states)
-    #else:
-    #    states=None
 
     inpfileq = {
                # LOT
@@ -161,6 +152,7 @@ def main():
               }
 
     nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
+
 
     #LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
@@ -475,11 +467,11 @@ def main():
                 CONV_dE=inpfileq['conv_dE'],
                 ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
                 growth_direction=inpfileq['growth_direction'],
-                product_geom_fixed=inpfileq['product_geom_fixed'],
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
     else:
         gsm = gsm_class.from_options(
@@ -494,6 +486,7 @@ def main():
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
 
 
@@ -556,7 +549,9 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        geometries = manage_xyz.read_molden_geoms(args.restart_file)
+        gsm.setup_from_geometries(geometries,reparametrize=args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

@@ -28,7 +28,8 @@ class nanoreactor_engine(Lot):
         super(nanoreactor_engine,self).__init__(options)
 
         # can we do a check here?
-        engine=options['job_data']['engine']
+        self.engine=options['job_data']['engine']
+        self.nscffail = 0
 
     def run(self,geom,mult,ad_idx,runtype='gradient'):
         self.Gradients={}
@@ -44,9 +45,9 @@ class nanoreactor_engine(Lot):
             # set energy to a large number so the optimizer attempts to slow down
             print(" SCF FAILURE")
             self.nscffail+=1
-            energy,gradient = 999,self._Gradients[(mult,ad_idx)].value
+            energy,gradient = 999, 0 
 
-            if self.nscfail>25:
+            if self.nscffail>25:
                 raise RuntimeError
   
         # Store the values in memory 
@@ -56,11 +57,10 @@ class nanoreactor_engine(Lot):
 
 if __name__=="__main__":
     from nanoreactor.engine import get_engine
-    from nanoreactor.parsing import load_settings_from_args
+    from nanoreactor.parsing import load_settings
 
     # read settings from name
-    db, setting_name, settings = load_settings_from_args(kind='refine', create=False,
-              description='Refining reactions paths.')
+    db, setting_name, settings = load_settings('refine.yaml', host='fire-05-30')
 
     # Create the nanoreactor TCPB engine
     engine_type=settings['engine'].pop('type')
