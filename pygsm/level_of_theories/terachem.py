@@ -191,7 +191,7 @@ class TeraChem(Lot):
             else:
                 use_alpha=False
                 for state in lot.states:
-                  if state[1] == 2:
+                  if state[0] == 2:
                       use_alpha=True
                 if use_alpha:
                   old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
