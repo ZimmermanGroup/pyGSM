@@ -1,20 +1,21 @@
 # pyGSM
 
-=======> Please see LICENCE for licensing and copyright information <= \
+=======> Please see LICENCE for licensing and copyright information <===== \
 ============> Zimmerman Group, University of Michigan  <==============
 
 ## Overview
-pyGSM (Python + GSM) combines the powerful tools of python with the
-Growing String Method to allow for rapid prototyping and improved
+pyGSM (Python + GSM) is a reaction path and photochemistry tool. 
+Key features
+It combines the powerful tools of python with the Growing String Method to allow for rapid prototyping and improved
 readability.
 
-## Download instructions
-git clone git@github.com:ZimmermanGroup/pyGSM.git\
-(need to have github ssh key activated) 
+## Documentation
+See https://zimmermangroup.github.io/pyGSM/
+
 
 ## Install instructions
 
-Install the code using `python setup.py install`. \ 
+Install the code using `python setup.py install`.\
 You can also install locally without sudo permissions like:
 `python setup.py install --prefix ~/.local`
 You might need to create the folder `~/.local/lib/` if setup.py complains about the folder not existing.
@@ -26,20 +27,11 @@ It's also recommended to do the installation within a conda environment e.g.:
 
 
 ## Requirements 
-anaconda 3 
-python 3.5 or greater\
+Python 3 is preferred\
 numpy\
 matplotlib\
 six\
 networkx
-
-## Running as Executable
-setup.py installs all the required packages, and creates an executable.  \
-To execute the gsm, run `gsm`. Use `-h` to see the list of command line options.
-Generally, you will need a .xyz file for the coordinates and one of the supported quantum chemistry software packages installed on your system.
-
-## Running as API
-within a python script run `import pygsm` (assuming you've run setup.py).\
 
 
 ## LICENCE Notifications
@@ -49,7 +41,8 @@ Authors: Lee-Ping Wang, Chenchen Song\
 https://github.com/leeping/geomeTRIC/blob/master/LICENSE
 
 
-## Contributors: 
+## Credits: 
 Cody Aldaz (lead author) \
 Prof. Paul Zimmerman \
-Prof. Todd Martinez \
+Prof. Lee-Ping Wang \
+Prof. Todd Martinez
