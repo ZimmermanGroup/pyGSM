@@ -91,7 +91,7 @@ class GSM(object):
 
         opt.add_option(
             key='CONV_gmax',
-            value=0.0005,
+            value=0.001,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold'
@@ -194,6 +194,11 @@ class GSM(object):
         return cls(cls.default_options().set_values(kwargs))
 
 
+    @classmethod
+    def copy_from_options(cls,gsm_obj,reactant,product):
+        new_gsm = cls.from_options(gsm.options.copy().set_values({'reactant':reactant,'product':product}))
+        return new_gsm
+
     def __init__(
             self,
             options,
@@ -246,6 +251,8 @@ class GSM(object):
         self.finder=False   # is this string a finder?
         self.done_growing = False
         self.nclimb=0
+        self.nopt_intermediate=0
+        self.flag_intermediate=False
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
         self.hess_counter = 0   # it is probably good to reset the hessian
@@ -267,10 +274,10 @@ class GSM(object):
             for i,node in enumerate(self.nodes):
                 if node!=None:
                     energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
-            return np.argmax(energies)
+            return int(np.argmax(energies))
         else:
             # make sure TS is not zero or last node
-            return np.argmax(self.energies[1:self.nnodes-1])+1
+            return int(np.argmax(self.energies[1:self.nnodes-1])+1)
 
     @property
     def emax(self):
@@ -741,21 +748,6 @@ class GSM(object):
     
         for n in range(n0+1,nnodes):
             do3 = False
-            #if not find:
-            #    if energies[n+1] > energies[n] and energies[n] > energies[n-1]:
-            #        intic_n = n
-            #        newic_n = n+1
-            #    elif energies[n-1] > energies[n] and energies[n] > energies[n+1]:
-            #        #intic_n = n-1
-            #        #newic_n = n
-            #        intic_n = n
-            #        newic_n = n-1
-            #    else:
-            #        do3 = True
-            #        newic_n = n
-            #        intic_n = n+1
-            #        int2ic_n = n-1
-            #else:
             if n < TSnode:
                 # The order is very important here
                 intic_n = n
@@ -935,7 +927,7 @@ class GSM(object):
 
         ictan,dqmaga = GSM.get_three_way_tangents(nodes,energies)
 
-        print('\n')
+        print()
         if print_level>0:
             print(" ideal progress gained per step",end=' ')
             for n in range(1,nnodes):

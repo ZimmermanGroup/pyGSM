@@ -46,7 +46,7 @@ class MainGSM(GSM):
         iteration=0
         while not isGrown:
             if iteration>max_iters:
-                raise RuntimeError
+                raise Exception(" Ran out of iterations")
             printcool("Starting growth iteration %i" % iteration)
             self.optimize_iteration(max_opt_steps)
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
@@ -116,6 +116,10 @@ class MainGSM(GSM):
             Maximum number of optimization steps per node of string
         rtype : int
             An option to change how GSM optimizes  
+            TODO change this s***
+            0 is no-climb
+            1 is climber
+            2 is finder
             
         '''
         printcool("In opt_iters")
@@ -126,20 +130,12 @@ class MainGSM(GSM):
         self.newclimbscale=2.
         self.set_finder(rtype)
 
-        # set convergence for nodes
-        if (self.climber or self.finder):
-            factor = 2.5
-        else: 
-            factor = 1.
-        for i in range(self.nnodes):
-            if self.nodes[i] !=None:
-                self.optimizer[i].conv_grms = self.CONV_TOL*factor
-                self.optimizer[i].conv_gmax = self.options['CONV_gmax']*factor
-                self.optimizer[i].conv_Ediff = self.options['CONV_Ediff']*factor
+
+        isConverged=False
+        oi = 0
 
         # enter loop
-        for oi in range(max_iter):
-
+        while not isConverged:
             printcool("Starting opt iter %i" % oi)
             if self.climb and not self.find: print(" CLIMBING")
             elif self.find: print(" TS SEARCHING")
@@ -148,10 +144,22 @@ class MainGSM(GSM):
             self.pTSnode = self.TSnode
             self.emaxp = self.emax
 
+
+            # => Reparam the String <= #
+            if oi<max_iter:
+                self.reparameterize(nconstraints=nconstraints)
+            else:
+                raise Exception(" Ran out of iterations")
+
+            # store reparam energies
+            print(" V_profile (beginning of iteration): ", end=' ')
+            self.print_energies()
+
             # => Get all tangents 3-way <= #
             self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
            
             # => do opt steps <= #
+            self.set_node_convergence()
             self.optimize_iteration(opt_steps)
 
             print(" V_profile: ", end=' ')
@@ -159,63 +167,17 @@ class MainGSM(GSM):
 
             #TODO resetting
             #TODO special SSM criteria if first opt'd node is too high?
-            if (self.TSnode == self.nnodes-2 or self.TSnode == self.nnodes-3) and (self.climb or self.find):
+            if (self.TSnode == self.nnodes-2 and (self.climb or self.find):
                 printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
-                new_node = GSM.add_node(
-                        self.nodes[self.TSnode],
-                        self.nodes[self.TSnode+1],
-                        stepsize=0.5,
-                        node_id = self.TSnode+1,
-                        )
-                new_node_list = [None]*(self.nnodes+1)
-                new_optimizers = [None]*(self.nnodes+1)
-                for n in range(0,self.TSnode+1):
-                    new_node_list[n] = self.nodes[n]
-                    new_optimizers[n] = self.optimizer[n]
-                new_node_list[self.TSnode+1] = new_node
-                new_optimizers[self.TSnode+1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
-
-                for n in range(self.TSnode+2,self.nnodes+1):
-                    new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
-                    new_optimizers[n] = self.optimizer[n-1]
-                self.nodes = new_node_list
-                self.optimizer = new_optimizers
-                self.nnodes = len(self.nodes)
-                print('New number of nodes %d' % self.nnodes)
-                self.active = [True] * self.nnodes
-                self.active[0] = False
-                self.active[self.nnodes-1] = False
-
-            if (self.TSnode == 1 or self.TSnode==2) and  (self.climb or self.find):
-                printcool("WARNING\n: TS node shouldn't be first or second node for tangent reasons")
-                new_node = GSM.add_node(
-                        self.nodes[self.TSnode-1],
-                        self.nodes[self.TSnode],
-                        stepsize=0.5,
-                        node_id = self.TSnode-1,
-                        )
-                new_node_list = [None]*(self.nnodes+1)
-                new_optimizers = [None]*(self.nnodes+1)
-                for n in range(0,self.TSnode-1):
-                    new_node_list[n] = self.nodes[n]
-                    new_optimizers[n] = self.optimizer[n]
-                new_node_list[self.TSnode-1] = new_node
-                new_optimizers[self.TSnode-1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
-
-                for n in range(self.TSnode,self.nnodes+1):
-                    new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
-                    new_optimizers[n] = self.optimizer[n-1]
-                self.nodes = new_node_list
-                self.optimizer = new_optimizers
-                self.nnodes = len(self.nodes)
-                print('New number of nodes %d' % self.nnodes)
-                self.active = [True] * self.nnodes
-                self.active[0] = False
-                self.active[self.nnodes-1] = False
-
+                self.add_node_after_TS()
+                self.added=True
+            elif self.TSnode == 1 and  (self.climb or self.find):
+                printcool("WARNING\n: TS node shouldn't be first  node for tangent reasons")
+                self.add_node_before_TS()
+                self.added=True
 
             # => find peaks <= #
-            fp = self.find_peaks(2)
+            fp = self.find_peaks('opting')
 
             ts_cgradq = 0.
             if not self.find:
@@ -230,59 +192,19 @@ class MainGSM(GSM):
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
 
             # => Check Convergence <= #
-            if self.is_converged(totalgrad,fp,rtype,ts_cgradq):
-                break
+            isConverged = self.is_converged(totalgrad,fp,rtype,ts_cgradq)
 
             # => set stage <= #
-            form_TS_hess = self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
+            self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
 
-            # => Reparam the String <= #
-            if oi!=max_iter-1:
-                self.reparameterize(nconstraints=nconstraints)
-
-            # store reparam energies
-            print(" V_profile (after reparam): ", end=' ')
-            self.print_energies()
-
-            ## Modify TS Hess if necessary ##
-            # from set stage
-            if form_TS_hess:
-                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                self.modify_TS_Hess()
-                if self.optimizer[self.TSnode].options['DMAX']>0.1:
-                    self.optimizer[self.TSnode].options['DMAX']=0.1
-
-            # opt decided Hess is not good because of overlap
-            elif self.find and not self.optimizer[self.TSnode].maxol_good:
-                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                self.modify_TS_Hess()
-
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 3 or (self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
-                if self.hessrcount<1 and self.pTSnode == self.TSnode:
-                    print(" resetting TS node coords Ut (and Hessian)")
-                    self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                    self.modify_TS_Hess()
-                    self.nhessreset=10
-                    self.hessrcount=1
-                else:
-                    print(" Hessian consistently bad, going back to climb (for 3 iterations)")
-                    self.find=False
-                    #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
-                    self.nclimb=2
-
-            #elif self.find and self.optimizer[self.TSnode].nneg > 1 and ts_gradrms < self.CONV_TOL:
-            #     print(" nneg > 1 and close to converging -- reforming Hessian")                
-            #         self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-            #     self.modify_TS_Hess(self.TSnode)                    
-
-            elif self.find and self.optimizer[self.TSnode].nneg <= 3:
-                self.hessrcount-=1
-                self.hess_counter += 1
+            # Decrement stuff that controls stage
+            if self.climb: 
+                self.nclimb-=1
+            self.nhessreset-=1
+            if self.nopt_intermediate>0:
+                self.nopt_intermediate-=1
 
             if self.pTSnode!=self.TSnode and self.climb:
-                #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy())
-                #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
-
                 if self.climb and not self.find:
                     print(" slowing down climb optimization")
                     self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
@@ -295,20 +217,59 @@ class MainGSM(GSM):
                         self.newclimbscale +=1.
                 elif self.find:
                     self.find = False
+                    self.climb = True
                     self.nclimb=1
                     print(" Find bad, going back to climb")
-                    #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.pTSnode].options.copy().set_values({"Linesearch":"backtrack"}))
-                    #self.optimizer[self.pTSnode] = self.optimizer[0].__class__(self.optimizer[self.TSnode].options.copy())
-                    #self.self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                    #self.modify_TS_Hess(self.TSnode)
+
+            # opt decided Hess is not good because of overlap
+            if self.find and not self.optimizer[self.TSnode].maxol_good:
+                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+                self.modify_TS_Hess()
+            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 5 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
+                if self.hessrcount<1 and self.pTSnode == self.TSnode:
+                    print(" resetting TS node coords Ut (and Hessian)")
+                    self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+                    self.modify_TS_Hess()
+                    self.nhessreset=10
+                    self.hessrcount=1
+                else:
+                    print(" Hessian consistently bad, going back to climb (for 3 iterations)")
+                    self.find=False
+                    self.nclimb=2
+            elif self.find and self.optimizer[self.TSnode].nneg <= 3:
+                self.hessrcount-=1
+                self.hess_counter += 1
+
+            # => Check if intermediate exists 
+            if self.has_intermediate() and rtype>0:
+                # Go Back to optimization for three steps, if intermediate still exists exit
+                if not self.flag_intermediate:
+                    # Turn on the flag to do optimization
+                    self.nopt_intermediate=3
+                    self.climb=False
+                    self.find=False
+                    self.flag_intermediate=True
+                if self.nopt_intermediate==0 and self.flag_intermediate:
+                    self.endearly=True
+                    isConverged=True
+                    self.tscontinue=False
+            elif self.flag_intermediate:
+                print(" Wow the intermediate disappeared, safe to turn off flag?")
+                self.flag_intermediate=False
+
+            # Check if allup or alldown
+            energies = np.array(self.energies)
+            if np.all(energies[1:]+0.5 >= energies[:-1]) or np.all(energies[1:]-0.5<=energies[:-1]) and (self.climber or self.finder):
+                rtype=0
+                self.climber=self.finder=self.find=self.climb=False
 
             # => write Convergence to file <= #
             filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi)
             write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
 
             #TODO prints tgrads and jobGradCount
-            print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
-            print('\n')
+            print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}\n".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
+            oi += 1
 
         #TODO Optimize TS node to a finer convergence
         #if rtype==2:
@@ -323,8 +284,6 @@ class MainGSM(GSM):
         '''
         Refresh the DLC coordinates for the string
         '''
-        energies = self.energies
-        TSnode = self.TSnode
 
         if not self.done_growing:
             #TODO
@@ -332,16 +291,17 @@ class MainGSM(GSM):
                 if self.nodes[n] is  not None:
                     self.nodes[n].update_coordinate_basis(self.ictan[n])
         else:
-            
-            for n in range(1,self.nnodes-1):
-                # don't update tsnode coord basis 
-                if n!=TSnode or (n==TSnode and update_TS): 
+            if self.find or self.climb:            
+                energies = self.energies
+                TSnode = self.TSnode
+                for n in range(1,self.nnodes-1):
+                    # don't update tsnode coord basis 
+                    if n!=TSnode or (n==TSnode and update_TS): 
+                        self.nodes[n].update_coordinate_basis(self.ictan[n])
+            else:
+                for n in range(1,self.nnodes-1):
                     self.nodes[n].update_coordinate_basis(self.ictan[n])
-                    # update newic coordinate basis
-                    #self.newic.xyz = self.nodes[n].xyz
-                    #Vecs = self.newic.update_coordinate_basis(self.ictan[n])
-                    #self.nodes[n].coord_basis = Vecs
-        
+
 
     def optimize_iteration(self,opt_steps):
         '''
@@ -384,8 +344,9 @@ class MainGSM(GSM):
                             )
 
         if self.__class__.__name__=="SE-GSM" and self.done_growing:
-            fp = self.find_peaks(2)
+            fp = self.find_peaks('opting')
             if self.energies[self.nnodes-1]>self.energies[self.nnodes-2] and fp>0 and self.nodes[self.nnodes-1].gradrms>self.CONV_TOL:
+                printcool('Last node is not a minimum, Might need to verify that the last node is a minimum')
                 path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nnodes-1))
                 self.optimizer[self.nnodes-1].optimize(
                         molecule=self.nodes[self.nnodes-1],
@@ -474,48 +435,46 @@ class MainGSM(GSM):
     # Refactor this code!
     # TODO remove return form_TS hess  3/2021
     def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
-        form_TS_hess=False
 
-        sum_conv_tol = np.sum([self.optimizer[n].conv_grms for n in range(1,self.nnodes-1)])+ 0.0005
+        # checking sum gradrms is not good because if one node is converged a lot while others a re not this is bad
+        #sum_conv_tol = np.sum([self.optimizer[n].conv_grms*1.05 for n in range(1,self.nnodes-1)])
+        all_converged = all([ self.nodes[n].gradrms < self.CONV_TOL *1.1 for n in range(1,self.nnodes-1) ])
+        all_converged_climb = all([ self.nodes[n].gradrms < self.CONV_TOL  for n in range(1,self.nnodes-1) ])
 
         #TODO totalgrad is not a good criteria for large systems
-        if (totalgrad < 0.15 or sumgradrms<sum_conv_tol or ts_cgradq < 0.01)  and fp>0 and self.dE_iter < 1.: # extra criterion in og-gsm for added
+        if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 1.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
-       
-                # set to beales
-                #self.optimizer[self.TSnode] = beales_cg(self.optimizer[self.TSnode].options.copy().set_values({"Linesearch":"backtrack"}))
-                #self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
-
                 # overwrite this here just in case TSnode changed wont cause slow down climb  
                 self.pTSnode = self.TSnode
 
-            elif (self.climb and not self.find and self.finder and self.nclimb<1 and
-                    ((totalgrad<0.2 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.01) or #
-                    (totalgrad<0.1 and ts_gradrms<self.options['CONV_TOL']*10. and ts_cgradq<0.02) or  #
-                    (sumgradrms< sum_conv_tol) or
-                    (ts_gradrms<self.options['CONV_TOL']*5.)  #  used to be 5
+            # TODO deserves to be rethought 3/2021
+            elif (self.climb and not self.find and self.finder and self.nclimb<1 and not self.added and
+                    ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or #  I hate totalgrad 
+                    (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or  #
+                    (all_converged_climb) or
+                    (ts_gradrms<self.CONV_TOL*5.)  #  used to be 5
                     )) and self.dE_iter<1. :
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
-                form_TS_hess=True
+
+                # Modify TS Hessian
+                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+                self.modify_TS_Hess()
+
+                if self.optimizer[self.TSnode].options['DMAX']>0.1:
+                    self.optimizer[self.TSnode].options['DMAX']=0.1
                 self.optimizer[self.TSnode] = eigenvector_follow(self.optimizer[self.TSnode].options.copy())
                 print(type(self.optimizer[self.TSnode]))
                 self.optimizer[self.TSnode].options['SCALEQN'] = 1.
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
-            if self.climb: 
-                self.nclimb-=1
 
-            #for n in range(1,self.nnodes-1):
-            #    self.active[n]=True
-            #    self.optimizer[n].options['OPTTHRESH']=self.options['CONV_TOL']*2
-            self.nhessreset-=1
 
-        return form_TS_hess
+        return
 
 
     def add_GSM_nodeR(self,newnodes=1):
@@ -616,10 +575,9 @@ class MainGSM(GSM):
         '''
         Reparameterize the string
         '''
-        print(self.interp_method)
         if self.interp_method == 'DLC':
             print('reparameterizing')
-            self.ic_reparam(nconstraints=nconstraints)
+            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=rtype>0,ic_reparam_steps=ic_reparam_steps)
         elif self.interp_method == 'Geodesic':
              self.geodesic_reparam()
         return
@@ -770,7 +728,7 @@ class MainGSM(GSM):
         TSnode = self.TSnode
         # a variable to determine how many time since last modify
         self.hess_counter = 0
-        self.TS_E_0 = self.energies[self.TSnode]
+        self.TS_E_0 = self.energies[TSnode]
 
         E0 = self.energies[TSnode]/GSM.units.KCAL_MOL_PER_AU
         Em1 = self.energies[TSnode-1]/GSM.units.KCAL_MOL_PER_AU
@@ -852,15 +810,18 @@ class MainGSM(GSM):
         exsteps=1
         tsnode = int(self.TSnode)
 
-        if (self.find) and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
+        if self.find and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-            self.optimizer[n].conv_grms = self.options['CONV_TOL']      # TODO this is not perfect here
+            self.optimizer[n].conv_grms = self.CONV_TOL      # TODO this is not perfect here
             self.optimizer[n].conv_gmax = self.options['CONV_gmax']
             self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
-        #if (self.find or (self.climb and self.energies[tsnode]>self.energies[tsnode-1]+5 and self.energies[tsnode]>self.energies[tsnode+1]+5.)) and n==tsnode: #or self.climb
-        #    exsteps=2
-        #    print(" multiplying steps for node %i by %i" % (n,exsteps))
+        elif self.find and n==tsnode and self.energies[tsnode]>self.energies[tsnode-1]*1.25 and self.energies[tsnode]>self.energies[tsnode+1]*1.25: # Can also try self.climb but i hate climbing image 
+            exsteps=2
+            print(" multiplying steps for node %i by %i" % (n,exsteps))
+        elif not self.find and not self.climb and n==tsnode  and self.energies[tsnode]>self.energies[tsnode-1]*1.5 and self.energies[tsnode]>self.energies[tsnode+1]*1.5 and self.climber: 
+            exsteps=2
+            print(" multiplying steps for node %i by %i" % (n,exsteps))
 
         #elif not (self.find and self.climb) and self.energies[tsnode] > 1.75*self.energies[tsnode-1] and self.energies[tsnode] > 1.75*self.energies[tsnode+1] and self.done_growing and n==tsnode:  #or self.climb
         #    exsteps=2
@@ -957,17 +918,19 @@ class MainGSM(GSM):
         return xyz1
 
 
-    #TODO
-    def find_peaks(self,rtype):
+    def find_peaks(self,rtype='opting'):
         '''
         This doesnt actually calculate peaks, it calculates some other thing
         '''
         #rtype 1: growing
         #rtype 2: opting
         #rtype 3: intermediate check
-        if rtype==1:
+        if rtype not in ['growing','opting','intermediate']: raise RuntimeError
+
+        #if rtype==1:
+        if rtype=="growing":
             nnodes=self.nR
-        elif rtype==2 or rtype==3:
+        elif rtype=="opting" or rtype=="intermediate":
             nnodes=self.nnodes
         else:
             raise ValueError("find peaks bad input")
@@ -1016,12 +979,12 @@ class MainGSM(GSM):
         #print "number of peaks is ",npeaks1
         ediff=0.5
         PEAK4_EDIFF = 2.0
-        if rtype==1:
+        if rtype=="growing":
             ediff=1.
-        if rtype==3:
+        if rtype=="intermediate":
             ediff=PEAK4_EDIFF
 
-        if rtype==1:
+        if rtype=="growing":
             nmax = np.argmax(energies[:self.nR])
             emax = float(max(energies[:self.nR]))
         else:
@@ -1040,7 +1003,7 @@ class MainGSM(GSM):
         print(" found %i significant peak(s) TOL %3.2f" %(npeaks,ediff))
 
         #handle dissociative case
-        if rtype==3 and npeaks==1:
+        if rtype=="intermediate" and npeaks==1:
             nextmin=0
             for n in range(found,nnodes-1):
                 if n in minnodes:
@@ -1064,27 +1027,17 @@ class MainGSM(GSM):
         '''
         Check if optimization is converged
         '''
-        TS_conv = self.options['CONV_TOL']
-        #if self.find and self.optimizer[self.TSnode].nneg>1:
-        #    print(" reducing TS convergence because nneg>1")
-        #    TS_conv = self.options['CONV_TOL']/2.
-        self.optimizer[self.TSnode].conv_grms = TS_conv
+        TS_conv = self.CONV_TOL
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
         if (rtype == 2 and self.find):
             return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
         elif rtype==1 and self.climb:
-            return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2
+            return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.CONV_TOL  and self.dE_iter < 0.2
 
         elif not self.climber and not self.finder:
             print(" CONV_TOL=%.4f" %self.CONV_TOL)
             return all([self.optimizer[n].converged for n in range(self.nnodes)])
-
-        # => Check if intermediate exists 
-        if self.has_intermediate():
-            self.endearly=True #bools
-            self.tscontinue=False
-            return True
 
 
         return False
@@ -1195,11 +1148,83 @@ class MainGSM(GSM):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
 
+        self.ictan,self.dqmaga = self.get_tangents(self.nodes)
+        self.refresh_coordinates()
         print(" setting all interior nodes to active")
         for n in range(1,self.nnodes-1):
             self.active[n]=True
-            self.optimizer[n].conv_grms=self.options['CONV_TOL']*2.5
+            self.optimizer[n].conv_grms=self.CONV_TOL*2.5
             self.optimizer[n].options['DMAX'] = 0.05
 
-
         return
+
+    def add_node_before_TS(self):
+        '''
+        '''
+        new_node = GSM.add_node(
+                self.nodes[self.TSnode-1],
+                self.nodes[self.TSnode],
+                stepsize=0.5,
+                node_id = self.TSnode-1,
+                )
+        new_node_list = [None]*(self.nnodes+1)
+        new_optimizers = [None]*(self.nnodes+1)
+        for n in range(0,self.TSnode-1):
+            new_node_list[n] = self.nodes[n]
+            new_optimizers[n] = self.optimizer[n]
+        new_node_list[self.TSnode-1] = new_node
+        new_optimizers[self.TSnode-1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
+
+        for n in range(self.TSnode,self.nnodes+1):
+            new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
+            new_optimizers[n] = self.optimizer[n-1]
+        self.nodes = new_node_list
+        self.optimizer = new_optimizers
+        self.nnodes = len(self.nodes)
+        print(' New number of nodes %d' % self.nnodes)
+        self.active = [True] * self.nnodes
+        self.active[0] = False
+        self.active[self.nnodes-1] = False
+
+    def add_node_after_TS(self):
+        '''
+        '''
+        new_node = GSM.add_node(
+                self.nodes[self.TSnode],
+                self.nodes[self.TSnode+1],
+                stepsize=0.5,
+                node_id = self.TSnode+1,
+                )
+        new_node_list = [None]*(self.nnodes+1)
+        new_optimizers = [None]*(self.nnodes+1)
+        for n in range(0,self.TSnode+1):
+            new_node_list[n] = self.nodes[n]
+            new_optimizers[n] = self.optimizer[n]
+        new_node_list[self.TSnode+1] = new_node
+        new_optimizers[self.TSnode+1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
+
+        for n in range(self.TSnode+2,self.nnodes+1):
+            new_node_list[n] = Molecule.copy_from_options(MoleculeA = self.nodes[n-1], new_node_id = n)
+            new_optimizers[n] = self.optimizer[n-1]
+        self.nodes = new_node_list
+        self.optimizer = new_optimizers
+        self.nnodes = len(self.nodes)
+        print(' New number of nodes %d' % self.nnodes)
+        self.active = [True] * self.nnodes
+        self.active[0] = False
+        self.active[self.nnodes-1] = False
+
+
+    def set_node_convergence(self):
+        ''' set convergence for nodes
+        '''
+        if (self.climber or self.finder):
+            factor = 2.5
+        else: 
+            factor = 1.
+        for i in range(self.nnodes):
+            if self.nodes[i] !=None:
+                self.optimizer[i].conv_grms = self.CONV_TOL*factor
+                self.optimizer[i].conv_gmax = self.options['CONV_gmax']*factor
+                self.optimizer[i].conv_Ediff = self.options['CONV_Ediff']*factor
+        self.optimizer[self.TSnode].conv_grms = self.CONV_TOL

@@ -354,7 +354,7 @@ class SE_GSM(MainGSM):
         condition1 = (abs(self.nodes[self.nR-1].bdist) <=(1-self.BDIST_RATIO)*abs(self.nodes[0].bdist))
         print(" bdist %.3f" % self.nodes[self.nR-1].bdist)
 
-        fp = self.find_peaks(1)
+        fp = self.find_peaks('growing')
         if self.pastts and self.current_nnodes>3 and condition1: #TODO extra criterion here
             print(" pastts is ",self.pastts)
             if self.TSnode == self.nR-1:
@@ -414,7 +414,7 @@ class SE_GSM(MainGSM):
             self.endearly=True #bools
             return True
         elif self.climb and fp>0:
-            fp=self.find_peaks(2)
+            fp=self.find_peaks('opting')
             if fp>1:
                 rxnocc,wint = self.check_for_reaction()
             if fp >1 and rxnocc and wint<self.nnodes-1:

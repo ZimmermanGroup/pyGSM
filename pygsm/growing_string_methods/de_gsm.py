@@ -56,9 +56,17 @@ class DE_GSM(MainGSM):
             #nifty.printcool("initial ic_reparam")
             self.reparameterize()
             write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+
+            # TODO Can check if there are any intermediates here
+
         else:
-            self.ictan,self.dqmaga = self.get_tangents(self.nodes)
-            self.refresh_coordinates()
+            if self.has_intermediate():
+                try:
+                    self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
+                except Exception as error:
+                    print(" Done optimizing 3 times, checking if intermediate still exists")
+                    if self.has_intermediate():
+                        self.tscontinue=False
 
         if self.tscontinue:
             self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
@@ -67,7 +75,7 @@ class DE_GSM(MainGSM):
             self.end_early=True
         print("Finished GSM!") 
 
-        return self.nnodes,self.energies
+        return 
 
     def add_GSM_nodes(self,newnodes=1):
         if self.current_nnodes+newnodes > self.nnodes:
@@ -94,7 +102,7 @@ class DE_GSM(MainGSM):
 
         for i in range(self.nnodes):
             if self.nodes[i] != None:
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']*2.
+                self.optimizer[i].conv_grms = self.CONV_TOL*2.
         self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
         self.optimizer[nP].conv_grms = self.options['ADD_NODE_TOL']
         print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
@@ -115,32 +123,6 @@ class DE_GSM(MainGSM):
         '''
 
         return self.current_nnodes==self.nnodes
-
-
-    def check_tscontinue(self):
-        tol1=0.5
-        tol2=2.
-        allup=True
-        alldown=True
-        diss=False
-        energies = self.energies
-        nnodes = self.nnodes
-
-        # if allup
-        for n in range(1,nnodes):
-            if energies[n]+tol1<energies[n-1]:
-                allup=False
-                break
-
-        # alldown
-        for n in range(1,nnodes-1):
-            if energies[n+1]+tol1>energies[n]:
-                alldown=False
-                break
-        
-        if allup or alldown:
-            self.tscontinue=False
-        return
 
 
     def grow_nodes(self):
