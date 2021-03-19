@@ -144,19 +144,13 @@ class MainGSM(GSM):
             self.pTSnode = self.TSnode
             self.emaxp = self.emax
 
-
-            # => Reparam the String <= #
-            if oi<max_iter:
-                self.reparameterize(nconstraints=nconstraints)
-            else:
-                raise Exception(" Ran out of iterations")
-
             # store reparam energies
             print(" V_profile (beginning of iteration): ", end=' ')
             self.print_energies()
 
             # => Get all tangents 3-way <= #
             self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+            self.refresh_coordinates()
            
             # => do opt steps <= #
             self.set_node_convergence()
@@ -167,14 +161,16 @@ class MainGSM(GSM):
 
             #TODO resetting
             #TODO special SSM criteria if first opt'd node is too high?
-            if (self.TSnode == self.nnodes-2 and (self.climb or self.find):
+            if self.TSnode == self.nnodes-2 and (self.climb or self.find):
                 printcool("WARNING\n: TS node shouldn't be second to last node for tangent reasons")
                 self.add_node_after_TS()
-                self.added=True
+                added=True
             elif self.TSnode == 1 and  (self.climb or self.find):
                 printcool("WARNING\n: TS node shouldn't be first  node for tangent reasons")
                 self.add_node_before_TS()
-                self.added=True
+                added=True
+            else:
+                added=False
 
             # => find peaks <= #
             fp = self.find_peaks('opting')
@@ -193,52 +189,6 @@ class MainGSM(GSM):
 
             # => Check Convergence <= #
             isConverged = self.is_converged(totalgrad,fp,rtype,ts_cgradq)
-
-            # => set stage <= #
-            self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
-
-            # Decrement stuff that controls stage
-            if self.climb: 
-                self.nclimb-=1
-            self.nhessreset-=1
-            if self.nopt_intermediate>0:
-                self.nopt_intermediate-=1
-
-            if self.pTSnode!=self.TSnode and self.climb:
-                if self.climb and not self.find:
-                    print(" slowing down climb optimization")
-                    self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
-                    self.optimizer[self.TSnode].options['SCALEQN'] = 2.
-                    if self.optimizer[self.TSnode].SCALE_CLIMB <5.:
-                        self.optimizer[self.TSnode].SCALE_CLIMB +=1.
-                    self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
-                    self.ts_exsteps=1
-                    if self.newclimbscale<5.0:
-                        self.newclimbscale +=1.
-                elif self.find:
-                    self.find = False
-                    self.climb = True
-                    self.nclimb=1
-                    print(" Find bad, going back to climb")
-
-            # opt decided Hess is not good because of overlap
-            if self.find and not self.optimizer[self.TSnode].maxol_good:
-                self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                self.modify_TS_Hess()
-            elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 5 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
-                if self.hessrcount<1 and self.pTSnode == self.TSnode:
-                    print(" resetting TS node coords Ut (and Hessian)")
-                    self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
-                    self.modify_TS_Hess()
-                    self.nhessreset=10
-                    self.hessrcount=1
-                else:
-                    print(" Hessian consistently bad, going back to climb (for 3 iterations)")
-                    self.find=False
-                    self.nclimb=2
-            elif self.find and self.optimizer[self.TSnode].nneg <= 3:
-                self.hessrcount-=1
-                self.hess_counter += 1
 
             # => Check if intermediate exists 
             if self.has_intermediate() and rtype>0:
@@ -262,6 +212,42 @@ class MainGSM(GSM):
             if np.all(energies[1:]+0.5 >= energies[:-1]) or np.all(energies[1:]-0.5<=energies[:-1]) and (self.climber or self.finder):
                 rtype=0
                 self.climber=self.finder=self.find=self.climb=False
+                self.CONV_TOL=self.CONV_TOL*2
+
+            # => set stage <= #
+            stage_changed=self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
+
+            if not stage_changed:
+                # Decrement stuff that controls stage
+                if self.climb: 
+                    self.nclimb-=1
+                self.nhessreset-=1
+                if self.nopt_intermediate>0:
+                    self.nopt_intermediate-=1
+
+                if self.pTSnode!=self.TSnode and self.climb:
+                    print("TS node changed after opting")
+                    self.slow_down_climb()
+                    self.pTSnode=self.TSnode
+
+                # opt decided Hess is not good because of overlap
+                if self.find and (not self.optimizer[self.TSnode].maxol_good or added):
+                    self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+                    self.modify_TS_Hess()
+                elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 5 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
+                    if self.hessrcount<1 and self.pTSnode == self.TSnode:
+                        print(" resetting TS node coords Ut (and Hessian)")
+                        self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+                        self.modify_TS_Hess()
+                        self.nhessreset=10
+                        self.hessrcount=1
+                    else:
+                        print(" Hessian consistently bad, going back to climb (for 3 iterations)")
+                        self.find=False
+                        self.nclimb=2
+                elif self.find and self.optimizer[self.TSnode].nneg <= 3:
+                    self.hessrcount-=1
+                    self.hess_counter += 1
 
             # => write Convergence to file <= #
             filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi)
@@ -270,6 +256,16 @@ class MainGSM(GSM):
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}\n".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
             oi += 1
+
+            # => Reparam the String <= #
+            if oi<max_iter:
+                self.reparameterize(nconstraints=nconstraints)
+                if self.pTSnode!=self.TSnode and self.climb:
+                    print("TS node changed after reparameterizing")
+                    self.slow_down_climb()
+            else:
+                raise Exception(" Ran out of iterations")
+
 
         #TODO Optimize TS node to a finer convergence
         #if rtype==2:
@@ -438,20 +434,22 @@ class MainGSM(GSM):
 
         # checking sum gradrms is not good because if one node is converged a lot while others a re not this is bad
         #sum_conv_tol = np.sum([self.optimizer[n].conv_grms*1.05 for n in range(1,self.nnodes-1)])
-        all_converged = all([ self.nodes[n].gradrms < self.CONV_TOL *1.1 for n in range(1,self.nnodes-1) ])
+        all_converged = all([ self.nodes[n].gradrms < self.CONV_TOL *1.5 for n in range(1,self.nnodes-1) ])
         all_converged_climb = all([ self.nodes[n].gradrms < self.CONV_TOL  for n in range(1,self.nnodes-1) ])
+        stage_changed=False
 
         #TODO totalgrad is not a good criteria for large systems
-        if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 1.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
+        if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 2.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 # overwrite this here just in case TSnode changed wont cause slow down climb  
                 self.pTSnode = self.TSnode
+                stage_changed=True
 
             # TODO deserves to be rethought 3/2021
-            elif (self.climb and not self.find and self.finder and self.nclimb<1 and not self.added and
+            elif (self.climb and not self.find and self.finder and self.nclimb<1  and
                     ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or #  I hate totalgrad 
                     (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or  #
                     (all_converged_climb) or
@@ -472,9 +470,9 @@ class MainGSM(GSM):
                 self.optimizer[self.TSnode].options['SCALEQN'] = 1.
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
+                stage_changed=True
 
-
-        return
+        return stage_changed
 
 
     def add_GSM_nodeR(self,newnodes=1):
@@ -571,13 +569,13 @@ class MainGSM(GSM):
         return
 
 
-    def reparameterize(self,ic_reparam_steps=8,n0=0,nconstraints=1,rtype=0):
+    def reparameterize(self,ic_reparam_steps=8,n0=0,nconstraints=1):
         '''
         Reparameterize the string
         '''
         if self.interp_method == 'DLC':
             print('reparameterizing')
-            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=rtype>0,ic_reparam_steps=ic_reparam_steps)
+            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=(self.climb or self.find),ic_reparam_steps=ic_reparam_steps)
         elif self.interp_method == 'Geodesic':
              self.geodesic_reparam()
         return
@@ -620,7 +618,7 @@ class MainGSM(GSM):
         emax = -1000 # And this?
 
         if self.current_nnodes==self.nnodes:
-            self.ic_reparam(4)
+            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=False,ic_reparam_steps=8)
             return
 
         for i in range(ic_reparam_steps):
@@ -813,9 +811,6 @@ class MainGSM(GSM):
         if self.find and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
-            self.optimizer[n].conv_grms = self.CONV_TOL      # TODO this is not perfect here
-            self.optimizer[n].conv_gmax = self.options['CONV_gmax']
-            self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
         elif self.find and n==tsnode and self.energies[tsnode]>self.energies[tsnode-1]*1.25 and self.energies[tsnode]>self.energies[tsnode+1]*1.25: # Can also try self.climb but i hate climbing image 
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
@@ -1085,7 +1080,7 @@ class MainGSM(GSM):
         return len(potential_min)>0            
 
 
-    def setup_from_geometries(self,input_geoms,reparametrize=False,restart_energies=True):
+    def setup_from_geometries(self,input_geoms,reparametrize=True,restart_energies=True):
         '''
         Restart
         '''
@@ -1126,11 +1121,6 @@ class MainGSM(GSM):
             #self.nodes[struct].PES.dE = dE[struct]
         self.nnodes=self.nR=nstructs
 
-        if reparametrize:
-            printcool("Reparametrizing")
-            self.reparameterize(ic_reparam_steps=8)
-            write_xyz_files('grown_string1_{:03}.xyz'.format(self.ID))
-
         if restart_energies:
             # initial energy
             self.nodes[0].V0 = self.nodes[0].energy 
@@ -1147,6 +1137,11 @@ class MainGSM(GSM):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
+
+        if reparametrize:
+            printcool("Reparametrizing")
+            self.reparameterize(ic_reparam_steps=8)
+            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         self.ictan,self.dqmaga = self.get_tangents(self.nodes)
         self.refresh_coordinates()
@@ -1218,13 +1213,32 @@ class MainGSM(GSM):
     def set_node_convergence(self):
         ''' set convergence for nodes
         '''
-        if (self.climber or self.finder):
-            factor = 2.5
-        else: 
-            factor = 1.
-        for i in range(self.nnodes):
-            if self.nodes[i] !=None:
-                self.optimizer[i].conv_grms = self.CONV_TOL*factor
-                self.optimizer[i].conv_gmax = self.options['CONV_gmax']*factor
-                self.optimizer[i].conv_Ediff = self.options['CONV_Ediff']*factor
-        self.optimizer[self.TSnode].conv_grms = self.CONV_TOL
+
+        factor = 2.5 if (self.climber or self.finder) else 1.
+        for n in range(1,self.nnodes-1):
+            if self.nodes[n] !=None:
+                self.optimizer[n].conv_grms = self.CONV_TOL*factor
+                self.optimizer[n].conv_gmax = self.options['CONV_gmax']*factor
+                self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']*factor
+                if n==self.TSnode and (self.climb or self.find):
+                    self.optimizer[n].conv_grms = self.CONV_TOL     
+                    self.optimizer[n].conv_gmax = self.options['CONV_gmax']
+                    self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
+
+
+    def slow_down_climb(self):
+        if self.climb and not self.find:
+            print(" slowing down climb optimization")
+            self.optimizer[self.TSnode].options['DMAX'] /= self.newclimbscale
+            self.optimizer[self.TSnode].options['SCALEQN'] = 2.
+            if self.optimizer[self.TSnode].SCALE_CLIMB <5.:
+                self.optimizer[self.TSnode].SCALE_CLIMB +=1.
+            self.optimizer[self.pTSnode].options['SCALEQN'] = 1.
+            self.ts_exsteps=1
+            if self.newclimbscale<5.0:
+                self.newclimbscale +=1.
+        elif self.find:
+            self.find = False
+            self.climb = True
+            self.nclimb=1
+            print(" Find bad, going back to climb")
