@@ -60,16 +60,20 @@ class DE_GSM(MainGSM):
             # TODO Can check if there are any intermediates here
 
         else:
-            if self.has_intermediate():
+            if self.has_intermediate(self.noise):
                 try:
                     self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
                 except Exception as error:
                     print(" Done optimizing 3 times, checking if intermediate still exists")
-                    if self.has_intermediate():
+                    if self.has_intermediate(self.noise):
                         self.tscontinue=False
 
         if self.tscontinue:
-            self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
+            try:
+                self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
+            except Exception as error:
+                if str(error) == "Ran out of iterations":
+                    print(error)
         else:
             print("Exiting early")
             self.end_early=True

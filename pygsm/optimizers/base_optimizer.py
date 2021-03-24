@@ -234,6 +234,7 @@ class base_optimizer(object):
 
         # Converged
         self.converged=False
+        self.check_only_grad_converged=False
 
         return
 
@@ -364,7 +365,7 @@ class base_optimizer(object):
         if opt_type=="CLIMB": 
             gts = np.dot(g.T,molecule.constraints[:,0])
             #stepsize=np.linalg.norm(constraint_steps)
-            max_step = 0.2/self.SCALE_CLIMB
+            max_step = 0.05/self.SCALE_CLIMB
             if gts > np.abs(max_step):
                 gts = np.sign(gts)*max_step
                 #constraint_steps = constraint_steps*max_step/stepsize
