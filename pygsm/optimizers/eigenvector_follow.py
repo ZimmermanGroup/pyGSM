@@ -37,6 +37,15 @@ class eigenvector_follow(base_optimizer):
         energies=[]
         geoms.append(molecule.geometry)
         energies.append(molecule.energy-refE)
+        self.converged=False
+
+        if self.check_only_grad_converged:
+            if molecule.gradrms < self.conv_grms:
+                self.converged=True
+                return geoms,energies
+            else:
+                self.check_only_grad_converged=False
+
 
         # stash/initialize some useful attributes
         self.check_inputs(molecule,opt_type,ictan)
@@ -225,7 +234,6 @@ class eigenvector_follow(base_optimizer):
             	xnorm = 1.0
 
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
-            self.converged=False
 
             #TODO turn back on conv_DE
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:

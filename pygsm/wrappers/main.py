@@ -160,6 +160,8 @@ def main():
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
+    if args.restart_file:
+        geoms = manage_xyz.read_molden_geoms(args.restart_file)
 
     inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)]
     if inpfileq['PES_type']!="PES":
@@ -550,8 +552,7 @@ def main():
    
     if args.restart_file is not None:
         #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
-        geometries = manage_xyz.read_molden_geoms(args.restart_file)
-        gsm.setup_from_geometries(geometries,reparametrize=args.reparametrize)
+        gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

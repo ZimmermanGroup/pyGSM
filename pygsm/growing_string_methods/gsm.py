@@ -91,7 +91,7 @@ class GSM(object):
 
         opt.add_option(
             key='CONV_gmax',
-            value=0.0005,
+            value=0.001,
             required=False,
             allowed_types=[float],
             doc='Convergence threshold'
@@ -194,6 +194,11 @@ class GSM(object):
         return cls(cls.default_options().set_values(kwargs))
 
 
+    @classmethod
+    def copy_from_options(cls,gsm_obj,reactant,product):
+        new_gsm = cls.from_options(gsm.options.copy().set_values({'reactant':reactant,'product':product}))
+        return new_gsm
+
     def __init__(
             self,
             options,
@@ -246,6 +251,8 @@ class GSM(object):
         self.finder=False   # is this string a finder?
         self.done_growing = False
         self.nclimb=0
+        self.nopt_intermediate=0
+        self.flag_intermediate=False
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
         self.hess_counter = 0   # it is probably good to reset the hessian
@@ -267,10 +274,10 @@ class GSM(object):
             for i,node in enumerate(self.nodes):
                 if node!=None:
                     energies[i] = (node.PES.PES1.energy + node.PES.PES2.energy)/2.
-            return np.argmax(energies)
+            return int(np.argmax(energies))
         else:
             # make sure TS is not zero or last node
-            return np.argmax(self.energies[1:self.nnodes-1])+1
+            return int(np.argmax(self.energies[1:self.nnodes-1])+1)
 
     @property
     def emax(self):
@@ -529,7 +536,10 @@ class GSM(object):
            
             PMDiff = np.zeros(node2.num_primitives)
             for k,prim in enumerate(node2.primitive_internal_coordinates):
-                PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
+                if type(prim) is Distance:
+                    PMDiff[k] = 2.5 *prim.calcDiff(node2.xyz,node1.xyz)
+                else:
+                    PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
     
             return np.reshape(PMDiff,(-1,1)),None
         else:
@@ -671,7 +681,6 @@ class GSM(object):
         '''
         nnodes = len(nodes)
         dqmaga = [0.]*nnodes
-        dqa = np.zeros((nnodes+1,nnodes))
         ictan = [[]]*nnodes
         
         for n in range(n0+1,nnodes):
@@ -698,8 +707,8 @@ class GSM(object):
             #        prim_constraint[index] *= 2.5
             #dqmaga[n] = float(np.dot(prim_constraint.T,ictan0))
             #dqmaga[n] = float(np.sqrt(dqmaga[n]))
-        if dqmaga[n]<0.:
-            raise RuntimeError
+            if dqmaga[n]<0.:
+                raise RuntimeError
     
         # TEMPORORARY parallel idea 
         #ictan = [0.]
@@ -739,27 +748,19 @@ class GSM(object):
             print("** Setting the middle of the string to be TS node to get proper directions **")
             TSnode = nnodes//2
     
-        for n in range(n0+1,nnodes):
+        for n in range(n0,nnodes):
             do3 = False
-            #if not find:
-            #    if energies[n+1] > energies[n] and energies[n] > energies[n-1]:
-            #        intic_n = n
-            #        newic_n = n+1
-            #    elif energies[n-1] > energies[n] and energies[n] > energies[n+1]:
-            #        #intic_n = n-1
-            #        #newic_n = n
-            #        intic_n = n
-            #        newic_n = n-1
-            #    else:
-            #        do3 = True
-            #        newic_n = n
-            #        intic_n = n+1
-            #        int2ic_n = n-1
-            #else:
+            print(f'getting tan[{n}]')
             if n < TSnode:
                 # The order is very important here
-                intic_n = n
-                newic_n = n+1
+                # the way it should be ;(
+                intic_n = n+1
+                newic_n = n
+
+                # old way
+                #intic_n = n
+                #newic_n = n+1
+
             elif n> TSnode:
                 # The order is very important here
                 intic_n = n
@@ -801,81 +802,77 @@ class GSM(object):
     
         return ictan,dqmaga
     
-    
+   
     @staticmethod
     def ic_reparam(nodes,energies,climbing=False,ic_reparam_steps=8,print_level=1):
         '''
         Reparameterizes the string using Delocalizedin internal coordinatesusing three-way tangents at the TS node
         Only pushes nodes outwards during reparameterization because otherwise too many things change.
-
+    
         Be careful, however, if the path is allup or alldown then this can cause 
-
+    
         Parameters
         ----------
         nodes : list of molecule objects
         energies : list of energies in kcal/mol
         ic_reparam_steps : int max number of reparameterization steps
         print_level : int verbosity
-
+    
         '''
         nifty.printcool("reparametrizing string nodes")
-
+    
         nnodes=len(nodes)
         rpart = np.zeros(nnodes)
         for n in range(1,nnodes):
             rpart[n] = 1./(nnodes-1)
         deltadqs = np.zeros(nnodes)
         TSnode = np.argmax(energies)
-
-        MAXRE = 0.5
-        ictan,orig_dqmaga = GSM.get_three_way_tangents(nodes,energies)
-
-        if (TSnode==nnodes-1) or (TSnode==0):
-            print("********** This will cause a range error in the following for loop *********")
-            print("** Setting the middle of the string to be TS node to get proper directions **")
-            TSnode = nnodes//2
-
-            if climbing:
-                raise RuntimeError(" This shouldn't happen")
-
+        MAXRE = 0.25
+        disprms=100
+    
+    
+        if (TSnode==nnodes-1) or (TSnode==0) and climbing:
+            raise RuntimeError(" This shouldn't happen")
+    
         ideal_progress_gained = np.zeros(nnodes)
-
+    
         if climbing:
             for n in range(1,TSnode):
-                ideal_progress_gained[n] = 1./(TSnode-1)
+                ideal_progress_gained[n] = 1./(TSnode)
             for n in range(TSnode+1,nnodes):
                 ideal_progress_gained[n] = 1./(nnodes-TSnode-1)
             ideal_progress_gained[TSnode]=0.
         else:
             for n in range(1,nnodes):
                 ideal_progress_gained[n] = 1./(nnodes-1)
-
+    
         for i in range(ic_reparam_steps):
-            ictan,dqmaga = GSM.get_three_way_tangents(nodes,energies)
-            totaldqmag = np.sum(dqmaga[1:nnodes])
-
-
+    
+            ictan,dqmaga = GSM.get_tangents(nodes)
+            totaldqmag = np.sum(dqmaga)
+    
             if climbing:
-                progress=np.zeros_like(dqmaga)
-                progress_gained=np.zeros_like(dqmaga)
-                h1dqmag = np.sum(dqmaga[1:TSnode])
+                progress = np.zeros(nnodes)
+                progress_gained=np.zeros(nnodes)
+                h1dqmag = np.sum(dqmaga[:TSnode+1])
                 h2dqmag = np.sum(dqmaga[TSnode+1:nnodes])
                 if print_level>0:
                     print(" h1dqmag, h2dqmag: %3.2f %3.2f" % (h1dqmag,h2dqmag))
-                progress_gained[1:TSnode] = dqmaga[1:TSnode]/h1dqmag
+                progress_gained[:TSnode] = dqmaga[:TSnode]/h1dqmag
                 progress_gained[TSnode+1:] = dqmaga[TSnode+1:]/h2dqmag
-                progress[1:TSnode] = np.cumsum(progress_gained[1:TSnode])
-                progress[TSnode+1:] = np.cumsum(progress_gained[TSnode+1:])
+                progress[:TSnode] = np.cumsum(progress_gained[:TSnode])
+                progress[TSnode:] = np.cumsum(progress_gained[TSnode:])
             else:
                 progress = np.cumsum(dqmaga)/totaldqmag
                 progress_gained = dqmaga/totaldqmag
-
+    
             if i==0:
+                orig_dqmaga = copy(dqmaga)
                 orig_progress_gained = copy(progress_gained)
-
+    
             if climbing:
-                difference=np.zeros_like(dqmaga)
-                for n in range(1,TSnode):
+                difference=np.zeros(nnodes)
+                for n in range(TSnode):
                     difference[n] =  ideal_progress_gained[n] - progress_gained[n]
                     deltadqs[n] = difference[n]*h1dqmag
                 for n in range(TSnode+1,nnodes):
@@ -884,79 +881,147 @@ class GSM(object):
             else:
                 difference = ideal_progress_gained - progress_gained 
                 deltadqs = difference*totaldqmag
-
-
+    
+    
             if print_level>1:
-                print('dqmaga')
-                print(dqmaga[1:],len(dqmaga))
-                print(" progress")
-                print(progress)
-                print(" progress gained per step")
-                print(progress_gained)
-                print('difference')
-                print(difference)
-                print("move each node this much")
-                print(deltadqs)
-
-            # Move left wing outwards only
-            for n in range(1,TSnode+1):
-                # Move along to previous tan
-                if deltadqs[n]<0:
-                    print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
-                    if climbing and n==TSnode:
-                        assert deltadqs[n]==0, "This is wrong."
-                    nodes[n].update_coordinate_basis(ictan[n])
-                    constraint = nodes[n].constraints[:,0]
-                    dq = deltadqs[n]*constraint
-                    nodes[n].update_xyz(dq,verbose=(print_level>1))
-
-            # Move right wing outwards only
-            for n in range(TSnode,nnodes-1):
-                # Move along to next tan
-                if deltadqs[n+1]<0:
-                    if climbing and n==TSnode:
-                        print('skipping TS')
-                        continue
-                    print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n+1]}")
-                    nodes[n].update_coordinate_basis(ictan[n+1])
-                    constraint = nodes[n].constraints[:,0]
-                    dq = -deltadqs[n+1]*constraint
-                    nodes[n].update_xyz(dq,verbose=(print_level>1))
-
+                print(" ideal progress gained per step",end=' ')
+                for n in range(nnodes):
+                    print(" step [{}]: {:1.3f}".format(n,ideal_progress_gained[n]), end=' ')
+                print()
+                print(" path progress                 ",end=' ' )
+                for n in range(nnodes):
+                    print(" step [{}]: {:1.3f}".format(n,progress_gained[n]), end=' ')
+                print()
+                print(" difference                    ",end=' ' )
+                for n in range(nnodes):
+                    print(" step [{}]: {:1.3f}".format(n,difference[n]), end=' ')
+                print()
+                print(" deltadqs                      ",end=' ' )
+                for n in range(nnodes):
+                    print(" step [{}]: {:1.3f}".format(n,deltadqs[n]), end=' ')
+                print()
+    
+    
+            #disprms = np.linalg.norm(deltadqs)/np.sqrt(nnodes-1)
+            lastdisprms=disprms
             disprms = np.linalg.norm(deltadqs)/np.sqrt(nnodes-1)
+            print(" disprms: {:1.3}\n".format(disprms))
+    
             if disprms < 0.02:
                 break
-
-            if print_level>0:
+            elif lastdisprms < disprms:
+                print("structures might be kinked, breaking early")
+                break
+    
+            # Move nodes
+            if climbing:
+                deltadqs[TSnode-2] -= deltadqs[TSnode-1]
+                deltadqs[nnodes-2] -= deltadqs[nnodes-1]
                 for n in range(1,nnodes-1):
-                    print(" disp[{}]: {:1.3}".format(n,deltadqs[n]), end=' ')
-                print()
-                print(" disprms: {:1.3}\n".format(disprms))
-
-        ictan,dqmaga = GSM.get_three_way_tangents(nodes,energies)
-
-        print('\n')
+                    if abs(deltadqs[n])>MAXRE:
+                        deltadqs[n] = np.sign(deltadqs[n])*MAXRE
+                for n in range(TSnode-1):
+                    deltadqs[n+1] += deltadqs[n]
+                for n in range(TSnode+1,nnodes-2):
+                    deltadqs[n+1] += deltadqs[n]
+                for n in range(nnodes):
+                    if abs(deltadqs[n]) > MAXRE:
+                        deltadqs[n] = np.sign(deltadqs[n])*MAXRE
+                for n in range(1,TSnode):
+                    if deltadqs[n]<0:
+                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+                    elif deltadqs[n]>0:
+                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n+1])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+    
+                for n in range(TSnode+1,nnodes-1):
+                    if deltadqs[n]<0:
+                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+                    elif deltadqs[n]>0:
+                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n+1])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+            else:
+                # e.g 11-2 = 9, deltadq[9] -= deltadqs[10]  
+                #deltadqs[nnodes-2] -= totaldqmag*ideal_progress_gained[nnodes-2] - dqmaga[nnodes-1]
+                deltadqs[nnodes-2] -= deltadqs[nnodes-1]
+                for n in range(1,nnodes-1):
+                    if abs(deltadqs[n])>MAXRE:
+                        deltadqs[n] = np.sign(deltadqs[n])*MAXRE
+                for n in range(1,nnodes-2):
+                    deltadqs[n+1] += deltadqs[n]
+                for n in range(1,nnodes-1):
+                    if abs(deltadqs[n]) > MAXRE:
+                        deltadqs[n] = np.sign(deltadqs[n])*MAXRE
+                for n in range(1,nnodes-1):
+                    if deltadqs[n]<0:
+                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+                    elif deltadqs[n]>0:
+                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        nodes[n].update_coordinate_basis(ictan[n+1])
+                        constraint = nodes[n].constraints[:,0]
+                        dq = deltadqs[n]*constraint
+                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+    
+    
+        if climbing:
+            ictan,dqmaga = GSM.get_tangents(nodes)
+            h1dqmag = np.sum(dqmaga[:TSnode+1])
+            h2dqmag = np.sum(dqmaga[TSnode+1:nnodes])
+            if print_level>0:
+                print(" h1dqmag, h2dqmag: %3.2f %3.2f" % (h1dqmag,h2dqmag))
+            progress_gained[:TSnode] = dqmaga[:TSnode]/h1dqmag
+            progress_gained[TSnode+1:] = dqmaga[TSnode+1:]/h2dqmag
+            progress[:TSnode] = np.cumsum(progress_gained[:TSnode])
+            progress[TSnode:] = np.cumsum(progress_gained[TSnode:])
+        else:
+            ictan,dqmaga = GSM.get_tangents(nodes)
+            totaldqmag = np.sum(dqmaga)
+            progress = np.cumsum(dqmaga)/totaldqmag
+            progress_gained = dqmaga/totaldqmag
+        print()
         if print_level>0:
             print(" ideal progress gained per step",end=' ')
-            for n in range(1,nnodes):
-                print(" step [{}]: {:1.3}".format(n,ideal_progress_gained[n]), end=' ')
+            for n in range(nnodes):
+                print(" step [{}]: {:1.3f}".format(n,ideal_progress_gained[n]), end=' ')
             print()
-            print(" original path progress",end=' ' )
-            for n in range(1,nnodes):
-                print(" step [{}]: {:1.3}".format(n,orig_progress_gained[n]), end=' ')
+            print(" original path progress        ",end=' ' )
+            for n in range(nnodes):
+                print(" step [{}]: {:1.3f}".format(n,orig_progress_gained[n]), end=' ')
             print()
-            print(" reparameterized path progress",end=' ')
-            for n in range(1,nnodes):
-                print(" step [{}]: {:1.3}".format(n,progress_gained[n]), end=' ')
+            print(" reparameterized path progress ",end=' ')
+            for n in range(nnodes):
+                print(" step [{}]: {:1.3f}".format(n,progress_gained[n]), end=' ')
             print()
-
+    
+        print(" spacings (begin ic_reparam, steps", end=' ')
+        for n in range(nnodes):
+            print(" {:1.2}".format(orig_dqmaga[n]), end=' ')
+        print()
         print(" spacings (end ic_reparam, steps: {}/{}):".format(i+1,ic_reparam_steps), end=' ')
         for n in range(nnodes):
             print(" {:1.2}".format(dqmaga[n]), end=' ')
         print("\n  disprms: {:1.3}".format(disprms))
-
+    
         return
-   
+
     # TODO move to string utils or delete altogether
     #def get_current_rotation(self,frag,a1,a2):
     #    '''
