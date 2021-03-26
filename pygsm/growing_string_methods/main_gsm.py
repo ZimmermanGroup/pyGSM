@@ -207,7 +207,7 @@ class MainGSM(GSM):
             if np.all(energies[1:]+0.5 >= energies[:-1]) or np.all(energies[1:]-0.5<=energies[:-1]) and (self.climber or self.finder):
                 rtype=0
                 self.climber=self.finder=self.find=self.climb=False
-                self.CONV_TOL=self.CONV_TOL*5
+                self.CONV_TOL=self.options['CONV_TOL']*5
 
             # => set stage <= #
             stage_changed=self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
@@ -266,10 +266,6 @@ class MainGSM(GSM):
 
         #TODO Optimize TS node to a finer convergence
         #if rtype==2:
-
-        filename="opt_converged_{:03d}.xyz".format(self.ID)
-        print(" Printing string to " + filename)
-        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
         return
 
 
@@ -1030,11 +1026,10 @@ class MainGSM(GSM):
         TS_conv = self.CONV_TOL
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-        if (rtype == 2 and self.find):
+        if (self.finder and self.find):
             return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
-        elif rtype==1 and self.climb:
+        elif self.climber and self.climb:
             return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.CONV_TOL  and self.dE_iter < 0.2
-
         elif not self.climber and not self.finder:
             print(" CONV_TOL=%.4f" %self.CONV_TOL)
             return all([self.optimizer[n].converged for n in range(self.nnodes)])

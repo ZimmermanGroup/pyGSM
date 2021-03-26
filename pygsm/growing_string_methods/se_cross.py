@@ -40,7 +40,7 @@ class SE_Cross(SE_GSM):
         self.add_GSM_nodeR()
 
         # grow string
-        self.growth_iters(iters=max_iters,maxopt=opt_steps,nconstraints=1)
+        self.grow_string(max_iters=max_iters,max_opt_steps=opt_steps)
         print(' SE_Cross growth phase over')
         print(' Warning last node still not fully optimized')
 

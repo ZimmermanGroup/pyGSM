@@ -2,7 +2,7 @@ from __future__ import print_function
 
 # standard library imports
 import sys
-from os import path
+import os
 try:
     from io import StringIO
 except:
@@ -27,7 +27,7 @@ class eigenvector_follow(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
-            path=path,
+            path=os.getcwd(),
             ):
 
         #print " refE %5.4f" % refE

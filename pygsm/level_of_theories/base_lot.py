@@ -234,6 +234,9 @@ class Lot(object):
         # pytc? TODO
         self.options['job_data']['lot'] = self.options['job_data'].get('lot',None)
 
+        print(" making folder scratch/{:03}/{}".format(self.ID,self.node_id))
+        os.system('mkdir -p scratch/{:03}/{}'.format(self.ID,self.node_id))
+
     @classmethod
     def from_options(cls,**kwargs):
         """ Returns an instance of this class with default options updated from values in kwargs"""

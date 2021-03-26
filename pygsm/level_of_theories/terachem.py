@@ -86,13 +86,14 @@ class TeraChem(Lot):
         self.file_options.set_active('cphfiter',None,int,'',depend=(self.file_options.hhtda=="yes"),msg='')  # a good value could be 1000
         self.file_options.set_active('cphfalgorithm',None,str,'',depend=(self.file_options.hhtda=="yes"),msg='') # a possible value is inc_diis
         self.file_options.set_active('sphericalbasis','no',str,'',depend=(self.file_options.hhtda=="yes"),msg='')
-        self.file_options.set_active('max_l_in_basis',None,float,'',depend=(self.file_options.sphericalbasis=="yes"),msg='')
+        self.file_options.set_active('max_l_in_basis',None,int,'',depend=(self.file_options.sphericalbasis=="yes"),msg='')
 
         # FON
         self.file_options.set_active('fon','no',str,'',
                 clash=(self.file_options.casscf=="yes"),
                 depend=(self.file_options.casci=="yes" or self.file_options.hhtda=="yes"),
                 msg = 'Unactivated, or cant activate FOMO with CASSCF')
+        self.file_options.set_active('fon_method',None,str,'',depend=(self.file_options.fon=="yes"),msg='')
         self.file_options.set_active('fon_temperature',0.3,float,'',depend=(self.file_options.fon=="yes"),msg='')
 
         # FOMO
@@ -184,8 +185,6 @@ class TeraChem(Lot):
 
         ## DONE setting values ##
         
-        print(" making folder scratch/{:03}/{}".format(self.ID,self.node_id))
-        os.system('mkdir -p scratch/{:03}/{}'.format(self.ID,self.node_id))
 
         self.link_atoms=None
 
@@ -198,8 +197,8 @@ class TeraChem(Lot):
 
         node_id = options.get('node_id',1)
 
-        print(" making folder scratch/{:03}/{}".format(lot.ID,node_id))
-        os.system('mkdir -p scratch/{:03}/{}'.format(lot.ID,node_id))
+        #print(" making folder scratch/{:03}/{}".format(lot.ID,node_id))
+        #os.system('mkdir -p scratch/{:03}/{}'.format(lot.ID,node_id))
 
         file_options = File_Options.copy(lot.file_options)
         options['file_options'] =file_options
@@ -207,7 +206,7 @@ class TeraChem(Lot):
         if node_id != lot.node_id and copy_wavefunction:
             if "casscf" in lot.file_options.ActiveOptions:
                 old_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,lot.node_id)
-                new_path = 'scratch/{}/'.format(lot.ID,node_id)
+                new_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,node_id)
                 copy_file(old_path,new_path)
             else:
                 use_alpha=False
@@ -356,7 +355,7 @@ class TeraChem(Lot):
             self.run(geom,tup[0],None,'energy')
             # make grada all None
             for tup in self.states:
-                self._Gradients[tup] = self.Gradients(None,None)
+                self._Gradients[tup] = self.Gradient(None,None)
         elif self.gradient_states:
             ### Calculate gradient(s) ###
             for tup in self.states:
@@ -411,10 +410,8 @@ class TeraChem(Lot):
             for line in lines:
                 mobj = re.match(r'^\s*(\d+)\s+(\S+)\s+(\S+)', line)
                 if mobj:
-                    print(mobj.groups())
                     if mobj.group(2)=="singlet":
                         tmp.append(float(mobj.group(3)))
-            print(tmp)
         else:
             pattern = re.compile(r'FINAL ENERGY: ([-+]?[0-9]*\.?[0-9]+) a.u.')
             tmp =[]

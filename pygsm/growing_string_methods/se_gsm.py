@@ -163,6 +163,9 @@ class SE_GSM(MainGSM):
             print("Exiting early")
             self.end_early=True
 
+        filename="opt_converged_{:03d}.xyz".format(self.ID)
+        print(" Printing string to " + filename)
+        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
         print("Finished GSM!")  
 
 
