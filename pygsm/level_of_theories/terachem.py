@@ -182,6 +182,10 @@ class TeraChem(Lot):
             self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
                     clash=(self.file_options.casscf or self.file_options.fomo),
                     depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
+        else:
+                self.file_options.set_active('guess','sad',str,doc='',
+                    clash=(self.file_options.casscf or self.file_options.fomo),
+                    msg=' deactivating guess for CASSCF and FOMO')
 
         ## DONE setting values ##
         
@@ -281,11 +285,11 @@ class TeraChem(Lot):
         os.system(cmd)
 
         # Turn on C0 for non-CASSCF calculations after running
-        if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
+        if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions or self.file_options.guess in ["sad","generate"]:
             if mult == 2:
-                self.file_options.set_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.ID,self.node_id),str,'')
+                self.file_options.force_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.ID,self.node_id))
             else:
-                self.file_options.set_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id),str,'')
+                self.file_options.force_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id))
 
         # if QM/MM get link atoms
         if "prmtop" in self.file_options.ActiveOptions and self.link_atoms is None:

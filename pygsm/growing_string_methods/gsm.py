@@ -750,7 +750,7 @@ class GSM(object):
     
         for n in range(n0,nnodes):
             do3 = False
-            print(f'getting tan[{n}]')
+            print('getting tan[{' + str(n) + '}]')
             if n < TSnode:
                 # The order is very important here
                 # the way it should be ;(
@@ -829,13 +829,10 @@ class GSM(object):
         TSnode = np.argmax(energies)
         MAXRE = 0.25
         disprms=100
-    
-    
-        if (TSnode==nnodes-1) or (TSnode==0) and climbing:
+        if ((TSnode==nnodes-1) or (TSnode==0)) and climbing:
             raise RuntimeError(" This shouldn't happen")
     
         ideal_progress_gained = np.zeros(nnodes)
-    
         if climbing:
             for n in range(1,TSnode):
                 ideal_progress_gained[n] = 1./(TSnode)
@@ -929,13 +926,14 @@ class GSM(object):
                         deltadqs[n] = np.sign(deltadqs[n])*MAXRE
                 for n in range(1,TSnode):
                     if deltadqs[n]<0:
-                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint
                         nodes[n].update_xyz(dq,verbose=(print_level>1))
                     elif deltadqs[n]>0:
-                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n+1])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint
@@ -943,13 +941,16 @@ class GSM(object):
     
                 for n in range(TSnode+1,nnodes-1):
                     if deltadqs[n]<0:
-                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint
                         nodes[n].update_xyz(dq,verbose=(print_level>1))
                     elif deltadqs[n]>0:
-                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        #print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n+1])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint
@@ -968,13 +969,15 @@ class GSM(object):
                         deltadqs[n] = np.sign(deltadqs[n])*MAXRE
                 for n in range(1,nnodes-1):
                     if deltadqs[n]<0:
-                        print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint
                         nodes[n].update_xyz(dq,verbose=(print_level>1))
                     elif deltadqs[n]>0:
-                        print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        #print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
+                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
                         nodes[n].update_coordinate_basis(ictan[n+1])
                         constraint = nodes[n].constraints[:,0]
                         dq = deltadqs[n]*constraint

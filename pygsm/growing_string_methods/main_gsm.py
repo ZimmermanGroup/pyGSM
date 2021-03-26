@@ -149,7 +149,7 @@ class MainGSM(GSM):
             self.print_energies()
 
             # => Get all tangents 3-way <= #
-            self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
+            self.get_tangents_opting()
             self.refresh_coordinates()
            
             # => do opt steps <= #
@@ -187,27 +187,28 @@ class MainGSM(GSM):
             # => calculate totalgrad <= #
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
 
-            # => Check Convergence <= #
-            isConverged = self.is_converged(totalgrad,fp,rtype,ts_cgradq)
+            # Check if allup or alldown
+            energies = np.array(self.energies)
+            if (np.all(energies[1:]+0.5 >= energies[:-1]) or np.all(energies[1:]-0.5<=energies[:-1])) and (self.climber or self.finder):
+                printcool(" There is no TS, turning off TS search")
+                rtype=0
+                self.climber=self.finder=self.find=self.climb=False
+                self.CONV_TOL=self.options['CONV_TOL']*5
 
             # => Check if intermediate exists 
-            #if self.has_intermediate(self.noise) and rtype>0 and not (self.climb or self.find):
-            #    printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
-            #    self.endearly=True
-            #    isConverged=True
-            #    self.tscontinue=False
+            if self.has_intermediate(self.noise) and rtype>0 and not (self.climb or self.find):
+                printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
+                self.endearly=True
+                isConverged=True
+                self.tscontinue=False
             #if self.has_intermediate(5) and rtype>0 and (self.climb or self.find):
             #    printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
             #    self.endearly=True
             #    isConverged=True
             #    self.tscontinue=False
 
-            # Check if allup or alldown
-            energies = np.array(self.energies)
-            if np.all(energies[1:]+0.5 >= energies[:-1]) or np.all(energies[1:]-0.5<=energies[:-1]) and (self.climber or self.finder):
-                rtype=0
-                self.climber=self.finder=self.find=self.climb=False
-                self.CONV_TOL=self.options['CONV_TOL']*5
+            # => Check Convergence <= #
+            isConverged = self.is_converged(totalgrad,fp,rtype,ts_cgradq)
 
             # => set stage <= #
             stage_changed=self.set_stage(totalgrad,sum_gradrms,ts_cgradq,ts_gradrms,fp)
@@ -253,7 +254,7 @@ class MainGSM(GSM):
             oi += 1
 
             # => Reparam the String <= #
-            if oi<max_iter:
+            if oi<max_iter and not isConverged:
                 self.reparameterize(nconstraints=nconstraints)
                 self.get_tangents_opting()
                 self.refresh_coordinates()
@@ -1032,7 +1033,7 @@ class MainGSM(GSM):
             return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.CONV_TOL  and self.dE_iter < 0.2
         elif not self.climber and not self.finder:
             print(" CONV_TOL=%.4f" %self.CONV_TOL)
-            return all([self.optimizer[n].converged for n in range(self.nnodes)])
+            return all([self.optimizer[n].converged for n in range(1,self.nnodes-1)])
 
 
         return False

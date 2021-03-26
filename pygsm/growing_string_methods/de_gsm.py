@@ -61,6 +61,7 @@ class DE_GSM(MainGSM):
 
         else:
             if self.has_intermediate(self.noise):
+                printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
                 try:
                     self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
                 except Exception as error:

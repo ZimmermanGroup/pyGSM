@@ -2,7 +2,7 @@ from __future__ import print_function
 
 # standard library imports
 import sys
-from os import path
+import os
 try:
     from io import StringIO
 except:
@@ -42,6 +42,7 @@ class lbfgs(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
+            path=os.getcwd(),
             ):
 
         # stash/initialize some useful attributes
@@ -279,7 +280,7 @@ class lbfgs(base_optimizer):
             if ostep % xyzframerate==0:
                 geoms.append(molecule.geometry)
                 energies.append(molecule.energy-refE)
-                manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
 
             if self.options['print_level']>0:
                 print(" Node: %d Opt step: %d E: %5.4f predE: %5.4f ratio: %1.3f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id,ostep+1,fx-refE,dEpre,ratio,molecule.gradrms,step,self.DMAX))
@@ -304,7 +305,7 @@ class lbfgs(base_optimizer):
                 if ostep % xyzframerate!=0:
                     geoms.append(molecule.geometry)
                     energies.append(molecule.energy-refE)
-                    manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                    manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
                 break
             #print " ########## DONE WITH TOTAL STEP #########"
 
