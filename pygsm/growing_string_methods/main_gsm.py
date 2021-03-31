@@ -195,12 +195,6 @@ class MainGSM(GSM):
                 self.climber=self.finder=self.find=self.climb=False
                 self.CONV_TOL=self.options['CONV_TOL']*5
 
-            # => Check if intermediate exists 
-            if self.has_intermediate(self.noise) and rtype>0 and not (self.climb or self.find):
-                printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
-                self.endearly=True
-                isConverged=True
-                self.tscontinue=False
             #if self.has_intermediate(5) and rtype>0 and (self.climb or self.find):
             #    printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
             #    self.endearly=True
@@ -1009,6 +1003,12 @@ class MainGSM(GSM):
         Check if optimization is converged
         '''
         TS_conv = self.CONV_TOL
+        # => Check if intermediate exists 
+        if self.has_intermediate(self.noise) and rtype>0 and not (self.climb or self.find):
+            printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
+            self.endearly=True
+            self.tscontinue=False
+            return True
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
         if (self.finder and self.find):
