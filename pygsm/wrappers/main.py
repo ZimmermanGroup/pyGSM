@@ -39,7 +39,7 @@ def main():
     parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package (default: %(default)s)",choices=["QChem","Orca","Molpro","PyTC","TeraChemCloud","OpenMM","DFTB","TeraChem","BAGEL","xTB_lot"])
     parser.add_argument('-lot_inp_file',type=str,default=None, help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=False)
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
-    parser.add_argument('-num_nodes',type=int,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
+    parser.add_argument('-num_nodes',type=int,default=11,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
     parser.add_argument('-adiabatic_index',nargs="*",type=int,default=[0],help='Adiabatic index (default: %(default)s)',required=False)
     parser.add_argument('-multiplicity',nargs="*",type=int,default=[1],help='Multiplicity (default: %(default)s)')
@@ -495,8 +495,9 @@ def main():
 
     if args.only_drive:
         for i in range(gsm.nnodes-1):
-            success=gsm.add_GSM_nodeR()
-            if not success:
+            try:
+                gsm.add_GSM_nodeR()
+            except:
                 break
         geoms=[]
         for node in gsm.nodes:
@@ -512,8 +513,8 @@ def main():
     if inpfileq['gsm_type']!='SE_Cross' and (inpfileq['PES_type'] =="Avg_PES" or inpfileq['PES_type']=="Penalty_PES"):
         optimizer.opt_cross = True
 
-    path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,0))
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,0))
         nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
@@ -522,8 +523,8 @@ def main():
            path=path
            )
 
-    path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,args.num_nodes-1))
     if not inpfileq['product_geom_fixed'] and inpfileq['gsm_type']=='DE_GSM':
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,args.num_nodes-1))
         nifty.printcool("PRODUCT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = product,

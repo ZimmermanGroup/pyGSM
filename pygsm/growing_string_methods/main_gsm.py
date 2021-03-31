@@ -300,38 +300,22 @@ class MainGSM(GSM):
 
         refE=self.nodes[0].energy
 
-        if self.use_multiprocessing:
-            cpus = mp.cpu_count()/self.nodes[0].PES.lot.nproc                                  
-            print(" Parallelizing over {} processes".format(cpus))                             
-            out_queue = mp.Queue()
-
-            workers = [ mp.Process(target=mod, args=(self.nodes[n],self.optimizer[n],self.ictan[n],self.mult_steps(n,opt_steps),self.set_opt_type(n),refE,n,s,gp_prim, out_queue) ) for n in range(self.nnodes) if self.nodes[n] and self.active[n] ]
-            
-            for work in workers: work.start()                                                  
-            
-            for work in workers: work.join()                                                   
-            
-            res_lst = []
-            for j in range(len(workers)):
-                res_lst.append(out_queue.get())                                                
-                                             
-        else:
-            for n in range(self.nnodes):
-                if self.nodes[n] and self.active[n]:
-                    print()
-                    path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,n))
-                    printcool("Optimizing node {}".format(n))
-                    opt_type = self.set_opt_type(n)
-                    osteps = self.mult_steps(n,opt_steps)
-                    self.optimizer[n].optimize(
-                            molecule=self.nodes[n],
-                            refE=refE,
-                            opt_type=opt_type,
-                            opt_steps=osteps,
-                            ictan=self.ictan[n],
-                            xyzframerate=1,
-                            path=path,
-                            )
+        for n in range(self.nnodes):
+            if self.nodes[n] and self.active[n]:
+                print()
+                path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,n))
+                printcool("Optimizing node {}".format(n))
+                opt_type = self.set_opt_type(n)
+                osteps = self.mult_steps(n,opt_steps)
+                self.optimizer[n].optimize(
+                        molecule=self.nodes[n],
+                        refE=refE,
+                        opt_type=opt_type,
+                        opt_steps=osteps,
+                        ictan=self.ictan[n],
+                        xyzframerate=1,
+                        path=path,
+                        )
 
         if self.__class__.__name__=="SE-GSM" and self.done_growing:
             fp = self.find_peaks('opting')

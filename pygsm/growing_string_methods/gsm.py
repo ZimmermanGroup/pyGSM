@@ -179,7 +179,7 @@ class GSM(object):
 
         opt.add_option(
                 key='noise',
-                value=1.0,
+                value=5.0,
                 allowed_types=[float],
                 required=False,
                 doc='Noise to check for intermediate',

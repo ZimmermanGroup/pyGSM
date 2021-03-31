@@ -209,6 +209,12 @@ class lbfgs(base_optimizer):
                 self.k = 0
                 self.end =0
                 molecule.newHess=5
+                if self.DMAX <= self.DMIN:
+                    print(" Reached minimum step,exiting")
+                    geoms.append(molecule.geometry)
+                    energies.append(molecule.energy-refE)
+                    break
+
                 self.DMAX = ls['step']/2
                 if self.DMAX < self.DMIN:
                     self.DMAX = self.DMIN
