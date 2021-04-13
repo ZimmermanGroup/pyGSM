@@ -10,10 +10,15 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+from utilities.manage_xyz import write_molden_geoms
 from wrappers import Molecule
-from .base_gsm import Base_Method
+try:
+    from .main_gsm import MainGSM
+except:
+    from main_gsm import MainGSM
 
-class DE_GSM(Base_Method):
+
+class DE_GSM(MainGSM):
 
     def __init__(
             self,
@@ -22,29 +27,11 @@ class DE_GSM(Base_Method):
 
         super(DE_GSM,self).__init__(options)
 
-        #print(" Forming Union of primitive coordinates")
-        #self.nodes[0].coord_obj = self.nodes[0].coord_obj.make_union_primitives(self.nodes[-1].coord_obj,self.nodes[0].xyz)
-
-        #print('coordinates')
-        #print(self.nodes[0].coord_obj.Prims.Internals[:100])
-        #self.nodes[0].form_Primitive_Hessian()
-        #print(" Done forming union")
-        #self.nodes[-1].PES.lot.node_id = self.nnodes-1
-        #self.nodes[-1].coord_obj = self.nodes[0].coord_obj.copy(self.nodes[-1].xyz)
-        #self.nodes[-1].form_Primitive_Hessian()
-
         print(" Assuming primitives are union!")
-        #self.nodes[0].form_Primitive_Hessian()
-        #self.nodes[-1].form_Primitive_Hessian()
-
-        # this tests if the primitives are the same
-        #assert self.nodes[0].coord_obj == self.nodes[-1].coord_obj, "They should be the same."
-
-        #print(" Primitive Internal Coordinates")
-        #print(self.nodes[0].primitive_internal_coordinates)
         print(" number of primitives is", self.nodes[0].num_primitives)
-        #self.set_V0()
 
+
+    #TODO Change rtype to a more meaningful argument name
     def go_gsm(self,max_iters=50,opt_steps=3,rtype=2):
         """
         rtype=2 Find and Climb TS,
@@ -60,30 +47,48 @@ class DE_GSM(Base_Method):
                 self.add_GSM_nodeR(1)
             elif self.growth_direction==2:
                 self.add_GSM_nodeP(1)
-            oi = self.growth_iters(iters=max_iters,maxopt=opt_steps) 
+
+            # Grow String
+            self.grow_string(max_iters=max_iters,max_opt_steps=opt_steps) 
             nifty.printcool("Done Growing the String!!!")
             self.done_growing = True
+
             #nifty.printcool("initial ic_reparam")
-            self.get_tangents_1()
-            self.ic_reparam(ic_reparam_steps=8)
-            self.write_xyz_files('grown_string_{:03}.xyz'.format(self.ID))
+            self.reparameterize()
+            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+
+            # TODO Can check if there are any intermediates here
+
         else:
-            oi=0
-            self.get_tangents_1()
+            if self.has_intermediate(self.noise):
+                printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
+                try:
+                    self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
+                except Exception as error:
+                    print(" Done optimizing 3 times, checking if intermediate still exists")
+                    if self.has_intermediate(self.noise):
+                        self.tscontinue=False
 
         if self.tscontinue:
-            if max_iters-oi>0:
-                opt_iters=max_iters-oi
-                self.opt_iters(max_iter=opt_iters,optsteps=opt_steps,rtype=rtype)
+            try:
+                self.optimize_string(max_iter=max_iters,opt_steps=opt_steps,rtype=rtype)
+            except Exception as error:
+                if str(error) == "Ran out of iterations":
+                    print(error)
+                    self.end_early=True
         else:
             print("Exiting early")
             self.end_early=True
+
+        filename="opt_converged_{:03d}.xyz".format(self.ID)
+        print(" Printing string to " + filename)
+        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
         print("Finished GSM!") 
 
-        return self.nnodes,self.energies
+        return 
 
     def add_GSM_nodes(self,newnodes=1):
-        if self.nn+newnodes > self.nnodes:
+        if self.current_nnodes+newnodes > self.nnodes:
             print("Adding too many nodes, cannot add_GSM_node")
         sign = -1
         for i in range(newnodes):
@@ -107,7 +112,7 @@ class DE_GSM(Base_Method):
 
         for i in range(self.nnodes):
             if self.nodes[i] != None:
-                self.optimizer[i].conv_grms = self.options['CONV_TOL']*2.
+                self.optimizer[i].conv_grms = self.CONV_TOL*2.
         self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
         self.optimizer[nP].conv_grms = self.options['ADD_NODE_TOL']
         print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
@@ -120,68 +125,21 @@ class DE_GSM(Base_Method):
             self.active[nR]=False
         #print(" Here is new active:",self.active)
 
+
     def check_if_grown(self):
-        isDone=False
-        if self.nn==self.nnodes:
-            isDone=True
+        '''
+        Check if the string is grown
+        Returns True if grown 
+        '''
 
-            # TODO should something be done for growthdirection 2?
-            if self.growth_direction==1:
-                print("Setting LOT of last node")
-                self.nodes[-1] = Molecule.copy_from_options(
-                        MoleculeA = self.nodes[-2],
-                        xyz = self.nodes[-1].xyz,
-                        new_node_id = self.nnodes-1
-                        )
+        return self.current_nnodes==self.nnodes
 
-            #TODO 01/13/2021 write a function to determine whether to ts_continue
 
-            # if reactant_geom_fixed and energy decreases from nodes 0 to 1 and 2 
-            # if allup
-            # if all down
+    def grow_nodes(self):
+        '''
+        Grow nodes
+        '''
 
-            tol1=0.5
-            tol2=2.
-            allup=True
-            alldown=True
-            diss=False
-            energies = self.energies
-            nnodes = self.nnodes
-
-            # if allup
-            for n in range(1,nnodes):
-                if energies[n]+tol1<energies[n-1]:
-                    allup=False
-                    break
-
-            # alldown
-            for n in range(1,nnodes-1):
-                if energies[n+1]+tol1>energies[n]:
-                    alldown=False
-                    break
-        
-            # check on dissociative
-            if energies[nnodes-1]>15.0:
-                if nnodes-3>0:
-                    if (abs(energies[nnodes-1]-energies[nnodes-2])<tol2 and
-                    abs(energies[nnodes-2]-energies[nnodes-3])<tol2 and
-                    abs(energies[nnodes-3]-energies[nnodes-4])<tol2):
-                        print(" possible dissociative profile")
-                        diss=True
-
-            # reverse dissociative
-            if ((energies[1] - energies[0]) < tol1 and
-            (energies[2] - energies[1]) < tol1 and
-            (energies[3] - energies[2]) < tol1):
-                diss=True
-        
-            if diss or allup or alldown:
-                self.tscontinue=False
-
-        return isDone
-
-    def check_add_node(self):
-        success=True 
         if self.nodes[self.nR-1].gradrms < self.gaddmax and self.growth_direction!=2:
             if self.nodes[self.nR] == None:
                 self.add_GSM_nodeR()
@@ -190,10 +148,15 @@ class DE_GSM(Base_Method):
             if self.nodes[-self.nP-1] == None:
                 self.add_GSM_nodeP()
                 print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
-        return success
+        return
 
 
-    def make_nlist(self):
+    def make_difference_node_list(self):
+        '''
+        Returns ncurrent and a list of indices that can be iterated over to produce
+        tangents for the string pathway.
+        '''
+        #TODO: THis can probably be done more succinctly using a list of tuples
         ncurrent = 0
         nlist = [0]*(2*self.nnodes)
         for n in range(self.nR-1):
@@ -225,33 +188,6 @@ class DE_GSM(Base_Method):
 
         return ncurrent,nlist
 
-    def check_opt(self,totalgrad,fp,rtype,ts_cgradq):
-        isDone=False
-        #if rtype==self.stage: 
-        # previously checked if rtype equals and 'stage' -- a previuos definition of climb/find were equal
-        #if True:
-
-        TS_conv = self.options['CONV_TOL']
-        #if self.find and self.optimizer[self.TSnode].nneg>1:
-        #    print(" reducing TS convergence because nneg>1")
-        #    TS_conv = self.options['CONV_TOL']/2.
-        self.optimizer[self.TSnode].conv_grms = TS_conv
-
-        if (rtype == 2 and self.find):
-            if self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff: 
-                isDone=True
-                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-                self.tscontinue=False
-            if totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02: #TODO extra crit here
-                #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
-                isDone=True
-                self.tscontinue=False
-
-        if rtype==1 and self.climb:
-            if self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.options['CONV_TOL']  and self.dE_iter < 0.2: 
-                isDone=True
-
-        return isDone
 
     def set_V0(self):
         self.nodes[0].V0 = self.nodes[0].energy
@@ -269,35 +205,120 @@ class DE_GSM(Base_Method):
 
 
 if __name__=='__main__':
-    from qchem import QChem
-    from pes import PES
-    from dlc_new import DelocalizedInternalCoordinates
-    from eigenvector_follow import eigenvector_follow
-    from _linesearch import backtrack,NoLineSearch
-    from molecule import Molecule
+    from level_of_theories.dummy_lot import Dummy
+    from potential_energy_surfaces.pes import PES
+    from coordinate_systems.delocalized_coordinates import DelocalizedInternalCoordinates,PrimitiveInternalCoordinates,Topology
+    from optimizers import eigenvector_follow
+
+    geoms = manage_xyz.read_molden_geoms('../growing_string_methods/opt_converged_000.xyz')
+    lot = Dummy.from_options(geom=geoms[0])
+
+    pes = PES.from_options(lot=lot,ad_idx=0,multiplicity=1)
+    atom_symbols  = manage_xyz.get_atoms(geoms[0])
+
+    ELEMENT_TABLE = elements.ElementData()
+    atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
+    xyz1 = manage_xyz.xyz_to_np(geoms[0])
+    xyz2 = manage_xyz.xyz_to_np(geoms[-1])
+
+    top1 = Topology.build_topology(
+            xyz1,
+            atoms,
+            )
+
+    # find union bonds
+    xyz2 = manage_xyz.xyz_to_np(geoms[-1])
+    top2 = Topology.build_topology(
+            xyz2,
+            atoms,
+            )
+
+    # Add bonds to top1 that are present in top2
+    # It's not clear if we should form the topology so the bonds
+    # are the same since this might affect the Primitives of the xyz1 (slightly)
+    # Later we stil need to form the union of bonds, angles and torsions
+    # However, I think this is important, the way its formulated, for identifiyin 
+    # the number of fragments and blocks, which is used in hybrid TRIC. 
+    for bond in top2.edges():
+        if bond in top1.edges:
+            pass
+        elif (bond[1],bond[0]) in top1.edges():
+            pass
+        else:
+            print(" Adding bond {} to top1".format(bond))
+            if bond[0]>bond[1]:
+                top1.add_edge(bond[0],bond[1])
+            else:
+                top1.add_edge(bond[1],bond[0])
+    
+    addtr = True
+    connect = addcart = False
+    p1 = PrimitiveInternalCoordinates.from_options(
+            xyz=xyz1,
+            atoms=atoms,
+            connect=connect,
+            addtr=addtr,
+            addcart=addcart,
+            topology=top1,
+            )
+
+    
+    p2 = PrimitiveInternalCoordinates.from_options(
+            xyz=xyz2,
+            atoms=atoms,
+            addtr = addtr,
+            addcart=addcart,
+            connect=connect,
+            topology=top1,  # Use the topology of 1 because we fixed it above
+            )
+
+    p1.add_union_primitives(p2)
 
 
-    #basis="sto-3g"
-    basis='6-31G'
-    nproc=8
-    #functional='HF'
-    functional='B3LYP'
-    filepath1="examples/tests/butadiene_ethene.xyz"
-    filepath2="examples/tests/cyclohexene.xyz"
-    #filepath1='reactant.xyz'
-    #filepath2='product.xyz'
+    coord_obj1 = DelocalizedInternalCoordinates.from_options(
+            xyz=xyz1,
+            atoms=atoms,
+            addtr = addtr,
+            addcart=addcart,
+            connect=connect,
+            primitives=p1,
+            ) 
 
-    lot1=QChem.from_options(states=[(1,0)],charge=0,basis=basis,functional=functional,nproc=nproc,fnm=filepath1)
-    lot2 = QChem(lot1.options.copy().set_values({'fnm':filepath2}))
+    optimizer = eigenvector_follow.from_options()
 
-    pes1 = PES.from_options(lot=lot1,ad_idx=0,multiplicity=1)
-    pes2 = PES(pes1.options.copy().set_values({'lot':lot2}))
+    reactant = Molecule.from_options(
+            geom=geoms[0],
+            PES=pes,
+            coord_obj = coord_obj1,
+            Form_Hessian=True,
+            )
+    product = Molecule.copy_from_options(
+            reactant,
+            xyz=xyz2,
+            new_node_id = len(geoms)-1,
+            copy_wavefunction=False,
+            )
 
-    M1 = Molecule.from_options(fnm=filepath1,PES=pes1,coordinate_type="DLC")
-    M2 = Molecule.from_options(fnm=filepath2,PES=pes2,coordinate_type="DLC")
+    gsm = DE_GSM.from_options(
+            reactant=reactant,
+            product=product,
+            nnodes=len(geoms),
+            optimizer=optimizer,
+            )
+    gsm.restart_from_geoms(geoms)
+    gsm.find=True
+    energies = [0.0,0.31894656200893223,1.0911851973214652,2.435532565781614,5.29310522499145,20.137409660528647,-30.240701181493932,-39.4328096016543,-41.09534010407515,-44.007087726989994,-45.82765071728499]
 
-    optimizer=eigenvector_follow.from_options(print_level=1)  #default parameters fine here/opt_type will get set by GSM
+    for e,m in zip(energies,gsm.nodes):
+        m.PES.lot._Energies[(1,0)] = lot.Energy(e,'kcal/mol') 
+        m.PES.lot.hasRanForCurrentCoords = True
 
-    gsm = GSM.from_options(reactant=M1,product=M2,nnodes=9,optimizer=optimizer,print_level=1)
-    gsm.go_gsm(rtype=2,opt_steps=3)
+    #print(gsm.nodes[-1].PES.lot.get_energy(xyz2,1,0))
+    print(gsm.nodes[-1].PES.lot.Energies)
 
+    print(gsm.energies)
+
+    print('reparameterizing')
+    gsm.geodesic_reparam()
+
+    manage_xyz.write_xyzs('rep.xyz', gsm.geometries)

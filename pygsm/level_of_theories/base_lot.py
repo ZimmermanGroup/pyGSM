@@ -19,6 +19,13 @@ from collections import namedtuple
 
 #TODO Make energies,grada dictionaries
 
+def copy_file(path1,path2):
+   cmd = 'cp -r ' + path1 +' ' + path2
+   print(" copying scr files\n {}".format(cmd))
+   os.system(cmd)
+   os.system('wait')
+
+
 
 class Lot(object):
     """ Lot object for level of theory calculators """
@@ -226,6 +233,9 @@ class Lot(object):
         self.options['job_data']['orbfile'] = self.options['job_data'].get('orbfile','')
         # pytc? TODO
         self.options['job_data']['lot'] = self.options['job_data'].get('lot',None)
+
+        print(" making folder scratch/{:03}/{}".format(self.ID,self.node_id))
+        os.system('mkdir -p scratch/{:03}/{}'.format(self.ID,self.node_id))
 
     @classmethod
     def from_options(cls,**kwargs):

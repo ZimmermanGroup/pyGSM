@@ -2,7 +2,7 @@ from __future__ import print_function
 
 # standard library imports
 import sys
-from os import path
+import os
 try:
     from io import StringIO
 except:
@@ -27,6 +27,7 @@ class eigenvector_follow(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
+            path=os.getcwd(),
             ):
 
         #print " refE %5.4f" % refE
@@ -36,6 +37,15 @@ class eigenvector_follow(base_optimizer):
         energies=[]
         geoms.append(molecule.geometry)
         energies.append(molecule.energy-refE)
+        self.converged=False
+
+        if self.check_only_grad_converged:
+            if molecule.gradrms < self.conv_grms:
+                self.converged=True
+                return geoms,energies
+            else:
+                self.check_only_grad_converged=False
+
 
         # stash/initialize some useful attributes
         self.check_inputs(molecule,opt_type,ictan)
@@ -54,7 +64,7 @@ class eigenvector_follow(base_optimizer):
 
         if opt_type=='TS':
             self.Linesearch=NoLineSearch
-        if opt_type=='SEAM' or opt_type=='MECI':
+        if opt_type=='SEAM' or opt_type=='MECI' or opt_type=="TS-SEAM":
             self.opt_cross=True
 
         # TODO are these used? -- n is used for gradrms,linesearch
@@ -190,7 +200,7 @@ class eigenvector_follow(base_optimizer):
             if ostep % xyzframerate==0:
                 geoms.append(molecule.geometry)
                 energies.append(molecule.energy-refE)
-                manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
 
             # save variables for update Hessian! 
             if not molecule.coord_obj.__class__.__name__=='CartesianCoordinates':
@@ -224,11 +234,17 @@ class eigenvector_follow(base_optimizer):
             	xnorm = 1.0
 
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
-            self.converged=False
 
             #TODO turn back on conv_DE
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                self.converged=True
+                print('opt_climb {}'.format(self.opt_climb))
+                if opt_type=="TS-SEAM":
+                    gts = np.dot(g.T,molecule.constraints[:,0])
+                    print(" gts %1.4f" % gts)
+                    if abs(gts)<self.conv_grms:
+                        self.converged=True
+                else:
+                    self.converged=True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if self.opt_climb and opt_type=="CLIMB":
                     gts = np.dot(g.T,molecule.constraints[:,0])
@@ -242,7 +258,7 @@ class eigenvector_follow(base_optimizer):
                 if ostep % xyzframerate!=0:
                     geoms.append(molecule.geometry)
                     energies.append(molecule.energy-refE)
-                    manage_xyz.write_xyzs_w_comments('opt_{}.xyz'.format(molecule.node_id),geoms,energies,scale=1.)
+                    manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path,molecule.node_id),geoms,energies,scale=1.)
                 break
 
             #update DLC  --> this changes q, g, Hint

@@ -70,7 +70,7 @@ class Molecule(object):
                 key='coord_obj',
                 required=False,
                 value=None,
-                allowed_types=[DelocalizedInternalCoordinates,CartesianCoordinates],
+                #allowed_types=[DelocalizedInternalCoordinates,CartesianCoordinates],
                 doc='A coordinate object.'
                 )
 

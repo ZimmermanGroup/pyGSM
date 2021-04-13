@@ -11,10 +11,10 @@ import numpy as np
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 
 try:
-    from .base_lot import Lot
+    from .base_lot import Lot,copy_file
     from .file_options import File_Options
 except:
-    from base_lot import Lot
+    from base_lot import Lot,copy_file
     from file_options import File_Options
 from utilities import *
 
@@ -45,6 +45,7 @@ class TeraChem(Lot):
         self.file_options.set_active('maxit',200,int,'')
         self.file_options.set_active('purify','no',str,'')
         self.file_options.set_active('precision','double',str,'')
+        self.file_options.set_active('threspdp',None,float,'')  # threspdp 0.0001
 
         # CASSCF
         self.file_options.set_active('casscf','no',str,'')
@@ -75,11 +76,24 @@ class TeraChem(Lot):
         self.file_options.set_active('nbeta',0,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
         self.file_options.set_active('cassinglets',2,int,'',depend=(self.file_options.casscf=="yes" or self.file_options.casci=="yes"),msg='')
 
+        # hh-tda
+        self.file_options.set_active('hhtda','no',str,'',
+                clash=(self.file_options.casscf=="yes"),
+                msg='')
+        self.file_options.set_active('hhtdasinglets',3,int,'',depend=(self.file_options.hhtda=="yes"),msg='')
+        self.file_options.set_active('hhtdatriplets',0,int,'',depend=(self.file_options.hhtda=="yes"),msg='')
+        self.file_options.set_active('cphftol',1e-6,float,'',depend=(self.file_options.hhtda=="yes"),msg='')
+        self.file_options.set_active('cphfiter',None,int,'',depend=(self.file_options.hhtda=="yes"),msg='')  # a good value could be 1000
+        self.file_options.set_active('cphfalgorithm',None,str,'',depend=(self.file_options.hhtda=="yes"),msg='') # a possible value is inc_diis
+        self.file_options.set_active('sphericalbasis','no',str,'',depend=(self.file_options.hhtda=="yes"),msg='')
+        self.file_options.set_active('max_l_in_basis',None,int,'',depend=(self.file_options.sphericalbasis=="yes"),msg='')
+
         # FON
         self.file_options.set_active('fon','no',str,'',
                 clash=(self.file_options.casscf=="yes"),
-                depend=(self.file_options.casci=="yes"),
-                msg = 'Cant activate FOMO with CASSCF')
+                depend=(self.file_options.casci=="yes" or self.file_options.hhtda=="yes"),
+                msg = 'Unactivated, or cant activate FOMO with CASSCF')
+        self.file_options.set_active('fon_method',None,str,'',depend=(self.file_options.fon=="yes"),msg='')
         self.file_options.set_active('fon_temperature',0.3,float,'',depend=(self.file_options.fon=="yes"),msg='')
 
         # FOMO
@@ -92,7 +106,6 @@ class TeraChem(Lot):
         self.file_options.set_active('fomo_nact',self.file_options.active,int,'',depend=(self.file_options.fomo=="yes"),msg='')
         self.file_options.set_active('fomo_method','gaussian',str,'',depend=(self.file_options.fomo=="yes"),msg='')
 
-
         # QMMM
         self.file_options.set_active('prmtop',None,str,'')
         self.file_options.set_active('qmindices',None,str,'')
@@ -101,9 +114,13 @@ class TeraChem(Lot):
         self.file_options.set_active('cis','no',str,'',
                 clash=(self.file_options.casscf=='yes' or self.file_options.fomo=='yes'),
                 msg = 'Cant activate CIS with FOMO or CASSCF')
-        self.file_options.set_active('cisnumstates',4,int,'',depend=(self.file_options.cis=="yes"))
-        self.file_options.set_active('cisguessvecs',self.file_options.cisnumstates,int,'',depend=(self.file_options.cis=="yes"))
-        self.file_options.set_active('cismaxiter',20,int,'',depend=(self.file_options.cis=="yes"))
+        self.file_options.set_active('cisalgorithm',None,str,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cisnumstates',4,int,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cisguessvecs',self.file_options.cisnumstates,int,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cismaxiter',20,int,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cismax',100,int,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cisconvtol',1.0e-6,float,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
+        self.file_options.set_active('cisincremental','no',str,'',depend=(self.file_options.cis=="yes" or self.file_options.hhtda=="yes"))
 
         # DFT
         self.file_options.set_active('rc_w',None,float,
@@ -113,21 +130,25 @@ class TeraChem(Lot):
                 )
         self.file_options.set_active('dftd','no',str,'',
                 clash=(self.file_options.casscf=="yes" or self.file_options.fomo=="yes"),
-                msg = 'Cant activate dftd with FOMO or CASSCF')
+                msg = 'Cant activate dftd with FOMO(?) or CASSCF')
+        self.file_options.set_active('dftgrid',None,int,'',clash=(self.file_options.casscf=="yes"))
 
         # GPU
         self.file_options.set_active('gpus',1,int,'')
         self.file_options.set_active('gpumem',None,int,'')
 
-        self.file_options.set_active('coordinates','scratch/{:03}/{}/tmp.xyz'.format(self.ID,self.node_id),str,doc='tmp coordinate file for running TeraChem')
+   
         self.file_options.set_active('scrdir','scratch/{:03}/{}/scr/'.format(self.ID,self.node_id),str,doc='')
+        self.file_options.force_active('scrdir','scratch/{:03}/{}/scr/'.format(self.ID,self.node_id))
+        self.file_options.set_active('coordinates','scratch/{:03}/{}/tmp.xyz'.format(self.ID,self.node_id),str,doc='',)
+        self.file_options.force_active('coordinates','scratch/{:03}/{}/tmp.xyz'.format(self.ID,self.node_id))
         self.file_options.set_active('charge',0,int,doc='')
        
         # Deactivate useless keys 
         #casscf
         keys_to_del=[]
         for key,value in self.file_options.ActiveOptions.items():
-            if value=="no":
+            if value=="no" or value==None:
                 keys_to_del.append(key)
         for key in keys_to_del:
             self.file_options.deactivate(key)
@@ -157,14 +178,17 @@ class TeraChem(Lot):
         self.file_options.set_active('casguess','scratch/{:03}/{}/c0.casscf'.format(self.ID,self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf=="yes"),msg='')
 
         guess_file='scratch/{:03}/{}/c0'.format(self.ID,self.node_id)
-        self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
-                clash=(self.file_options.casscf or self.file_options.fomo),
-                depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
+        if os.path.isfile(guess_file):
+            self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
+                    clash=(self.file_options.casscf or self.file_options.fomo),
+                    depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
+        else:
+                self.file_options.set_active('guess','sad',str,doc='',
+                    clash=(self.file_options.casscf or self.file_options.fomo),
+                    msg=' deactivating guess for CASSCF and FOMO')
 
         ## DONE setting values ##
         
-        print(" making folder scratch/{:03}/{}".format(self.ID,self.node_id))
-        os.system('mkdir -p scratch/{:03}/{}'.format(self.ID,self.node_id))
 
         self.link_atoms=None
 
@@ -177,8 +201,8 @@ class TeraChem(Lot):
 
         node_id = options.get('node_id',1)
 
-        print(" making folder scratch/{:03}/{}".format(lot.ID,node_id))
-        os.system('mkdir -p scratch/{:03}/{}'.format(lot.ID,node_id))
+        #print(" making folder scratch/{:03}/{}".format(lot.ID,node_id))
+        #os.system('mkdir -p scratch/{:03}/{}'.format(lot.ID,node_id))
 
         file_options = File_Options.copy(lot.file_options)
         options['file_options'] =file_options
@@ -186,14 +210,28 @@ class TeraChem(Lot):
         if node_id != lot.node_id and copy_wavefunction:
             if "casscf" in lot.file_options.ActiveOptions:
                 old_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,lot.node_id)
-                new_path = 'scratch/{}/'.format(lot.ID,node_id)
+                new_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,node_id)
+                copy_file(old_path,new_path)
             else:
-                old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
-                new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
-            cmd = 'cp -r ' + old_path +' ' + new_path
-            print(" copying scr files\n {}".format(cmd))
-            os.system(cmd)
-            os.system('wait')
+                use_alpha=False
+                for state in lot.states:
+                  if state[0] == 2:
+                      use_alpha=True
+                if use_alpha:
+                  old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+                  old_path = 'scratch/{:03}/{}/cb0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+                else:
+                  old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
+                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                  copy_file(old_path,new_path)
+            #cmd = 'cp -r ' + old_path +' ' + new_path
+            #print(" copying scr files\n {}".format(cmd))
+            #os.system(cmd)
+            #os.system('wait')
         return cls(lot.options.copy().set_values(options))
 
     def write_input(self,inpfilename,geom,mult,ad_idx,runtype='gradient'):
@@ -214,13 +252,12 @@ class TeraChem(Lot):
                 inpfile.write('nacstate1 {}\n'.format(self.coupling_states[0]))
                 inpfile.write('nacstate2 {}\n'.format(self.coupling_states[1]))
                 inpfile.write('castargetmult        {}\n'.format(mult))
-        elif "cis" in self.file_options.ActiveOptions:
+        elif "cis" in self.file_options.ActiveOptions or "hhtda" in self.file_options.ActiveOptions:
             if runtype == "gradient":
                 inpfile.write('cistarget            {}\n'.format(ad_idx))
             elif runtype=="coupling":
                 inpfile.write('nacstate1 {}\n'.format(self.coupling_states[0]))
                 inpfile.write('nacstate2 {}\n'.format(self.coupling_states[1]))
-
 
         # Runtype
         inpfile.write("run         {}\n\n".format(runtype))
@@ -248,11 +285,11 @@ class TeraChem(Lot):
         os.system(cmd)
 
         # Turn on C0 for non-CASSCF calculations after running
-        if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions:
+        if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions or self.file_options.guess in ["sad","generate"]:
             if mult == 2:
-                self.file_options.set_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.node_id),str,'')
+                self.file_options.force_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.ID,self.node_id))
             else:
-                self.file_options.set_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id),str,'')
+                self.file_options.force_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id))
 
         # if QM/MM get link atoms
         if "prmtop" in self.file_options.ActiveOptions and self.link_atoms is None:
@@ -322,7 +359,7 @@ class TeraChem(Lot):
             self.run(geom,tup[0],None,'energy')
             # make grada all None
             for tup in self.states:
-                self._Gradients[tup] = self.Gradients(None,None)
+                self._Gradients[tup] = self.Gradient(None,None)
         elif self.gradient_states:
             ### Calculate gradient(s) ###
             for tup in self.states:
@@ -352,21 +389,40 @@ class TeraChem(Lot):
         #TODO Parse other multiplicities is broken here
         if "casscf" in self.file_options.ActiveOptions or "casci" in self.file_options.ActiveOptions:
             pattern = re.compile(r'Singlet state  \d energy: \s* ([-+]?[0-9]*\.?[0-9]+)')
-        else:
-            pattern = re.compile(r'FINAL ENERGY: ([-+]?[0-9]*\.?[0-9]+) a.u.')
-        tmp =[]
-        for i,line in enumerate(open(tempfileout)):
-            for match in re.finditer(pattern,line):
-                tmp.append(float(match.group(1)))
-        
+            tmp =[]
+            for i,line in enumerate(open(tempfileout)):
+                for match in re.finditer(pattern,line):
+                    tmp.append(float(match.group(1)))
         # Terachem has weird printout for td-dft energy
-        if 'cis' in self.file_options.ActiveOptions:
+        elif 'cis' in self.file_options.ActiveOptions:
+            tmp =[]
+            pattern = re.compile(r'FINAL ENERGY: ([-+]?[0-9]*\.?[0-9]+) a.u.')
+            for i,line in enumerate(open(tempfileout)):
+                for match in re.finditer(pattern,line):
+                    tmp.append(float(match.group(1)))
             lines=open(tempfileout).readlines()
             lines = lines[([x for x,y in enumerate(lines) if re.match(r'^\s+Final Excited State Results:', y)][0]+4):]
             for line in lines:
                 mobj = re.match(r'^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
                 if mobj:
                     tmp.append(float(mobj.group(2)))
+
+        elif 'hhtda' in self.file_options.ActiveOptions:
+            tmp=[]
+            lines=open(tempfileout).readlines()
+            lines = lines[([x for x,y in enumerate(lines) if re.match(r'^\s+ Root   Mult.', y)][0]+1):]
+            for line in lines:
+                mobj = re.match(r'^\s*(\d+)\s+(\S+)\s+(\S+)', line)
+                if mobj:
+                    if mobj.group(2)=="singlet":
+                        tmp.append(float(mobj.group(3)))
+        else:
+            pattern = re.compile(r'FINAL ENERGY: ([-+]?[0-9]*\.?[0-9]+) a.u.')
+            tmp =[]
+            for i,line in enumerate(open(tempfileout)):
+                for match in re.finditer(pattern,line):
+                    tmp.append(float(match.group(1)))
+        
 
         for E,state in zip(tmp,self.states):
             self._Energies[state] = self.Energy(E,'Hartree')

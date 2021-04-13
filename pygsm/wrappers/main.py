@@ -15,17 +15,12 @@ import textwrap
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
-from potential_energy_surfaces import PES
-from potential_energy_surfaces import Avg_PES
-from potential_energy_surfaces import Penalty_PES
+from potential_energy_surfaces import PES,Avg_PES,Penalty_PES
 from wrappers import Molecule
 from optimizers import *
 from growing_string_methods import *
 from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
-
-
-#TODO can use the "dest" keyword in parser to automatically save the variable
 
 def main():
     parser = argparse.ArgumentParser(
@@ -44,7 +39,7 @@ def main():
     parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package (default: %(default)s)",choices=["QChem","Orca","Molpro","PyTC","TeraChemCloud","OpenMM","DFTB","TeraChem","BAGEL","xTB_lot"])
     parser.add_argument('-lot_inp_file',type=str,default=None, help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=False)
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
-    parser.add_argument('-num_nodes',type=int,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
+    parser.add_argument('-num_nodes',type=int,default=11,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
     parser.add_argument('-adiabatic_index',nargs="*",type=int,default=[0],help='Adiabatic index (default: %(default)s)',required=False)
     parser.add_argument('-multiplicity',nargs="*",type=int,default=[1],help='Multiplicity (default: %(default)s)')
@@ -82,6 +77,7 @@ def main():
     parser.add_argument('-sigma',default=1.,type=float,help='The strength of the difference energy penalty in Penalty_PES')
     parser.add_argument('-prim_idx_file',type=str,help="A filename containing a list of indices to define fragments. 0-Based indexed")
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
+    parser.add_argument('-interp_method',default='DLC',type=str,help='')
     parser.add_argument('-bonds_file',type=str,help="A file which contains the bond indices (0-based)")
 
 
@@ -103,13 +99,6 @@ def main():
         except: 
             nproc = 1
         print(" Using {} processors".format(nproc))
-
-    #print(args.states)
-    #if args.states is not None:
-    #    states = [tuple(int(s) for s in my_tup.strip("()").split(",")) for my_tup in args.states ]
-    #    print(states)
-    #else:
-    #    states=None
 
     inpfileq = {
                # LOT
@@ -164,12 +153,15 @@ def main():
 
     nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
 
+
     #LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
     est_package=importlib.import_module("level_of_theories."+inpfileq['EST_Package'].lower())
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
+    if args.restart_file:
+        geoms = manage_xyz.read_molden_geoms(args.restart_file)
 
     inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)]
     if inpfileq['PES_type']!="PES":
@@ -477,11 +469,11 @@ def main():
                 CONV_dE=inpfileq['conv_dE'],
                 ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
                 growth_direction=inpfileq['growth_direction'],
-                product_geom_fixed=inpfileq['product_geom_fixed'],
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
     else:
         gsm = gsm_class.from_options(
@@ -496,14 +488,16 @@ def main():
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
                 use_multiprocessing=inpfileq['use_multiprocessing'],
+                interp_method = args.interp_method,
                 )
 
 
 
     if args.only_drive:
         for i in range(gsm.nnodes-1):
-            success=gsm.add_GSM_nodeR()
-            if not success:
+            try:
+                gsm.add_GSM_nodeR()
+            except:
                 break
         geoms=[]
         for node in gsm.nodes:
@@ -520,19 +514,23 @@ def main():
         optimizer.opt_cross = True
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,0))
         nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
            refE = reactant.energy,
            opt_steps=100,
+           path=path
            )
 
     if not inpfileq['product_geom_fixed'] and inpfileq['gsm_type']=='DE_GSM':
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,args.num_nodes-1))
         nifty.printcool("PRODUCT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = product,
            refE = reactant.energy,
            opt_steps=100,
+           path=path
            )
 
     rtype=2
@@ -554,7 +552,8 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
+        gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(

@@ -84,8 +84,6 @@ class File_Options(object):
         val     : The value that the option is being set to.
         msg     : A warning that is printed out if the option is not activated.
         """
-        print(key)
-        print(val)
         if msg == None:
             msg == "Option forced to active for no given reason."
         if key not in self.ActiveOptions:
