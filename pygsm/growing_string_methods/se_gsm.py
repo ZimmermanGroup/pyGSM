@@ -434,7 +434,7 @@ class SE_GSM(MainGSM):
     def check_for_reaction(self):
         '''
         '''
-        isrxn = self.check_for_reaction_g(self.driving_coords,1)
+        isrxn = self.check_for_reaction_g(1, self.driving_coords)
         minnodes=[]
         maxnodes=[]
         wint=0
