@@ -79,6 +79,7 @@ class MainGSM(GSM):
                     print(" Will do extra optimization of this node in SE-Cross")
                 else:
                     raise RuntimeError
+                break
 
             self.set_active(self.nR-1, self.nnodes-self.nP)
             self.ic_reparam_g()
@@ -504,7 +505,7 @@ class MainGSM(GSM):
             #print("%i %i %i" %(iR,iP,iN))
 
             #print(" Aligning")
-            self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
+            #self.nodes[self.nR-1].xyz = self.com_rotate_move(iR,iP,iN)
 
 
     def add_GSM_nodeP(self,newnodes=1):
@@ -544,7 +545,7 @@ class MainGSM(GSM):
             # align center of mass  and rotation
             #print("%i %i %i" %(n1,n3,n2))
             #print(" Aligning")
-            self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
+            #self.nodes[-self.nP].xyz = self.com_rotate_move(n1,n3,n2)
             #print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
         return
 
@@ -673,22 +674,22 @@ class MainGSM(GSM):
             param_list=[]
             for n in range(ncurrent):
                 if nlist[2*n+1] not in param_list:
-                    if rpmove[nlist[2*n+1]]>0:
+                    if rpmove[nlist[2*n+1]]<0:
                         # Using tangent pointing inner?
-                        print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n+1]))
-                        self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n+1]])
-                        constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
-                        dq0 = rpmove[nlist[2*n+1]]*constraint
-                        self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
-                        param_list.append(nlist[2*n+1])
-                    else:
-                        # Using tangent point outer
                         print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n]))
                         self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
                         constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
                         dq0 = rpmove[nlist[2*n+1]]*constraint
                         self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
                         param_list.append(nlist[2*n+1])
+                    #else:
+                    #    # Using tangent point outer
+                    #    print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n]))
+                    #    self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
+                    #    constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
+                    #    dq0 = rpmove[nlist[2*n+1]]*constraint
+                    #    self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
+                    #    param_list.append(nlist[2*n+1])
         print(" spacings (end ic_reparam, steps: {}/{}):".format(i+1,ic_reparam_steps), end=' ')
         for n in range(self.nnodes):
             print(" {:1.2}".format(self.dqmaga[n]), end=' ')
@@ -788,7 +789,7 @@ class MainGSM(GSM):
         exsteps=1
         tsnode = int(self.TSnode)
 
-        if self.find and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
+        if (self.find or self.climb) and self.energies[n] > self.energies[self.TSnode]*0.9 and n!=tsnode:  #
             exsteps=2
             print(" multiplying steps for node %i by %i" % (n,exsteps))
         elif self.find and n==tsnode and self.energies[tsnode]>self.energies[tsnode-1]*1.1 and self.energies[tsnode]>self.energies[tsnode+1]*1.1: # Can also try self.climb but i hate climbing image 
@@ -1209,7 +1210,7 @@ class MainGSM(GSM):
                 self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']*factor
                 if self.optimizer[n].converged:
                     self.optimizer[n].check_only_grad_converged=True
-                if self.find and self.energies[n]>self.energies[TSnode]*0.75 and n!=TSnode:
+                if (self.climb or self.find) and self.energies[n]>self.energies[TSnode]*0.75 and n!=TSnode:
                     self.optimizer[n].conv_grms = self.CONV_TOL     
                     self.optimizer[n].conv_gmax = self.options['CONV_gmax']
                     self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']

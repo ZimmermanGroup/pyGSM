@@ -76,13 +76,16 @@ class DE_GSM(MainGSM):
                 if str(error) == "Ran out of iterations":
                     print(error)
                     self.end_early=True
+                else:
+                    print(error)
+                    self.end_early=True
         else:
             print("Exiting early")
             self.end_early=True
 
         filename="opt_converged_{:03d}.xyz".format(self.ID)
         print(" Printing string to " + filename)
-        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
+        write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
         print("Finished GSM!") 
 
         return 

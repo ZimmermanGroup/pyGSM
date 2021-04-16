@@ -906,9 +906,9 @@ class GSM(object):
     
             if disprms < 0.02:
                 break
-            elif lastdisprms < disprms:
-                print("structures might be kinked, breaking early")
-                break
+            #elif lastdisprms < disprms:
+            #    print("structures might be kinked, breaking early")
+            #    break
     
             # Move nodes
             if climbing:
