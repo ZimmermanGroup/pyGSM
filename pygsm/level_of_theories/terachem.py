@@ -479,6 +479,7 @@ class TeraChem(Lot):
         self._Gradients[state] = self.Gradient(grad,"Hartree/Bohr")
 
     def parse_coup(self):
+        tempfileout ='scratch/{:03}/{}/output.dat'.format(self.ID,self.node_id)
         if "prmtop" in self.file_options.ActiveOptions:
             tmpcoup = []
             with open(tempfileout,"r") as f:
@@ -505,7 +506,7 @@ class TeraChem(Lot):
                                 float(mobj.group(2)),
                                 float(mobj.group(3)),
                                 ])
-            coup = np.zeros_like(tmpgrad)
+            coup = np.zeros_like(tmpcoup)
             coup[self.qmindices] = tmpcoup[:len(self.qmindices)]
             coup[self.mm_indices] = tmpcoup[len(self.qmindices):]
             coup = np.asarray(coup)
