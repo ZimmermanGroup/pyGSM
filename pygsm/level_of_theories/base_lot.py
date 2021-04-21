@@ -370,29 +370,40 @@ class Lot(object):
         elif Energy.unit==None:
             return Energy.value
 
-    def get_gradient(self,coords,multiplicity,state):
+    def get_gradient(self,coords,multiplicity,state,frozen_atoms=None):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         Gradient = self.Gradients[(multiplicity,state)]
         if Gradient.value is not None:
+            if frozen_atoms is not None:
+                for a in frozen_atoms:
+                    Gradient.value[a,:]=0.
             if Gradient.unit=="Hartree/Bohr":
                 return Gradient.value *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
-            if Gradient.unit=="kcal/mol/Angstrom":
+            elif Gradient.unit=="kcal/mol/Angstrom":
                 return Gradient.value *units.KCAL_MOL_TO_AU  #kcalmol/A*Ha/kcalmol=Ha/ang
+            else:
+                raise NotImplementedError
         else:
             return None
 
-    def get_coupling(self,coords,multiplicity,state1,state2):
+    def get_coupling(self,coords,multiplicity,state1,state2,frozen_atoms=None):
         if self.hasRanForCurrentCoords==False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
             self.runall(geom)
         Coupling = self.Couplings[(state1,state2)]
+
         if Coupling.value is not None:
+            if frozen_atoms is not None:
+                for a in [3*i for i in frozen_atoms]:
+                    Coupling.value[a:a+3,0]=0.
             if Coupling.unit=="Hartree/Bohr":
                 return Coupling.value *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
+            else:
+                raise NotImplementedError
         else:
             return None
         #return np.reshape(self.coup,(3*len(self.geom),1))*units.ANGSTROM_TO_AU

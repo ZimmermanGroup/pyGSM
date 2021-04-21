@@ -70,8 +70,9 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         fx = molecule.PES.get_energy(xyz)
 
         #print('new fx %11.9f' % fx)
-        gx = molecule.PES.get_gradient(xyz)
+        gx = molecule.PES.get_gradient(xyz,frozen_atoms=molecule.frozen_atoms)
         g = molecule.coord_obj.calcGrad(xyz,gx)
+        #g = molecule.gradient
         width = 1.
 
         # project out the constraint

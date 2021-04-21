@@ -143,6 +143,13 @@ class Molecule(object):
                 doc='used to specify level of theory node identification',
                 )
 
+        opt.add_option(
+                key='frozen_atoms',
+                required=False,
+                value=None,
+                doc='frozen atoms',
+                )
+
 
         Molecule._default_options = opt
         return Molecule._default_options.copy()
@@ -160,9 +167,8 @@ class Molecule(object):
     @staticmethod
     def copy_from_options(MoleculeA,xyz=None,fnm=None,new_node_id=1,copy_wavefunction=True):
         """Create a copy of MoleculeA"""
-        #lot = MoleculeA.PES.lot.copy(MoleculeA.PES.lot,node_id=new_node_id)
-        #PES = MoleculeA.PES.create_pes_from(PES=MoleculeA.PES,options={'node_id': new_node_id})
         print(" Copying from MoleculA {}".format(MoleculeA.node_id))
+        PES = type(MoleculeA.PES).create_pes_from(PES=MoleculeA.PES,options={'node_id': new_node_id})
 
         if xyz is not None:
             new_geom = manage_xyz.np_to_xyz(MoleculeA.geometry,xyz)
@@ -176,7 +182,7 @@ class Molecule(object):
             coord_obj = type(MoleculeA.coord_obj)(MoleculeA.coord_obj.options.copy())
 
         return Molecule(MoleculeA.Data.copy().set_values({
-            'PES': MoleculeA.PES,
+            'PES': PES,
             'coord_obj':coord_obj,
             'geom':new_geom,
             'node_id':new_node_id,
@@ -403,27 +409,27 @@ class Molecule(object):
 
     @property
     def gradx(self):
-        return np.reshape(self.PES.get_gradient(self.xyz),(-1,3))
+        return np.reshape(self.PES.get_gradient(self.xyz,frozen_atoms=self.frozen_atoms),(-1,3))
 
     @property
     def gradient(self):
-        gradx = self.PES.get_gradient(self.xyz) 
+        gradx = self.PES.get_gradient(self.xyz,frozen_atoms=self.frozen_atoms) 
         return self.coord_obj.calcGrad(self.xyz,gradx)  #CartesianCoordinate just returns gradx
 
     # for PES seams
     @property
     def avg_gradient(self):
-        gradx = self.PES.get_avg_gradient(self.xyz) 
+        gradx = self.PES.get_avg_gradient(self.xyz,frozen_atoms=self.frozen_atoms) 
         return self.coord_obj.calcGrad(self.xyz,gradx)  #CartesianCoordinate just returns gradx
 
     @property
     def derivative_coupling(self):
-        dvecx = self.PES.get_coupling(self.xyz) 
+        dvecx = self.PES.get_coupling(self.xyz,frozen_atoms=self.frozen_atoms)
         return self.coord_obj.calcGrad(self.xyz,dvecx)
 
     @property
     def difference_gradient(self):
-        dgradx = self.PES.get_dgrad(self.xyz) 
+        dgradx = self.PES.get_dgrad(self.xyz,frozen_atoms=self.frozen_atoms) 
         return self.coord_obj.calcGrad(self.xyz,dgradx)
     
     @property
@@ -489,10 +495,21 @@ class Molecule(object):
         if newxyz is not None:
             self.Data['xyz']=newxyz
 
+    @property
+    def frozen_atoms(self):
+        return self.Data['frozen_atoms']
+
+    @property
+    def num_frozen_atoms(self):
+        if self.frozen_atoms is not None:
+            return len(self.frozen_atoms)
+        else:
+            0
+
     def update_xyz(self,dq=None,verbose=True):
         #print " updating xyz"
         if dq is not None:
-            self.xyz = self.coord_obj.newCartesian(self.xyz,dq,verbose)
+            self.xyz = self.coord_obj.newCartesian(self.xyz,dq,frozen_atoms=self.frozen_atoms,verbose=verbose)
         return self.xyz
 
     def update_MW_xyz(self,mass,dq,verbose=True):

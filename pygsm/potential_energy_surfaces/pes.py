@@ -294,9 +294,9 @@ class PES(object):
     
         return w, Q 
     
-    def get_gradient(self,xyz):
-        tmp =self.lot.get_gradient(xyz,self.multiplicity,self.ad_idx)
-        grad = tmp
+    def get_gradient(self,xyz,frozen_atoms=None):
+
+        grad = self.lot.get_gradient(xyz,self.multiplicity,self.ad_idx,frozen_atoms=frozen_atoms)
         if self.FORCE is not None:
             for i in self.FORCE:
                 atoms=[i[0],i[1]]

@@ -46,13 +46,6 @@ class InternalCoordinates(object):
                 )
 
         opt.add_option(
-                key="frozen_atoms",
-                value=None,
-                required=False,
-                doc='Atoms to be left unoptimized/unmoved',
-                )
-
-        opt.add_option(
                 key='connect',
                 value=False,
                 allowed_types=[bool],
@@ -138,10 +131,6 @@ class InternalCoordinates(object):
 
         self.options = options
         self.stored_wilsonB = OrderedDict()
-
-    @property
-    def frozen_atoms(self):
-        return self.options['frozen_atoms']
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -335,16 +324,17 @@ class InternalCoordinates(object):
         logger.info("Finite-difference Finished\n")
         return FiniteDifference
 
-    def calcGrad(self, xyz, gradx):
+    def calcGrad(self, xyz, gradx,frozen_atoms=None):
         #q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
         Bmat = self.wilsonB(xyz)
       
         #with np.printoptions(threshold=np.inf):
         #    print(gradx.T)
-        if self.frozen_atoms is not None:
-            for a in [3*i for i in self.frozen_atoms]:
-                gradx[a:a+3,0]=0.
+
+        #if self.frozen_atoms is not None:
+        #    for a in [3*i for i in self.frozen_atoms]:
+        #        gradx[a:a+3,0]=0.
         #with np.printoptions(threshold=np.inf):
         #    print(gradx.T)
 
@@ -469,7 +459,7 @@ class InternalCoordinates(object):
             xyz1 = xyz2.copy()
 
 
-    def newCartesian(self, xyz, dQ, verbose=True):
+    def newCartesian(self, xyz, dQ, frozen_atoms=None, verbose=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             #print "Returning cached result"
@@ -505,8 +495,8 @@ class InternalCoordinates(object):
             # Get new Cartesian coordinates
             dxyz = damp*block_matrix.dot(block_matrix.transpose(Bmat),block_matrix.dot(Ginv,dQ1))
 
-            if self.frozen_atoms is not None:
-                for a in [3*i for i in self.frozen_atoms]:
+            if frozen_atoms is not None:
+                for a in [3*i for i in frozen_atoms]:
                     dxyz[a:a+3]=0.
 
             xyz2 = xyz1 + dxyz.reshape((-1,3))

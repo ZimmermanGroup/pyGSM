@@ -57,9 +57,9 @@ class Penalty_PES(PES):
         sys.stdout.flush()
         return avgE+self.sigma*G
 
-    def get_gradient(self,geom):
-        self.grad1 = self.PES1.get_gradient(geom)
-        self.grad2 = self.PES2.get_gradient(geom)
+    def get_gradient(self,geom,frozen_atoms=None):
+        self.grad1 = self.PES1.get_gradient(geom,frozen_atoms)
+        self.grad2 = self.PES2.get_gradient(geom,frozen_atoms)
         avg_grad = 0.5*(self.grad1 + self.grad2)
         dgrad = self.grad2 - self.grad1
         if self.dE < 0:
@@ -68,8 +68,8 @@ class Penalty_PES(PES):
         #print "factor is %1.4f" % factor
         return avg_grad + factor*dgrad
 
-    def get_avg_gradient(self,xyz):
-        return 0.5*(self.PES1.get_gradient(xyz) + self.PES2.get_gradient(xyz))
+    def get_avg_gradient(self,xyz,frozen_atoms=None):
+        return 0.5*(self.PES1.get_gradient(xyz,frozen_atoms) + self.PES2.get_gradient(xyz,frozen_atoms))
 
 if __name__ == '__main__':
 
