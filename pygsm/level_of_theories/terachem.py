@@ -199,10 +199,7 @@ class TeraChem(Lot):
     @classmethod
     def copy(cls,lot,options,copy_wavefunction=True):
 
-        node_id = options.get('node_id',1)
-
-        #print(" making folder scratch/{:03}/{}".format(lot.ID,node_id))
-        #os.system('mkdir -p scratch/{:03}/{}'.format(lot.ID,node_id))
+        node_id = options.get('node_id',lot.node_id)
 
         file_options = File_Options.copy(lot.file_options)
         options['file_options'] =file_options
@@ -244,7 +241,7 @@ class TeraChem(Lot):
             inpfile.write('{0:<25}{1:<25}\n'.format(key,value))
         inpfile.write('spinmult             {}\n'.format(mult))
 
-        if "casscf" in self.file_options.ActiveOptions or "casci" or self.file_options.ActiveOptions:
+        if "casscf" in self.file_options.ActiveOptions or "casci" in self.file_options.ActiveOptions:
             if runtype == "gradient":
                 inpfile.write('castarget            {}\n'.format(ad_idx))
                 inpfile.write('castargetmult        {}\n'.format(mult))
@@ -338,8 +335,8 @@ class TeraChem(Lot):
                 os.system(cp_coup)
 
         # clean up
-        #rm_cmd = 'rm -rf scratch/{}/scr'.format(self.node_id)
-        #os.system(rm_cmd)
+        rm_cmd = 'rm -rf scratch/{}/scr'.format(self.node_id)
+        os.system(rm_cmd)
 
         return
         #Done go
@@ -506,10 +503,10 @@ class TeraChem(Lot):
                                 float(mobj.group(2)),
                                 float(mobj.group(3)),
                                 ])
+            tmpcoup = np.asarray(tmpcoup)
             coup = np.zeros_like(tmpcoup)
             coup[self.qmindices] = tmpcoup[:len(self.qmindices)]
             coup[self.mm_indices] = tmpcoup[len(self.qmindices):]
-            coup = np.asarray(coup)
         else:
             coupfile='scratch/{:03}/{}/coup_{}_{}.xyz'.format(self.ID,self.node_id,self.coupling_states[0],self.coupling_states[1])
             coup = manage_xyz.read_xyz(coupfile,scale=1.0)
