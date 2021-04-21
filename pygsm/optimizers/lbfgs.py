@@ -66,7 +66,7 @@ class lbfgs(base_optimizer):
         x = np.copy(molecule.coordinates)
         xyz = np.copy(molecule.xyz)
         x_prim = molecule.primitive_internal_values
-        num_coords =  molecule.num_coordinates - nconstraints 
+        num_coords =  molecule.num_coordinates - nconstraints - molecule.num_frozen_atoms*3
         
         # Evaluate the function value and its gradient.
         fx = molecule.energy

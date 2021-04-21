@@ -42,23 +42,23 @@ class Avg_PES(PES):
         self.dE = self.PES2.get_energy(xyz) - self.PES1.get_energy(xyz)
         return 0.5*(self.PES1.get_energy(xyz) + self.PES2.get_energy(xyz))
 
-    def get_gradient(self,xyz):
-        return 0.5*(self.PES1.get_gradient(xyz) + self.PES2.get_gradient(xyz))
+    def get_gradient(self,xyz,frozen_atoms=None):
+        return 0.5*(self.PES1.get_gradient(xyz,frozen_atoms) + self.PES2.get_gradient(xyz,frozen_atoms))
 
-    def get_coupling(self,xyz):
+    def get_coupling(self,xyz,frozen_atoms=None):
         assert self.PES1.multiplicity==self.PES2.multiplicity,"coupling is 0"
         assert self.PES1.ad_idx!=self.PES2.ad_idx,"coupling is 0"
-        return np.reshape(self.lot.get_coupling(xyz,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx),(-1,1))
+        return np.reshape(self.lot.get_coupling(xyz,self.PES1.multiplicity,self.PES1.ad_idx,self.PES2.ad_idx,frozen_atoms),(-1,1))
 
-    def get_dgrad(self,xyz):
+    def get_dgrad(self,xyz,frozen_atoms=None):
         if self.PES1.multiplicity==self.PES2.multiplicity:
             assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
-        return (self.PES2.get_gradient(xyz) - self.PES1.get_gradient(xyz))
+        return self.PES2.get_gradient(xyz,frozen_atoms) - self.PES1.get_gradient(xyz,frozen_atoms)
 
-    def get_average_gradient(self,xyz):
+    def get_average_gradient(self,xyz,frozen_atoms=None):
         if self.PES1.multiplicity==self.PES2.multiplicity:
             assert self.PES2.ad_idx>self.PES1.ad_idx,"dgrad wrong direction"
-        return 0.5*(self.PES2.get_gradient(xyz) + self.PES1.get_gradient(xyz))
+        return 0.5*(self.PES2.get_gradient(xyz,frozen_atoms) + self.PES1.get_gradient(xyz,frozen_atoms))
 
 
     # http://pubs.acs.org/doi/abs/10.1021/acs.jctc.6b00384

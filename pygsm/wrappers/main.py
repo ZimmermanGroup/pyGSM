@@ -380,7 +380,6 @@ def main():
             addtr=addtr,
             addcart=addcart,
             topology=top1,
-            frozen_atoms=frozen_indices,
             )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
@@ -413,7 +412,6 @@ def main():
             addcart=addcart,
             connect=connect,
             primitives=p1,
-            frozen_atoms=frozen_indices,
             ) 
     if inpfileq['gsm_type'] == 'DE_GSM':
         # TMP 
@@ -426,6 +424,7 @@ def main():
             PES=pes,
             coord_obj = coord_obj1,
             Form_Hessian=Form_Hessian,
+            frozen_atoms=frozen_indices,
             )
 
     if inpfileq['gsm_type']=='DE_GSM':
@@ -436,6 +435,7 @@ def main():
                 xyz=xyz2,
                 new_node_id = inpfileq['num_nodes']-1,
                 copy_wavefunction=False,
+                frozen_atoms=frozen_indices,
                 )
    
     # optimizer
