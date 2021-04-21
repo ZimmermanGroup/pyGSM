@@ -240,6 +240,14 @@ class SE_GSM(MainGSM):
         '''
         return
 
+    def set_frontier_convergence(self,nR):
+        # set 
+        self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        self.optimizer[nR].conv_gmax = 100. #self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
+        self.optimizer[nR].conv_Ediff = 1000. # 2.5
+        print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
+
+
     def set_active(self,nR,nP=None):
         #print(" Here is active:",self.active)
         print((" setting active node to %i "%nR))
@@ -248,13 +256,7 @@ class SE_GSM(MainGSM):
             if self.nodes[i] != None:
                 self.active[i] = False
 
-        # set 
-        self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
-        self.optimizer[nR].conv_gmax = 100. #self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
-        self.optimizer[nR].conv_Ediff = 1000. # 2.5
-
-        print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
-
+        self.set_frontier_convergence(nR)
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 

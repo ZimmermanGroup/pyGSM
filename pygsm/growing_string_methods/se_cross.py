@@ -49,7 +49,7 @@ class SE_Cross(SE_GSM):
         if True:
             # doing extra constrained penalty optimization for MECI
             print(" extra constrained optimization for the nnR-1 = %d" % (self.nR-1))
-            self.optimizer[self.nR-1].conv_grms=0.01
+            self.optimizer[self.nR-1].conv_grms=self.options['CONV_TOL']*2.5
             ictan,_ = self.get_tangent(self.nodes[self.nR-1],self.nodes[self.nR-2])
             self.nodes[self.nR-1].PES.sigma=3.5
 
@@ -70,7 +70,7 @@ class SE_Cross(SE_GSM):
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
-            self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
+            self.optimizer[self.nR].conv_gmax = 0.1 # self.options['CONV_gmax']
             self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
             self.optimizer[self.nR].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR].optimize(
@@ -89,7 +89,7 @@ class SE_Cross(SE_GSM):
             print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
             self.optimizer[self.nR].opt_cross=True
             self.optimizer[self.nR].conv_grms = self.options['CONV_TOL']
-            self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
+            #self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
             self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
             self.optimizer[self.nR].conv_dE = self.options['CONV_dE']
             self.optimizer[self.nR].optimize(
@@ -99,31 +99,76 @@ class SE_Cross(SE_GSM):
                     opt_steps=200,
                     )
             write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+
+        if self.optimizer[self.nR].converged:
+            self.nnodes=self.nR
+            self.nodes = self.nodes[:self.nR]
+            print("Setting all interior nodes to active")
+            for n in range(1,self.nnodes-1):
+                self.active[n]=True
+            self.active[self.nnodes-1] = False
+            self.active[0] = False
+
+            # Convert all the PES to excited-states
+            for n in range(self.nR):
+                self.nodes[n].PES = PES.create_from(self.nodes[n].PES.PES1)
+            self.set_V0()
+
+            print(" initial ic_reparam")
+            self.reparameterize(ic_reparam_steps=25)
+            print(" V_profile (after reparam): ", end=' ')
+            energies = self.energies
+            for n in range(self.nnodes):
+                print(" {:7.3f}".format(float(energies[n])), end=' ')
+            print()
+            write_molden_geoms('grown_string1_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+   
+            deltaE = energies[-1] - energies[0]
+            if deltaE>20:
+                print(f" MECI energy is too high {deltaE}. Don't try to optimize pathway")
+                print("Exiting early")
+                self.end_early=True
+            else:
+                print(f" deltaE s1-minimum and MECI {deltaE}")
+                try:
+                    self.optimize_string(max_iter=max_iters,opt_steps=3,rtype=1)
+                except Exception as error:
+                    if str(error) == "Ran out of iterations":
+                        print(error)
+                        self.end_early=True
+                    else:
+                        print(error)
+                        self.end_early=True
+        else:
+            print("Exiting early")
+            self.end_early=True
+
+
     
-    def converged(self,n,opt_type):
-        if opt_type=="UNCSONTRAINED":
-            tmp1 = np.copy(self.nodes[n].PES.grad1)
-            tmp2 = np.copy(self.nodes[n].PES.grad2)
-            print('norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)))
-            print('ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2)))
-            tmp1 = tmp1/np.linalg.norm(tmp1)
-            tmp2 = tmp2/np.linalg.norm(tmp2)
-            print('normalized gradient dot product:',float(np.dot(tmp1.T,tmp2)))
-            sys.stdout.flush()
-            if self.nodes[n].gradrms<self.options['CONV_TOL'] and 1.-abs(float(np.dot(tmp1.T,tmp2))) <= 0.02 and abs(self.nodes[n].PES.dE) <= 1.25:
-                return True
-            else:
-                return False
-        elif opt_type=="ICTAN": #constrained growth
-            if self.nodes[n].gradrms<self.optimizer[n].conv_grms:
-                return True
-            else:
-                return False
-        elif opt_type=="MECI":
-            if self.nodes[n].gradrms<self.options['CONV_TOL'] and abs(self.nodes[n].PES.dE) <= 1.0:
-                return True
-            else:
-                return False
+    #def converged(self,n,opt_type):
+    #    if opt_type=="UNCSONTRAINED":
+    #        tmp1 = np.copy(self.nodes[n].PES.grad1)
+    #        tmp2 = np.copy(self.nodes[n].PES.grad2)
+    #        print('norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)))
+    #        print('ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2)))
+    #        tmp1 = tmp1/np.linalg.norm(tmp1)
+    #        tmp2 = tmp2/np.linalg.norm(tmp2)
+    #        print('normalized gradient dot product:',float(np.dot(tmp1.T,tmp2)))
+    #        sys.stdout.flush()
+    #        if self.nodes[n].gradrms<self.options['CONV_TOL'] and 1.-abs(float(np.dot(tmp1.T,tmp2))) <= 0.02 and abs(self.nodes[n].PES.dE) <= 1.25:
+    #            return True
+    #        else:
+    #            return False
+    #    elif opt_type=="ICTAN": #constrained growth
+    #        if self.nodes[n].gradrms<self.optimizer[n].conv_grms:
+    #            return True
+    #        else:
+    #            return False
+    #    elif opt_type=="MECI":
+    #        if self.nodes[n].gradrms<self.options['CONV_TOL'] and abs(self.nodes[n].PES.dE) <= 1.0:
+    #            return True
+    #        else:
+    #            return False
 
     def check_if_grown(self):
         isDone = False
@@ -151,4 +196,11 @@ class SE_Cross(SE_GSM):
         self.nR -=1 
         # stash bdist for node 0
         _,self.nodes[0].bdist = self.get_tangent(self.nodes[0],None,driving_coords=self.driving_coords)
+
+    def set_frontier_convergence(self,nR):
+        self.optimizer[nR].conv_grms = self.options['ADD_NODE_TOL']
+        self.optimizer[nR].conv_gmax = 100. #self.options['ADD_NODE_TOL'] # could use some multiplier times CONV_GMAX...
+        self.optimizer[nR].conv_Ediff = 1000. # 2.5
+        print(" conv_tol of node %d is %.4f" % (nR,self.optimizer[nR].conv_grms))
+
 

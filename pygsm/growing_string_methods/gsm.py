@@ -830,7 +830,7 @@ class GSM(object):
         MAXRE = 0.25
         disprms=100
         if ((TSnode==nnodes-1) or (TSnode==0)) and climbing:
-            raise RuntimeError(" This shouldn't happen")
+            raise RuntimeError(" TS node shouldn't be the first or last node")
     
         ideal_progress_gained = np.zeros(nnodes)
         if climbing:
