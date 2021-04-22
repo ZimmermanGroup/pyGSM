@@ -327,6 +327,7 @@ class lbfgs(base_optimizer):
                     for c in molecule.constraints.T:
                         gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
                     g_prim = block_matrix.dot(molecule.coord_basis,gc)
+            sys.stdout.flush()
 
         print(" opt-summary")
         print(self.buf.getvalue())

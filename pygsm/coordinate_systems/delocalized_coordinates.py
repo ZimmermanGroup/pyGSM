@@ -379,7 +379,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             self.Vecs = block_matrix.project_constraint(self.Vecs,cVecs)
             #print(" shape of DLC")
             #print(self.Vecs.shape)
-        return
+        return self.Vecs
 
 
     def build_dlc_conjugate(self, xyz, C=None):
@@ -863,12 +863,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        nifty.click()
+        #nifty.click()
         G = self.GMatrix(xyz)
-        time_G = nifty.click()
+        #time_G = nifty.click()
         #Gi = np.linalg.inv(G)
         tmpGi = [ np.linalg.inv(g) for g in G.matlist ]
-        time_inv = nifty.click()
+        #time_inv = nifty.click()
         #print("G-time: %.3f Inv-time: %.3f" % (time_G, time_inv))
         return block_matrix(tmpGi)
 

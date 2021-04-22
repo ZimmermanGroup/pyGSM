@@ -383,6 +383,7 @@ class Molecule(object):
 
     @property
     def mass_weighted_cartesians(self):
+        M = self.total_mass_au
         return np.asarray( [self.xyz[i,:]*self.atomic_mass[i]/M for i in range(self.natoms)] )
 
     @property
@@ -504,13 +505,18 @@ class Molecule(object):
         if self.frozen_atoms is not None:
             return len(self.frozen_atoms)
         else:
-            0
+            return 0
 
     def update_xyz(self,dq=None,verbose=True):
         #print " updating xyz"
         if dq is not None:
             self.xyz = self.coord_obj.newCartesian(self.xyz,dq,frozen_atoms=self.frozen_atoms,verbose=verbose)
         return self.xyz
+
+    def update_and_move(self,tan,deltadq,verbose=True):
+        self.update_coordinate_basis(tan)
+        dq = deltadq*self.constraint[:,0]
+        self.update_xyz(dq,verbose=verbose)
 
     def update_MW_xyz(self,mass,dq,verbose=True):
         self.xyz = self.coord_obj.massweighted_newCartesian(self.xyz,dq,mass,verbose)
@@ -623,6 +629,12 @@ class Molecule(object):
     @property
     def node_id(self):
         return self.Data['node_id']
+
+    
+    @node_id.setter
+    def node_id(self,value):
+        self.Data['node_id'] = value
+        self.PES.lot.node_id = value
 
 if __name__=='__main__':
     from level_of_theories import Molpro

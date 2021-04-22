@@ -76,11 +76,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             for g in self.fragments: g.__class__ = MyG
 
             self.get_hybrid_indices(xyz)
-            nifty.click()
+            #nifty.click()
             self.newMakePrimitives(xyz)
             print(" done making primitives")
-            time_build = nifty.click()
-            print(" make prim %.3f" % time_build)
+            #time_build = nifty.click()
+            #print(" make prim %.3f" % time_build)
 
         # Reorder primitives for checking with cc's code in TC.
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
@@ -360,12 +360,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def GInverse_SVD(self, xyz):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
-        nifty.click()
+        #nifty.click()
         loops = 0
         while True:
             try:
                 G = self.GMatrix(xyz)
-                time_G = nifty.click()
+                #time_G = nifty.click()
                 start=0
                 tmpUvecs=[]
                 tmpVvecs=[]
@@ -378,7 +378,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 V = block_matrix(tmpVvecs)
                 UT = block_matrix(tmpUvecs)
                 S = block_matrix(tmpSvecs)
-                time_svd = nifty.click()
+                #time_svd = nifty.click()
             except np.linalg.LinAlgError:
                 logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
@@ -411,16 +411,16 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        nifty.click()
+        #nifty.click()
         G = self.GMatrix(xyz)
-        time_G = nifty.click()
+        #time_G = nifty.click()
 
         matlist=[]
         for Gmat in G.matlist:
             matlist.append(np.linalg.inv(Gmat))
         
         Gt = block_matrix(matlist)
-        time_inv = nifty.click()
+        #time_inv = nifty.click()
         #print("G-time: %.3f Inv-time: %.3f" % (time_G, time_inv))
 
         return Gt

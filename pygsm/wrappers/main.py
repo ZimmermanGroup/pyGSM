@@ -66,10 +66,10 @@ def main():
     parser.add_argument('-optimize_mesx',action='store_true',help='optimize to the MESX')
     parser.add_argument('-optimize_meci',action='store_true',help='optimize to the MECI')
     parser.add_argument('-restart_file',help='restart file',type=str)
-    parser.add_argument('-use_multiprocessing',action='store_true',help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
+    parser.add_argument('-mp_cores',type=int,default=1,help="Use python multiprocessing to parallelize jobs on a single compute node. Set OMP_NUM_THREADS, ncpus accordingly.")
     parser.add_argument('-dont_analyze_ICs',action='store_false',help="Don't post-print the internal coordinates primitives and values") #defaults to true
-    parser.add_argument('-hybrid_coord_idx_file',type=str,help="A filename containing a list of  indices to use in hybrid coordinates. 0-Based indexed")
-    parser.add_argument('-frozen_coord_idx_file',type=str,help="A filename containing a list of  indices to be frozen. 0-Based indexed")
+    parser.add_argument('-hybrid_coord_idx_file',type=str,default=None,help="A filename containing a list of  indices to use in hybrid coordinates. 0-Based indexed")
+    parser.add_argument('-frozen_coord_idx_file',type=str,default=None,help="A filename containing a list of  indices to be frozen. 0-Based indexed")
     parser.add_argument('-conv_Ediff',default=100.,type=float,help='Energy difference convergence of optimization.')
     parser.add_argument('-conv_dE',default=1.,type=float,help='State difference energy convergence')
     parser.add_argument('-conv_gmax',default=100.,type=float,help='Max grad rms threshold')
@@ -147,7 +147,7 @@ def main():
               'gsm_print_level' : args.gsm_print_level,
               'max_gsm_iters' : args.max_gsm_iters,
               'max_opt_steps' : args.max_opt_steps,
-              'use_multiprocessing': args.use_multiprocessing,
+              #'use_multiprocessing': args.use_multiprocessing,
               'sigma'   :   args.sigma,
               }
 
@@ -435,7 +435,6 @@ def main():
                 xyz=xyz2,
                 new_node_id = inpfileq['num_nodes']-1,
                 copy_wavefunction=False,
-                frozen_atoms=frozen_indices,
                 )
    
     # optimizer
@@ -472,7 +471,7 @@ def main():
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
-                use_multiprocessing=inpfileq['use_multiprocessing'],
+                mp_cores=args.mp_cores,
                 interp_method = args.interp_method,
                 )
     else:
@@ -487,7 +486,7 @@ def main():
                 print_level=inpfileq['gsm_print_level'],
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
-                use_multiprocessing=inpfileq['use_multiprocessing'],
+                mp_cores=args.mp_cores,
                 interp_method = args.interp_method,
                 )
 

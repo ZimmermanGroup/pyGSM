@@ -61,7 +61,7 @@ class DE_GSM(MainGSM):
 
         else:
             if self.has_intermediate(self.noise):
-                printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
+                nifty.printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
                 try:
                     self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
                 except Exception as error:
@@ -152,6 +152,23 @@ class DE_GSM(MainGSM):
                 self.add_GSM_nodeP()
                 print(" getting energy for node %d: %5.4f" %(self.nnodes-self.nP,self.nodes[-self.nP].energy - self.nodes[0].V0))
         return
+
+
+    def make_tan_list(self):
+        ncurrent,nlist = self.make_difference_node_list()
+        param_list = []
+        for n in range(ncurrent-2):
+            if nlist[2*n] not in param_list:
+                param_list.append(nlist[2*n])
+        return param_list
+
+    def make_move_list(self):
+        ncurrent,nlist = self.make_difference_node_list()
+        param_list = []
+        for n in range(ncurrent):
+            if nlist[2*n+1] not in param_list:
+                param_list.append(nlist[2*n+1])
+        return param_list
 
 
     def make_difference_node_list(self):

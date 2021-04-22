@@ -408,6 +408,8 @@ class base_optimizer(object):
             print(" dE is %1.4f" % molecule.difference_energy)
 
         dq = -molecule.difference_energy/units.KCAL_MOL_PER_AU/norm_dg 
+        if dq < self.DMAX/5:
+            dq = -self.DMAX/5
         if dq<-0.075:
             dq=-0.075
 
