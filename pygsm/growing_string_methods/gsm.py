@@ -8,8 +8,8 @@ from os import path
 import numpy as np
 import multiprocessing as mp
 from collections import Counter
-from multiprocessing import Process 
 from copy import copy
+from itertools import chain
 
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
@@ -24,7 +24,11 @@ try:
     from geodesic_interpolate import Geodesic,redistribute
 except ImportError:
     nifty.logger.warning("Geodesic interpolation cannot be imported. Don't use geodesic interpolation.")
-    
+
+def worker(arg):
+   obj, methname = arg[:2]
+   return getattr(obj, methname)(*arg[2:])
+
 
 #######################################################################################
 #### This class contains the main constructor, object properties and staticmethods ####
@@ -147,10 +151,9 @@ class GSM(object):
                 )
 
         opt.add_option(
-                key='use_multiprocessing',
-                value=False,
-                doc='Use python multiprocessing module, an OpenMP like implementation \
-                        that parallelizes optimization cycles on a single compute node'
+                key='mp_cores',
+                value=1,
+                doc='multiprocessing cores for parallel programming. Use this with caution.',
                 )
 
         opt.add_option(
@@ -179,7 +182,7 @@ class GSM(object):
 
         opt.add_option(
                 key='noise',
-                value=5.0,
+                value=100.0,
                 allowed_types=[float],
                 required=False,
                 doc='Noise to check for intermediate',
@@ -220,11 +223,11 @@ class GSM(object):
         self.DQMAG_MIN=self.options['DQMAG_MIN']
         self.BDIST_RATIO=self.options['BDIST_RATIO']
         self.ID = self.options['ID']
-        self.use_multiprocessing = self.options['use_multiprocessing']
         self.optimizer=[]
         self.interp_method = self.options['interp_method']
         self.CONV_TOL = self.options['CONV_TOL']
         self.noise = self.options['noise']
+        self.mp_cores = self.options['mp_cores']
 
         optimizer = options['optimizer']
         for count in range(self.nnodes):
@@ -383,7 +386,19 @@ class GSM(object):
             manage_xyz.write_xyzs('tmp.xyz', new_geoms)
     
         return smoother.path
-  
+ 
+    @staticmethod
+    def add_xyz_along_tangent(
+            xyz1,
+            constraints,
+            step,
+            coord_obj,
+            ):
+        dq0 = step*constraints
+        new_xyz = coord_obj.newCartesian(xyz1,dq0)
+
+        return new_xyz
+
 
     @staticmethod 
     def add_node(
@@ -521,7 +536,169 @@ class GSM(object):
             sign *= -1
     
         return nodes
+   
+
+
+    @staticmethod
+    def get_tangent_xyz(xyz1,xyz2, prim_coords):
+        PMDiff = np.zeros(len(prim_coords))
+        for k,prim in enumerate(prim_coords):
+            if type(prim) is Distance:
+                PMDiff[k] = 2.5 *prim.calcDiff(xyz2,xyz1)
+            else:
+                PMDiff[k] = prim.calcDiff(xyz2,xyz1)
+        return np.reshape(PMDiff,(-1,1))
+
+
+    @staticmethod
+    def get_tangent(node1,node2,print_level=1,**kwargs):
+        '''
+        Get internal coordinate tangent between two nodes, assumes they have unique IDs
+        '''
     
+    
+        if node2 is not None and node1.node_id!=node2.node_id:
+            print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
+            assert node2!=None,'node n2 is None'
+           
+            PMDiff = np.zeros(node2.num_primitives)
+            for k,prim in enumerate(node2.primitive_internal_coordinates):
+                if type(prim) is Distance:
+                    PMDiff[k] = 2.5 *prim.calcDiff(node2.xyz,node1.xyz)
+                else:
+                    PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
+    
+            return np.reshape(PMDiff,(-1,1)),None
+        else:
+            print(" getting tangent from node ",node1.node_id)
+    
+            driving_coords = kwargs.get('driving_coords',None)
+            assert driving_coords is not None, " Driving coord is None!"
+    
+            c = Counter(elem[0] for elem in driving_coords)
+            nadds = c['ADD']
+            nbreaks = c['BREAK']
+            nangles = c['nangles']
+            ntorsions = c['ntorsions']
+    
+            ictan = np.zeros((node1.num_primitives,1),dtype=float)
+            breakdq = 0.3
+            bdist=0.0
+            atoms = node1.atoms
+            xyz = node1.xyz.copy()
+    
+            for i in driving_coords:
+                if "ADD" in i:
+    
+                    #order indices to avoid duplicate bonds
+                    if i[1]<i[2]:
+                        index = [i[1]-1, i[2]-1]
+                    else:
+                        index = [i[2]-1, i[1]-1]
+    
+                    bond = Distance(index[0],index[1])
+                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
+                    if len(i)==3:
+                        #TODO why not just use the covalent radii?
+                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
+                    elif len(i)==4:
+                        d0=i[3]
+                    current_d =  bond.value(xyz)
+    
+                    #TODO don't set tangent if value is too small
+                    ictan[prim_idx] = -1*(d0-current_d)
+                    #if nbreaks>0:
+                    #    ictan[prim_idx] *= 2
+                    # => calc bdist <=
+                    if current_d>d0:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if print_level>0:
+                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
+    
+                elif "BREAK" in i:
+                    #order indices to avoid duplicate bonds
+                    if i[1]<i[2]:
+                        index = [i[1]-1, i[2]-1]
+                    else:
+                        index = [i[2]-1, i[1]-1]
+                    bond = Distance(index[0],index[1])
+                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
+                    if len(i)==3:
+                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
+                    elif len(i)==4:
+                        d0=i[3]
+    
+                    current_d =  bond.value(xyz)
+                    ictan[prim_idx] = -1*(d0-current_d) 
+    
+                    # => calc bdist <=
+                    if current_d<d0:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+    
+                    if print_level>0:
+                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
+                elif "ANGLE" in i:
+    
+                    if i[1]<i[3]:
+                        index = [i[1]-1, i[2]-1,i[3]-1]
+                    else:
+                        index = [i[3]-1, i[2]-1,i[1]-1]
+                    angle = Angle(index[0],index[1],index[2])
+                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
+                    anglet = i[4]
+                    ang_value = angle.value(xyz)
+                    ang_diff = anglet*np.pi/180. - ang_value
+                    #print(" angle: %s is index %i " %(angle,ang_idx))
+                    if print_level>0:
+                        print((" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff)))
+                    ictan[prim_idx] = -ang_diff
+                    #TODO need to come up with an adist
+                    #if abs(ang_diff)>0.1:
+                    #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
+                elif "TORSION" in i:
+    
+                    if i[1]<i[4]:
+                        index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
+                    else:
+                        index = [i[4]-1,i[3]-1,i[2]-1,i[1]-1]
+                    torsion = Dihedral(index[0],index[1],index[2],index[3])
+                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
+                    tort = i[5]
+                    torv = torsion.value(xyz)
+                    tor_diff = tort - torv*180./np.pi
+                    if tor_diff>180.:
+                        tor_diff-=360.
+                    elif tor_diff<-180.:
+                        tor_diff+=360.
+                    ictan[prim_idx] = -tor_diff*np.pi/180.
+    
+                    if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if print_level>0:
+                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
+    
+                elif "OOP" in i:
+                    index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
+                    oop = OutOfPlane(index[0],index[1],index[2],index[3])
+                    prim_idx = node1.coord_obj.Prims.dof_index(oop)
+                    oopt = i[5]
+                    oopv = oop.value(xyz)
+                    oop_diff = oopt - oopv*180./np.pi
+                    if oop_diff>180.:
+                        oop_diff-=360.
+                    elif oop_diff<-180.:
+                        oop_diff+=360.
+                    ictan[prim_idx] = -oop_diff*np.pi/180.
+    
+                    if oop_diff*np.pi/180.>0.1 or oop_diff*np.pi/180.<0.1:
+                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
+                    if print_level>0:
+                        print((" current oopv: %4.3f align to %4.3f diff(deg): %4.3f" %(oopv*180./np.pi,oopt,oop_diff)))
+    
+            bdist = np.sqrt(bdist)
+            if np.all(ictan==0.0):
+                raise RuntimeError(" All elements are zero")
+            return ictan,bdist
 
     @staticmethod
     def get_tangent(node1,node2,print_level=1,**kwargs):
@@ -687,7 +864,7 @@ class GSM(object):
             #print "getting tangent between %i %i" % (n,n-1)
             assert nodes[n]!=None,"n is bad"
             assert nodes[n-1]!=None,"n-1 is bad"
-            ictan[n],_ = GSM.get_tangent(nodes[n-1],nodes[n])
+            ictan[n] = GSM.get_tangent_xyz(nodes[n-1].xyz,nodes[n].xyz,nodes[0].primitive_internal_coordinates)
         
             dqmaga[n] = 0.
             #ictan0= np.copy(ictan[n])
@@ -804,7 +981,7 @@ class GSM(object):
     
    
     @staticmethod
-    def ic_reparam(nodes,energies,climbing=False,ic_reparam_steps=8,print_level=1):
+    def ic_reparam(nodes,energies,climbing=False,ic_reparam_steps=8,print_level=1,NUM_CORE=1):
         '''
         Reparameterizes the string using Delocalizedin internal coordinatesusing three-way tangents at the TS node
         Only pushes nodes outwards during reparameterization because otherwise too many things change.
@@ -924,40 +1101,41 @@ class GSM(object):
                 for n in range(nnodes):
                     if abs(deltadqs[n]) > MAXRE:
                         deltadqs[n] = np.sign(deltadqs[n])*MAXRE
-                for n in range(1,TSnode):
-                    if deltadqs[n]<0:
-                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
-                    elif deltadqs[n]>0:
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n+1])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
-    
-                for n in range(TSnode+1,nnodes-1):
-                    if deltadqs[n]<0:
-                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
 
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
-                    elif deltadqs[n]>0:
-                        #print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n+1])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
+                if NUM_CORE>1:
+                    tans = [ictan[n] if deltadqs[n]<0 else ictan[n+1] for n in chain(range(1,TSnode),range(TSnode+1,nnodes-1))] #+ [ ictan[n] if deltadqs[n]<0 else ictan[n+1] for n in range(TSnode+1,nnodes-1)]
+                    pool = mp.Pool(NUM_CORE)
+                    Vecs = pool.map(worker,((nodes[0].coord_obj,"build_dlc",node.xyz,tan) for node,tan in zip(nodes[1:TSnode] + nodes[TSnode+1:nnodes-1],tans)))
+                    pool.close()
+                    pool.join()
+                    for n,node in enumerate(nodes[1:TSnode] + nodes[TSnode+1:nnodes-1]):
+                        node.coord_basis = Vecs[n]
+            
+                    # move the positions
+                    dqs = [deltadqs[n]*nodes[n].constraints[:,0] for n in chain(range(1,TSnode),range(TSnode+1,nnodes-1))]
+                    pool = mp.Pool(NUM_CORE)
+                    newXyzs = pool.map(worker,((node.coord_obj,"newCartesian",node.xyz,dq) for node,dq in zip(nodes[1:TSnode] + nodes[TSnode+1:nnodes-1],dqs)))
+                    pool.close()
+                    pool.join()
+                    for n,node in enumerate(nodes[1:TSnode] + nodes[TSnode+1:nnodes-1]):
+                        node.xyz = newXyzs[n]
+                else:
+                    for n in chain(range(1,TSnode),range(TSnode+1,nnodes-1)):
+                        if deltadqs[n]<0:
+                            #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                            print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
+                            nodes[n].update_coordinate_basis(ictan[n])
+                            constraint = nodes[n].constraints[:,0]
+                            dq = deltadqs[n]*constraint
+                            nodes[n].update_xyz(dq,verbose=(print_level>1))
+                        elif deltadqs[n]>0:
+                            print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
+                            nodes[n].update_coordinate_basis(ictan[n+1])
+                            constraint = nodes[n].constraints[:,0]
+                            dq = deltadqs[n]*constraint
+                            nodes[n].update_xyz(dq,verbose=(print_level>1))
             else:
                 # e.g 11-2 = 9, deltadq[9] -= deltadqs[10]  
-                #deltadqs[nnodes-2] -= totaldqmag*ideal_progress_gained[nnodes-2] - dqmaga[nnodes-1]
                 deltadqs[nnodes-2] -= deltadqs[nnodes-1]
                 for n in range(1,nnodes-1):
                     if abs(deltadqs[n])>MAXRE:
@@ -967,22 +1145,41 @@ class GSM(object):
                 for n in range(1,nnodes-1):
                     if abs(deltadqs[n]) > MAXRE:
                         deltadqs[n] = np.sign(deltadqs[n])*MAXRE
-                for n in range(1,nnodes-1):
-                    if deltadqs[n]<0:
-                        #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
-                    elif deltadqs[n]>0:
-                        #print(f" Moving node {n} along tan[{n+1}] this much {deltadqs[n]}")
-                        print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
-                        nodes[n].update_coordinate_basis(ictan[n+1])
-                        constraint = nodes[n].constraints[:,0]
-                        dq = deltadqs[n]*constraint
-                        nodes[n].update_xyz(dq,verbose=(print_level>1))
-    
+               
+
+                if NUM_CORE>1:
+                    # Update the coordinate basis
+                    tans = [ictan[n] if deltadqs[n]<0 else ictan[n+1] for n in range(1,nnodes-1)]
+                    pool = mp.Pool(NUM_CORE)
+                    Vecs = pool.map(worker,((nodes[0].coord_obj,"build_dlc",node.xyz,tan) for node,tan in zip(nodes[1:nnodes-1],tans)))
+                    pool.close()
+                    pool.join()
+                    for n,node in enumerate(nodes[1:nnodes-1]):
+                        node.coord_basis = Vecs[n]
+                    ## move the positions
+                    dqs = [deltadqs[n]*nodes[n].constraints[:,0] for n in range(1,nnodes-1)]
+                    pool = mp.Pool(NUM_CORE)
+                    newXyzs = pool.map(worker,((node.coord_obj,"newCartesian",node.xyz,dq) for node,dq in zip(nodes[1:nnodes-1],dqs)))
+                    pool.close()
+                    pool.join()
+                    for n,node in enumerate(nodes[1:nnodes-1]):
+                        node.xyz = newXyzs[n]
+                else:
+                    for n in range(1,nnodes-1):
+                        if deltadqs[n]<0:
+                            #print(f" Moving node {n} along tan[{n}] this much {deltadqs[n]}")
+                            print(" Moving node {} along tan[{}] this much {}".format(n, n, deltadqs[n]))
+                            nodes[n].update_coordinate_basis(ictan[n])
+                            constraint = nodes[n].constraints[:,0]
+                            dq = deltadqs[n]*constraint
+                            nodes[n].update_xyz(dq,verbose=(print_level>1))
+                        elif deltadqs[n]>0:
+                            print(" Moving node {} along tan[{}] this much {}".format(n, n+1, deltadqs[n]))
+                            nodes[n].update_coordinate_basis(ictan[n+1])
+                            constraint = nodes[n].constraints[:,0]
+                            dq = deltadqs[n]*constraint
+                            nodes[n].update_xyz(dq,verbose=(print_level>1))
+
     
         if climbing:
             ictan,dqmaga = GSM.get_tangents(nodes)

@@ -260,6 +260,22 @@ class SE_GSM(MainGSM):
         self.active[nR] = True
         #print(" Here is new active:",self.active)
 
+    def make_tan_list(self):
+        ncurrent,nlist = self.make_difference_node_list()
+        param_list = []
+        for n in range(ncurrent-1):
+            if nlist[2*n] not in param_list:
+                param_list.append(nlist[2*n])
+        return param_list
+
+    def make_move_list(self):
+        ncurrent,nlist = self.make_difference_node_list()
+        param_list = []
+        for n in range(ncurrent):
+            if nlist[2*n+1] not in param_list:
+                param_list.append(nlist[2*n+1])
+        return param_list
+
     def make_difference_node_list(self):
         ncurrent =0
         nlist = [0]*(2*self.nnodes)

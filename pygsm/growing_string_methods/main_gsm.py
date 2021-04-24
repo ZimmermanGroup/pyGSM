@@ -14,7 +14,12 @@ from utilities import block_matrix
 from coordinate_systems import rotate
 from optimizers import eigenvector_follow
 from geodesic_interpolate import redistribute
+import multiprocessing as mp
+from itertools import chain
 
+def worker(arg):
+   obj, methname = arg[:2]
+   return getattr(obj, methname)(*arg[2:])
 
 #######################################################################################
 ############### This class contains the main GSM functions  ###########################
@@ -218,7 +223,8 @@ class MainGSM(GSM):
 
                 if self.pTSnode!=self.TSnode and self.climb:
                     print("TS node changed after opting")
-                    self.slow_down_climb()
+                    self.climb=False
+                    #self.slow_down_climb()
                     self.pTSnode=self.TSnode
 
                 # opt decided Hess is not good because of overlap
@@ -256,7 +262,7 @@ class MainGSM(GSM):
                 if self.pTSnode!=self.TSnode and self.climb:
                     print("TS node changed after reparameterizing")
                     self.slow_down_climb()
-            else:
+            elif oi>=max_iter and not isConverged:
                 raise Exception(" Ran out of iterations")
 
 
@@ -272,20 +278,61 @@ class MainGSM(GSM):
 
         if not self.done_growing:
             #TODO
-            for n in range(1,self.nnodes-1):
-                if self.nodes[n] is  not None:
-                    self.nodes[n].update_coordinate_basis(self.ictan[n])
+
+            if self.mp_cores==1:
+                for n in range(1,self.nnodes-1):
+                    if self.nodes[n] is not None:
+                        Vecs = self.newic.coord_obj.build_dlc(self.nodes[n].xyz,self.ictan[n])
+                        self.nodes[n].coord_basis = Vecs
+
+            else:
+                pool = mp.Pool(self.mp_cores)
+                Vecs = pool.map(worker,((self.newic.coord_obj,"build_dlc",self.nodes[n].xyz,self.ictan[n]) for n in range(1,self.nnodes-1) if self.nodes[n] is not None ))
+                pool.close()
+                pool.join()
+    
+                i=0
+                for n in range(1,self.nnodes-1):
+                    if self.nodes[n] is not None:
+                        self.nodes[n].coord_basis = Vecs[i]
+                        i+=1
         else:
             if self.find or self.climb:            
                 energies = self.energies
                 TSnode = self.TSnode
-                for n in range(1,self.nnodes-1):
-                    # don't update tsnode coord basis 
-                    if n!=TSnode or (n==TSnode and update_TS): 
-                        self.nodes[n].update_coordinate_basis(self.ictan[n])
+                if self.mp_cores==1:
+                    for n in range(1,self.nnodes-1):
+                        # don't update tsnode coord basis 
+                        if n!=TSnode or (n==TSnode and update_TS): 
+                            Vecs = self.newic.coord_obj.build_dlc(self.nodes[n].xyz,self.ictan[n])
+                            self.nodes[n].coord_basis = Vecs
+                else:
+                    pool = mp.Pool(self.mp_cores)
+                    Vecs = pool.map(worker,((self.newic.coord_obj,"build_dlc",self.nodes[n].xyz,self.ictan[n]) for n in range(1,self.nnodes-1) if n!=TSnode))
+                    pool.close()
+                    pool.join()
+                    for i,n in enumerate(chain(range(1,TSnode),range(TSnode+1,self.nnodes-1))):
+                        self.nodes[n].coord_basis = Vecs[i]
+
+                    if update_TS:
+                        Vec = self.newic.coord_obj.build_dlc(self.nodes[TSnode].xyz,self.ictan[TSnode])
+                        self.nodes[TSnode].coord_basis = Vec
+
             else:
-                for n in range(1,self.nnodes-1):
-                    self.nodes[n].update_coordinate_basis(self.ictan[n])
+                #for n in range(1,self.nnodes-1):
+                #    self.nodes[n].update_coordinate_basis(self.ictan[n])
+
+                if self.mp_cores==1:
+                    Vecs=[]
+                    for n in range(1,self.nnodes-1):
+                        Vecs.append(self.newic.coord_obj.build_dlc(self.nodes[n].xyz,self.ictan[n]))
+                elif self.mp_cores>1:
+                    pool = mp.Pool(self.mp_cores)
+                    Vecs = pool.map(worker,((self.newic.coord_obj,"build_dlc",self.nodes[n].xyz,self.ictan[n]) for n in range(1,self.nnodes-1)))
+                    pool.close()
+                    pool.join()
+                for n,node in enumerate(self.nodes[1:self.nnodes-1]):
+                    node.coord_basis = Vecs[n]
 
 
     def optimize_iteration(self,opt_steps):
@@ -353,12 +400,24 @@ class MainGSM(GSM):
             print(nlist)
     
         for n in range(ncurrent):
-            print(" ictan[{}]".format(nlist[2*n]))
-            ictan0,_ = self.get_tangent(
-                    node1=self.nodes[nlist[2*n]],
-                    node2=self.nodes[nlist[2*n+1]],
-                    driving_coords=self.driving_coords,
-                    )
+            #ictan0,_ = self.get_tangent(
+            #        node1=self.nodes[nlist[2*n]],
+            #        node2=self.nodes[nlist[2*n+1]],
+            #        driving_coords=self.driving_coords,
+            #        )
+
+            if self.__class__.__name__=="DE_GSM": # or self.__class__.__name__=="SE_Cross":
+                print(" getting tangent [%i ]from between %i %i pointing towards %i"%(nlist[2*n],nlist[2*n],nlist[2*n+1],nlist[2*n]))
+                ictan0 = self.get_tangent_xyz(self.nodes[nlist[2*n]].xyz,
+                    self.nodes[nlist[2*n+1]].xyz,
+                    self.nodes[0].primitive_internal_coordinates)
+            else:
+                ictan0,_ = self.get_tangent(
+                        node1=self.nodes[nlist[2*n]],
+                        node2=self.nodes[nlist[2*n+1]],
+                        driving_coords=self.driving_coords,
+                        )
+
     
             if self.print_level>1:
                 print("forming space for", nlist[2*n+1])
@@ -556,7 +615,7 @@ class MainGSM(GSM):
         '''
         if self.interp_method == 'DLC':
             print('reparameterizing')
-            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=(self.climb or self.find),ic_reparam_steps=ic_reparam_steps)
+            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=(self.climb or self.find),ic_reparam_steps=ic_reparam_steps,NUM_CORE=self.mp_cores)
         elif self.interp_method == 'Geodesic':
              self.geodesic_reparam()
         return
@@ -599,12 +658,10 @@ class MainGSM(GSM):
         emax = -1000 # And this?
 
         if self.current_nnodes==self.nnodes:
-            self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=False,ic_reparam_steps=8)
             return
 
         for i in range(ic_reparam_steps):
             self.ictan,self.dqmaga = self.get_tangents_growing()
-            self.refresh_coordinates()
             totaldqmag = np.sum(self.dqmaga[n0:self.nR-1])+np.sum(self.dqmaga[self.nnodes-self.nP+1:self.nnodes])
             if self.print_level>0:
                 if i==0:
@@ -670,26 +727,41 @@ class MainGSM(GSM):
             if disprms < 1e-2:
                 break
 
-            ncurrent,nlist = self.make_difference_node_list()
-            param_list=[]
-            for n in range(ncurrent):
-                if nlist[2*n+1] not in param_list:
-                    if rpmove[nlist[2*n+1]]<0:
-                        # Using tangent pointing inner?
-                        print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n]))
-                        self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
-                        constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
-                        dq0 = rpmove[nlist[2*n+1]]*constraint
-                        self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
-                        param_list.append(nlist[2*n+1])
-                    #else:
-                    #    # Using tangent point outer
-                    #    print('Moving {} along ictan[{}]'.format(nlist[2*n+1],nlist[2*n]))
-                    #    self.nodes[nlist[2*n+1]].update_coordinate_basis(constraints=self.ictan[nlist[2*n]])
-                    #    constraint = self.nodes[nlist[2*n+1]].constraints[:,0]
-                    #    dq0 = rpmove[nlist[2*n+1]]*constraint
-                    #    self.nodes[nlist[2*n+1]].update_xyz(dq0,verbose=True)
-                    #    param_list.append(nlist[2*n+1])
+            move_list = self.make_move_list()
+            tan_list = self.make_tan_list()
+
+
+            if self.mp_cores>1:
+                pool = mp.Pool(self.mp_cores)
+                Vecs = pool.map(worker,((self.nodes[0].coord_obj,"build_dlc",self.nodes[n].xyz,self.ictan[ntan]) for n,ntan in zip(move_list,tan_list) if rpmove[n]<0))
+                pool.close()
+                pool.join()
+
+                i=0
+                for n in move_list:
+                    if rpmove[n]<0:
+                        self.nodes[n].coord_basis = Vecs[i]
+                        i+=1
+            
+                # move the positions
+                pool = mp.Pool(self.mp_cores)
+                newXyzs = pool.map(worker,((self.nodes[n].coord_obj,"newCartesian",self.nodes[n].xyz,rpmove[n]*self.nodes[n].constraints[:,0]) for n in move_list if rpmove[n]<0))
+                pool.close()
+                pool.join()
+                i=0
+                for n in move_list:
+                    if rpmove[n]<0:
+                        self.nodes[n].xyz = newXyzs[i]
+                        i+=1
+            else:
+                for nmove,ntan in zip(move_list,tan_list):
+                    if rpmove[nmove] <0:
+                            print('Moving {} along ictan[{}]'.format(nmove,ntan))
+                            self.nodes[nmove].update_coordinate_basis(constraints=self.ictan[ntan])
+                            constraint = self.nodes[nmove].constraints[:,0]
+                            dq0 = rpmove[nmove]*constraint
+                            self.nodes[nmove].update_xyz(dq0,verbose=True)
+
         print(" spacings (end ic_reparam, steps: {}/{}):".format(i+1,ic_reparam_steps), end=' ')
         for n in range(self.nnodes):
             print(" {:1.2}".format(self.dqmaga[n]), end=' ')
@@ -1108,6 +1180,11 @@ class MainGSM(GSM):
             #self.nodes[struct].PES.dE = dE[struct]
         self.nnodes=self.nR=nstructs
 
+        if reparametrize:
+            printcool("Reparametrizing")
+            self.reparameterize(ic_reparam_steps=8)
+            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+
         if restart_energies:
             # initial energy
             self.nodes[0].V0 = self.nodes[0].energy 
@@ -1125,10 +1202,6 @@ class MainGSM(GSM):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
 
-        if reparametrize:
-            printcool("Reparametrizing")
-            self.reparameterize(ic_reparam_steps=8)
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         self.ictan,self.dqmaga = self.get_tangents(self.nodes)
         self.refresh_coordinates()
@@ -1237,3 +1310,4 @@ class MainGSM(GSM):
             self.climb = True
             self.nclimb=1
             print(" Find bad, going back to climb")
+

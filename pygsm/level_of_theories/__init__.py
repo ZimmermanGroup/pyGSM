@@ -5,3 +5,4 @@
 #from orca import Orca
 #from openmm import OpenMM
 #from .pdynamo import pDynamo
+from .nanoreactor_engine import nanoreactor_engine

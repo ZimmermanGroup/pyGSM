@@ -193,14 +193,14 @@ class InternalCoordinates(object):
     def GInverse_SVD(self, xyz):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
-        nifty.click()
+        #nifty.click()
         loops = 0
         while True:
             try:
                 G = self.GMatrix(xyz)
-                time_G = nifty.click()
+                #time_G = nifty.click()
                 U, S, VT = np.linalg.svd(G)
-                time_svd = nifty.click()
+                #time_svd = nifty.click()
             except np.linalg.LinAlgError:
                 nifty.logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
@@ -226,11 +226,11 @@ class InternalCoordinates(object):
 
     def GInverse_EIG(self, xyz):
         xyz = xyz.reshape(-1,3)
-        nifty.click()
+        #nifty.click()
         G = self.GMatrix(xyz)
-        time_G = nifty.click()
+        #time_G = nifty.click()
         Gi = np.linalg.inv(G)
-        time_inv = nifty.click()
+        #time_inv = nifty.click()
         # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
         return Gi
 
