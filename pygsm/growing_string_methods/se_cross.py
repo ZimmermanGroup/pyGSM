@@ -12,7 +12,7 @@ sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
 from wrappers import Molecule
 from .se_gsm import SE_GSM
-from potential_energy_surfaces import Avg_PES
+from potential_energy_surfaces import Avg_PES,PES
 from utilities.manage_xyz import write_molden_geoms
 
 
@@ -47,28 +47,50 @@ class SE_Cross(SE_GSM):
 
 
         if True:
+            path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nR-1))
             # doing extra constrained penalty optimization for MECI
             print(" extra constrained optimization for the nnR-1 = %d" % (self.nR-1))
-            self.optimizer[self.nR-1].conv_grms=self.options['CONV_TOL']*2.5
-            ictan,_ = self.get_tangent(self.nodes[self.nR-1],self.nodes[self.nR-2])
-            self.nodes[self.nR-1].PES.sigma=3.5
-
+            self.optimizer[self.nR-1].conv_grms=self.options['CONV_TOL']*5
+            ictan = self.get_tangent_xyz(self.nodes[self.nR-1].xyz,self.nodes[self.nR-2].xyz,self.newic.primitive_internal_coordinates)
+            self.nodes[self.nR-1].PES.sigma=1.5
             self.optimizer[self.nR-1].optimize(
                     molecule=self.nodes[self.nR-1],
                     refE=self.nodes[0].V0,
                     opt_type='ICTAN',
-                    opt_steps=50,
+                    opt_steps=5,
                     ictan=ictan,
+                    path=path,
+                    )
+            ictan = self.get_tangent_xyz(self.nodes[self.nR-1].xyz,self.nodes[self.nR-2].xyz,self.newic.primitive_internal_coordinates)
+            self.nodes[self.nR-1].PES.sigma=2.5
+            self.optimizer[self.nR-1].optimize(
+                    molecule=self.nodes[self.nR-1],
+                    refE=self.nodes[0].V0,
+                    opt_type='ICTAN',
+                    opt_steps=5,
+                    ictan=ictan,
+                    path=path,
+                    )
+            ictan = self.get_tangent_xyz(self.nodes[self.nR-1].xyz,self.nodes[self.nR-2].xyz,self.newic.primitive_internal_coordinates)
+            self.nodes[self.nR-1].PES.sigma=3.5
+            self.optimizer[self.nR-1].optimize(
+                    molecule=self.nodes[self.nR-1],
+                    refE=self.nodes[0].V0,
+                    opt_type='ICTAN',
+                    opt_steps=5,
+                    ictan=ictan,
+                    path=path,
                     )
 
+        write_molden_geoms('after_penalty_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
         self.optimizer[self.nR].opt_cross=True
+        self.nodes[0].V0 = self.nodes[0].PES.PES2.energy 
         if rtype==0:
             # MECI optimization
-            #self.write_xyz_files('after_penalty_{:03}'.format(self.ID))
-            write_molden_geoms('after_penalty_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             avg_pes = Avg_PES.create_pes_from(self.nodes[self.nR].PES)
             self.nodes[self.nR].PES = avg_pes
+            path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nR))
             self.optimizer[self.nR].conv_grms=self.options['CONV_TOL']
             self.optimizer[self.nR].conv_gmax = 0.1 # self.options['CONV_gmax']
             self.optimizer[self.nR].conv_Ediff = self.options['CONV_Ediff']
@@ -78,15 +100,27 @@ class SE_Cross(SE_GSM):
                     refE=self.nodes[0].V0,
                     opt_type='MECI',
                     opt_steps=100,
+                    verbose=True,
+                    path=path,
                     )
-            #self.write_xyz_files('grown_string_{:03}'.format(self.ID))
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            if not self.optimizer[self.nR].converged:
+                print("doing extra optimization in hopes that the MECI will converge.")
+                if self.nodes[self.nR].PES.PES2.energy - self.nodes[0].V0 <20: 
+                    self.optimizer[self.nR].optimize(
+                            molecule=self.nodes[self.nR],
+                            refE=self.nodes[0].V0,
+                            opt_type='MECI',
+                            opt_steps=100,
+                            verbose=True,
+                            path=path,
+                            )
         else:
             # unconstrained penalty optimization
             #TODO make unctonstrained "CROSSING" which checks for dE convergence
             self.nodes[self.nR] = Molecule.copy_from_options(self.nodes[self.nR-1],new_node_id=self.nR)
             self.nodes[self.nR].PES.sigma = 10.0
             print(" sigma for node %d is %.3f" %(self.nR,self.nodes[self.nR].PES.sigma))
+            path=os.path.join(os.getcwd(),'scratch/{:03d}/{}'.format(self.ID,self.nR))
             self.optimizer[self.nR].opt_cross=True
             self.optimizer[self.nR].conv_grms = self.options['CONV_TOL']
             #self.optimizer[self.nR].conv_gmax = self.options['CONV_gmax']
@@ -97,12 +131,14 @@ class SE_Cross(SE_GSM):
                     refE=self.nodes[0].V0,
                     opt_type='UNCONSTRAINED',
                     opt_steps=200,
+                    verbose=True,
+                    path=path,
                     )
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+        write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         if self.optimizer[self.nR].converged:
-            self.nnodes=self.nR
-            self.nodes = self.nodes[:self.nR]
+            self.nnodes=self.nR+1
+            self.nodes = self.nodes[:self.nnodes]
             print("Setting all interior nodes to active")
             for n in range(1,self.nnodes-1):
                 self.active[n]=True
@@ -110,9 +146,9 @@ class SE_Cross(SE_GSM):
             self.active[0] = False
 
             # Convert all the PES to excited-states
-            for n in range(self.nR):
-                self.nodes[n].PES = PES.create_from(self.nodes[n].PES.PES1)
-            self.set_V0()
+            for n in range(self.nnodes):
+                self.nodes[n].PES = PES.create_pes_from(self.nodes[n].PES.PES2,
+                        options={'gradient_states': [(1,1)]})
 
             print(" initial ic_reparam")
             self.reparameterize(ic_reparam_steps=25)
@@ -143,32 +179,6 @@ class SE_Cross(SE_GSM):
             print("Exiting early")
             self.end_early=True
 
-
-    
-    #def converged(self,n,opt_type):
-    #    if opt_type=="UNCSONTRAINED":
-    #        tmp1 = np.copy(self.nodes[n].PES.grad1)
-    #        tmp2 = np.copy(self.nodes[n].PES.grad2)
-    #        print('norm1: {:1.4f} norm2: {:1.4f}'.format(np.linalg.norm(tmp1),np.linalg.norm(tmp2)))
-    #        print('ratio: {:1.4f}'.format(np.linalg.norm(tmp1)/np.linalg.norm(tmp2)))
-    #        tmp1 = tmp1/np.linalg.norm(tmp1)
-    #        tmp2 = tmp2/np.linalg.norm(tmp2)
-    #        print('normalized gradient dot product:',float(np.dot(tmp1.T,tmp2)))
-    #        sys.stdout.flush()
-    #        if self.nodes[n].gradrms<self.options['CONV_TOL'] and 1.-abs(float(np.dot(tmp1.T,tmp2))) <= 0.02 and abs(self.nodes[n].PES.dE) <= 1.25:
-    #            return True
-    #        else:
-    #            return False
-    #    elif opt_type=="ICTAN": #constrained growth
-    #        if self.nodes[n].gradrms<self.optimizer[n].conv_grms:
-    #            return True
-    #        else:
-    #            return False
-    #    elif opt_type=="MECI":
-    #        if self.nodes[n].gradrms<self.options['CONV_TOL'] and abs(self.nodes[n].PES.dE) <= 1.0:
-    #            return True
-    #        else:
-    #            return False
 
     def check_if_grown(self):
         isDone = False

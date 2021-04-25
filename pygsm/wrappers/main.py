@@ -551,7 +551,6 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        #gsm.restart_string(args.restart_file,rtype,args.reparametrize)
         gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
@@ -560,14 +559,17 @@ def main():
                 analyze_ICs=args.dont_analyze_ICs,
                 have_TS=False,
                 )
-        manage_xyz.write_xyz('TSnode.xyz',gsm.nodes[gsm.nR].geometry)
+        manage_xyz.write_xyz(f'meci_{gsm.ID}.xyz',gsm.nodes[gsm.nR].geometry)
+
+        if not gsm.end_early:
+            manage_xyz.write_xyz(f'TSnode_{gsm.ID}.xyz',gsm.nodes[gsm.TSnode].geometry)
     else:
         post_processing(
                 gsm,
                 analyze_ICs=args.dont_analyze_ICs,
                 have_TS=True,
                 )
-        manage_xyz.write_xyz('TSnode.xyz',gsm.nodes[gsm.TSnode].geometry)
+        manage_xyz.write_xyz(f'TSnode_{gsm.ID}.xyz',gsm.nodes[gsm.TSnode].geometry)
 
     cleanup_scratch(gsm.ID)
 
