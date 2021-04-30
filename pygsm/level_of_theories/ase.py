@@ -8,6 +8,7 @@ try:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.data import atomic_numbers
+    from ase import units
 except ModuleNotFoundError:
     print("ASE not installed, ASE-based calculators will not work")
 
@@ -25,6 +26,16 @@ class ASELoT(Lot):
 
         self.ase_calculator = calculator
 
+    @classmethod
+    def from_options(cls, calculator: Calculator, **kwargs):
+        """ Returns an instance of this class with default options updated from values in kwargs"""
+        return cls(calculator, cls.default_options().set_values(kwargs))
+
+    @classmethod
+    def copy(cls, lot, options, copy_wavefunction=True):
+        assert isinstance(lot, ASELoT)
+        return cls(lot.ase_calculator, lot.options.copy().set_values(options))
+
     def run(self, geom, mult, ad_idx, runtype='gradient'):
         # run ASE
         self.run_ase_atoms(xyz_to_ase(geom), mult, ad_idx, runtype)
@@ -35,14 +46,15 @@ class ASELoT(Lot):
 
         # perform gradient calculation if needed
         if runtype == "gradient":
-            self._Gradients[(mult, ad_idx)] = self.Gradient(atoms.get_forces(), 'eV/A')
+            self._Gradients[(mult, ad_idx)] = self.Gradient(- atoms.get_forces() / units.Ha * units.Bohr,
+                                                            'Hartree/Bohr')
         elif runtype == "energy":
             pass
         else:
             raise NotImplementedError(f"Run type {runtype} is not implemented in the ASE calculator interface")
 
         # energy is always calculated -> cached if force calculation was done
-        self._Energies[(mult, ad_idx)] = self.Energy(atoms.get_potential_energy(), 'eV')
+        self._Energies[(mult, ad_idx)] = self.Energy(atoms.get_potential_energy() / units.Ha, 'Hartree')
 
         # write E to scratch
         self.write_E_to_file()
@@ -65,10 +77,10 @@ def xyz_to_ase(xyz):
 
     """
 
-    # atomic numbers
-    numbers = [atomic_numbers(x) for x in xyz[:, 0]]
-
-    return geom_to_ase(numbers, xyz[:, 1:4])
+    # compatible with list-of-list as well
+    numbers = [atomic_numbers[x[0]] for x in xyz]
+    pos = [x[1:4] for x in xyz]
+    return geom_to_ase(numbers, pos)
 
 
 def geom_to_ase(numbers, positions, **kwargs):
