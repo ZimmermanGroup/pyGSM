@@ -4,10 +4,12 @@ https://gitlab.com/ase/ase
 
 Written by Tamas K. Stenczel in 2021
 """
-
-from ase import Atoms
-from ase.calculators.calculator import Calculator
-from ase.data import atomic_numbers
+try:
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator
+    from ase.data import atomic_numbers
+except ModuleNotFoundError:
+    print("ASE not installed, ASE-based calculators will not work")
 
 from .base_lot import Lot
 
