@@ -335,7 +335,7 @@ class TeraChem(Lot):
                 os.system(cp_coup)
 
         # clean up
-        rm_cmd = 'rm -rf scratch/{}/{}/scr'.format(self.ID,self.node_id)
+        rm_cmd = 'rm -rf scratch/{:03}/{}/scr'.format(self.ID,self.node_id)
         os.system(rm_cmd)
 
         return

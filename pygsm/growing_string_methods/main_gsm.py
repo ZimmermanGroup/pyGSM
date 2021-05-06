@@ -13,7 +13,6 @@ from utilities.manage_xyz import write_molden_geoms,xyz_to_np,get_atoms,np_to_xy
 from utilities import block_matrix
 from coordinate_systems import rotate
 from optimizers import eigenvector_follow
-from geodesic_interpolate import redistribute
 import multiprocessing as mp
 from itertools import chain
 
@@ -616,29 +615,9 @@ class MainGSM(GSM):
         if self.interp_method == 'DLC':
             print('reparameterizing')
             self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=(self.climb or self.find),ic_reparam_steps=ic_reparam_steps,NUM_CORE=self.mp_cores)
-        elif self.interp_method == 'Geodesic':
-             self.geodesic_reparam()
         return
 
     
-    def geodesic_reparam(self):
-        '''
-        Reparameterize using Geodesic interpolation
-        '''
-        printcool(' Reparameterizing using Geodesic Interpolation.')
-        TSnode = self.TSnode
-        if self.climb or self.find:
-            a  = GSM.geodesic_reparam( self.nodes[0:self.TSnode] )
-            b = GSM.geodesic_reparam( self.nodes[self.TSnode:] )
-            new_xyzs = np.vstack((a,b))
-        else:
-            new_xyzs =  GSM.geodesic_reparam(self.nodes) 
-
-        for i,xyz in enumerate(new_xyzs):
-            self.nodes[i].xyz  = xyz
-
-        self.refresh_coordinates()
-
 
     def ic_reparam_g(self,ic_reparam_steps=4,n0=0,reparam_interior=True):  #see line 3863 of gstring.cpp
         """

@@ -20,11 +20,6 @@ from optimizers._linesearch import double_golden_section
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 from coordinate_systems.rotate import get_quat,calc_fac_dfac
 
-try:
-    from geodesic_interpolate import Geodesic,redistribute
-except ImportError:
-    nifty.logger.warning("Geodesic interpolation cannot be imported. Don't use geodesic interpolation.")
-
 def worker(arg):
    obj, methname = arg[:2]
    return getattr(obj, methname)(*arg[2:])
@@ -360,33 +355,6 @@ class GSM(object):
         self._dqmaga = value
 
 
-    @staticmethod
-    def geodesic_reparam(nodes):
-        '''
-        takes gsm nodes and reparameterizes the geometries using geodesic interpolation
-        '''
-    
-        xyzs = []
-        for mol in nodes:
-            xyzs.append( mol.xyz ) 
-        symbols = nodes[0].atom_symbols
-    
-        # Perform smoothing by minimizing distance in Cartesian coordinates with redundant internal metric
-        # to find the appropriate geodesic curve on the hyperspace.
-        smoother = Geodesic(symbols, xyzs, 1.7, threshold=3, friction=1e-2)
-        try:
-            smoother.smooth(tol=1.7, max_iter=15)
-        finally:
-            # Save the smoothed path to output file.  try block is to ensure output is saved if one ^C the
-            # process, or there is an error
-            new_geoms = []
-            for xyz in smoother.path:
-                new_geoms.append( manage_xyz.combine_atom_xyz(symbols,xyz))
-    
-            manage_xyz.write_xyzs('tmp.xyz', new_geoms)
-    
-        return smoother.path
- 
     @staticmethod
     def add_xyz_along_tangent(
             xyz1,
