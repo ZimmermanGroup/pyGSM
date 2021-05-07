@@ -409,7 +409,7 @@ class Lot(object):
         #return np.reshape(self.coup,(3*len(self.geom),1))*units.ANGSTROM_TO_AU
 
     def write_E_to_file(self):
-        with open('scratch/E_{}.txt'.format(self.node_id),'w') as f:
+        with open('scratch/{:03}/E_{}.txt'.format(self.ID,self.node_id),'w') as f:
             for key,Energy in self.Energies.items():
                 f.write('{} {} {:9.7f} Hartree\n'.format(key[0],key[1],Energy.value))
 

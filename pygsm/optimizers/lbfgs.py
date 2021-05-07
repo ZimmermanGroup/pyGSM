@@ -297,11 +297,19 @@ class lbfgs(base_optimizer):
             print(" gmax %5.4f disp %5.4f dEstep %5.4f gradrms %5.4f\n" % (gmax,disp,dEstep,molecule.gradrms))
             self.converged=False
             if self.opt_cross and abs(dE)<self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp and ls['status']==0:
-                self.converged=True
-            elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
-                if self.opt_climb and opt_type=="CLIMB":
+
+                # TODO Seam Climb
+                if opt_type=="TS-SEAM":
                     gts = np.dot(g.T,molecule.constraints[:,0])
-                    if abs(gts)<self.conv_grms:
+                    if abs(gts)<self.conv_grms*5:
+                        self.converged=True
+                else:
+                    self.converged=True
+
+            elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
+                if opt_type=="CLIMB":
+                    gts = np.dot(g.T,molecule.constraints[:,0])
+                    if abs(gts)<self.conv_grms*5:
                         self.converged=True
                 else:
                     self.converged=True

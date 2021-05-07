@@ -230,7 +230,10 @@ class MainGSM(GSM):
                 if self.find and (not self.optimizer[self.TSnode].maxol_good or added):
                     self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
                     self.modify_TS_Hess()
-                elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 5 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
+                elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg==0 or self.hess_counter > 10 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms >self.CONV_TOL:
+
+                    # Reform the guess primitive Hessian
+                    self.nodes[self.TSnode].form_Primitive_Hessian()
                     if self.hessrcount<1 and self.pTSnode == self.TSnode:
                         print(" resetting TS node coords Ut (and Hessian)")
                         self.ictan,self.dqmaga = self.get_three_way_tangents(self.nodes,self.energies)
@@ -472,13 +475,14 @@ class MainGSM(GSM):
     def set_stage(self,totalgrad,sumgradrms, ts_cgradq,ts_gradrms,fp):
 
         # checking sum gradrms is not good because if one node is converged a lot while others a re not this is bad
-        #sum_conv_tol = np.sum([self.optimizer[n].conv_grms*1.05 for n in range(1,self.nnodes-1)])
-        all_converged = all([ self.nodes[n].gradrms < self.optimizer[n].conv_grms for n in range(1,self.nnodes-1) ])
-        all_converged_climb = all([ self.nodes[n].gradrms < self.CONV_TOL  for n in range(1,self.nnodes-1) ])
+        all_converged = all([ self.nodes[n].gradrms < self.optimizer[n].conv_grms*1.1 for n in range(1,self.nnodes-1) ])
+        all_converged_climb = all([ self.nodes[n].gradrms < self.optimizer[n].conv_grms*2.5 for n in range(1,self.nnodes-1) ])
         stage_changed=False
 
         #TODO totalgrad is not a good criteria for large systems
-        if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 2.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
+        #if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 2.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
+
+        if fp>0 and all_converged_climb and self.dE_iter<2.:   #and self.nopt_intermediate<1:
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb=True
@@ -491,9 +495,9 @@ class MainGSM(GSM):
             elif (self.climb and not self.find and self.finder and self.nclimb<1  and
                     ((totalgrad<0.2 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.01) or #  I hate totalgrad 
                     (totalgrad<0.1 and ts_gradrms<self.CONV_TOL*10. and ts_cgradq<0.02) or  #
-                    (all_converged_climb) or
-                    (ts_gradrms<self.CONV_TOL*5.)  #  used to be 5
-                    )) and self.dE_iter<1.5:
+                    (all_converged) or
+                    (ts_gradrms<self.CONV_TOL*2.5 and ts_cgradq < 0.01)  #  used to be 5
+                    )) and self.dE_iter<1.:
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" %(totalgrad,ts_gradrms,ts_cgradq))
                 self.find=True
@@ -1253,7 +1257,7 @@ class MainGSM(GSM):
         ''' set convergence for nodes
         '''
 
-        factor = 2.5 if (self.climber or self.finder) else 1.
+        factor = 5. if (self.climber or self.finder) else 1.
         TSnode=self.TSnode
         for n in range(1,self.nnodes-1):
             if self.nodes[n] !=None:

@@ -451,7 +451,7 @@ def main():
             conv_dE = inpfileq['conv_dE'],
             conv_gmax = inpfileq['conv_gmax'],
             DMAX = inpfileq['DMAX'],
-            opt_climb = True if args.only_climb else False,
+            #opt_climb = True if args.only_climb else False,
             )
 
     # GSM

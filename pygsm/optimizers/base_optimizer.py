@@ -221,6 +221,7 @@ class base_optimizer(object):
         self.dx=0.
         self.dg=0.
         self.maxol_good=True
+        self.gtse=100.
 
         # additional parameters needed by linesearch
         self.linesearch_parameters = {
@@ -593,6 +594,8 @@ class base_optimizer(object):
             gqe = np.dot(tmph,g)
             path_overlap_e_g = gqe[maxoln]
             print(' gtse: {:1.4f} '.format(path_overlap_e_g[0]))
+            # save gtse in memory ...
+            self.gtse = abs(path_overlap_e_g[0])
             # => calculate eigenvector step <=#
             dqe0 = np.zeros((molecule.num_coordinates,1))
             for i in range(molecule.num_coordinates):
