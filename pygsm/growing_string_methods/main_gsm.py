@@ -252,6 +252,8 @@ class MainGSM(GSM):
             filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi)
             write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
 
+            print(" End early counter {}".format(self.endearly_counter))
+
             #TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}\n".format(oi,float(totalgrad),float(gradrms),self.TSnode,float(self.emax)))
             oi += 1
@@ -265,6 +267,7 @@ class MainGSM(GSM):
                     print("TS node changed after reparameterizing")
                     self.slow_down_climb()
             elif oi>=max_iter and not isConverged:
+                self.ran_out = True
                 raise Exception(" Ran out of iterations")
 
 
@@ -1060,11 +1063,24 @@ class MainGSM(GSM):
         '''
         TS_conv = self.CONV_TOL
         # => Check if intermediate exists 
-        if self.has_intermediate(self.noise) and rtype>0 and not (self.climb or self.find):
-            printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
-            self.endearly=True
-            self.tscontinue=False
-            return True
+        #ALEX REMOVED CLIMB REQUIREMENT
+        if self.has_intermediate(self.noise):
+            print("New pot min: {}".format(self.get_intermediate(self.noise)))
+            print("Old pot min: {}".format(self.pot_min))
+            if self.get_intermediate(self.noise) == self.pot_min:
+                self.endearly_counter += 1
+            else:
+                self.pot_min = self.get_intermediate(self.noise)
+                self.endearly_counter = 1
+            if self.endearly_counter >= 3:
+                self.end_early=True
+                self.tscontinue=False
+                printcool(" THERE IS AN INTERMEDIATE, OPTIMIZE THE INTERMEDIATE AND TRY AGAIN")
+                return True
+
+        elif not self.has_intermediate(self.noise):
+            self.endearly_counter = 0
+            self.pot_min = self.get_intermediate(self.noise)
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
         if (self.finder and self.find):
@@ -1085,7 +1101,7 @@ class MainGSM(GSM):
         print()
 
 
-    def has_intermediate(self,noise):
+    def get_intermediate(self,noise):
         '''
         Check string for intermediates
         noise is a leeway factor for determining intermediate
@@ -1119,7 +1135,12 @@ class MainGSM(GSM):
                 print('Potential minimum at image %s' % i)
                 potential_min.append(i)
     
-        return len(potential_min)>0            
+        return potential_min
+
+
+    def has_intermeiate(self,noise):
+        pot_min = self.get_intermediate(noise)
+        retun len(pot_min)>0
 
 
     def setup_from_geometries(self,input_geoms,reparametrize=True,restart_energies=True):

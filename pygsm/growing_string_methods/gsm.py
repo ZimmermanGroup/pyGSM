@@ -249,14 +249,20 @@ class GSM(object):
         self.finder=False   # is this string a finder?
         self.done_growing = False
         self.nclimb=0
-        self.nopt_intermediate=0
-        self.flag_intermediate=False
         self.nhessreset=10  # are these used??? TODO 
         self.hessrcount=0   # are these used?!  TODO
         self.hess_counter = 0   # it is probably good to reset the hessian
         self.newclimbscale=2.
         self.TS_E_0 = None 
         self.dE_iter = 100.  # change in max TS node
+
+
+        self.nopt_intermediate=0     # might be a duplicate of endearly_counter
+        self.flag_intermediate=False
+        self.endearly_counter = 0  # Find the intermediate x time
+        self.pot_min = []
+        self.ran_out = False   # if it ran out of iterations
+
         self.newic  = Molecule.copy_from_options(self.nodes[0]) # newic object is used for coordinate transformations
 
 

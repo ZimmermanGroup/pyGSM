@@ -57,17 +57,17 @@ class DE_GSM(MainGSM):
             self.reparameterize()
             write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
-            # TODO Can check if there are any intermediates here
-
-        else:
-            if self.has_intermediate(self.noise):
-                nifty.printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
-                try:
-                    self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
-                except Exception as error:
-                    print(" Done optimizing 3 times, checking if intermediate still exists")
-                    if self.has_intermediate(self.noise):
-                        self.tscontinue=False
+        
+        # Can check for intermediate at beginning but not doing that now.
+        #else:
+        #    if self.has_intermediate(self.noise):
+        #        nifty.printcool(f" WARNING THIS REACTION HAS AN INTERMEDIATE within noise {self.noise}, opting out")
+        #        try:
+        #            self.optimize_string(max_iter=3,opt_steps=opt_steps,rtype=0)
+        #        except Exception as error:
+        #            print(" Done optimizing 3 times, checking if intermediate still exists")
+        #            if self.has_intermediate(self.noise):
+        #                self.tscontinue=False
 
         if self.tscontinue:
             try:
