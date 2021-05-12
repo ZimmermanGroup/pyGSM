@@ -185,17 +185,26 @@ class TeraChem(Lot):
         if type(self.unrestricted)==str:
             self.unrestricted==str2bool(self.unrestricted)
         # if any of the states are open-shell then use unrestricted... should probably check there are no doublets and singlets in same calculation
-        for state in lot.states:
+        for state in self.states:
           if state[0] == 2:
               self.unrestricted=True
 
         self.file_options.set_active('casguess','scratch/{:03}/{}/c0.casscf'.format(self.ID,self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf=="yes"),msg='')
 
-        guess_file='scratch/{:03}/{}/c0'.format(self.ID,self.node_id)
+        if self.unrestricted:
+            guess_file = 'scratch/{:03}{}/ca0'.format(self.ID,self.node_id)
+        else:
+            guess_file='scratch/{:03}/{}/c0'.format(self.ID,self.node_id)
         if os.path.isfile(guess_file):
-            self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
-                    clash=(self.file_options.casscf or self.file_options.fomo),
-                    depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
+            if self.unrestricted:
+                guess_file2 = 'scratch/{:03}{}/ca0'.format(self.ID,self.node_id)
+                self.file_options.set_active('guess',guess_file+guess_file2,str,doc='guess for dft/HF',
+                        clash=(self.file_options.casscf or self.file_options.fomo),
+                        depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
+            else:
+                self.file_options.set_active('guess',guess_file,str,doc='guess for dft/HF',
+                        clash=(self.file_options.casscf or self.file_options.fomo),
+                        depend=(os.path.isfile(guess_file)),msg='guess does not exist deactivating for now')
         else:
                 self.file_options.set_active('guess','sad',str,doc='',
                     clash=(self.file_options.casscf or self.file_options.fomo),
@@ -224,17 +233,26 @@ class TeraChem(Lot):
                 new_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,node_id)
                 copy_file(old_path,new_path)
             else:
-                if self.unrestricted:
-                  old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
-                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
-                  copy_file(old_path,new_path)
-                  old_path = 'scratch/{:03}/{}/cb0'.format(lot.ID,lot.node_id)
-                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
-                  copy_file(old_path,new_path)
+                if lot.unrestricted:
+                    old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
+                    new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                    if os.path.isfile(old_path):
+                        copy_file(old_path,new_path)
+                    else:
+                        print(" no file to copy")
+                    old_path = 'scratch/{:03}/{}/cb0'.format(lot.ID,lot.node_id)
+                    new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                    if os.path.isfile(old_path):
+                        copy_file(old_path,new_path)
+                    else:
+                        print(" no file to copy")
                 else:
-                  old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
-                  new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
-                  copy_file(old_path,new_path)
+                    old_path = 'scratch/{:03}/{}/c0'.format(lot.ID,lot.node_id)
+                    new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
+                    if os.path.isfile(old_path):
+                        copy_file(old_path,new_path)
+                    else:
+                        print(" no file to copy")
             #cmd = 'cp -r ' + old_path +' ' + new_path
             #print(" copying scr files\n {}".format(cmd))
             #os.system(cmd)
