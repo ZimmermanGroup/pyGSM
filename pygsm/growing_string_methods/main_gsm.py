@@ -1061,7 +1061,9 @@ class MainGSM(GSM):
         '''
         Check if optimization is converged
         '''
-        TS_conv = self.CONV_TOL
+
+        # Important the factor 5 here corresponds to the same convergence criteria in the TS optimizer 
+        TS_conv = self.CONV_TOL*5
         # => Check if intermediate exists 
         #ALEX REMOVED CLIMB REQUIREMENT
         if self.has_intermediate(self.noise):
@@ -1083,10 +1085,12 @@ class MainGSM(GSM):
             self.pot_min = self.get_intermediate(self.noise)
 
         #print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
+
+        # or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
         if (self.finder and self.find):
-            return (self.nodes[self.TSnode].gradrms<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff)  or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
+            return (self.nodes[self.TSnode].gradrms<self.CONV_TOL and abs(ts_cgradq)<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3 and self.optimizer[self.TSnode].nneg<2)
         elif self.climber and self.climb:
-            return self.nodes[self.TSnode].gradrms<TS_conv and abs(ts_cgradq) < self.CONV_TOL  and self.dE_iter < 0.2
+            return (self.nodes[self.TSnode].gradrms<self.CONV_TOL and abs(ts_cgradq)<TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3)
         elif not self.climber and not self.finder:
             print(" CONV_TOL=%.4f" %self.CONV_TOL)
             return all([self.optimizer[n].converged for n in range(1,self.nnodes-1)])
@@ -1138,12 +1142,12 @@ class MainGSM(GSM):
         return potential_min
 
 
-    def has_intermeiate(self,noise):
+    def has_intermediate(self,noise):
         pot_min = self.get_intermediate(noise)
-        retun len(pot_min)>0
+        return len(pot_min)>0
 
 
-    def setup_from_geometries(self,input_geoms,reparametrize=True,restart_energies=True):
+    def setup_from_geometries(self,input_geoms,reparametrize=True,restart_energies=True,start_climb_immediately=False):
         '''
         Restart
         '''
@@ -1183,6 +1187,10 @@ class MainGSM(GSM):
             #self.nodes[struct].gradrms=grmss[struct]
             #self.nodes[struct].PES.dE = dE[struct]
         self.nnodes=self.nR=nstructs
+
+        if start_climb_immediately:
+            # should check that this is a climber...
+            self.climb=True
 
         if reparametrize:
             printcool("Reparametrizing")

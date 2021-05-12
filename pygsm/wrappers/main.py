@@ -79,6 +79,7 @@ def main():
     parser.add_argument('-reparametrize',action='store_true',help='Reparametrize restart string equally along path')
     parser.add_argument('-interp_method',default='DLC',type=str,help='')
     parser.add_argument('-bonds_file',type=str,help="A file which contains the bond indices (0-based)")
+    parser.add_argument('-start_climb_immediately',action='store_true',help='Start climbing immediately when restarting.')
 
 
     args = parser.parse_args()
@@ -551,7 +552,7 @@ def main():
             inpfileq['max_opt_steps']=20
    
     if args.restart_file is not None:
-        gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize)
+        gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize,start_climb_immediately=args.start_climb_immediately)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(
