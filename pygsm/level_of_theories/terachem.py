@@ -27,6 +27,9 @@ Don't forget to go back and try to fix this . . .
 4/20 I'm pretty sure this has been resolved for some time
 '''
 
+def str2bool(v):
+      return v.lower() in ("yes", "true", "t", "1")
+
 class TeraChem(Lot):
     def __init__(self,options):
         super(TeraChem,self).__init__(options)
@@ -163,17 +166,28 @@ class TeraChem(Lot):
             self.file_options.deactivate('prmtop')
         else:
             self.file_options.force_active('coordinates','scratch/{:03}/{}/tmp.inpcrd'.format(self.ID,self.node_id))
-        if self.file_options.xtol==None:
-            self.file_options.deactivate('xtol')
-        if self.file_options.qmindices==None:
-            self.file_options.deactivate('qmindices')
-        if self.file_options.gpumem==None:
-            self.file_options.deactivate('gpumem')
-        # dft
-        if self.file_options.rc_w==None:
-            self.file_options.deactivate('rc_w')
-        if self.file_options.dftd==None:
-            self.file_options.deactivate('dftd')
+
+        # delete?
+        #if self.file_options.xtol==None:
+        #    self.file_options.deactivate('xtol')
+        #if self.file_options.qmindices==None:
+        #    self.file_options.deactivate('qmindices')
+        #if self.file_options.gpumem==None:
+        #    self.file_options.deactivate('gpumem')
+        ## dft
+        #if self.file_options.rc_w==None:
+        #    self.file_options.deactivate('rc_w')
+        #if self.file_options.dftd==None:
+        #    self.file_options.deactivate('dftd')
+
+        # Flag for using ca0 and cb0 orbital files
+        self.unrestricted = self.file_options.UserOptions.get('unrestricted',False)
+        if type(self.unrestricted)==str:
+            self.unrestricted==str2bool(self.unrestricted)
+        # if any of the states are open-shell then use unrestricted... should probably check there are no doublets and singlets in same calculation
+        for state in lot.states:
+          if state[0] == 2:
+              self.unrestricted=True
 
         self.file_options.set_active('casguess','scratch/{:03}/{}/c0.casscf'.format(self.ID,self.node_id),str,doc='guess for casscf',depend=(self.file_options.casscf=="yes"),msg='')
 
@@ -210,11 +224,7 @@ class TeraChem(Lot):
                 new_path = 'scratch/{:03}/{}/c0.casscf'.format(lot.ID,node_id)
                 copy_file(old_path,new_path)
             else:
-                use_alpha=False
-                for state in lot.states:
-                  if state[0] == 2:
-                      use_alpha=True
-                if use_alpha:
+                if self.unrestricted:
                   old_path = 'scratch/{:03}/{}/ca0'.format(lot.ID,lot.node_id)
                   new_path = 'scratch/{:03}/{}/'.format(lot.ID,node_id)
                   copy_file(old_path,new_path)
@@ -283,7 +293,7 @@ class TeraChem(Lot):
 
         # Turn on C0 for non-CASSCF calculations after running
         if 'guess' not in self.file_options.ActiveOptions and 'casscf' not in self.file_options.ActiveOptions or self.file_options.guess in ["sad","generate"]:
-            if mult == 2:
+            if self.unrestricted:
                 self.file_options.force_active('guess','scratch/{:03}/{}/ca0 scratch/{:03}/{}/cb0'.format(self.ID,self.node_id,self.ID,self.node_id))
             else:
                 self.file_options.force_active('guess','scratch/{:03}/{}/c0'.format(self.ID,self.node_id))
@@ -312,7 +322,7 @@ class TeraChem(Lot):
             cp_cmd = 'cp scratch/{:03}/{}/scr/c0.casscf scratch/{:03}/{}/'.format(self.ID,self.node_id,self.ID,self.node_id)
             os.system(cp_cmd)
         else:
-            if mult==2:
+            if self.unrestricted:
                 cp_cmd = 'cp scratch/{:03}/{}/scr/ca0 scratch/{:03}/{}/'.format(self.ID,self.node_id,self.ID,self.node_id)
                 os.system(cp_cmd)
                 cp_cmd = 'cp scratch/{:03}/{}/scr/cb0 scratch/{:03}/{}/'.format(self.ID,self.node_id,self.ID,self.node_id)

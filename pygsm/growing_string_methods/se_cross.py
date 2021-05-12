@@ -161,11 +161,11 @@ class SE_Cross(SE_GSM):
    
             deltaE = energies[-1] - energies[0]
             if deltaE>20:
-                print(f" MECI energy is too high {deltaE}. Don't try to optimize pathway")
+                print(" MECI energy is too high %5.4f. Don't try to optimize pathway" % deltaE)
                 print("Exiting early")
                 self.end_early=True
             else:
-                print(f" deltaE s1-minimum and MECI {deltaE}")
+                print(" deltaE s1-minimum and MECI %5.4f" % deltaE)
                 try:
                     self.optimize_string(max_iter=max_iters,opt_steps=3,rtype=1)
                 except Exception as error:
