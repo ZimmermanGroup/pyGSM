@@ -15,6 +15,8 @@ import textwrap
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
+from utilities.manage_xyz import XYZ_WRITERS
+
 from potential_energy_surfaces import PES,Avg_PES,Penalty_PES
 from wrappers import Molecule
 from optimizers import *
@@ -48,6 +50,7 @@ def main():
     parser.add_argument('-optimizer',type=str,default='eigenvector_follow',help='The optimizer object. (default: %(default)s Recommend LBFGS for large molecules >1000 atoms)',required=False)
     parser.add_argument('-opt_print_level',type=int,default=1,help='Printout for optimization. 2 prints everything in opt.',required=False)
     parser.add_argument('-gsm_print_level',type=int,default=1,help='Printout for gsm. 1 prints ?',required=False)
+    parser.add_argument('-xyz_output_format',type=str,default="molden",help='Format of the produced XYZ files',required=False)
     parser.add_argument('-linesearch',type=str,default='NoLineSearch',help='default: %(default)s',choices=['NoLineSearch','backtrack'])
     parser.add_argument('-coordinate_type',type=str,default='TRIC',help='Coordinate system (default %(default)s)',choices=['TRIC','DLC','HDLC'])
     parser.add_argument('-ADD_NODE_TOL',type=float,default=0.01,help='Convergence tolerance for adding new node (default: %(default)s)',required=False)
@@ -124,6 +127,9 @@ def main():
               'opt_print_level' : args.opt_print_level,
               'linesearch' : args.linesearch,
               'DMAX'    :   args.DMAX,
+
+              #output
+              'xyz_output_format': args.xyz_output_format,
 
               #molecule
               'coordinate_type' : args.coordinate_type,
@@ -455,6 +461,7 @@ def main():
             #opt_climb = True if args.only_climb else False,
             )
 
+    
     # GSM
     nifty.printcool("Building the GSM object")
     gsm_class = getattr(sys.modules[__name__], inpfileq['gsm_type'])
@@ -472,6 +479,7 @@ def main():
                 optimizer=optimizer,
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
+                xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
                 mp_cores=args.mp_cores,
                 interp_method = args.interp_method,
                 )
@@ -487,6 +495,7 @@ def main():
                 print_level=inpfileq['gsm_print_level'],
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
+                xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
                 mp_cores=args.mp_cores,
                 interp_method = args.interp_method,
                 )

@@ -13,7 +13,6 @@ from utilities import *
 from wrappers import Molecule
 from .se_gsm import SE_GSM
 from potential_energy_surfaces import Avg_PES,PES
-from utilities.manage_xyz import write_molden_geoms
 
 
 class SE_Cross(SE_GSM):
@@ -82,7 +81,7 @@ class SE_Cross(SE_GSM):
                     path=path,
                     )
 
-        write_molden_geoms('after_penalty_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+        self.xyz_writer('after_penalty_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
         self.optimizer[self.nR].opt_cross=True
         self.nodes[0].V0 = self.nodes[0].PES.PES2.energy 
         if rtype==0:
@@ -134,7 +133,7 @@ class SE_Cross(SE_GSM):
                     verbose=True,
                     path=path,
                     )
-        write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+        self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         if self.optimizer[self.nR].converged:
             self.nnodes=self.nR+1
@@ -157,7 +156,7 @@ class SE_Cross(SE_GSM):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
-            write_molden_geoms('grown_string1_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('grown_string1_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
    
             deltaE = energies[-1] - energies[0]
             if deltaE>20:

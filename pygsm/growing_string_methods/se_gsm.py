@@ -14,7 +14,6 @@ from utilities import *
 from wrappers import Molecule
 from .main_gsm import MainGSM
 from coordinate_systems import Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
-from utilities.manage_xyz import write_molden_geoms
 
 
 class SE_GSM(MainGSM):
@@ -136,7 +135,7 @@ class SE_GSM(MainGSM):
 
             print(" Number of nodes is ",self.nnodes)
             print(" Warning last node still not optimized fully")
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
             print(" SSM growth phase over")
             self.done_growing=True
 
@@ -155,7 +154,7 @@ class SE_GSM(MainGSM):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
-            write_molden_geoms('grown_string1_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('grown_string1_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         if self.tscontinue:
             self.optimize_string(max_iter=max_iters,opt_steps=3,rtype=rtype) #opt steps fixed at 3 for rtype=1 and 2, else set it to be the large number :) muah hahaahah
@@ -165,7 +164,7 @@ class SE_GSM(MainGSM):
 
         filename="opt_converged_{:03d}.xyz".format(self.ID)
         print(" Printing string to " + filename)
-        write_molden_geoms(filename,self.geometries,self.energies,self.gradrms,self.dEs)
+        self.xyz_writer(filename,self.geometries,self.energies,self.gradrms,self.dEs)
         print("Finished GSM!")  
 
 
