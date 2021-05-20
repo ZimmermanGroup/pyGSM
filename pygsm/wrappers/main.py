@@ -179,6 +179,22 @@ def parse_arguments(verbose=True):
     if verbose:
         nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
 
+
+    # set default num_nodes
+    if inpfileq['num_nodes'] is None:
+        if inpfileq['gsm_type'] == "DE_GSM":
+            inpfileq['num_nodes'] = 9
+        else:
+            inpfileq['num_nodes'] = 20
+
+    # checks on parameters
+    if inpfileq['PES_type'] != "PES":
+        assert len(inpfileq["adiabatic_index"]) > 1, "need more states"
+        assert len(inpfileq["multiplicity"]) > 1, "need more spins"
+    if inpfileq["charge"] != 0:
+        print("Warning: charge is not implemented for all level of theories. "
+              "Make sure this is correct for your package.")
+
     return inpfileq
 
 
@@ -186,7 +202,6 @@ def choose_lot_class(lot_name: str):
     est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
     lot_class = getattr(est_package, lot_name)
     return lot_class
-
 
 
 def main():
@@ -202,17 +217,7 @@ def main():
         geoms = manage_xyz.read_molden_geoms(inpfileq["restart_file"])
 
     inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(inpfileq["multiplicity"],inpfileq["adiabatic_index"])]
-    if inpfileq['PES_type']!="PES":
-        assert len(inpfileq["adiabatic_index"])>1, "need more states"
-        assert len(inpfileq["multiplicity"])>1, "need more spins"
-    if inpfileq["charge"] != 0:
-        print("Warning: charge is not implemented for all level of theories. Make sure this is correct for your package.")
-    if inpfileq['num_nodes'] is None:
-        if inpfileq['gsm_type']=="DE_GSM":
-            inpfileq['num_nodes']=9
-        else:
-            inpfileq['num_nodes']=20
-    do_coupling = True if inpfileq['PES_type']=="Avg_PES" else False
+    do_coupling = inpfileq['PES_type'] == "Avg_PES"
     coupling_states = [ (int(m),int(s)) for m,s in zip(inpfileq["multiplicity"],inpfileq["adiabatic_index"])] if inpfileq['PES_type']=="Avg_PES" else []
 
     lot = lot_class.from_options(
@@ -227,7 +232,7 @@ def main():
             do_coupling=do_coupling,
             )
 
-    #PES
+    # PES
     if inpfileq['gsm_type'] == "SE_Cross":
         if inpfileq['PES_type']!="Penalty_PES":
             print(" setting PES type to Penalty")
