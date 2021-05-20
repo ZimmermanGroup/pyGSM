@@ -113,19 +113,20 @@ def parse_arguments(verbose=True):
               'xyzfile' : args.xyzfile,
               'EST_Package': args.package,
               'reactant_geom_fixed' : args.reactant_geom_fixed,
-              'nproc': args.nproc,
+              'nproc': nproc,
               'states': None,
 
-              #PES
+              # PES
               'PES_type': args.pes_type,
               'adiabatic_index': args.adiabatic_index,
               'multiplicity': args.multiplicity,
+              'charge': args.charge,
               'FORCE_FILE': args.FORCE_FILE,
               'RESTRAINT_FILE': args.RESTRAINT_FILE,
               'FORCE': None,
               'RESTRAINTS': None,
 
-              #optimizer
+              # optimizer
               'optimizer' : args.optimizer,
               'opt_print_level' : args.opt_print_level,
               'linesearch' : args.linesearch,
@@ -134,7 +135,7 @@ def parse_arguments(verbose=True):
               #output
               'xyz_output_format': args.xyz_output_format,
 
-              #molecule
+              # molecule
               'coordinate_type' : args.coordinate_type,
               'hybrid_coord_idx_file' : args.hybrid_coord_idx_file,
               'frozen_coord_idx_file' : args.frozen_coord_idx_file,
@@ -159,6 +160,20 @@ def parse_arguments(verbose=True):
               'max_opt_steps' : args.max_opt_steps,
               #'use_multiprocessing': args.use_multiprocessing,
               'sigma'   :   args.sigma,
+
+              # newly added args that did not live here yet
+        'only_climb': args.only_climb,
+        'restart_file': args.restart_file,
+        'no_climb': args.no_climb,
+        'optimize_mesx': args.optimize_mesx,
+        'optimize_meci': args.optimize_meci,
+        'bonds_file': args.bonds_file,
+        'mp_cores': args.mp_cores,
+        'interp_method': args.interp_method,
+        'only_drive': args.only_drive,
+        'reparametrize': args.reparametrize,
+        'dont_analyze_ICs': args.dont_analyze_ICs,
+
               }
 
     if verbose:
@@ -181,14 +196,14 @@ def main():
     lot_class = getattr(est_package,inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-    if args.restart_file:
-        geoms = manage_xyz.read_molden_geoms(args.restart_file)
+    if inpfileq["restart_file"]:
+        geoms = manage_xyz.read_molden_geoms(inpfileq["restart_file"])
 
-    inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)]
+    inpfileq['states'] = [ (int(m),int(s)) for m,s in zip(inpfileq["multiplicity"],inpfileq["adiabatic_index"])]
     if inpfileq['PES_type']!="PES":
-        assert len(args.adiabatic_index)>1, "need more states"
-        assert len(args.multiplicity)>1, "need more spins"
-    if args.charge != 0:
+        assert len(inpfileq["adiabatic_index"])>1, "need more states"
+        assert len(inpfileq["multiplicity"])>1, "need more spins"
+    if inpfileq["charge"] != 0:
         print("Warning: charge is not implemented for all level of theories. Make sure this is correct for your package.")
     if inpfileq['num_nodes'] is None:
         if inpfileq['gsm_type']=="DE_GSM":
@@ -196,7 +211,7 @@ def main():
         else:
             inpfileq['num_nodes']=20
     do_coupling = True if inpfileq['PES_type']=="Avg_PES" else False
-    coupling_states = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)] if inpfileq['PES_type']=="Avg_PES" else []
+    coupling_states = [ (int(m),int(s)) for m,s in zip(inpfileq["multiplicity"],inpfileq["adiabatic_index"])] if inpfileq['PES_type']=="Avg_PES" else []
 
     lot = lot_class.from_options(
             ID = inpfileq['ID'],
@@ -205,8 +220,8 @@ def main():
             gradient_states=inpfileq['states'],
             coupling_states=coupling_states,
             geom=geoms[0],
-            nproc=nproc,
-            charge=args.charge,
+            nproc=inpfileq["nproc"],
+            charge=inpfileq["charge"],
             do_coupling=do_coupling,
             )
 
@@ -215,7 +230,7 @@ def main():
         if inpfileq['PES_type']!="Penalty_PES":
             print(" setting PES type to Penalty")
             inpfileq['PES_type']="Penalty_PES"
-    if args.optimize_mesx or args.optimize_meci  or inpfileq['gsm_type']=="SE_Cross":
+    if inpfileq["optimize_mesx"] or inpfileq["optimize_meci"]  or inpfileq['gsm_type']=="SE_Cross":
         assert inpfileq['PES_type'] == "Penalty_PES", "Need penalty pes for optimizing MESX/MECI"
     if inpfileq['FORCE_FILE']:
         inpfileq['FORCE']=[]
@@ -334,7 +349,7 @@ def main():
             atoms,
             hybrid_indices=hybrid_indices,
             prim_idx_start_stop=prim_indices,
-            bondlistfile=args.bonds_file,
+            bondlistfile=inpfileq["bonds_file"],
             )
 
     if inpfileq['gsm_type'] == 'DE_GSM':
@@ -461,7 +476,7 @@ def main():
     # optimizer
     nifty.printcool("Building the Optimizer object")
     update_hess_in_bg = True
-    if args.only_climb or inpfileq['optimizer']=="lbfgs":
+    if inpfileq["only_climb"] or inpfileq['optimizer']=="lbfgs":
         update_hess_in_bg = False
     opt_class = getattr(sys.modules[__name__], inpfileq['optimizer'])
     optimizer = opt_class.from_options(
@@ -472,7 +487,7 @@ def main():
             conv_dE = inpfileq['conv_dE'],
             conv_gmax = inpfileq['conv_gmax'],
             DMAX = inpfileq['DMAX'],
-            #opt_climb = True if args.only_climb else False,
+            # opt_climb = True if inpfileq["only_climb"] else False,
             )
 
     # GSM
@@ -493,8 +508,8 @@ def main():
                 ID=inpfileq['ID'],
                 print_level=inpfileq['gsm_print_level'],
                 xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
-                mp_cores=args.mp_cores,
-                interp_method = args.interp_method,
+                mp_cores=inpfileq["mp_cores"],
+                interp_method = inpfileq["interp_method"],
                 )
     else:
         gsm = gsm_class.from_options(
@@ -509,13 +524,13 @@ def main():
                 driving_coords=driving_coordinates,
                 ID=inpfileq['ID'],
                 xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
-                mp_cores=args.mp_cores,
-                interp_method = args.interp_method,
+                mp_cores=inpfileq["mp_cores"],
+                interp_method = inpfileq["interp_method"],
                 )
 
 
 
-    if args.only_drive:
+    if inpfileq["only_drive"]:
         for i in range(gsm.nnodes-1):
             try:
                 gsm.add_GSM_nodeR()
@@ -536,7 +551,7 @@ def main():
         optimizer.opt_cross = True
 
     if not inpfileq['reactant_geom_fixed'] and inpfileq['gsm_type']!='SE_Cross':
-        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,0))
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(inpfileq["ID"],0))
         nifty.printcool("REACTANT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = reactant,
@@ -546,7 +561,7 @@ def main():
            )
 
     if not inpfileq['product_geom_fixed'] and inpfileq['gsm_type']=='DE_GSM':
-        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(args.ID,args.num_nodes-1))
+        path=os.path.join(os.getcwd(),'scratch/{:03}/{}/'.format(inpfileq["ID"],inpfileq["num_nodes"]-1))
         nifty.printcool("PRODUCT GEOMETRY NOT FIXED!!! OPTIMIZING")
         optimizer.optimize(
            molecule = product,
@@ -556,13 +571,13 @@ def main():
            )
 
     rtype=2
-    if args.only_climb:
+    if inpfileq["only_climb"]:
         rtype=1
-    elif args.no_climb:
+    elif inpfileq["no_climb"]:
         rtype=0
-    elif args.optimize_meci:
+    elif inpfileq["optimize_meci"]:
         rtype=0
-    elif args.optimize_mesx:
+    elif inpfileq["optimize_mesx"]:
         rtype=1
     elif inpfileq['gsm_type']=="SE_Cross":
         rtype=1
@@ -573,13 +588,13 @@ def main():
         else:
             inpfileq['max_opt_steps']=20
 
-    if args.restart_file is not None:
-        gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize,start_climb_immediately=args.start_climb_immediately)
+    if inpfileq["restart_file"] is not None:
+        gsm.setup_from_geometries(geoms,reparametrize=inpfileq["reparametrize"], start_climb_immediately=inpfileq["start_climb_immediately"])
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
     if inpfileq['gsm_type']=='SE_Cross':
         post_processing(
                 gsm,
-                analyze_ICs=args.dont_analyze_ICs,
+                analyze_ICs=inpfileq["dont_analyze_ICs"],
                 have_TS=False,
                 )
         manage_xyz.write_xyz(f'meci_{gsm.ID}.xyz',gsm.nodes[gsm.nR].geometry)
@@ -589,7 +604,7 @@ def main():
     else:
         post_processing(
                 gsm,
-                analyze_ICs=args.dont_analyze_ICs,
+                analyze_ICs=inpfileq["dont_analyze_ICs"],
                 have_TS=True,
                 )
         manage_xyz.write_xyz(f'TSnode_{gsm.ID}.xyz',gsm.nodes[gsm.TSnode].geometry)
