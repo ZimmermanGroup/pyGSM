@@ -65,7 +65,7 @@ class ASELoT(Lot):
         _ = kwargs.pop("calculator", None)
 
         # construct from the constructor
-        cls.from_options(calc_class(**calculator_kwargs), **kwargs)
+        return cls.from_options(calc_class(**calculator_kwargs), **kwargs)
 
     def run(self, geom, mult, ad_idx, runtype='gradient'):
         # run ASE
