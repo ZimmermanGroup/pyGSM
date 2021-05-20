@@ -1,10 +1,8 @@
 # standard library imports
 import sys
 import os
-from os import path
 import importlib
 import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 # third party
@@ -13,7 +11,7 @@ import numpy as np
 import textwrap
 
 # local application imports
-from pygsm.utilities import *
+from pygsm.utilities import nifty, manage_xyz, elements
 from pygsm.utilities.manage_xyz import XYZ_WRITERS
 from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.wrappers import Molecule
