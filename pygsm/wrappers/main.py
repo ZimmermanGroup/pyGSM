@@ -181,19 +181,21 @@ def parse_arguments(verbose=True):
 
     return inpfileq
 
+
+def choose_lot_class(lot_name: str):
+    est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
+    lot_class = getattr(est_package, lot_name)
+    return lot_class
+
+
+
 def main():
     # argument parsing and header
     inpfileq = parse_arguments(verbose=True)
 
-
-    if verbose:
-        nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
-
-
-    #LOT
+    # LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
-    est_package=importlib.import_module("level_of_theories."+inpfileq['EST_Package'].lower())
-    lot_class = getattr(est_package,inpfileq['EST_Package'])
+    lot_class = choose_lot_class(inpfileq["EST_Package"])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
     if inpfileq["restart_file"]:
