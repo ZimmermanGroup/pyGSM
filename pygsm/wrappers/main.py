@@ -17,7 +17,7 @@ from pygsm.utilities import *
 from pygsm.utilities.manage_xyz import XYZ_WRITERS
 from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.wrappers import Molecule
-from pygsm.optimizers import *
+from pygsm.optimizers import conjugate_gradient, lbfgs, beales_cg, eigenvector_follow
 from pygsm.growing_string_methods import DE_GSM, SE_GSM, SE_Cross
 from pygsm.coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
@@ -236,6 +236,36 @@ def choose_pes(lot, inpfileq: dict):
 
     return pes
 
+
+def choose_optimizer(inpfileq: dict):
+    update_hess_in_bg = True
+    if inpfileq["only_climb"] or inpfileq['optimizer'] == "lbfgs":
+        update_hess_in_bg = False
+
+    # choose the class
+    if inpfileq['optimizer'] == "conjugate_gradient":
+        opt_class = conjugate_gradient
+    elif inpfileq['optimizer'] == "eigenvector_follow":
+        opt_class = eigenvector_follow
+    elif inpfileq['optimizer'] == "lbfgs":
+        opt_class = lbfgs
+    elif inpfileq['optimizer'] == "beales_cg":
+        opt_class = beales_cg
+    else:
+        raise NotImplementedError(f"Optimizer `{inpfileq['optimizer']}` not implemented")
+
+    optimizer = opt_class.from_options(
+        print_level=inpfileq['opt_print_level'],
+        Linesearch=inpfileq['linesearch'],
+        update_hess_in_bg=update_hess_in_bg,
+        conv_Ediff=inpfileq['conv_Ediff'],
+        conv_dE=inpfileq['conv_dE'],
+        conv_gmax=inpfileq['conv_gmax'],
+        DMAX=inpfileq['DMAX'],
+        # opt_climb=True if inpfileq["only_climb"] else False,
+    )
+
+    return optimizer
 
 def main():
     # argument parsing and header
@@ -487,20 +517,7 @@ def main():
 
     # optimizer
     nifty.printcool("Building the Optimizer object")
-    update_hess_in_bg = True
-    if inpfileq["only_climb"] or inpfileq['optimizer']=="lbfgs":
-        update_hess_in_bg = False
-    opt_class = getattr(sys.modules[__name__], inpfileq['optimizer'])
-    optimizer = opt_class.from_options(
-            print_level=inpfileq['opt_print_level'],
-            Linesearch=inpfileq['linesearch'],
-            update_hess_in_bg = update_hess_in_bg,
-            conv_Ediff = inpfileq['conv_Ediff'],
-            conv_dE = inpfileq['conv_dE'],
-            conv_gmax = inpfileq['conv_gmax'],
-            DMAX = inpfileq['DMAX'],
-            # opt_climb = True if inpfileq["only_climb"] else False,
-            )
+    optimizer = choose_optimizer(inpfileq)
 
     # GSM
     nifty.printcool("Building the GSM object")
