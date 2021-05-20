@@ -24,7 +24,7 @@ from growing_string_methods import *
 from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 
-def main():
+def parse_arguments(verbose=True):
     parser = argparse.ArgumentParser(
         description="Reaction path transition state and photochemistry tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -87,11 +87,13 @@ def main():
 
     args = parser.parse_args()
 
-    print_msg()
+    if verbose:
+        print_msg()
 
     if args.nproc>1:
         force_num_procs=True
-        print("forcing number of processors to be {}!!!".format(args.nproc))
+        if verbose:
+            print("forcing number of processors to be {}!!!".format(args.nproc))
     else:
         force_num_procs=False
     if force_num_procs:
@@ -100,9 +102,10 @@ def main():
         #nproc = get_nproc()
         try:
             nproc = int(os.environ['OMP_NUM_THREADS'])
-        except: 
+        except:
             nproc = 1
-        print(" Using {} processors".format(nproc))
+        if verbose:
+            print(" Using {} processors".format(nproc))
 
     inpfileq = {
                # LOT
@@ -112,7 +115,7 @@ def main():
               'reactant_geom_fixed' : args.reactant_geom_fixed,
               'nproc': args.nproc,
               'states': None,
-              
+
               #PES
               'PES_type': args.pes_type,
               'adiabatic_index': args.adiabatic_index,
@@ -158,7 +161,15 @@ def main():
               'sigma'   :   args.sigma,
               }
 
-    nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
+    return inpfileq
+
+def main():
+    # argument parsing and header
+    inpfileq = parse_arguments(verbose=True)
+
+
+    if verbose:
+        nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
 
 
     #LOT
@@ -183,7 +194,7 @@ def main():
             inpfileq['num_nodes']=20
     do_coupling = True if inpfileq['PES_type']=="Avg_PES" else False
     coupling_states = [ (int(m),int(s)) for m,s in zip(args.multiplicity,args.adiabatic_index)] if inpfileq['PES_type']=="Avg_PES" else []
-    
+
     lot = lot_class.from_options(
             ID = inpfileq['ID'],
             lot_inp_file=inpfileq['lot_inp_file'],
@@ -262,7 +273,7 @@ def main():
                 )
         if inpfileq['PES_type']=="Avg_PES":
             pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)
-        elif inpfileq['PES_type']=="Penalty_PES": 
+        elif inpfileq['PES_type']=="Penalty_PES":
             pes = pes_class(PES1=pes1,PES2=pes2,lot=lot,sigma=inpfileq['sigma'])
         else:
             raise NotImplementedError
@@ -290,7 +301,7 @@ def main():
 
 
     # prim internal coordinates
-    # The start and stop indexes of the primitive internal region, this defines the "fragments" so no large molecule is built        
+    # The start and stop indexes of the primitive internal region, this defines the "fragments" so no large molecule is built
     if inpfileq['prim_idx_file'] is not None:
         nifty.printcool(" Defining primitive internal region :)")
         assert inpfileq['coordinate_type']=="TRIC", "won't work (currently) with other coordinate systems"
@@ -337,8 +348,8 @@ def main():
         # It's not clear if we should form the topology so the bonds
         # are the same since this might affect the Primitives of the xyz1 (slightly)
         # Later we stil need to form the union of bonds, angles and torsions
-        # However, I think this is important, the way its formulated, for identifiyin 
-        # the number of fragments and blocks, which is used in hybrid TRIC. 
+        # However, I think this is important, the way its formulated, for identifiyin
+        # the number of fragments and blocks, which is used in hybrid TRIC.
         for bond in top2.edges():
             if bond in top1.edges:
                 pass
@@ -398,7 +409,7 @@ def main():
                 addcart=addcart,
                 connect=connect,
                 topology=top1,  # Use the topology of 1 because we fixed it above
-                ) 
+                )
         nifty.printcool("Forming Union of Primitives")
         # Form the union of primitives
         p1.add_union_primitives(p2)
@@ -419,9 +430,9 @@ def main():
             addcart=addcart,
             connect=connect,
             primitives=p1,
-            ) 
+            )
     if inpfileq['gsm_type'] == 'DE_GSM':
-        # TMP 
+        # TMP
         pass
 
 
@@ -443,7 +454,7 @@ def main():
                 new_node_id = inpfileq['num_nodes']-1,
                 copy_wavefunction=False,
                 )
-   
+
     # optimizer
     nifty.printcool("Building the Optimizer object")
     update_hess_in_bg = True
@@ -559,7 +570,7 @@ def main():
             inpfileq['max_opt_steps']=3
         else:
             inpfileq['max_opt_steps']=20
-   
+
     if args.restart_file is not None:
         gsm.setup_from_geometries(geoms,reparametrize=args.reparametrize,start_climb_immediately=args.start_climb_immediately)
     gsm.go_gsm(inpfileq['max_gsm_iters'],inpfileq['max_opt_steps'],rtype)
@@ -594,7 +605,7 @@ def read_isomers_file(isomers_file):
             lines.append(line)
 
     driving_coordinates=[]
-    
+
     if lines[0] == "NEW":
         start = 1
     else:
@@ -686,7 +697,7 @@ def plot(fx,x,title):
     plt.savefig('{:04d}_string.png'.format(title),dpi=600)
 
 def get_nproc():
-    # THIS FUNCTION DOES NOT RETURN "USABLE" CPUS 
+    # THIS FUNCTION DOES NOT RETURN "USABLE" CPUS
     try:
         return os.cpu_count()
     except (ImportError, NotImplementedError):
