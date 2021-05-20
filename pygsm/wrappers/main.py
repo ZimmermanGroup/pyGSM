@@ -1,6 +1,7 @@
 # standard library imports
 import argparse
 import importlib
+import json
 import os
 import textwrap
 
@@ -13,6 +14,7 @@ import numpy as np
 from pygsm.coordinate_systems import Angle, DelocalizedInternalCoordinates, Dihedral, Distance, OutOfPlane, \
     PrimitiveInternalCoordinates, Topology
 from pygsm.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
+from pygsm.level_of_theories.ase import ASELoT
 from pygsm.optimizers import beales_cg, conjugate_gradient, eigenvector_follow, lbfgs
 from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.utilities import elements, manage_xyz, nifty
@@ -114,6 +116,13 @@ def parse_arguments(verbose=True):
     parser.add_argument('-bonds_file', type=str, help="A file which contains the bond indices (0-based)")
     parser.add_argument('-start_climb_immediately',action='store_true',help='Start climbing immediately when restarting.')
 
+    # ASE calculator's options
+    group_ase = parser.add_argument_group('ASE', 'ASE calculator options')
+    group_ase.add_argument('--ase-class', type=str,
+                              help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
+    group_ase.add_argument('--ase-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
+                                                             'eg. {"param_filename":"path/to/file.xml"}')
+
     args = parser.parse_args()
 
     if verbose:
@@ -203,6 +212,10 @@ def parse_arguments(verbose=True):
         'reparametrize': args.reparametrize,
         'dont_analyze_ICs': args.dont_analyze_ICs,
 
+        # ASE
+        'ase_class': args.ase_class,
+        'ase_kwargs': args.ase_kwargs,
+
     }
 
     if verbose:
@@ -226,10 +239,41 @@ def parse_arguments(verbose=True):
     return inpfileq
 
 
-def choose_lot_class(lot_name: str):
-    est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
-    lot_class = getattr(est_package, lot_name)
-    return lot_class
+def create_lot(inpfileq: dict, geom):
+    # decision making
+    inpfileq['states'] = [(int(m), int(s)) for m, s in zip(inpfileq["multiplicity"], inpfileq["adiabatic_index"])]
+    do_coupling = inpfileq['PES_type'] == "Avg_PES"
+    coupling_states = inpfileq['states'] if inpfileq['PES_type'] == "Avg_PES" else []
+
+    # common options for LoTs
+    lot_options = dict(
+        ID=inpfileq['ID'],
+        lot_inp_file=inpfileq['lot_inp_file'],
+        states=inpfileq['states'],
+        gradient_states=inpfileq['states'],
+        coupling_states=coupling_states,
+        geom=geom,
+        nproc=inpfileq["nproc"],
+        charge=inpfileq["charge"],
+        do_coupling=do_coupling,
+    )
+
+    # actual LoT choice
+    lot_name = inpfileq["EST_Package"]
+    if lot_name.lower() == "ase":
+
+        # de-serialise the JSON argument given
+        ase_kwargs = dict(json.loads(inpfileq.get("ase_kwargs", "{}")))
+
+        return ASELoT.from_calculator_string(
+            calculator_import=inpfileq["ase_class"],
+            calculator_kwargs=ase_kwargs,
+            **lot_options
+        )
+    else:
+        est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
+        lot_class = getattr(est_package, lot_name)
+        return lot_class.from_options(**lot_options)
 
 
 def choose_pes(lot, inpfileq: dict):
@@ -308,24 +352,7 @@ def main():
 
     # LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
-    lot_class = choose_lot_class(inpfileq["EST_Package"])
-
-    inpfileq['states'] = [(int(m), int(s)) for m, s in zip(inpfileq["multiplicity"], inpfileq["adiabatic_index"])]
-    do_coupling = inpfileq['PES_type'] == "Avg_PES"
-    coupling_states = [(int(m), int(s)) for m, s in zip(inpfileq["multiplicity"], inpfileq["adiabatic_index"])] if \
-    inpfileq['PES_type'] == "Avg_PES" else []
-
-    lot = lot_class.from_options(
-        ID=inpfileq['ID'],
-        lot_inp_file=inpfileq['lot_inp_file'],
-        states=inpfileq['states'],
-        gradient_states=inpfileq['states'],
-        coupling_states=coupling_states,
-        geom=geoms[0],
-        nproc=inpfileq["nproc"],
-        charge=inpfileq["charge"],
-        do_coupling=do_coupling,
-    )
+    lot = create_lot(inpfileq, geoms[0])
 
     # PES
     if inpfileq['gsm_type'] == "SE_Cross":
