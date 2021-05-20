@@ -15,7 +15,7 @@ import textwrap
 # local application imports
 from pygsm.utilities import *
 from pygsm.utilities.manage_xyz import XYZ_WRITERS
-from pygsm.potential_energy_surfaces import PES,Avg_PES,Penalty_PES
+from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.wrappers import Molecule
 from pygsm.optimizers import *
 from pygsm.growing_string_methods import *
@@ -204,6 +204,39 @@ def choose_lot_class(lot_name: str):
     return lot_class
 
 
+def choose_pes(lot, inpfileq: dict):
+    if inpfileq['PES_type'] == 'PES':
+        pes = PES.from_options(
+            lot=lot,
+            ad_idx=inpfileq['adiabatic_index'][0],
+            multiplicity=inpfileq['multiplicity'][0],
+            FORCE=inpfileq['FORCE'],
+            RESTRAINTS=inpfileq['RESTRAINTS'],
+        )
+    else:
+        pes1 = PES.from_options(
+            lot=lot, multiplicity=inpfileq['states'][0][0],
+            ad_idx=inpfileq['states'][0][1],
+            FORCE=inpfileq['FORCE'],
+            RESTRAINTS=inpfileq['RESTRAINTS'],
+        )
+        pes2 = PES.from_options(
+            lot=lot,
+            multiplicity=inpfileq['states'][1][0],
+            ad_idx=inpfileq['states'][1][1],
+            FORCE=inpfileq['FORCE'],
+            RESTRAINTS=inpfileq['RESTRAINTS'],
+        )
+        if inpfileq['PES_type'] == "Avg_PES":
+            pes = Avg_PES(PES1=pes1, PES2=pes2, lot=lot)
+        elif inpfileq['PES_type'] == "Penalty_PES":
+            pes = Penalty_PES(PES1=pes1, PES2=pes2, lot=lot, sigma=inpfileq['sigma'])
+        else:
+            raise NotImplementedError
+
+    return pes
+
+
 def main():
     # argument parsing and header
     inpfileq = parse_arguments(verbose=True)
@@ -273,35 +306,7 @@ def main():
         print(inpfileq['RESTRAINTS'])
 
     nifty.printcool("Building the {} objects".format(inpfileq['PES_type']))
-    pes_class = getattr(sys.modules[__name__], inpfileq['PES_type'])
-    if inpfileq['PES_type']=='PES':
-        pes = pes_class.from_options(
-                lot=lot,
-                ad_idx=inpfileq['adiabatic_index'][0],
-                multiplicity=inpfileq['multiplicity'][0],
-                FORCE=inpfileq['FORCE'],
-                RESTRAINTS=inpfileq['RESTRAINTS'],
-                )
-    else:
-        pes1 = PES.from_options(
-                lot=lot,multiplicity=inpfileq['states'][0][0],
-                ad_idx=inpfileq['states'][0][1],
-                FORCE=inpfileq['FORCE'],
-                RESTRAINTS=inpfileq['RESTRAINTS'],
-                )
-        pes2 = PES.from_options(
-                lot=lot,
-                multiplicity=inpfileq['states'][1][0],
-                ad_idx=inpfileq['states'][1][1],
-                FORCE=inpfileq['FORCE'],
-                RESTRAINTS=inpfileq['RESTRAINTS'],
-                )
-        if inpfileq['PES_type']=="Avg_PES":
-            pes = pes_class(PES1=pes1,PES2=pes2,lot=lot)
-        elif inpfileq['PES_type']=="Penalty_PES":
-            pes = pes_class(PES1=pes1,PES2=pes2,lot=lot,sigma=inpfileq['sigma'])
-        else:
-            raise NotImplementedError
+    pes = choose_pes(lot, inpfileq)
 
     # Molecule
     nifty.printcool("Building the reactant object with {}".format(inpfileq['coordinate_type']))
