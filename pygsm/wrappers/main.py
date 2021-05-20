@@ -7,21 +7,21 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-#third party
+# third party
 import argparse
 import numpy as np
 import textwrap
 
 # local application imports
-sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
-from utilities import *
-from utilities.manage_xyz import XYZ_WRITERS
+from pygsm.utilities import *
+from pygsm.utilities.manage_xyz import XYZ_WRITERS
+from pygsm.potential_energy_surfaces import PES,Avg_PES,Penalty_PES
+from pygsm.wrappers import Molecule
+from pygsm.optimizers import *
+from pygsm.growing_string_methods import *
+from pygsm.coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
-from potential_energy_surfaces import PES,Avg_PES,Penalty_PES
-from wrappers import Molecule
-from optimizers import *
-from growing_string_methods import *
-from coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
+mpl.use('Agg')
 
 
 def parse_arguments(verbose=True):
@@ -160,6 +160,9 @@ def parse_arguments(verbose=True):
               #'use_multiprocessing': args.use_multiprocessing,
               'sigma'   :   args.sigma,
               }
+
+    if verbose:
+        nifty.printcool_dictionary(inpfileq,title='Parsed GSM Keys : Values')
 
     return inpfileq
 
@@ -472,7 +475,6 @@ def main():
             #opt_climb = True if args.only_climb else False,
             )
 
-    
     # GSM
     nifty.printcool("Building the GSM object")
     gsm_class = getattr(sys.modules[__name__], inpfileq['gsm_type'])
