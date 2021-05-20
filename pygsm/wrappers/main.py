@@ -300,13 +300,15 @@ def main():
     # argument parsing and header
     inpfileq = parse_arguments(verbose=True)
 
+    # XYZ
+    if inpfileq["restart_file"]:
+        geoms = manage_xyz.read_molden_geoms(inpfileq["restart_file"])
+    else:
+        geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
+
     # LOT
     nifty.printcool("Build the {} level of theory (LOT) object".format(inpfileq['EST_Package']))
     lot_class = choose_lot_class(inpfileq["EST_Package"])
-
-    geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-    if inpfileq["restart_file"]:
-        geoms = manage_xyz.read_molden_geoms(inpfileq["restart_file"])
 
     inpfileq['states'] = [(int(m), int(s)) for m, s in zip(inpfileq["multiplicity"], inpfileq["adiabatic_index"])]
     do_coupling = inpfileq['PES_type'] == "Avg_PES"
