@@ -18,7 +18,7 @@ from pygsm.utilities.manage_xyz import XYZ_WRITERS
 from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.wrappers import Molecule
 from pygsm.optimizers import *
-from pygsm.growing_string_methods import *
+from pygsm.growing_string_methods import DE_GSM, SE_GSM, SE_Cross
 from pygsm.coordinate_systems import Topology,PrimitiveInternalCoordinates,DelocalizedInternalCoordinates,Distance,Angle,Dihedral,OutOfPlane,TranslationX,TranslationY,TranslationZ,RotationA,RotationB,RotationC
 
 mpl.use('Agg')
@@ -504,41 +504,47 @@ def main():
 
     # GSM
     nifty.printcool("Building the GSM object")
-    gsm_class = getattr(sys.modules[__name__], inpfileq['gsm_type'])
-    if inpfileq['gsm_type']=="DE_GSM":
-        gsm = gsm_class.from_options(
-                reactant=reactant,
-                product=product,
-                nnodes=inpfileq['num_nodes'],
-                CONV_TOL=inpfileq['CONV_TOL'],
-                CONV_gmax=inpfileq['conv_gmax'],
-                CONV_Ediff=inpfileq['conv_Ediff'],
-                CONV_dE=inpfileq['conv_dE'],
-                ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
-                growth_direction=inpfileq['growth_direction'],
-                optimizer=optimizer,
-                ID=inpfileq['ID'],
-                print_level=inpfileq['gsm_print_level'],
-                xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
-                mp_cores=inpfileq["mp_cores"],
-                interp_method = inpfileq["interp_method"],
-                )
+    if inpfileq['gsm_type'] == "DE_GSM":
+        gsm = DE_GSM.from_options(
+            reactant=reactant,
+            product=product,
+            nnodes=inpfileq['num_nodes'],
+            CONV_TOL=inpfileq['CONV_TOL'],
+            CONV_gmax=inpfileq['conv_gmax'],
+            CONV_Ediff=inpfileq['conv_Ediff'],
+            CONV_dE=inpfileq['conv_dE'],
+            ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
+            growth_direction=inpfileq['growth_direction'],
+            optimizer=optimizer,
+            ID=inpfileq['ID'],
+            print_level=inpfileq['gsm_print_level'],
+            xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
+            mp_cores=inpfileq["mp_cores"],
+            interp_method=inpfileq["interp_method"],
+        )
     else:
+        if inpfileq['gsm_type'] == "SE_GSM":
+            gsm_class = SE_GSM
+        elif inpfileq['gsm_type'] == "SE_Cross":
+            gsm_class = SE_Cross
+        else:
+            raise NotImplementedError(f"GSM type: `{inpfileq['gsm_type']}` not understood")
+
         gsm = gsm_class.from_options(
-                reactant=reactant,
-                nnodes=inpfileq['num_nodes'],
-                DQMAG_MAX=inpfileq['DQMAG_MAX'],
-                BDIST_RATIO=inpfileq['BDIST_RATIO'],
-                CONV_TOL=inpfileq['CONV_TOL'],
-                ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
-                optimizer=optimizer,
-                print_level=inpfileq['gsm_print_level'],
-                driving_coords=driving_coordinates,
-                ID=inpfileq['ID'],
-                xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
-                mp_cores=inpfileq["mp_cores"],
-                interp_method = inpfileq["interp_method"],
-                )
+            reactant=reactant,
+            nnodes=inpfileq['num_nodes'],
+            DQMAG_MAX=inpfileq['DQMAG_MAX'],
+            BDIST_RATIO=inpfileq['BDIST_RATIO'],
+            CONV_TOL=inpfileq['CONV_TOL'],
+            ADD_NODE_TOL=inpfileq['ADD_NODE_TOL'],
+            optimizer=optimizer,
+            print_level=inpfileq['gsm_print_level'],
+            driving_coords=driving_coordinates,
+            ID=inpfileq['ID'],
+            xyz_writer=XYZ_WRITERS[inpfileq['xyz_output_format']],
+            mp_cores=inpfileq["mp_cores"],
+            interp_method=inpfileq["interp_method"],
+        )
 
 
 
