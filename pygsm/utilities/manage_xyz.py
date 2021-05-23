@@ -8,7 +8,6 @@ import re
 #import openbabel as ob
 
 # => XYZ File Utility <= #
-
 def read_xyz(
     filename, 
     scale=1.):
@@ -241,6 +240,25 @@ def write_xyzs(
                 scale*atom[3],
                 ))
 
+def write_std_multixyz(
+        filename,
+        geoms,
+        energies,
+        gradrms,
+        dEs,
+        ):
+        with open(filename,'w') as f:
+            for E, geom in zip(energies, geoms):
+                f.write('%d\n' % len(geom))
+                f.write('%.6f\n' % (E*units.KJ_MOL_TO_AU))
+                for atom in geom:
+                    f.write('%-2s %14.6f %14.6f %14.6f\n' % (
+                        atom[0],
+                        atom[1],
+                        atom[2],
+                        atom[3],
+                        ))
+
 def write_amber_xyz(
         filename,
         geom,
@@ -391,3 +409,8 @@ def write_fms90(
                 atom[2],
                 atom[3],
                 ))
+XYZ_WRITERS = {
+    'molden': write_molden_geoms,
+    'multixyz': write_std_multixyz,
+}
+

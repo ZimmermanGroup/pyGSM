@@ -54,7 +54,7 @@ class MainGSM(GSM):
             printcool("Starting growth iteration %i" % iteration)
             self.optimize_iteration(max_opt_steps)
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
-            write_molden_geoms('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('scratch/growth_iters_{:03}_{:03}.xyz'.format(self.ID,iteration),self.geometries,self.energies,self.gradrmss,self.dEs)
             print(" gopt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E: {:5.4}\n".format(iteration,float(totalgrad),float(gradrms),float(self.emax)))
                 
             try:
@@ -250,7 +250,7 @@ class MainGSM(GSM):
 
             # => write Convergence to file <= #
             filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID,oi)
-            write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
 
             print(" End early counter {}".format(self.endearly_counter))
 
@@ -1195,7 +1195,7 @@ class MainGSM(GSM):
         if reparametrize:
             printcool("Reparametrizing")
             self.reparameterize(ic_reparam_steps=8)
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         if restart_energies:
             # initial energy

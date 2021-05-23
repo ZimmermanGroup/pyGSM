@@ -10,7 +10,6 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import *
-from utilities.manage_xyz import write_molden_geoms
 from wrappers import Molecule
 try:
     from .main_gsm import MainGSM
@@ -55,7 +54,7 @@ class DE_GSM(MainGSM):
 
             #nifty.printcool("initial ic_reparam")
             self.reparameterize()
-            write_molden_geoms('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
+            self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID),self.geometries,self.energies,self.gradrmss,self.dEs)
 
         
         # Can check for intermediate at beginning but not doing that now.
@@ -85,7 +84,7 @@ class DE_GSM(MainGSM):
 
         filename="opt_converged_{:03d}.xyz".format(self.ID)
         print(" Printing string to " + filename)
-        write_molden_geoms(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
+        self.xyz_writer(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
         print("Finished GSM!") 
 
         return 

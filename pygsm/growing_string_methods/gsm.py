@@ -14,6 +14,7 @@ from itertools import chain
 # local application imports
 sys.path.append(path.dirname( path.dirname( path.abspath(__file__))))
 from utilities import nifty,options,manage_xyz
+from utilities.manage_xyz import write_molden_geoms
 from wrappers import Molecule
 from coordinate_systems import DelocalizedInternalCoordinates
 from optimizers._linesearch import double_golden_section
@@ -146,6 +147,13 @@ class GSM(object):
                 )
 
         opt.add_option(
+                key='xyz_writer',
+                value=write_molden_geoms,
+                required=False,
+                doc='Function to be used to format and write XYZ files',
+                )
+
+        opt.add_option(
                 key='mp_cores',
                 value=1,
                 doc='multiprocessing cores for parallel programming. Use this with caution.',
@@ -223,6 +231,7 @@ class GSM(object):
         self.CONV_TOL = self.options['CONV_TOL']
         self.noise = self.options['noise']
         self.mp_cores = self.options['mp_cores']
+        self.xyz_writer = self.options['xyz_writer']
 
         optimizer = options['optimizer']
         for count in range(self.nnodes):
