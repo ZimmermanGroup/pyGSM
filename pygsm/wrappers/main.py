@@ -42,7 +42,7 @@ def parse_arguments(verbose=True):
     parser.add_argument('-package', default="QChem", type=str,
                         help="Electronic structure theory package (default: %(default)s)",
                         choices=["QChem", "Orca", "Molpro", "PyTC", "TeraChemCloud", "OpenMM", "DFTB", "TeraChem",
-                                 "BAGEL", "xTB_lot"])
+                                 "BAGEL", "xTB_lot", "ase"])
     parser.add_argument('-lot_inp_file', type=str, default=None,
                         help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',
                         required=False)
