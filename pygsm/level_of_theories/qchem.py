@@ -96,11 +96,11 @@ class QChem(Lot):
         #  Run the process
         output = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr = subprocess.PIPE).communicate()[0]
 
-        self.parse()
+        self.parse(qcscratch, multiplicity)
        
         return 
 
-    def parse(self):
+    def parse(self, qcscratch, multiplicity):
         # PARSE OUTPUT #
         if self.calc_grad:
             efilepath = qcscratch + '/string_{:03d}/{}.{}/GRAD'.format(self.ID,self.node_id,multiplicity)

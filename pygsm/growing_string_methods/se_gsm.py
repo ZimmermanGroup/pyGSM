@@ -164,7 +164,7 @@ class SE_GSM(MainGSM):
 
         filename="opt_converged_{:03d}.xyz".format(self.ID)
         print(" Printing string to " + filename)
-        self.xyz_writer(filename,self.geometries,self.energies,self.gradrms,self.dEs)
+        self.xyz_writer(filename,self.geometries,self.energies,self.gradrmss,self.dEs)
         print("Finished GSM!")  
 
 
