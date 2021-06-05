@@ -380,7 +380,7 @@ class InternalCoordinates(object):
 
     
     #TODO this does not work!!! 8/29/2019
-    def massweighted_newCartesian(self,xyz,dQ,mass,verbose=True):
+    def massweighted_newCartesian(self, xyz, dQ, mass, verbose=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             #print "Returning cached result"

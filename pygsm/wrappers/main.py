@@ -40,6 +40,9 @@ def main():
     parser.add_argument('-only_drive',action='store_true',help='')
     parser.add_argument('-package',default="QChem",type=str,help="Electronic structure theory package (default: %(default)s)",choices=["QChem","Orca","Molpro","PyTC","TeraChemCloud","OpenMM","DFTB","TeraChem","BAGEL","xTB_lot"])
     parser.add_argument('-lot_inp_file',type=str,default=None, help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',required=False)
+    parser.add_argument('-xTB_Hamiltonian',type=str,default='GFN2-xTB', help='xTB hamiltonian', choices=["GFN2-xTB","GFN1-xTB"] ,required=False)
+    parser.add_argument('-xTB_accuracy',type=float,default=1.0, help='xTB accuracy',required=False)
+    parser.add_argument('-xTB_electronic_temperature',type=float,default=300.0, help='xTB electronic temperature',required=False)
     parser.add_argument('-ID',default=0, type=int,help='string identification number (default: %(default)s)',required=False)
     parser.add_argument('-num_nodes',type=int,default=11,help='number of nodes for string (defaults: 9 DE-GSM, 20 SE-GSM)',required=False)
     parser.add_argument('-pes_type',type=str,default='PES',help='Potential energy surface (default: %(default)s)',choices=['PES','Avg_PES','Penalty_PES'])
@@ -112,6 +115,9 @@ def main():
               'reactant_geom_fixed' : args.reactant_geom_fixed,
               'nproc': args.nproc,
               'states': None,
+              'xTB_Hamiltonian': args.xTB_Hamiltonian,
+              'xTB_accuracy': args.xTB_accuracy,
+              'xTB_electronic_temperature': args.xTB_electronic_temperature,
               
               #PES
               'PES_type': args.pes_type,
@@ -189,6 +195,9 @@ def main():
             lot_inp_file=inpfileq['lot_inp_file'],
             states=inpfileq['states'],
             gradient_states=inpfileq['states'],
+            xTB_Hamiltonian=inpfileq['xTB_Hamiltonian'],
+            xTB_accuracy=inpfileq['xTB_accuracy'],
+            xTB_electronic_temperature=inpfileq['xTB_electronic_temperature'],
             coupling_states=coupling_states,
             geom=geoms[0],
             nproc=nproc,

@@ -37,7 +37,11 @@ class xTB_lot(Lot):
 
         # convert to bohr
         positions = coords* units.ANGSTROM_TO_AU
-        calc = Calculator(get_method("GFN2-xTB"), self.numbers, positions, charge=self.charge)
+        calc = Calculator(get_method(self.xTB_Hamiltonian), self.numbers, positions, charge=self.charge)
+
+        calc.set_accuracy(self.xTB_accuracy)
+        calc.set_electronic_temperature(self.xTB_electronic_temperature)
+        
         calc.set_output('lot_jobs_{}.txt'.format(self.node_id))
         res = calc.singlepoint()  # energy printed is only the electronic part
         calc.release_output()
