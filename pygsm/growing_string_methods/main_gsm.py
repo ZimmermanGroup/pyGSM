@@ -50,7 +50,9 @@ class MainGSM(GSM):
         iteration=0
         while not isGrown:
             if iteration>max_iters:
-                raise Exception(" Ran out of iterations")
+                print(" Ran out of iterations")
+                return 
+                # raise Exception(" Ran out of iterations")
             printcool("Starting growth iteration %i" % iteration)
             self.optimize_iteration(max_opt_steps)
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
@@ -268,7 +270,9 @@ class MainGSM(GSM):
                     self.slow_down_climb()
             elif oi>=max_iter and not isConverged:
                 self.ran_out = True
-                raise Exception(" Ran out of iterations")
+                print(" Ran out of iterations")
+                return 
+                # raise Exception(" Ran out of iterations")
 
 
         #TODO Optimize TS node to a finer convergence
