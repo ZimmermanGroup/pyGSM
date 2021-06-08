@@ -510,7 +510,7 @@ class Molecule(object):
     def update_xyz(self,dq=None,verbose=True):
         #print " updating xyz"
         if dq is not None:
-            self.xyz = self.coord_obj.newCartesian(self.xyz,dq,frozen_atoms=self.frozen_atoms,verbose=verbose)
+            self.xyz = self.coord_obj.newCartesian(self.xyz, dq, frozen_atoms=self.frozen_atoms, verbose=verbose)
         return self.xyz
 
     def update_and_move(self,tan,deltadq,verbose=True):
@@ -519,7 +519,7 @@ class Molecule(object):
         self.update_xyz(dq,verbose=verbose)
 
     def update_MW_xyz(self,mass,dq,verbose=True):
-        self.xyz = self.coord_obj.massweighted_newCartesian(self.xyz,dq,mass,verbose)
+        self.xyz = self.coord_obj.massweighted_newCartesian(self.xyz, dq, mass, verbose)
         return self.xyz
 
     @property

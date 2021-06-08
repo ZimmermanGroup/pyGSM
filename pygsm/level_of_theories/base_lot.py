@@ -147,6 +147,30 @@ class Lot(object):
                         require'
                 )
 
+        opt.add_option(
+                key='xTB_Hamiltonian',
+                value=None,
+                required=False,
+                allowed_types=[str],
+                doc='xTB hamiltonian'
+                )
+
+        opt.add_option(
+                key='xTB_accuracy',
+                value=None,
+                required=False,
+                allowed_types=[float],
+                doc='xTB accuracy'
+                )
+
+        opt.add_option(
+                key='xTB_electronic_temperature',
+                value=None,
+                required=False,
+                allowed_types=[float],
+                doc='xTB electronic_temperature'
+                )
+
         Lot._default_options = opt
         return Lot._default_options.copy()
 
@@ -218,6 +242,9 @@ class Lot(object):
         self.charge = self.options['charge']
         self.node_id=self.options['node_id']
         self.lot_inp_file = self.options['lot_inp_file']
+        self.xTB_Hamiltonian = self.options['xTB_Hamiltonian']
+        self.xTB_accuracy = self.options['xTB_accuracy']
+        self.xTB_electronic_temperature = self.options['xTB_electronic_temperature']
 
         # Bools for running 
         self.hasRanForCurrentCoords =False
@@ -379,7 +406,7 @@ class Lot(object):
         if Gradient.value is not None:
             if frozen_atoms is not None:
                 for a in frozen_atoms:
-                    Gradient.value[a,:]=0.
+                    Gradient.value[a, :]= 0.
             if Gradient.unit=="Hartree/Bohr":
                 return Gradient.value *units.ANGSTROM_TO_AU  #Ha/bohr*bohr/ang=Ha/ang
             elif Gradient.unit=="kcal/mol/Angstrom":

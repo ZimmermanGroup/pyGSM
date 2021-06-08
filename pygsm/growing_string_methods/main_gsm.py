@@ -50,7 +50,9 @@ class MainGSM(GSM):
         iteration=0
         while not isGrown:
             if iteration>max_iters:
-                raise Exception(" Ran out of iterations")
+                print(" Ran out of iterations")
+                return 
+                # raise Exception(" Ran out of iterations")
             printcool("Starting growth iteration %i" % iteration)
             self.optimize_iteration(max_opt_steps)
             totalgrad,gradrms,sum_gradrms = self.calc_optimization_metrics(self.nodes)
@@ -268,7 +270,9 @@ class MainGSM(GSM):
                     self.slow_down_climb()
             elif oi>=max_iter and not isConverged:
                 self.ran_out = True
-                raise Exception(" Ran out of iterations")
+                print(" Ran out of iterations")
+                return 
+                # raise Exception(" Ran out of iterations")
 
 
         #TODO Optimize TS node to a finer convergence
@@ -512,7 +516,6 @@ class MainGSM(GSM):
                 if self.optimizer[self.TSnode].options['DMAX']>0.1:
                     self.optimizer[self.TSnode].options['DMAX']=0.1
                 self.optimizer[self.TSnode] = eigenvector_follow(self.optimizer[self.TSnode].options.copy())
-                print(type(self.optimizer[self.TSnode]))
                 self.optimizer[self.TSnode].options['SCALEQN'] = 1.
                 self.nhessreset=10  # are these used??? TODO 
                 self.hessrcount=0   # are these used?!  TODO
@@ -620,7 +623,7 @@ class MainGSM(GSM):
         Reparameterize the string
         '''
         if self.interp_method == 'DLC':
-            print('reparameterizing')
+            # print('reparameterizing')
             self.ic_reparam(nodes=self.nodes,energies=self.energies,climbing=(self.climb or self.find),ic_reparam_steps=ic_reparam_steps,NUM_CORE=self.mp_cores)
         return
 

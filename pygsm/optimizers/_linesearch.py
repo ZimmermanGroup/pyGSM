@@ -4,15 +4,15 @@ from utilities import *
 
 #TODO remove unecessary arguments: nconstraints, xp, ,...
 
-def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule,verbose=False):
+def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters, molecule, verbose=False):
 
     x = x + d * step  + constraint_step  # 
-    xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=verbose)
+    xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp, frozen_atoms = molecule.frozen_atoms, verbose = verbose)
 
     # use these so molecule xyz doesn't change
     print(" evaluate fx in linesearch")
     fx = molecule.PES.get_energy(xyz)
-    gx = molecule.PES.get_gradient(xyz)
+    gx = molecule.PES.get_gradient(xyz, frozen_atoms = molecule.frozen_atoms)
     g = molecule.coord_obj.calcGrad(xyz,gx)
 
     #print(" [INFO]end line evaluate fx = %5.4f step = %1.2f." %(fx, step))
@@ -24,7 +24,7 @@ def NoLineSearch(n, x, fx, g, d, step, xp, constraint_step, parameters,molecule,
 # TODO might be wise to add to backtrack a condition that says if 
 # the number of iterations was many and the energy increased
 # just return the initial point
-def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,molecule, verbose=False):
+def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters, molecule, verbose=False):
     print(" In backtrack")
 
     # n is the non-constrained
@@ -64,13 +64,13 @@ def backtrack(nconstraints, x, fx, g, d, step, xp,constraint_step, parameters,mo
         x = xp
         x = x + d * step  + constraint_step 
         xyzp = molecule.xyz.copy()
-        xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp,verbose=verbose)
+        xyz = molecule.coord_obj.newCartesian(molecule.xyz, x-xp, frozen_atoms=molecule.frozen_atoms, verbose=verbose)
         # Evaluate the function and gradient values. 
         # use these so molecule xyz doesn't change
         fx = molecule.PES.get_energy(xyz)
 
         #print('new fx %11.9f' % fx)
-        gx = molecule.PES.get_gradient(xyz,frozen_atoms=molecule.frozen_atoms)
+        gx = molecule.PES.get_gradient(xyz, frozen_atoms=molecule.frozen_atoms)
         g = molecule.coord_obj.calcGrad(xyz,gx)
         #g = molecule.gradient
         width = 1.

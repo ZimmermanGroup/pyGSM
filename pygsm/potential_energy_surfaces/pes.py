@@ -316,7 +316,7 @@ class PES(object):
             for i in self.RESTRAINTS:
                 a= i[0]
                 force=i[1]
-                grada[a] += force*(xyz[a] - self.reference_xyz[a])
+                grad[a] += force*(xyz[a] - self.reference_xyz[a])
 
         grad = np.reshape(grad,(-1,1))
         return grad  #Ha/ang
