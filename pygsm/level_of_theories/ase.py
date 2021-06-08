@@ -4,15 +4,21 @@ https://gitlab.com/ase/ase
 
 Written by Tamas K. Stenczel in 2021
 """
+import importlib
+
 try:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.data import atomic_numbers
     from ase import units
 except ModuleNotFoundError:
+    Atoms = None
+    Calculator = None
+    atomic_numbers = None
+    units = None
     print("ASE not installed, ASE-based calculators will not work")
 
-from .base_lot import Lot
+from .base_lot import Lot, LoTError
 
 
 class ASELoT(Lot):
@@ -35,6 +41,31 @@ class ASELoT(Lot):
     def copy(cls, lot, options, copy_wavefunction=True):
         assert isinstance(lot, ASELoT)
         return cls(lot.ase_calculator, lot.options.copy().set_values(options))
+
+    @classmethod
+    def from_calculator_string(cls, calculator_import: str, calculator_kwargs: dict = dict(), **kwargs):
+        # this imports the calculator
+        module_name = ".".join(calculator_import.split(".")[:-1])
+        class_name = calculator_import.split(".")[-1]
+
+        # import the module of the calculator
+        try:
+            module = importlib.import_module(module_name)
+        except ModuleNotFoundError:
+            raise LoTError("ASE-calculator's module is not found: {}".format(class_name))
+
+        # class of the calculator
+        if hasattr(module, class_name):
+            calc_class = getattr(module, class_name)
+            assert issubclass(calc_class, Calculator)
+        else:
+            raise LoTError("ASE-calculator's class ({}) not found in module {}".format(class_name, module_name))
+
+        # make sure there is no calculator in the options
+        _ = kwargs.pop("calculator", None)
+
+        # construct from the constructor
+        return cls.from_options(calc_class(**calculator_kwargs), **kwargs)
 
     def run(self, geom, mult, ad_idx, runtype='gradient'):
         # run ASE
