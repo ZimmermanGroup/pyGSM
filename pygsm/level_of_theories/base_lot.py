@@ -26,6 +26,9 @@ def copy_file(path1,path2):
    os.system('wait')
 
 
+class LoTError(Exception):
+    pass
+
 
 class Lot(object):
     """ Lot object for level of theory calculators """
