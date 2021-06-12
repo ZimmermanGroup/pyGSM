@@ -813,7 +813,7 @@ class GSM(object):
     
    
     @staticmethod
-    def ic_reparam(nodes,energies,climbing=False,ic_reparam_steps=8,print_level=1,NUM_CORE=1):
+    def ic_reparam(nodes,energies,climbing=False,ic_reparam_steps=8,print_level=1,NUM_CORE=1,MAXRE=0.25):
         '''
         Reparameterizes the string using Delocalizedin internal coordinatesusing three-way tangents at the TS node
         Only pushes nodes outwards during reparameterization because otherwise too many things change.
@@ -836,7 +836,6 @@ class GSM(object):
             rpart[n] = 1./(nnodes-1)
         deltadqs = np.zeros(nnodes)
         TSnode = np.argmax(energies)
-        MAXRE = 0.25
         disprms=100
         if ((TSnode==nnodes-1) or (TSnode==0)) and climbing:
             raise RuntimeError(" TS node shouldn't be the first or last node")
@@ -935,6 +934,8 @@ class GSM(object):
                         deltadqs[n] = np.sign(deltadqs[n])*MAXRE
 
                 if NUM_CORE>1:
+
+                    # 5/14/2021 TS node fucks this up?!
                     tans = [ictan[n] if deltadqs[n]<0 else ictan[n+1] for n in chain(range(1,TSnode),range(TSnode+1,nnodes-1))] #+ [ ictan[n] if deltadqs[n]<0 else ictan[n+1] for n in range(TSnode+1,nnodes-1)]
                     pool = mp.Pool(NUM_CORE)
                     Vecs = pool.map(worker,((nodes[0].coord_obj,"build_dlc",node.xyz,tan) for node,tan in zip(nodes[1:TSnode] + nodes[TSnode+1:nnodes-1],tans)))

@@ -433,7 +433,7 @@ class SE_GSM(MainGSM):
             self.tscontinue=False
             self.endearly=True #bools
             return True
-        elif self.climb and fp>0:
+        elif self.climb and fp>0 and self.finder:
             fp=self.find_peaks('opting')
             if fp>1:
                 rxnocc,wint = self.check_for_reaction()

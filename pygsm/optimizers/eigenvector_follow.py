@@ -30,6 +30,11 @@ class eigenvector_follow(base_optimizer):
             path=os.getcwd(),
             ):
 
+        # stash/initialize some useful attributes
+        self.check_inputs(molecule,opt_type,ictan)
+        nconstraints=self.get_nconstraints(opt_type)
+        self.buf = StringIO()
+
         #print " refE %5.4f" % refE
         print(" initial E %5.4f" % (molecule.energy - refE))
         print(" CONV_TOL %1.5f" % self.conv_grms)
@@ -39,24 +44,27 @@ class eigenvector_follow(base_optimizer):
         energies.append(molecule.energy-refE)
         self.converged=False
 
-        if self.check_only_grad_converged:
-            if molecule.gradrms < self.conv_grms:
-                self.converged=True
-                return geoms,energies
-            else:
-                self.check_only_grad_converged=False
-
-
-        # stash/initialize some useful attributes
-        self.check_inputs(molecule,opt_type,ictan)
-        nconstraints=self.get_nconstraints(opt_type)
-        self.buf = StringIO()
-
         #form initial coord basis
         if opt_type != 'TS':
             constraints = self.get_constraint_vectors(molecule,opt_type,ictan)
             molecule.update_coordinate_basis(constraints=constraints)
             molecule.form_Hessian_in_basis()
+
+        # Evaluate the function value and its gradient.
+        fx = molecule.energy
+        g = molecule.gradient.copy()
+        # project out the constraint
+        gc = g.copy()
+        for c in molecule.constraints.T:
+            gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
+        gmax = float(np.max(np.absolute(gc)))
+
+        if self.check_only_grad_converged:
+            if molecule.gradrms < self.conv_grms and gmax < self.conv_gmax:
+                self.converged=True
+                return geoms,energies
+            else:
+                self.check_only_grad_converged=False
 
         # for cartesian these are the same
         x = np.copy(molecule.coordinates)
@@ -76,14 +84,6 @@ class eigenvector_follow(base_optimizer):
             self.x_prim=np.zeros((molecule.num_primitives,1),dtype=float)
             self.g_prim=np.zeros((molecule.num_primitives,1),dtype=float)
         
-        # Evaluate the function value and its gradient.
-        fx = molecule.energy
-        g = molecule.gradient.copy()
-
-        # project out the constraint
-        gc = g.copy()
-        for c in molecule.constraints.T:
-            gc -= np.dot(gc.T,c[:,np.newaxis])*c[:,np.newaxis]
 
         molecule.gradrms = np.sqrt(np.dot(gc.T,gc)/n)
         dE = molecule.difference_energy
