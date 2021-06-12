@@ -14,7 +14,8 @@ import numpy as np
 from pygsm.coordinate_systems import Angle, DelocalizedInternalCoordinates, Dihedral, Distance, OutOfPlane, \
     PrimitiveInternalCoordinates, Topology
 from pygsm.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
-from pygsm.level_of_theories.ase import ASELoT,xTB_lot
+from pygsm.level_of_theories.ase import ASELoT
+from pygsm.level_of_theories.xtb_lot import xTB_lot
 from pygsm.optimizers import beales_cg, conjugate_gradient, eigenvector_follow, lbfgs
 from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pygsm.utilities import elements, manage_xyz, nifty
@@ -870,7 +871,7 @@ def post_processing(gsm, analyze_ICs=False, have_TS=True):
                 f.write("{0}\t{1}\t{2}\n".format(*x))
 
     # Delta E
-    deltaE = gsm.energies[minnodeR] - gsm.energies[minnodeP]
+    deltaE = gsm.energies[minnodeP] - gsm.energies[minnodeR] 
     print(" Delta E is %5.4f" % deltaE)
 
 

@@ -646,6 +646,24 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def dof_index(self,dof):
         return self.Internals.index(dof)
 
+    def dof_index(self,indice_tuple,dtype='Distance'):
+        if dtype == "Distance":
+            i,j = indice_tuple
+            prim = Distance(i,j)
+        elif dtype == "Angle":
+            i,j,k = indice_tuple
+            prim = Angle(i,j,k)
+        elif dtype == "Dihedral":
+            i,j,k,l = indice_tuple
+            prim = Dihedral(i,j,k,l)
+        elif dtype == "OutOfPlane":
+            i,j,k,l= indice_tuple
+            prim = OutOfPlane(i,j,k,l)
+        else:
+            print(dtype)
+            raise NotImplementedError
+        return self.Internals.index(prim)
+
     def delete(self, dof):
         found=False
         for ii in range(len(self.Internals))[::-1]:

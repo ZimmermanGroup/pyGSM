@@ -580,7 +580,7 @@ class GSM(object):
                         index = [i[2]-1, i[1]-1]
     
                     bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
+                    prim_idx = node1.coord_obj.Prims.dof_index(index,'Distance')
                     if len(i)==3:
                         #TODO why not just use the covalent radii?
                         d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
@@ -605,7 +605,7 @@ class GSM(object):
                     else:
                         index = [i[2]-1, i[1]-1]
                     bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
+                    prim_idx = node1.coord_obj.Prims.dof_index(index,'Distance')
                     if len(i)==3:
                         d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
                     elif len(i)==4:
@@ -627,7 +627,7 @@ class GSM(object):
                     else:
                         index = [i[3]-1, i[2]-1,i[1]-1]
                     angle = Angle(index[0],index[1],index[2])
-                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
+                    prim_idx = node1.coord_obj.Prims.dof_index(index,'Angle')
                     anglet = i[4]
                     ang_value = angle.value(xyz)
                     ang_diff = anglet*np.pi/180. - ang_value
@@ -645,7 +645,7 @@ class GSM(object):
                     else:
                         index = [i[4]-1,i[3]-1,i[2]-1,i[1]-1]
                     torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
+                    prim_idx = node1.coord_obj.Prims.dof_index(index,'Dihedral')
                     tort = i[5]
                     torv = torsion.value(xyz)
                     tor_diff = tort - torv*180./np.pi
@@ -663,7 +663,7 @@ class GSM(object):
                 elif "OOP" in i:
                     index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
                     oop = OutOfPlane(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(oop)
+                    prim_idx = node1.coord_obj.Prims.dof_index(index,'OutOfPlane')
                     oopt = i[5]
                     oopv = oop.value(xyz)
                     oop_diff = oopt - oopv*180./np.pi
@@ -683,157 +683,6 @@ class GSM(object):
                 raise RuntimeError(" All elements are zero")
             return ictan,bdist
 
-    @staticmethod
-    def get_tangent(node1,node2,print_level=1,**kwargs):
-        '''
-        Get internal coordinate tangent between two nodes, assumes they have unique IDs
-        '''
-    
-    
-        if node2 is not None and node1.node_id!=node2.node_id:
-            print(" getting tangent from between %i %i pointing towards %i"%(node2.node_id,node1.node_id,node2.node_id))
-            assert node2!=None,'node n2 is None'
-           
-            PMDiff = np.zeros(node2.num_primitives)
-            for k,prim in enumerate(node2.primitive_internal_coordinates):
-                if type(prim) is Distance:
-                    PMDiff[k] = 2.5 *prim.calcDiff(node2.xyz,node1.xyz)
-                else:
-                    PMDiff[k] = prim.calcDiff(node2.xyz,node1.xyz)
-    
-            return np.reshape(PMDiff,(-1,1)),None
-        else:
-            print(" getting tangent from node ",node1.node_id)
-    
-            driving_coords = kwargs.get('driving_coords',None)
-            assert driving_coords is not None, " Driving coord is None!"
-    
-            c = Counter(elem[0] for elem in driving_coords)
-            nadds = c['ADD']
-            nbreaks = c['BREAK']
-            nangles = c['nangles']
-            ntorsions = c['ntorsions']
-    
-            ictan = np.zeros((node1.num_primitives,1),dtype=float)
-            breakdq = 0.3
-            bdist=0.0
-            atoms = node1.atoms
-            xyz = node1.xyz.copy()
-    
-            for i in driving_coords:
-                if "ADD" in i:
-    
-                    #order indices to avoid duplicate bonds
-                    if i[1]<i[2]:
-                        index = [i[1]-1, i[2]-1]
-                    else:
-                        index = [i[2]-1, i[1]-1]
-    
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        #TODO why not just use the covalent radii?
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)/2.8
-                    elif len(i)==4:
-                        d0=i[3]
-                    current_d =  bond.value(xyz)
-    
-                    #TODO don't set tangent if value is too small
-                    ictan[prim_idx] = -1*(d0-current_d)
-                    #if nbreaks>0:
-                    #    ictan[prim_idx] *= 2
-                    # => calc bdist <=
-                    if current_d>d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print(" bond %s target (less than): %4.3f current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-    
-                elif "BREAK" in i:
-                    #order indices to avoid duplicate bonds
-                    if i[1]<i[2]:
-                        index = [i[1]-1, i[2]-1]
-                    else:
-                        index = [i[2]-1, i[1]-1]
-                    bond = Distance(index[0],index[1])
-                    prim_idx = node1.coord_obj.Prims.dof_index(bond)
-                    if len(i)==3:
-                        d0 = (atoms[index[0]].vdw_radius + atoms[index[1]].vdw_radius)
-                    elif len(i)==4:
-                        d0=i[3]
-    
-                    current_d =  bond.value(xyz)
-                    ictan[prim_idx] = -1*(d0-current_d) 
-    
-                    # => calc bdist <=
-                    if current_d<d0:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-    
-                    if print_level>0:
-                        print(" bond %s target (greater than): %4.3f, current d: %4.3f diff: %4.3f " % ((i[1],i[2]),d0,current_d,ictan[prim_idx]))
-                elif "ANGLE" in i:
-    
-                    if i[1]<i[3]:
-                        index = [i[1]-1, i[2]-1,i[3]-1]
-                    else:
-                        index = [i[3]-1, i[2]-1,i[1]-1]
-                    angle = Angle(index[0],index[1],index[2])
-                    prim_idx = node1.coord_obj.Prims.dof_index(angle)
-                    anglet = i[4]
-                    ang_value = angle.value(xyz)
-                    ang_diff = anglet*np.pi/180. - ang_value
-                    #print(" angle: %s is index %i " %(angle,ang_idx))
-                    if print_level>0:
-                        print((" anglev: %4.3f align to %4.3f diff(rad): %4.3f" %(ang_value,anglet,ang_diff)))
-                    ictan[prim_idx] = -ang_diff
-                    #TODO need to come up with an adist
-                    #if abs(ang_diff)>0.1:
-                    #    bdist+=ictan[ICoord1.BObj.nbonds+ang_idx]*ictan[ICoord1.BObj.nbonds+ang_idx]
-                elif "TORSION" in i:
-    
-                    if i[1]<i[4]:
-                        index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
-                    else:
-                        index = [i[4]-1,i[3]-1,i[2]-1,i[1]-1]
-                    torsion = Dihedral(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(torsion)
-                    tort = i[5]
-                    torv = torsion.value(xyz)
-                    tor_diff = tort - torv*180./np.pi
-                    if tor_diff>180.:
-                        tor_diff-=360.
-                    elif tor_diff<-180.:
-                        tor_diff+=360.
-                    ictan[prim_idx] = -tor_diff*np.pi/180.
-    
-                    if tor_diff*np.pi/180.>0.1 or tor_diff*np.pi/180.<0.1:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current torv: %4.3f align to %4.3f diff(deg): %4.3f" %(torv*180./np.pi,tort,tor_diff)))
-    
-                elif "OOP" in i:
-                    index = [i[1]-1,i[2]-1,i[3]-1,i[4]-1]
-                    oop = OutOfPlane(index[0],index[1],index[2],index[3])
-                    prim_idx = node1.coord_obj.Prims.dof_index(oop)
-                    oopt = i[5]
-                    oopv = oop.value(xyz)
-                    oop_diff = oopt - oopv*180./np.pi
-                    if oop_diff>180.:
-                        oop_diff-=360.
-                    elif oop_diff<-180.:
-                        oop_diff+=360.
-                    ictan[prim_idx] = -oop_diff*np.pi/180.
-    
-                    if oop_diff*np.pi/180.>0.1 or oop_diff*np.pi/180.<0.1:
-                        bdist += np.dot(ictan[prim_idx],ictan[prim_idx])
-                    if print_level>0:
-                        print((" current oopv: %4.3f align to %4.3f diff(deg): %4.3f" %(oopv*180./np.pi,oopt,oop_diff)))
-    
-            bdist = np.sqrt(bdist)
-            if np.all(ictan==0.0):
-                raise RuntimeError(" All elements are zero")
-            return ictan,bdist
-    
-   
     @staticmethod
     def get_tangents(nodes,n0=0,print_level=0):
         '''
