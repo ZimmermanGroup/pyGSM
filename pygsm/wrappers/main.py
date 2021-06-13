@@ -283,6 +283,7 @@ def create_lot(inpfileq: dict, geom):
             xTB_Hamiltonian=inpfileq['xTB_Hamiltonian'],
             xTB_accuracy=inpfileq['xTB_accuracy'],
             xTB_electronic_temperature=inpfileq['xTB_electronic_temperature'],
+            **lot_options
                 )
     else:
         est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
