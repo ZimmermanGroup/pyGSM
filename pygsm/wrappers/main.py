@@ -704,14 +704,14 @@ def main():
         manage_xyz.write_xyz(f'meci_{gsm.ID}.xyz', gsm.nodes[gsm.nR].geometry)
 
         if not gsm.end_early:
-            manage_xyz.write_xyz(f'TSnode_{gsm.ID}.xyz', gsm.nodes[gsm.TSnode].geometry)
+            manage_xyz.write_xyz(f'TSnode.xyz', gsm.nodes[gsm.TSnode].geometry)
     else:
         post_processing(
             gsm,
             analyze_ICs=inpfileq["dont_analyze_ICs"],
             have_TS=True,
         )
-        manage_xyz.write_xyz(f'TSnode_{gsm.ID}.xyz', gsm.nodes[gsm.TSnode].geometry)
+        manage_xyz.write_xyz(f'TSnode.xyz', gsm.nodes[gsm.TSnode].geometry)
 
     cleanup_scratch(gsm.ID)
 
