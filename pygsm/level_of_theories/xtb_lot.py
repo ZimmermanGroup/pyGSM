@@ -6,7 +6,7 @@ from os import path
 import numpy as np
 import contextlib
 from xtb.interface import Calculator
-from xtb.utils import get_method
+from xtb.utils import get_method, get_solvent
 from xtb.interface import Environment
 from xtb.libxtb import VERBOSITY_FULL
 
@@ -41,6 +41,9 @@ class xTB_lot(Lot):
 
         calc.set_accuracy(self.xTB_accuracy)
         calc.set_electronic_temperature(self.xTB_electronic_temperature)
+
+        if self.solvent is not None:
+            calc.set_solvent(get_solvent(self.solvent))
         
         calc.set_output('lot_jobs_{}.txt'.format(self.node_id))
         res = calc.singlepoint()  # energy printed is only the electronic part
