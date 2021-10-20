@@ -69,6 +69,7 @@ def parse_arguments(verbose=True):
     parser.add_argument('-xTB_accuracy',type=float,default=1.0, help='xTB accuracy',required=False)
     parser.add_argument('-xTB_electronic_temperature',type=float,default=300.0, help='xTB electronic temperature',required=False)
     parser.add_argument('-xyz_output_format',type=str,default="molden",help='Format of the produced XYZ files',required=False)
+    parser.add_argument('-solvent',type=str,help='Solvent to use (xTB calculations only)',required=False)
     parser.add_argument('-linesearch', type=str, default='NoLineSearch', help='default: %(default)s',
                         choices=['NoLineSearch', 'backtrack'])
     parser.add_argument('-coordinate_type', type=str, default='TRIC', help='Coordinate system (default %(default)s)',
@@ -160,6 +161,7 @@ def parse_arguments(verbose=True):
         'xTB_Hamiltonian': args.xTB_Hamiltonian,
         'xTB_accuracy': args.xTB_accuracy,
         'xTB_electronic_temperature': args.xTB_electronic_temperature,
+        'solvent': args.solvent,
 
         # PES
         'PES_type': args.pes_type,
@@ -283,6 +285,8 @@ def create_lot(inpfileq: dict, geom):
             xTB_Hamiltonian=inpfileq['xTB_Hamiltonian'],
             xTB_accuracy=inpfileq['xTB_accuracy'],
             xTB_electronic_temperature=inpfileq['xTB_electronic_temperature'],
+            solvent=inpfileq['solvent'],
+            **lot_options,
                 )
     else:
         est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())

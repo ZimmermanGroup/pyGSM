@@ -174,6 +174,14 @@ class Lot(object):
                 doc='xTB electronic_temperature'
                 )
 
+        opt.add_option(
+                key='solvent',
+                value=None,
+                required=False,
+                allowed_types=[str],
+                doc='xTB solvent'
+                )
+
         Lot._default_options = opt
         return Lot._default_options.copy()
 
@@ -181,9 +189,7 @@ class Lot(object):
             options,
             ):
         """ Constructor """
-
         self.options = options
-
         # properties
         self.Energy = namedtuple('Energy','value unit')
         self.Gradient = namedtuple('Gradient','value unit')
@@ -248,6 +254,7 @@ class Lot(object):
         self.xTB_Hamiltonian = self.options['xTB_Hamiltonian']
         self.xTB_accuracy = self.options['xTB_accuracy']
         self.xTB_electronic_temperature = self.options['xTB_electronic_temperature']
+        self.solvent = self.options['solvent']
 
         # Bools for running 
         self.hasRanForCurrentCoords =False
