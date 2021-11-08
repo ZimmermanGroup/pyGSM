@@ -404,7 +404,8 @@ class ElementData(object):
         if not isinstance(atomic_num, int):
             raise TypeError("Atomic number must be an integer")
         if atomic_num >= len(cls.data) or atomic_num < 0:
-            raise ValueError("Atomic number {} is out of bound".format(atomic_num))
+            raise ValueError(
+                "Atomic number {} is out of bound".format(atomic_num))
         return cls.data[atomic_num]
 
     def from_symbol(self, symbol):
@@ -438,15 +439,14 @@ class ElementData(object):
     def get_element_list(cls):
         """Returns the list of symbols of all available elements"""
         return [element.symbol for element in cls.data]
- 
+
+
 if __name__ == '__main__':
 
     from . import manage_xyz
-    filepath="tests/fluoroethene.xyz"
-    geom=manage_xyz.read_xyz(filepath,scale=1)
+    filepath = "tests/fluoroethene.xyz"
+    geom = manage_xyz.read_xyz(filepath, scale=1)
     E = ElementData()
-    #geom[0]
-    C =E.from_symbol(geom[0][0])
+    # geom[0]
+    C = E.from_symbol(geom[0][0])
     print(C.vdw_radius)
-
-

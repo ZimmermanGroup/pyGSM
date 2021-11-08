@@ -52,14 +52,16 @@ class ASELoT(Lot):
         try:
             module = importlib.import_module(module_name)
         except ModuleNotFoundError:
-            raise LoTError("ASE-calculator's module is not found: {}".format(class_name))
+            raise LoTError(
+                "ASE-calculator's module is not found: {}".format(class_name))
 
         # class of the calculator
         if hasattr(module, class_name):
             calc_class = getattr(module, class_name)
             assert issubclass(calc_class, Calculator)
         else:
-            raise LoTError("ASE-calculator's class ({}) not found in module {}".format(class_name, module_name))
+            raise LoTError(
+                "ASE-calculator's class ({}) not found in module {}".format(class_name, module_name))
 
         # make sure there is no calculator in the options
         _ = kwargs.pop("calculator", None)
@@ -82,10 +84,12 @@ class ASELoT(Lot):
         elif runtype == "energy":
             pass
         else:
-            raise NotImplementedError(f"Run type {runtype} is not implemented in the ASE calculator interface")
+            raise NotImplementedError(
+                f"Run type {runtype} is not implemented in the ASE calculator interface")
 
         # energy is always calculated -> cached if force calculation was done
-        self._Energies[(mult, ad_idx)] = self.Energy(atoms.get_potential_energy() / units.Ha, 'Hartree')
+        self._Energies[(mult, ad_idx)] = self.Energy(
+            atoms.get_potential_energy() / units.Ha, 'Hartree')
 
         # write E to scratch
         self.write_E_to_file()

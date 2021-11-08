@@ -1,5 +1,6 @@
 import collections
 
+
 class Option(object):
 
     """ Class Option represents a key, value Option, with possible restrictions
@@ -13,9 +14,8 @@ class Option(object):
         required=False,
         allowed_types=None,
         allowed_values=None,
-        doc="", 
-        ):
-
+        doc="",
+    ):
         """ Option constructor:
 
         Params/Members:
@@ -35,7 +35,7 @@ class Option(object):
             doc - string message providing helpful documentation about the
                 option.
         """
-    
+
         self.key = key
         self.value = value
         self.required = required
@@ -44,20 +44,18 @@ class Option(object):
         self.doc = doc
 
     def get_value(self):
-
         """ Get value for this Option and check validity.
 
         Returns:
             value if the Option is in a valid state, else raises RuntimeError.
         """
-        
+
         if self.required and self.value is None:
             raise RuntimeError("Option %s is required" % self.key)
 
         return self.value
 
     def set_value(self, value):
-
         """ Set value for this Option and check validity.
 
         Result:
@@ -70,14 +68,15 @@ class Option(object):
             return
 
         if self.allowed_types and not any(isinstance(value, x) for x in self.allowed_types):
-            raise RuntimeError("Option %s must be one of allowed types: %s" % (self.key, self.allowed_types))
+            raise RuntimeError("Option %s must be one of allowed types: %s" % (
+                self.key, self.allowed_types))
         if self.allowed_values and value not in self.allowed_values:
-            raise RuntimeError("Option %s must be one of allowed values: %r" % (self.key, self.allowed_values))
+            raise RuntimeError("Option %s must be one of allowed values: %r" % (
+                self.key, self.allowed_values))
 
         self.value = value
 
     def __str__(self):
-
         """ Return a string containing the full contents and documentation of this Option. """
 
         s = ''
@@ -90,6 +89,7 @@ class Option(object):
         s += '  Doc: %s\n' % self.doc
         s += '\n'
         return s
+
 
 class Options(object):
 
@@ -112,19 +112,20 @@ class Options(object):
     def __init__(
         self,
         options=None,
-        ):
-
+    ):
         """ Options constructor.
 
         Params/Members:
             - options - dict of key -> Option
         """
 
-        if options is None: self.options = collections.OrderedDict()
-        else: self.options = options
+        if options is None:
+            self.options = collections.OrderedDict()
+        else:
+            self.options = options
 
     def keys(self):
-        keys=[]
+        keys = []
         for opt in self.options:
             keys.append(opt)
         return keys
@@ -132,8 +133,7 @@ class Options(object):
     def add_option(
         self,
         **kwargs
-        ):
-
+    ):
         """ Declare a new Option with possible default value, type and value
             rules, and documentation.
 
@@ -143,13 +143,12 @@ class Options(object):
 
         self.options[kwargs['key']] = Option(
             **kwargs
-            )
-    
+        )
+
     def get_option(
         self,
         key,
-        ):
-
+    ):
         """ Get the Option corresponding to key (useful for doc searching an debugging).
 
         Params:
@@ -167,8 +166,7 @@ class Options(object):
     def __getitem__(
         self,
         key,
-        ):
-
+    ):
         """ Get the current value of Option corresponding to key, performing validity checks.
 
         Params:
@@ -176,7 +174,7 @@ class Options(object):
         Returns:
             - value - value of Option (raises RuntimeError if type, value or other validity error).
         """
-        
+
         if key not in self.options:
             raise ValueError("Key %s is not in Options" % key)
         return self.options[key].get_value()
@@ -185,8 +183,7 @@ class Options(object):
         self,
         key,
         value,
-        ):
-
+    ):
         """ Set the value of Option corresponding to key, performing validity checks.
 
         Params:
@@ -203,8 +200,7 @@ class Options(object):
     def set_values(
         self,
         options,
-        ):
-
+    ):
         """ Set the values of multiple options. 
 
         Params:
@@ -213,13 +209,12 @@ class Options(object):
         Results:
             - Option values are updated if valid.
         """
-        
+
         for k, v in options.items():
             self[k] = v
         return self
 
-    def copy(self): 
-
+    def copy(self):
         """ Return a 1-level shallow copy of this Options object. This makes
             copies of all underlying Option objects so that changes to the new
             Options object will not affect the original Options object.
@@ -231,11 +226,11 @@ class Options(object):
         return Options(options=options2)
 
     def __str__(self):
-
         """ Return the string representations of all Option objects in this Options, in insertion order. """
         s = ''.join(str(v) for v in list(self.options.values()))
         return s
-        
+
+
 if __name__ == '__main__':
 
     import time
@@ -243,51 +238,51 @@ if __name__ == '__main__':
     print(" this demonstrates options")
 
     start = time.time()
-    options1 = Options()        
+    options1 = Options()
     for k in range(500):
         options1.add_option(
             key='size%d' % k,
             value=0,
             allowed_types=[int],
-            allowed_values=[0,1],
-            ) 
+            allowed_values=[0, 1],
+        )
 
     start = time.time()
     options2 = options1.copy()
     print('copy time %11.3E' % (time.time() - start))
 
     start = time.time()
-    options3 = Options()        
+    options3 = Options()
     options3.add_option(
         key='size',
         value=0,
         allowed_types=[int],
-        allowed_values=[0,1],
-        ) 
+        allowed_values=[0, 1],
+    )
     options4 = options3.copy()
     print('%11.3E' % (time.time() - start))
 
     start = time.time()
-    options3 = Options()        
+    options3 = Options()
     options3.add_option(
         key='size',
         value=0,
         allowed_types=[int],
-        allowed_values=[0,1],
-        ) 
+        allowed_values=[0, 1],
+    )
     options4 = options3.copy()
     print('%11.3E' % (time.time() - start))
 
     start = time.time()
-    options3 = Options()        
+    options3 = Options()
     options3.add_option(
         key='size',
         value=0,
         allowed_types=[int],
-        allowed_values=[0,1],
-        ) 
+        allowed_values=[0, 1],
+    )
     options4 = options3.copy()
     print('%11.3E' % (time.time() - start))
 
-    options4.set_values({ 'size' : 1 })
+    options4.set_values({'size': 1})
     print(options4)

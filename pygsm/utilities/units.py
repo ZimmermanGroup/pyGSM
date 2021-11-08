@@ -83,13 +83,13 @@ if __name__ == '__main__':
 
 
 units = {
-    'au_per_amu'   : 1.8228884855409500E+03,        # mass
-    'au_per_cminv' : 1.0 / 219474.6305,             # ???
-    'au_per_ang'   : 1.0 / 0.5291772109217,         # length
-    'au_per_K'     : 1.0 / 3.1577464E5,             # temperature
-    'au_per_fs'    : 1.0 / 2.418884326505E-2,       # time
+    'au_per_amu': 1.8228884855409500E+03,        # mass
+    'au_per_cminv': 1.0 / 219474.6305,             # ???
+    'au_per_ang': 1.0 / 0.5291772109217,         # length
+    'au_per_K': 1.0 / 3.1577464E5,             # temperature
+    'au_per_fs': 1.0 / 2.418884326505E-2,       # time
 }
 for k in list(units.keys()):
     v = units[k]
-    mobj = re.match('(\S+)_per_(\S+)',k)
-    units['%s_per_%s' % (mobj.group(2),mobj.group(1))] = 1.0 / v
+    mobj = re.match('(\S+)_per_(\S+)', k)
+    units['%s_per_%s' % (mobj.group(2), mobj.group(1))] = 1.0 / v

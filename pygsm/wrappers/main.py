@@ -65,11 +65,11 @@ def parse_arguments(verbose=True):
     parser.add_argument('-opt_print_level', type=int, default=1,
                         help='Printout for optimization. 2 prints everything in opt.', required=False)
     parser.add_argument('-gsm_print_level', type=int, default=1, help='Printout for gsm. 1 prints ?', required=False)
-    parser.add_argument('-xTB_Hamiltonian',type=str,default='GFN2-xTB', help='xTB hamiltonian', choices=["GFN2-xTB","GFN1-xTB"] ,required=False)
-    parser.add_argument('-xTB_accuracy',type=float,default=1.0, help='xTB accuracy',required=False)
-    parser.add_argument('-xTB_electronic_temperature',type=float,default=300.0, help='xTB electronic temperature',required=False)
-    parser.add_argument('-xyz_output_format',type=str,default="molden",help='Format of the produced XYZ files',required=False)
-    parser.add_argument('-solvent',type=str,help='Solvent to use (xTB calculations only)',required=False)
+    parser.add_argument('-xTB_Hamiltonian', type=str, default='GFN2-xTB', help='xTB hamiltonian', choices=["GFN2-xTB", "GFN1-xTB"], required=False)
+    parser.add_argument('-xTB_accuracy', type=float, default=1.0, help='xTB accuracy', required=False)
+    parser.add_argument('-xTB_electronic_temperature', type=float, default=300.0, help='xTB electronic temperature', required=False)
+    parser.add_argument('-xyz_output_format', type=str, default="molden", help='Format of the produced XYZ files', required=False)
+    parser.add_argument('-solvent', type=str, help='Solvent to use (xTB calculations only)', required=False)
     parser.add_argument('-linesearch', type=str, default='NoLineSearch', help='default: %(default)s',
                         choices=['NoLineSearch', 'backtrack'])
     parser.add_argument('-coordinate_type', type=str, default='TRIC', help='Coordinate system (default %(default)s)',
@@ -119,14 +119,14 @@ def parse_arguments(verbose=True):
     parser.add_argument('-reparametrize', action='store_true', help='Reparametrize restart string equally along path')
     parser.add_argument('-interp_method', default='DLC', type=str, help='')
     parser.add_argument('-bonds_file', type=str, help="A file which contains the bond indices (0-based)")
-    parser.add_argument('-start_climb_immediately',action='store_true',help='Start climbing immediately when restarting.')
+    parser.add_argument('-start_climb_immediately', action='store_true', help='Start climbing immediately when restarting.')
 
     # ASE calculator's options
     group_ase = parser.add_argument_group('ASE', 'ASE calculator options')
     group_ase.add_argument('--ase-class', type=str,
-                              help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
+                           help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
     group_ase.add_argument('--ase-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
-                                                             'eg. {"param_filename":"path/to/file.xml"}')
+                           'eg. {"param_filename":"path/to/file.xml"}')
 
     args = parser.parse_args()
 
@@ -287,7 +287,7 @@ def create_lot(inpfileq: dict, geom):
             xTB_electronic_temperature=inpfileq['xTB_electronic_temperature'],
             solvent=inpfileq['solvent'],
             **lot_options,
-                )
+        )
     else:
         est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
         lot_class = getattr(est_package, lot_name)
@@ -424,7 +424,7 @@ def main():
     if inpfileq['hybrid_coord_idx_file'] is not None:
         nifty.printcool(" Using Hybrid COORDINATES :)")
         assert inpfileq[
-                   'coordinate_type'] == "TRIC", "hybrid indices won't work (currently) with other coordinate systems"
+            'coordinate_type'] == "TRIC", "hybrid indices won't work (currently) with other coordinate systems"
         with open(inpfileq['hybrid_coord_idx_file']) as f:
             hybrid_indices = f.read().splitlines()
         hybrid_indices = [int(x) for x in hybrid_indices]
@@ -875,7 +875,7 @@ def post_processing(gsm, analyze_ICs=False, have_TS=True):
                 f.write("{0}\t{1}\t{2}\n".format(*x))
 
     # Delta E
-    deltaE = gsm.energies[minnodeP] - gsm.energies[minnodeR] 
+    deltaE = gsm.energies[minnodeP] - gsm.energies[minnodeR]
     print(" Delta E is %5.4f" % deltaE)
 
 
