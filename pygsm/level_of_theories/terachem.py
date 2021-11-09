@@ -473,8 +473,7 @@ class TeraChem(Lot):
             self.parse_coup()
         # ### FINALLY DONE WITH RUN Energy/Gradients ###
 
-        self.parse_E()
-        self.hasRanForCurrentCoords = True
+        self.parse_E()       
         return
 
     def parse_E(self):

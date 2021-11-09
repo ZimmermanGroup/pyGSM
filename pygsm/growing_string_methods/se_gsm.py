@@ -109,15 +109,18 @@ class SE_GSM(MainGSM):
             self.add_GSM_nodeR()
             self.grow_string(max_iters=max_iters, max_opt_steps=opt_steps)
             if self.tscontinue:
-                if self.pastts == 1:  # normal over the hill
-                    self.add_GSM_nodeR(1)
-                    self.add_last_node(2)
-                elif self.pastts == 2 or self.pastts == 3:  # when cgrad is positive
-                    self.add_last_node(1)
-                    if self.nodes[self.nR-1].gradrms > 5.*self.options['CONV_TOL']:
+                try:
+                    if self.pastts == 1: #normal over the hill
+                        self.add_GSM_nodeR(1)
+                        self.add_last_node(2)
+                    elif self.pastts == 2 or self.pastts==3: #when cgrad is positive
                         self.add_last_node(1)
-                elif self.pastts == 3:  # product detected by bonding
-                    self.add_last_node(1)
+                        if self.nodes[self.nR-1].gradrms > 5.*self.options['CONV_TOL']:
+                            self.add_last_node(1)
+                    elif self.pastts == 3: #product detected by bonding
+                        self.add_last_node(1)
+                except:
+                    print("Failed to add last node, continuing.")
 
             self.nnodes = self.nR
             self.nodes = self.nodes[:self.nR]

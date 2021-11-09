@@ -220,6 +220,7 @@ def parse_arguments(verbose=True):
         'only_drive': args.only_drive,
         'reparametrize': args.reparametrize,
         'dont_analyze_ICs': args.dont_analyze_ICs,
+        'start_climb_immediately' : args.start_climb_immediately,
 
         # ASE
         'ase_class': args.ase_class,

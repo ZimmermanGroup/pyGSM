@@ -58,8 +58,6 @@ class xTB_lot(Lot):
         # write E to scratch
         self.write_E_to_file()
 
-        self.hasRanForCurrentCoords = True
-
         return res
 
 

@@ -15,7 +15,13 @@ from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 # third party
-np.set_printoptions(precision=4, suppress=True)
+from copy import deepcopy,copy
+import numpy as np
+import networkx as nx
+np.set_printoptions(precision=4,suppress=True)
+import itertools
+from collections import OrderedDict, defaultdict
+from scipy.linalg import block_diag
 
 # local application imports
 
@@ -1231,18 +1237,18 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     #        tot+=num_prim
     #    return new_xyz
 
-    # def second_derivatives(self, xyz):
-    #    self.calculate(xyz)
-    #    answer = []
-    #    for Internal in self.Internals:
-    #        answer.append(Internal.second_derivative(xyz))
-    #    # This array has dimensions:
-    #    # 1) Number of internal coordinates
-    #    # 2) Number of atoms
-    #    # 3) 3
-    #    # 4) Number of atoms
-    #    # 5) 3
-    #    return np.array(answer)
+    def second_derivatives_nb(self, xyz):
+        self.calculate(xyz)
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.second_derivative(xyz))
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        # 4) Number of atoms
+        # 5) 3
+        return np.array(answer)
 
     def second_derivatives(self, xyz):
         self.calculate(xyz)
@@ -1262,13 +1268,37 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         answer = block_tensor(c_list)
         # This array has dimensions:
         # 1) Number of internal coordinates
-        # 2) Number of atoms
-        # 3) 3
-        # 4) Number of atoms
-        # 5) 3
+        # 2) 3*Number of atoms
+        # 4) 3*Number of atoms
         return answer
 
-    def get_hybrid_indices(self, xyz):
+    def calcCg(self,xyz,gradx):
+        '''
+        Calculates the tensor product Cxg where C is the tensor of second derivatives and g
+        is the internal coordinate gradient
+        '''
+        self.calculate(xyz)
+        Gq = self.calcGrad(xyz, gradx).flatten()
+        natoms = len(xyz)
+
+        result_list = []
+        for info in self.block_info:
+            sa = int(info[0])
+            ea = int(info[1])
+            sp = int(info[2])
+            ep = int(info[3])
+            na = ea - sa
+            mini_result = np.zeros( (3*na,3*na), dtype=float )
+            for p,prim in enumerate(self.Internals[sp:ep]):
+                sder = np.reshape(prim.second_derivative(xyz[sa:ea,:],start_idx=sa), (3*na,3*na))
+                mini_result += sder*Gq[p+sp]
+            result_list.append(mini_result)
+
+        result = block_diag(*result_list)
+
+        return result
+
+    def get_hybrid_indices(self,xyz):
         '''
         Get the hybrid indices if they exist
         '''

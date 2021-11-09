@@ -323,16 +323,29 @@ class InternalCoordinates(object):
          Compute the internal coordinate Hessian. 
          Expects Cartesian coordinates to be provided in a.u.
          """
-        xyz = xyz.flatten()
-        self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        Gq = self.calcGrad(xyz, gradx)
-        deriv2 = self.second_derivatives(xyz)
-        Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
-        Hx_BptGq = hessx - np.einsum('pmn,p->mn', Bmatp, Gq)
-        Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
-        return Hq
+         # xyz = xyz.flatten()
+         # self.calculate(xyz)
+         # Ginv = self.GInverse(xyz)
+         # Bmat = self.wilsonB(xyz)
+         # Gq = self.calcGrad(xyz, gradx)
+         # deriv2 = self.second_derivatives(xyz)
+         # Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+         # Hx_BptGq = hessx - np.einsum('pmn,p->mn', Bmatp, Gq)
+         # Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+         # return Hq
+
+         q0 = self.calculate(xyz)
+         Ginv = self.GInverse(xyz)
+         Ginv = block_matrix.full_matrix(Ginv)
+         Bmat = self.wilsonB(xyz)
+         Bmat = block_matrix.full_matrix(Bmat)
+
+         # np.einsum('pmn,p->mn',Bmatp,Gq)
+         BptGq = self.calcCg(xyz,gradx)
+         Hx_BptGq = hessx - BptGq 
+
+         Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+         return Hq
 
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):

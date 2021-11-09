@@ -232,7 +232,7 @@ class MainGSM(GSM):
                 if self.find and (not self.optimizer[self.TSnode].maxol_good or added):
                     self.ictan, self.dqmaga = self.get_three_way_tangents(self.nodes, self.energies)
                     self.modify_TS_Hess()
-                elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg == 0 or self.hess_counter > 10 or np.abs(self.TS_E_0 - self.emax) > 10.) and ts_gradrms > self.CONV_TOL:
+                elif self.find and (self.optimizer[self.TSnode].nneg > 3 or self.optimizer[self.TSnode].nneg == 0 or self.hess_counter > 10 or np.abs(self.TS_E_0 - self.emax) > 10.) and not self.optimizer[self.TSnode].converged:
 
                     # Reform the guess primitive Hessian
                     self.nodes[self.TSnode].form_Primitive_Hessian()
@@ -1245,10 +1245,10 @@ class MainGSM(GSM):
                 self.optimizer[n].conv_grms = self.CONV_TOL*factor
                 self.optimizer[n].conv_gmax = self.options['CONV_gmax']*factor
                 self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']*factor
-                if self.optimizer[n].converged:
-                    self.optimizer[n].check_only_grad_converged = True
-                if (self.climb or self.find) and self.energies[n] > self.energies[TSnode]*0.75 and n != TSnode:
-                    self.optimizer[n].conv_grms = self.CONV_TOL
+                if self.optimizer[n].converged and n != TSnode:
+                    self.optimizer[n].check_only_grad_converged=True
+                if (self.climb or self.find) and self.energies[n]>self.energies[TSnode]*0.75 and n!=TSnode:
+                    self.optimizer[n].conv_grms = self.CONV_TOL     
                     self.optimizer[n].conv_gmax = self.options['CONV_gmax']
                     self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
                     self.optimizer[n].check_only_grad_converged = False
@@ -1256,6 +1256,7 @@ class MainGSM(GSM):
                     self.optimizer[n].conv_grms = self.CONV_TOL
                     self.optimizer[n].conv_gmax = self.options['CONV_gmax']
                     self.optimizer[n].conv_Ediff = self.options['CONV_Ediff']
+                    self.optimizer[n].check_only_grad_converged = False
 
     def slow_down_climb(self):
         if self.climb and not self.find:

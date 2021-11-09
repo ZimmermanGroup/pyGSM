@@ -86,7 +86,7 @@ class block_tensor(object):
 
     @property
     def shape(self):
-        tot = (0,0)
+        tot = (0,0,0)
         for a in self.matlist:
             tot = tuple(map(sum,zip(a.shape,tot)))
         return tot

@@ -31,6 +31,9 @@ def copy_file(path1, path2):
 class LoTError(Exception):
     pass
 
+Energy = namedtuple('Energy','value unit')
+Gradient = namedtuple('Gradient','value unit')
+Coupling = namedtuple('Coupling','value unit')
 
 class Lot(object):
     """ Lot object for level of theory calculators """
@@ -154,28 +157,28 @@ class Lot(object):
         )
 
         opt.add_option(
-            key='xTB_Hamiltonian',
-            value=None,
-            required=False,
-            allowed_types=[str],
-            doc='xTB hamiltonian'
-        )
+                key='xTB_Hamiltonian',
+                value='GFN2-xTB',
+                required=False,
+                allowed_types=[str],
+                doc='xTB hamiltonian'
+                )
 
         opt.add_option(
-            key='xTB_accuracy',
-            value=None,
-            required=False,
-            allowed_types=[float],
-            doc='xTB accuracy'
-        )
+                key='xTB_accuracy',
+                value=1.0,
+                required=False,
+                allowed_types=[float],
+                doc='xTB accuracy'
+                )
 
         opt.add_option(
-            key='xTB_electronic_temperature',
-            value=None,
-            required=False,
-            allowed_types=[float],
-            doc='xTB electronic_temperature'
-        )
+                key='xTB_electronic_temperature',
+                value=300,
+                required=False,
+                allowed_types=[float],
+                doc='xTB electronic_temperature'
+                )
 
         opt.add_option(
             key='solvent',
@@ -194,12 +197,12 @@ class Lot(object):
         """ Constructor """
         self.options = options
         # properties
-        self.Energy = namedtuple('Energy', 'value unit')
-        self.Gradient = namedtuple('Gradient', 'value unit')
-        self.Coupling = namedtuple('Coupling', 'value unit')
-        self._Energies = {}
-        self._Gradients = {}
-        self._Couplings = {}
+        self.Energy = Energy
+        self.Gradient = Gradient
+        self.Coupling = Coupling
+        self._Energies={}
+        self._Gradients={}
+        self._Couplings={}
 
         # count number of states
         singlets = self.search_tuple(self.states, 1)
@@ -397,11 +400,12 @@ class Lot(object):
     def get_energy(self, coords, multiplicity, state, runtype=None):
         if self.hasRanForCurrentCoords is False or (coords != self.currentCoords).any():
             self.currentCoords = coords.copy()
-            geom = manage_xyz.np_to_xyz(self.geom, self.currentCoords)
-            self.runall(geom, runtype)
-
-        Energy = self.Energies[(multiplicity, state)]
-        if Energy.unit == "Hartree":
+            geom = manage_xyz.np_to_xyz(self.geom,self.currentCoords)
+            self.runall(geom,runtype)
+            self.hasRanForCurrentCoords=True
+        
+        Energy = self.Energies[(multiplicity,state)]
+        if Energy.unit=="Hartree":
             return Energy.value*units.KCAL_MOL_PER_AU
         elif Energy.unit == 'kcal/mol':
             return Energy.value
@@ -413,7 +417,8 @@ class Lot(object):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom, self.currentCoords)
             self.runall(geom)
-        Gradient = self.Gradients[(multiplicity, state)]
+            self.hasRanForCurrentCoords=True
+        Gradient = self.Gradients[(multiplicity,state)]
         if Gradient.value is not None:
             if frozen_atoms is not None:
                 for a in frozen_atoms:
@@ -432,7 +437,8 @@ class Lot(object):
             self.currentCoords = coords.copy()
             geom = manage_xyz.np_to_xyz(self.geom, self.currentCoords)
             self.runall(geom)
-        Coupling = self.Couplings[(state1, state2)]
+            self.hasRanForCurrentCoords=True
+        Coupling = self.Couplings[(state1,state2)]
 
         if Coupling.value is not None:
             if frozen_atoms is not None:
