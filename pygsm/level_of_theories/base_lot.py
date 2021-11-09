@@ -19,6 +19,8 @@ ELEMENT_TABLE = elements.ElementData()
 # TODO Make energies,grada dictionaries
 
 
+      
+
 def copy_file(path1, path2):
     cmd = 'cp -r ' + path1 + ' ' + path2
     print(" copying scr files\n {}".format(cmd))
@@ -372,7 +374,7 @@ class Lot(object):
         self.options['calc_grad'] = value
 
     @classmethod
-    def copy(cls, lot, options, copy_wavefunction=True):
+    def copy(cls, lot, options={}, copy_wavefunction=True):
         return cls(lot.options.copy().set_values(options))
 
     def check_multiplicity(self, multiplicity):
@@ -503,3 +505,27 @@ class Lot(object):
 
     def search_tuple(self, tups, multiplicity):
         return [tup for tup in tups if multiplicity == tup[0]]
+
+
+    @classmethod
+    def rmsd(cls, geom1, geom2):
+        total = 0
+        flat_geom1 = np.array(geom1).flatten()
+        flat_geom2 = np.array(geom2).flatten()
+        for i in range(len(flat_geom1)):
+            total += (flat_geom1[i] - flat_geom2[i]) ** 2
+        return total
+
+    def pick_best_orb_from_lots(self, lots):
+        '''
+        The idea is that this would take a list of lots and pick the best one for a node
+        Untested!
+        '''
+        rmsds = []
+        xyz1 = manage_xyz.xyz_to_np(self.geom)
+        for lot in lots:
+            rmsds.append(lot.rmsd(xyz1, lot.self.currentCoords))
+        minnode = rmsds.index(min(rmsds))
+        self.lot = self.lot.copy(lots[minnode])
+
+        return

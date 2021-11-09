@@ -21,6 +21,7 @@ def worker(arg):
     obj, methname = arg[:2]
     return getattr(obj, methname)(*arg[2:])
 
+
 #######################################################################################
 ############### This class contains the main GSM functions  ###########################
 #######################################################################################
@@ -126,7 +127,6 @@ class MainGSM(GSM):
             0 is no-climb
             1 is climber
             2 is finder
-            
         '''
         printcool("In opt_iters")
 
@@ -1113,6 +1113,10 @@ class MainGSM(GSM):
     def setup_from_geometries(self, input_geoms, reparametrize=True, restart_energies=True, start_climb_immediately=False):
         '''
         Restart
+        input_geoms list of geometries
+        reparameterize (boolean) : reparameterize the initial string to make the nodes equidistant
+        restart_energies (boolean) : generate the initial energies
+        start_climb_immediately (boolean) : set climb to True or False
         '''
 
         printcool("Restarting GSM from geometries")
@@ -1123,11 +1127,6 @@ class MainGSM(GSM):
             print('need to interpolate')
             # if self.interp_method=="DLC": TODO
             raise NotImplementedError
-            # symbols = get_atoms(input_geoms[0])
-            # old_xyzs = [xyz_to_np(geom) for geom in input_geoms]
-            # xyzs = redistribute(symbols, old_xyzs, self.nnodes, tol=2e-3*5)
-            # geoms = [np_to_xyz(input_geoms[0], xyz) for xyz in xyzs]
-            # nstructs = len(geoms)
         else:
             geoms = input_geoms
 
@@ -1162,16 +1161,7 @@ class MainGSM(GSM):
             self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID), self.geometries, self.energies, self.gradrmss, self.dEs)
 
         if restart_energies:
-            # initial energy
-            self.nodes[0].V0 = self.nodes[0].energy
-            self.energies[0] = 0.
-            print(" initial energy is %3.4f" % self.nodes[0].energy)
-
-            for struct in range(1, nstructs-1):
-                print(" energy of node %i is %5.4f" % (struct, self.nodes[struct].energy))
-                self.energies[struct] = self.nodes[struct].energy - self.nodes[0].V0
-                print(" Relative energy of node %i is %5.4f" % (struct, self.energies[struct]))
-
+            self.interpolate_orbitals()
             print(" V_profile: ", end=' ')
             energies = self.energies
             for n in range(self.nnodes):
@@ -1283,3 +1273,30 @@ class MainGSM(GSM):
             self.climb = True
             self.nclimb = 1
             print(" Find bad, going back to climb")
+
+    def interpolate_orbitals(self):
+        '''
+        Interpolate orbitals
+        '''
+
+        nnodes = len(self.nodes)
+        nn = nnodes//2
+        couples = [(i, nnodes-i-1) for i in range(nn)]
+        first = True
+        for i, j in couples:
+
+            if first:
+                # Calculate the energy of the i, j
+                self.nodes[i].energy
+                self.nodes[j].energy
+                first = False
+            else:
+                # Copy the orbital of i-1 to i
+                self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
+                    self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                self.nodes[i].energy
+                # Copy the orbital of j+1 to j
+                self.nodes[j].PES.lot = type(self.nodes[j+1].PES.lot).copy(
+                    self.nodes[j+1].PES.lot, copy_wavefunction=True)
+                self.nodes[j].energy
+        return

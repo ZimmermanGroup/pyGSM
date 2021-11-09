@@ -323,6 +323,13 @@ class GSM(object):
                 E.append(ico.energy - self.nodes[0].energy)
         return E
 
+    @energies.setter
+    def energies(self, list_of_E):
+        '''
+        setter for energies
+        '''
+        self.E = list_of_E
+
     @property
     def geometries(self):
         geoms = []
