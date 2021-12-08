@@ -1,6 +1,5 @@
 # standard library imports
-from .base_lot import Lot
-from utilities import nifty
+
 import sys
 from os import path
 import time
@@ -12,6 +11,8 @@ import json
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from .base_lot import Lot
+from utilities import nifty
 
 
 class TeraChemCloud(Lot):

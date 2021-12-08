@@ -1,6 +1,4 @@
 # standard library imports
-from utilities import manage_xyz
-from .base_lot import Lot
 import sys
 import os
 from os import path
@@ -10,7 +8,7 @@ import numpy as np
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-
+from .base_lot import Lot
 
 class Orca(Lot):
 

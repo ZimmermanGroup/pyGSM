@@ -1,4 +1,6 @@
 from __future__ import print_function
+# local application imports
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from coordinate_systems import Distance, Angle, Dihedral, OutOfPlane
 from utilities import nifty, options, block_matrix
 from wrappers import Molecule
@@ -14,9 +16,6 @@ import multiprocessing as mp
 from collections import Counter
 from copy import copy
 from itertools import chain
-
-# local application imports
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 
 def worker(arg):

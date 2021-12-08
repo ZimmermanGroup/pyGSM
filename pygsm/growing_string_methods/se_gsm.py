@@ -1,4 +1,6 @@
 from __future__ import print_function
+# local application imports
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from coordinate_systems import Distance, Angle, Dihedral, OutOfPlane
 from .main_gsm import MainGSM
 from wrappers import Molecule
@@ -11,9 +13,6 @@ from os import path
 # third party
 from collections import Counter
 import numpy as np
-
-# local application imports
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 
 class SE_GSM(MainGSM):

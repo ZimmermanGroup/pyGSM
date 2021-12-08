@@ -1,4 +1,6 @@
 # standard library imports
+# local application imports
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from utilities import manage_xyz
 import sys
 import os
@@ -7,9 +9,6 @@ import re
 
 # third party
 import numpy as np
-
-# local application imports
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 try:
     from .base_lot import Lot

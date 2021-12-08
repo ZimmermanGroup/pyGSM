@@ -1,6 +1,5 @@
 
 # standard library imports
-from utilities import manage_xyz, units
 import sys
 from os import path
 import copy as cp
@@ -8,6 +7,7 @@ import copy as cp
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from utilities import manage_xyz, units
 
 try:
     from .base_lot import Lot

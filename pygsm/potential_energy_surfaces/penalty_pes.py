@@ -1,6 +1,4 @@
 # standard library imports
-from utilities import manage_xyz, units
-from .pes import PES
 import sys
 from os import path
 
@@ -8,7 +6,8 @@ from os import path
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-
+from utilities import manage_xyz, units
+from .pes import PES
 
 class Penalty_PES(PES):
     """ penalty potential energy surface calculators """

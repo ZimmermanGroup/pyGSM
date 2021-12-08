@@ -1,5 +1,4 @@
 # standard library imports
-from utilities import manage_xyz, units, elements
 import sys
 from os import path
 
@@ -12,6 +11,7 @@ from xtb.libxtb import VERBOSITY_FULL
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from utilities import manage_xyz, units, elements
 try:
     from .base_lot import Lot
 except:

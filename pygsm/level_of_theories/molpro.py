@@ -4,7 +4,6 @@ import os
 from os import path
 import re
 import subprocess
-from utilities import manage_xyz
 
 # third party
 import numpy as np
@@ -12,6 +11,7 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
+from utilities import manage_xyz
 try:
     from .base_lot import Lot
 except:

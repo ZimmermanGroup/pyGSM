@@ -1,5 +1,4 @@
 # standard library imports
-from utilities import manage_xyz, nifty, units
 import sys
 import os
 from os import path
@@ -16,6 +15,7 @@ import glob
 #from Definitions import *
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from utilities import manage_xyz, nifty, units
 try:
     from .base_lot import Lot
 except:

@@ -1,6 +1,4 @@
 # standard library imports
-from ._linesearch import backtrack, NoLineSearch
-from utilities import units, options, block_matrix
 import sys
 from os import path
 
@@ -9,6 +7,8 @@ import numpy as np
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+from ._linesearch import backtrack, NoLineSearch
+from utilities import units, options, block_matrix
 
 
 def sorted_eigh(mat, asc=False):

@@ -2,6 +2,9 @@
 This class is the combination of Martinez group and Lee Ping's molecule class.
 """
 
+# local application imports
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 # standard library imports
 from coordinate_systems import CartesianCoordinates
 from coordinate_systems import DelocalizedInternalCoordinates
@@ -18,8 +21,6 @@ from time import time
 import numpy as np
 from collections import Counter
 
-# local application imports
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 ELEMENT_TABLE = elements.ElementData()
 
