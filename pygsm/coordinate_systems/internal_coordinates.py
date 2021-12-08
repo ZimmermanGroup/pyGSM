@@ -78,9 +78,9 @@ class InternalCoordinates(object):
         )
 
         opt.add_option(
-            key='form_primitives',
+            key='form_topology',
             value=True,
-            doc='Useful when copying to prevent potentially expensive primitive formation',
+            doc='A lazy argument for forming the topology on the fly, dont use this',
         )
 
         opt.add_option(

@@ -57,6 +57,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.Rotators = OrderedDict()
         self.natoms = len(self.atoms)
         self.built_bonds = False
+        self.hybrid_idx_start_stop = []
 
         # # Topology settings  -- CRA 3/2019 leftovers from Lee-Ping's code
         # but maybe useful in the future
@@ -71,7 +72,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # make_prims = self.top_settings['make_primitives']
 
         # setup
-        if self.options['form_primitives']:
+        if self.options['form_topology']:
             if self.topology is None:
                 print(" Warning it's better to build the topology before calling PrimitiveInternals\n Only the most basic option is enabled here \n You get better control of the topology by controlling extra bonds, angles etc.")
                 self.topology = Topology.build_topology(xyz, self.atoms)
@@ -80,13 +81,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.fragments = [self.topology.subgraph(c).copy() for c in nx.connected_components(self.topology)]
             for g in self.fragments:
                 g.__class__ = MyG
-
-            self.get_hybrid_indices(xyz)
-            # nifty.click()
-            self.newMakePrimitives(xyz)
-            print(" done making primitives")
-            # time_build = nifty.click()
-            # print(" make prim %.3f" % time_build)
 
         # Reorder primitives for checking with cc's code in TC.
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
@@ -97,7 +91,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     @classmethod
     def copy(cls, Prims):
-        newPrims = cls(Prims.options.copy().set_values({'form_primitives': False}))
+        newPrims = cls(Prims.options.copy().set_values({'form_topology': False}))
         newPrims.hybrid_idx_start_stop = Prims.hybrid_idx_start_stop
         newPrims.topology = deepcopy(Prims.topology)
         newPrims.Internals = deepcopy(Prims.Internals)
@@ -1343,7 +1337,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # print(new_hybrid_indices)
 
         # get the hybrid start and stop indices
-        self.hybrid_idx_start_stop = []
         new = True
         for i in range(natoms+1):
             if i in new_hybrid_indices:

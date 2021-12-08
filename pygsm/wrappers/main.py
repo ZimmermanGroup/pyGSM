@@ -419,7 +419,6 @@ def main():
     # Molecule
     nifty.printcool("Building the reactant object with {}".format(inpfileq['coordinate_type']))
     Form_Hessian = True if inpfileq['optimizer'] == 'eigenvector_follow' else False
-    # form_primitives = True if inpfileq['gsm_type']!='DE_GSM' else False
 
     # hybrid coordinates
     if inpfileq['hybrid_coord_idx_file'] is not None:
@@ -535,6 +534,10 @@ def main():
         addcart=addcart,
         topology=top1,
     )
+    if hybrid_indices:
+        p1.get_hybrid_indices(xyz1)
+    p1.newMakePrimitives(xyz1)
+    print(" done making primitives p1")
 
     if inpfileq['gsm_type'] == 'DE_GSM':
         nifty.printcool("Building Primitive Internal Coordinates 2")
@@ -546,6 +549,11 @@ def main():
             connect=connect,
             topology=top1,  # Use the topology of 1 because we fixed it above
         )
+        if hybrid_indices:
+            p2.get_hybrid_indices(xyz2)
+        p2.newMakePrimitives(xyz2)
+        print(" done making primitives p2")
+
         nifty.printcool("Forming Union of Primitives")
         # Form the union of primitives
         p1.add_union_primitives(p2)
