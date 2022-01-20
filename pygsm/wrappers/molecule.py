@@ -2,20 +2,20 @@
 This class is the combination of Martinez group and Lee Ping's molecule class.
 """
 
+# standard library imports
+import sys
+import os
+from os import path
+from time import time
+
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-
-# standard library imports
 from coordinate_systems import CartesianCoordinates
 from coordinate_systems import DelocalizedInternalCoordinates
 from potential_energy_surfaces import Penalty_PES
 from potential_energy_surfaces import Avg_PES
 from potential_energy_surfaces import PES
 from utilities import manage_xyz, elements, options, block_matrix
-import sys
-import os
-from os import path
-from time import time
 
 # third party
 import numpy as np
