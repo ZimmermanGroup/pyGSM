@@ -1,14 +1,15 @@
 from __future__ import print_function
+# standard library imports
+import sys
+import os
+from os import path
+
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from coordinate_systems import Distance, Angle, Dihedral, OutOfPlane
 from .main_gsm import MainGSM
 from wrappers import Molecule
 from utilities import nifty
-# standard library imports
-import sys
-import os
-from os import path
 
 # third party
 from collections import Counter
