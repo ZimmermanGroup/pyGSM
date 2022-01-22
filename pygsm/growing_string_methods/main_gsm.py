@@ -1181,23 +1181,28 @@ class MainGSM(GSM):
     def add_node_before_TS(self):
         '''
         '''
+
+        # New node is TS node
         new_node = GSM.add_node(
             self.nodes[self.TSnode-1],
             self.nodes[self.TSnode],
             stepsize=0.5,
-            node_id=self.TSnode-1,
+            node_id=self.TSnode,
         )
         new_node_list = [None]*(self.nnodes+1)
         new_optimizers = [None]*(self.nnodes+1)
-        for n in range(0, self.TSnode-1):
+
+        for n in range(0, self.TSnode):
             new_node_list[n] = self.nodes[n]
             new_optimizers[n] = self.optimizer[n]
-        new_node_list[self.TSnode-1] = new_node
-        new_optimizers[self.TSnode-1] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
 
-        for n in range(self.TSnode, self.nnodes+1):
+        new_node_list[self.TSnode] = new_node
+        new_optimizers[self.TSnode] = self.optimizer[0].__class__(self.optimizer[0].options.copy())
+
+        for n in range(self.TSnode+1, self.nnodes+1):
             new_node_list[n] = Molecule.copy_from_options(MoleculeA=self.nodes[n-1], new_node_id=n)
             new_optimizers[n] = self.optimizer[n-1]
+
         self.nodes = new_node_list
         self.optimizer = new_optimizers
         self.nnodes = len(self.nodes)
