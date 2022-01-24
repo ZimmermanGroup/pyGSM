@@ -8,7 +8,7 @@ import numpy as np
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from coordinate_systems import rotate
-from utilities import manage_xyz, units, elements
+from utilities import manage_xyz,options, units, elements
 
 ELEMENT_TABLE = elements.ElementData()
 

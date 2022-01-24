@@ -1,6 +1,11 @@
 from __future__ import print_function
 import numpy as np
+import sys
 import os
+from os import path
+
+# local application imports
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 try:
     from .gsm import GSM

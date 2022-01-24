@@ -131,6 +131,7 @@ def parse_arguments(verbose=True):
     args = parser.parse_args()
 
     if verbose:
+        print("what the fuck2")
         print_msg()
 
     if args.nproc > 1:
@@ -360,6 +361,8 @@ def choose_optimizer(inpfileq: dict):
 
 
 def main():
+
+    print("WHAT THE FUCK!")
     # argument parsing and header
     inpfileq = parse_arguments(verbose=True)
 
