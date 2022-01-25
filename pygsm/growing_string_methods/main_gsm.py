@@ -20,7 +20,7 @@ from coordinate_systems import rotate
 from optimizers import eigenvector_follow
 import multiprocessing as mp
 from itertools import chain
-
+from copy import deepcopy
 
 def worker(arg):
     obj, methname = arg[:2]
@@ -141,11 +141,11 @@ class MainGSM(GSM):
         self.newclimbscale = 2.
         self.set_finder(rtype)
 
-        isConverged = False
+        self.isConverged = False
         oi = 0
 
         # enter loop
-        while not isConverged:
+        while not self.isConverged:
             printcool("Starting opt iter %i" % oi)
             if self.climb and not self.find:
                 print(" CLIMBING")
@@ -214,7 +214,7 @@ class MainGSM(GSM):
             #    self.tscontinue=False
 
             # => Check Convergence <= #
-            isConverged = self.is_converged(totalgrad, fp, rtype, ts_cgradq)
+            self.isConverged = self.is_converged(totalgrad, fp, rtype, ts_cgradq)
 
             # => set stage <= #
             stage_changed = self.set_stage(totalgrad, sum_gradrms, ts_cgradq, ts_gradrms, fp)
@@ -266,14 +266,14 @@ class MainGSM(GSM):
             oi += 1
 
             # => Reparam the String <= #
-            if oi < max_iter and not isConverged:
+            if oi < max_iter and not self.isConverged:
                 self.reparameterize(nconstraints=nconstraints)
                 self.get_tangents_opting()
                 self.refresh_coordinates()
                 if self.pTSnode != self.TSnode and self.climb:
                     print("TS node changed after reparameterizing")
                     self.slow_down_climb()
-            elif oi >= max_iter and not isConverged:
+            elif oi >= max_iter and not self.isConverged:
                 self.ran_out = True
                 print(" Ran out of iterations")
                 return
@@ -1159,12 +1159,7 @@ class MainGSM(GSM):
         if start_climb_immediately:
             # should check that this is a climber...
             self.climb = True
-
-        if reparametrize:
-            printcool("Reparametrizing")
-            self.reparameterize(ic_reparam_steps=8)
-            self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID), self.geometries, self.energies, self.gradrmss, self.dEs)
-
+        #ALEX CHANGE - rearranged reparameterize and restart_energies 'if' blocks
         if restart_energies:
             self.interpolate_orbitals()
             print(" V_profile: ", end=' ')
@@ -1172,6 +1167,11 @@ class MainGSM(GSM):
             for n in range(self.nnodes):
                 print(" {:7.3f}".format(float(energies[n])), end=' ')
             print()
+        if reparametrize:
+            printcool("Reparametrizing")
+            self.reparameterize(ic_reparam_steps=8)
+            self.xyz_writer('grown_string_{:03}.xyz'.format(self.ID), self.geometries, self.energies, self.gradrmss, self.dEs)
+
 
         self.ictan, self.dqmaga = self.get_tangents(self.nodes)
         self.refresh_coordinates()
@@ -1215,6 +1215,12 @@ class MainGSM(GSM):
         self.active = [True] * self.nnodes
         self.active[0] = False
         self.active[self.nnodes-1] = False
+        print("0")
+        print(self.nodes[0].xyz)
+        print("1")
+        print(self.nodes[1].xyz)
+        print("-1")
+        print(self.nodes[-1].xyz)
 
     def add_node_after_TS(self):
         '''
@@ -1289,25 +1295,79 @@ class MainGSM(GSM):
         '''
         Interpolate orbitals
         '''
-
+        print("Interpolating orbitals")
         nnodes = len(self.nodes)
-        nn = nnodes//2
+        #nn = nnodes//2 + 1
+        nn = - (nnodes // -2)
         couples = [(i, nnodes-i-1) for i in range(nn)]
         first = True
         for i, j in couples:
-
             if first:
                 # Calculate the energy of the i, j
+                print("Calculating initial energy for node: {}".format(i))
                 self.nodes[i].energy
+                print("Calculating initial energy for node: {}".format(j))
                 self.nodes[j].energy
                 first = False
+            elif j - i <= 1:
+                #even nnodes case
+                if i == j - 1:  
+                    self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
+                        self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                    self.nodes[i].PES.lot.node_id = i
+                    self.nodes[i].energy
+                    i += 1
+                if i == j:
+                    print("Checking if energies match for wavefunction guesses from either direction for node: {}".format(i))
+                    self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
+                        self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                    print("Getting forward energy")
+                    self.nodes[i].PES.lot.node_id = i
+                    energy_forward = self.nodes[i].energy
+                    print("Getting backward energy")
+                    self.nodes[i].PES.lot = type(self.nodes[i+1].PES.lot).copy(
+                        self.nodes[i+1].PES.lot, copy_wavefunction=True)
+                    self.nodes[i].PES.lot.node_id = i
+                    self.nodes[i].PES.lot.hasRanForCurrentCoords = False
+                    energy_backward = self.nodes[i].energy
+                    print("Forward direction energy: {}".format(energy_forward))
+                    print("Backward direction energy: {}".format(energy_backward))
+                    if abs(energy_forward - energy_backward) < 0.1:
+                        print("Energies match")
+                    else:
+                        print("Energies do not match")
+                        if energy_backward < energy_forward:
+                            for k in range(i):
+                                
+                                self.nodes[i-k-1].PES.lot = type(self.nodes[i-k].PES.lot).copy(
+                                    self.nodes[i-k].PES.lot, copy_wavefunction=True)
+                                self.nodes[i-k-1].PES.lot.node_id = i-k-1
+                                self.nodes[i-k -1].PES.lot.hasRanForCurrentCoords = False
+                                print("Calculating new initial energy for node: {}".format(i-k-1))
+                                print("New energy: {}".format(self.nodes[i-k-1].energy))
+                        else:
+                            for k in range(i+1):
+                                #lower energy is in forward direction, so do node i using i-1's wavefunction
+                                self.nodes[i+k].PES.lot = type(self.nodes[i+k-1].PES.lot).copy(
+                                    self.nodes[i+k-1].PES.lot, copy_wavefunction=True)
+                                self.nodes[i+k].PES.lot.node_id = i+k
+                                self.nodes[i+k].PES.lot.hasRanForCurrentCoords = False
+                                print("Calculating new initial energy for node: {}".format(i+k))
+                                print("New energy: {}".format(self.nodes[i+k].energy))
+
+                     
+                    
             else:
                 # Copy the orbital of i-1 to i
                 self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
                     self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                self.nodes[i].PES.lot.node_id = i
+                print("Calculating initial energy for node: {}".format(i))
                 self.nodes[i].energy
                 # Copy the orbital of j+1 to j
                 self.nodes[j].PES.lot = type(self.nodes[j+1].PES.lot).copy(
                     self.nodes[j+1].PES.lot, copy_wavefunction=True)
+                self.nodes[j].PES.lot.node_id = j
+                print("Calculating initial energy for node: {}".format(j))
                 self.nodes[j].energy
         return
