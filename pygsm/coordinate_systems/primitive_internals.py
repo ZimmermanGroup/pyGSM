@@ -82,14 +82,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             for g in self.fragments:
                 g.__class__ = MyG
 
-            #ALEX CHANGE for lines 86-91
-            self.get_hybrid_indices(xyz)
-            #nifty.click()
-            self.newMakePrimitives(xyz)
-            print(" done making primitives")
-            #time_build = nifty.click()
-            #print(" make prim %.3f" % time_build)
-
         # Reorder primitives for checking with cc's code in TC.
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
         # self.reorderPrimitives()

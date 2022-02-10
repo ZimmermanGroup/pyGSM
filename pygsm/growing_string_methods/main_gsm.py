@@ -1159,7 +1159,6 @@ class MainGSM(GSM):
         if start_climb_immediately:
             # should check that this is a climber...
             self.climb = True
-        #ALEX CHANGE - rearranged reparameterize and restart_energies 'if' blocks
         if restart_energies:
             self.interpolate_orbitals()
             print(" V_profile: ", end=' ')
