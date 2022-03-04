@@ -168,18 +168,18 @@ def write_molden_geoms(
                     atom[2],
                     atom[3],
                 ))
-            f.write("[GEOCONV]\n")
-            f.write('energy\n')
-            V0 = energies[0]
-            for energy in energies:
-                f.write('{}\n'.format(energy-V0))
-            f.write("max-force\n")
-            for grad in gradrms:
-                f.write('{}\n'.format(float(grad)))
-            # rint(" WARNING: Printing dE as max-step in molden output ")
-            f.write("max-step\n")
-            for dE in dEs:
-                f.write('{}\n'.format(float(dE)))
+        f.write("[GEOCONV]\n")
+        f.write('energy\n')
+        V0 = energies[0]
+        for energy in energies:
+            f.write('{}\n'.format(energy-V0))
+        f.write("max-force\n")
+        for grad in gradrms:
+            f.write('{}\n'.format(float(grad)))
+        # rint(" WARNING: Printing dE as max-step in molden output ")
+        f.write("max-step\n")
+        for dE in dEs:
+            f.write('{}\n'.format(float(dE)))
 
 
 def get_atoms(
