@@ -4,6 +4,7 @@ This class is the combination of Martinez group and Lee Ping's molecule class.
 
 # local application imports
 import sys
+import os
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
@@ -14,13 +15,11 @@ from potential_energy_surfaces import Penalty_PES
 from potential_energy_surfaces import Avg_PES
 from potential_energy_surfaces import PES
 from utilities import manage_xyz, elements, options, block_matrix
-import os
 from time import time
 
 # third party
 import numpy as np
 from collections import Counter
-
 
 ELEMENT_TABLE = elements.ElementData()
 
