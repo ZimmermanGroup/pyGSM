@@ -1060,8 +1060,10 @@ class MainGSM(GSM):
         # print(" Number of imaginary frequencies %i" % self.optimizer[self.TSnode].nneg)
 
         # or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
+
+        # 4/8/2022 Bug with this because it isn't recalculated and abs(ts_cgradq) < TS_conv
         if (self.finder and self.find):
-            return (self.nodes[self.TSnode].gradrms < self.CONV_TOL and abs(ts_cgradq) < TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3 and self.optimizer[self.TSnode].nneg < 2)
+            return (self.nodes[self.TSnode].gradrms < self.CONV_TOL  and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3 and self.optimizer[self.TSnode].nneg < 2)
         elif self.climber and self.climb:
             return (self.nodes[self.TSnode].gradrms < self.CONV_TOL and abs(ts_cgradq) < TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3)
         elif not self.climber and not self.finder:
