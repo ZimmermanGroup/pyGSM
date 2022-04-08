@@ -1161,7 +1161,7 @@ class MainGSM(GSM):
             self.climb = True
         #ALEX CHANGE - rearranged reparameterize and restart_energies 'if' blocks
         if restart_energies:
-            self.interpolate_orbitals()
+            # self.interpolate_orbitals()
             print(" V_profile: ", end=' ')
             energies = self.energies
             for n in range(self.nnodes):
@@ -1301,6 +1301,7 @@ class MainGSM(GSM):
         nn = - (nnodes // -2)
         couples = [(i, nnodes-i-1) for i in range(nn)]
         first = True
+        options = {}
         for i, j in couples:
             if first:
                 # Calculate the energy of the i, j
@@ -1319,14 +1320,17 @@ class MainGSM(GSM):
                     i += 1
                 if i == j:
                     print("Checking if energies match for wavefunction guesses from either direction for node: {}".format(i))
+
+                    options={'node_id':self.nodes[i].node_id}
                     self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
-                        self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                        self.nodes[i-1].PES.lot, options, copy_wavefunction=True)
                     print("Getting forward energy")
                     self.nodes[i].PES.lot.node_id = i
                     energy_forward = self.nodes[i].energy
                     print("Getting backward energy")
+                    options={'node_id':self.nodes[i+1].node_id}
                     self.nodes[i].PES.lot = type(self.nodes[i+1].PES.lot).copy(
-                        self.nodes[i+1].PES.lot, copy_wavefunction=True)
+                        self.nodes[i+1].PES.lot, options, copy_wavefunction=True)
                     self.nodes[i].PES.lot.node_id = i
                     self.nodes[i].PES.lot.hasRanForCurrentCoords = False
                     energy_backward = self.nodes[i].energy
@@ -1338,20 +1342,23 @@ class MainGSM(GSM):
                         print("Energies do not match")
                         if energy_backward < energy_forward:
                             for k in range(i):
-                                
+                                options={'node_id':self.nodes[i+k-1].node_id}
                                 self.nodes[i-k-1].PES.lot = type(self.nodes[i-k].PES.lot).copy(
-                                    self.nodes[i-k].PES.lot, copy_wavefunction=True)
+                                    self.nodes[i-k].PES.lot, options, copy_wavefunction=True)
                                 self.nodes[i-k-1].PES.lot.node_id = i-k-1
                                 self.nodes[i-k -1].PES.lot.hasRanForCurrentCoords = False
+                                print("node_id {}".format(self.nodes[i+k].node_id))
                                 print("Calculating new initial energy for node: {}".format(i-k-1))
                                 print("New energy: {}".format(self.nodes[i-k-1].energy))
                         else:
                             for k in range(i+1):
                                 #lower energy is in forward direction, so do node i using i-1's wavefunction
+                                options={'node_id':self.nodes[i+k].node_id}
                                 self.nodes[i+k].PES.lot = type(self.nodes[i+k-1].PES.lot).copy(
-                                    self.nodes[i+k-1].PES.lot, copy_wavefunction=True)
+                                    self.nodes[i+k-1].PES.lot, options, copy_wavefunction=True)
                                 self.nodes[i+k].PES.lot.node_id = i+k
                                 self.nodes[i+k].PES.lot.hasRanForCurrentCoords = False
+                                print("node_id {}".format(self.nodes[i+k].node_id))
                                 print("Calculating new initial energy for node: {}".format(i+k))
                                 print("New energy: {}".format(self.nodes[i+k].energy))
 
@@ -1360,13 +1367,13 @@ class MainGSM(GSM):
             else:
                 # Copy the orbital of i-1 to i
                 self.nodes[i].PES.lot = type(self.nodes[i-1].PES.lot).copy(
-                    self.nodes[i-1].PES.lot, copy_wavefunction=True)
+                    self.nodes[i-1].PES.lot, options, copy_wavefunction=True)
                 self.nodes[i].PES.lot.node_id = i
                 print("Calculating initial energy for node: {}".format(i))
                 self.nodes[i].energy
                 # Copy the orbital of j+1 to j
                 self.nodes[j].PES.lot = type(self.nodes[j+1].PES.lot).copy(
-                    self.nodes[j+1].PES.lot, copy_wavefunction=True)
+                    self.nodes[j+1].PES.lot, options, copy_wavefunction=True)
                 self.nodes[j].PES.lot.node_id = j
                 print("Calculating initial energy for node: {}".format(j))
                 self.nodes[j].energy
