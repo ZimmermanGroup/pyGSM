@@ -194,6 +194,12 @@ class TeraChem(Lot):
             'coordinates', 'scratch/{:03}/{}/tmp.xyz'.format(self.ID, self.node_id))
         self.file_options.set_active('charge', 0, int, doc='')
 
+
+        # PCM
+        self.file_options.set_active('pcm', None, str, doc='')
+        self.file_options.set_active('epsilon', 1., float, '', depend=self.file_options.pcm=="yes")
+
+
         # Deactivate useless keys
         # casscf
         keys_to_del = []

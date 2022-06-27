@@ -481,7 +481,10 @@ class MainGSM(GSM):
         # TODO totalgrad is not a good criteria for large systems
         # if fp>0 and (((totalgrad < 0.3 or ts_cgradq < 0.01) and self.dE_iter < 2.) or all_converged) and self.nopt_intermediate<1: # extra criterion in og-gsm for added
 
-        if fp > 0 and all_converged_climb and self.dE_iter < 2.:  # and self.nopt_intermediate<1:
+        print('set stage ts_cgradq')
+        print(ts_cgradq)
+
+        if fp > 0: # and all_converged_climb and self.dE_iter < 2.:  # and self.nopt_intermediate<1:
             if not self.climb and self.climber:
                 print(" ** starting climb **")
                 self.climb = True
@@ -491,12 +494,12 @@ class MainGSM(GSM):
                 stage_changed = True
 
             # TODO deserves to be rethought 3/2021
+                     #(totalgrad < 0.2 and ts_gradrms < self.CONV_TOL*20. and ts_cgradq < 0.02) or  #
             elif (self.climb and not self.find and self.finder and self.nclimb < 1 and
-                    ((totalgrad < 0.2 and ts_gradrms < self.CONV_TOL*10. and ts_cgradq < 0.01) or  # I hate totalgrad
-                     (totalgrad < 0.1 and ts_gradrms < self.CONV_TOL*10. and ts_cgradq < 0.02) or  #
+                    ((totalgrad < 0.3 and ts_gradrms < self.CONV_TOL*20.) or  # I hate totalgrad  and ts_cgradq < 0.02
                      (all_converged) or
                      (ts_gradrms < self.CONV_TOL*2.5 and ts_cgradq < 0.01)  # used to be 5
-                     )) and self.dE_iter < 1.:
+                     )) and self.dE_iter < 5.:
                 print(" ** starting exact climb **")
                 print(" totalgrad %5.4f gradrms: %5.4f gts: %5.4f" % (totalgrad, ts_gradrms, ts_cgradq))
                 self.find = True
@@ -1062,8 +1065,9 @@ class MainGSM(GSM):
         # or (totalgrad<0.1 and self.nodes[self.TSnode].gradrms<2.5*TS_conv and self.dE_iter<0.02 and self.optimizer[self.TSnode].nneg <2)  #TODO extra crit here
 
         # 4/8/2022 Bug with this because it isn't recalculated and abs(ts_cgradq) < TS_conv
+        # 5/10/2022 self.optimizer[self.TSnode].nneg < 3
         if (self.finder and self.find):
-            return (self.nodes[self.TSnode].gradrms < self.CONV_TOL  and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3 and self.optimizer[self.TSnode].nneg < 2)
+            return (self.nodes[self.TSnode].gradrms < self.CONV_TOL  and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3)
         elif self.climber and self.climb:
             return (self.nodes[self.TSnode].gradrms < self.CONV_TOL and abs(ts_cgradq) < TS_conv and self.dE_iter < self.optimizer[self.TSnode].conv_Ediff*3)
         elif not self.climber and not self.finder:

@@ -110,6 +110,8 @@ class SE_GSM(MainGSM):
             self.add_GSM_nodeR()
             self.grow_string(max_iters=max_iters, max_opt_steps=opt_steps)
             if self.tscontinue:
+                self.pastts = self.past_ts()
+                print("pastts {}".format(self.pastts))
                 try:
                     if self.pastts == 1: #normal over the hill
                         self.add_GSM_nodeR(1)
@@ -122,6 +124,7 @@ class SE_GSM(MainGSM):
                         self.add_last_node(1)
                 except:
                     print("Failed to add last node, continuing.")
+                    # probably need to make sure last node is optimized
 
             self.nnodes = self.nR
             self.nodes = self.nodes[:self.nR]

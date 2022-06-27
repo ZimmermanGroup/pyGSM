@@ -456,7 +456,7 @@ class base_optimizer(object):
                 if gradrms > (pgradrms + 0.0005):
                     print(' decreasing DMAX, gradrms increased')
                     self.DMAX -= self.DMAX/10.
-                elif gradrms < pgradrms:
+                elif gradrms < (pgradrms + 0.0005):
                     if self.DMAX < 0.05:
                         print(' increased DMAX, gradrms decreased')
                         print(gradrms)
