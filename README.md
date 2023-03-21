@@ -21,7 +21,7 @@ You can also install locally without sudo permissions like:
 You might need to create the folder `~/.local/lib/` if setup.py complains about the folder not existing.
 
 It's also recommended to do the installation within a conda environment e.g.:
-   1. `conda create -n gsm_env`
+   1. `conda create -n gsm_env python`
    2. `source activate gsm_env`
    3. `python setup.py install --prefix ~/.local`
 
