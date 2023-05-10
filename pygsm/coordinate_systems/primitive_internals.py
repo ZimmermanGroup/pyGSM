@@ -1340,7 +1340,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             except:
                 print(elem)
                 print(type(elem))
-                raise RuntimeError
+                raise RuntimeError(
+                    'Attempting to remove nonexistent index while getting hybrid indices. '
+                    'This can occur if the input molecule contains multiple disconnected (not bonded) '
+                    'fragments that have discontiguous atom indices.'
+                )
         # print('hybrid indices')
         # print(new_hybrid_indices)
 
