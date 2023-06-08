@@ -4,6 +4,13 @@ API example modified for an ASE calculator.
 The result is meaningless, apart from showing that the code runs, because of using a Morse potential.
 
 """
+from pathlib import Path
+import sys
+import pygsm
+# workaround for issue with pygsm installation
+sys.path.append(str(Path(pygsm.__file__).parent))
+from pygsm.coordinate_systems.primitive_internals import PrimitiveInternalCoordinates
+from pygsm.coordinate_systems.topology import Topology
 import ase.io
 import numpy as np
 from ase.calculators.morse import MorsePotential
@@ -31,18 +38,18 @@ def main(geom):
     atom_symbols = manage_xyz.get_atoms(geom)
     ELEMENT_TABLE = elements.ElementData()
     atoms = [ELEMENT_TABLE.from_symbol(atom) for atom in atom_symbols]
-    # top = Topology.build_topology(
-    #     xyz,
-    #     atoms,
-    # )
+    top = Topology.build_topology(
+        xyz,
+        atoms,
+    )
 
-    # nifty.printcool("Building Primitive Internal Coordinates")
-    # p1 = PrimitiveInternalCoordinates.from_options(
-    #     xyz=xyz,
-    #     atoms=atoms,
-    #     addtr=False,  # Add TRIC
-    #     topology=top,
-    # )
+    nifty.printcool("Building Primitive Internal Coordinates")
+    p1 = PrimitiveInternalCoordinates.from_options(
+        xyz=xyz,
+        atoms=atoms,
+        addtr=False,  # Add TRIC
+        topology=top,
+    )
 
     nifty.printcool("Building Delocalized Internal Coordinates")
     coord_obj1 = DelocalizedInternalCoordinates.from_options(
@@ -76,7 +83,7 @@ def main(geom):
 
 
 if __name__ == '__main__':
-    diels_adler = ase.io.read("diels_alder.xyz", ":")
+    diels_adler = ase.io.read("diels_alder_stray_methane.xyz", ":")
     xyz = diels_adler[0].positions
 
     # this is a hack
