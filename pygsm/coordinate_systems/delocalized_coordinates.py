@@ -1,5 +1,5 @@
 from __future__ import print_function
-from utilities import nifty, block_matrix, math_utils
+from pygsm.utilities import nifty, block_matrix, math_utils
 
 # standard library imports
 from sys import exit
@@ -13,16 +13,10 @@ import numpy as np
 np.set_printoptions(precision=4, suppress=True)
 
 # local application imports
-try:
-    from .internal_coordinates import InternalCoordinates
-    from .primitive_internals import PrimitiveInternalCoordinates
-    from .topology import Topology
-    from .slots import *
-except:
-    from internal_coordinates import InternalCoordinates
-    from primitive_internals import PrimitiveInternalCoordinates
-    from topology import Topology
-    from slots import *
+from . internal_coordinates import InternalCoordinates
+from . primitive_internals import PrimitiveInternalCoordinates
+from . topology import Topology
+from . slots import *
 
 
 class DelocalizedInternalCoordinates(InternalCoordinates):

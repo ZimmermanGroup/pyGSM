@@ -3,10 +3,12 @@ from __future__ import print_function
 import sys
 from os import path
 from utilities import manage_xyz, nifty
-from wrappers import Molecule
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
+
+from pygsm.molecule import Molecule
 
 try:
     from .main_gsm import MainGSM

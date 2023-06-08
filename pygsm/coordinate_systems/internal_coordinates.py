@@ -8,7 +8,7 @@ from collections import OrderedDict
 import numpy as np
 from numpy.linalg import multi_dot
 
-from utilities import elements, options, nifty, block_matrix
+from pygsm.utilities import elements, options, nifty, block_matrix
 
 ELEMENT_TABLE = elements.ElementData()
 

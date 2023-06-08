@@ -6,9 +6,10 @@ import sys
 import os
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from coordinate_systems import Distance, Angle, Dihedral, OutOfPlane
 from .main_gsm import MainGSM
-from wrappers import Molecule
+from molecule import Molecule
 from utilities import nifty
 # standard library imports
 

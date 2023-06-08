@@ -4,9 +4,10 @@ import os
 from os import path
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from potential_energy_surfaces import Avg_PES, PES
 from .se_gsm import SE_GSM
-from wrappers import Molecule
+from molecule import Molecule
 from utilities import nifty
 # standard library imports
 

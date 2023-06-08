@@ -12,7 +12,7 @@ try:
 except:
     from gsm import GSM
 
-from wrappers.molecule import Molecule
+from molecule.molecule import Molecule
 from utilities.nifty import printcool
 from utilities.manage_xyz import xyz_to_np
 from utilities import block_matrix

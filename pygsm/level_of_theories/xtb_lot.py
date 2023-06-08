@@ -4,10 +4,14 @@ from os import path
 
 # third party
 import numpy as np
-from xtb.interface import Calculator
-from xtb.utils import get_method, get_solvent
-from xtb.interface import Environment
-from xtb.libxtb import VERBOSITY_FULL
+
+try:
+    from xtb.interface import Calculator
+    from xtb.utils import get_method, get_solvent
+    from xtb.interface import Environment
+    from xtb.libxtb import VERBOSITY_FULL
+except:
+    print('xtb is not imported')
 
 # local application imports
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
