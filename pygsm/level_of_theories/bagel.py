@@ -1,12 +1,12 @@
 # standard library imports
 # local application imports
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from utilities import manage_xyz
 import sys
 import os
 from os import path
 import re
 
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 # third party
 import numpy as np
 

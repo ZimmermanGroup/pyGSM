@@ -1,4 +1,4 @@
-# Compiling pygsm's Documentation
+# Compiling pyGSM's Documentation
 
 The docs for this project are built with [Sphinx](http://www.sphinx-doc.org/en/master/).
 To compile the docs, first ensure that Sphinx and the ReadTheDocs theme are installed.

@@ -3,6 +3,9 @@ from scipy.linalg import block_diag
 from .math_utils import orthogonalize, conjugate_orthogonalize
 
 
+def isblock(obj):
+    return hasattr(obj, "matlist")
+
 class block_matrix(object):
 
     def __init__(self, matlist, cnorms=None):
@@ -400,17 +403,22 @@ class block_matrix(object):
                 s = e
             return np.reshape(np.concatenate(result), (-1, 1))
 
+        if isinstance(left, np.ndarray) and left.ndim == 1:
+            left = np.reshape(left, (-1, 1))
+        if isinstance(right, np.ndarray) and right.ndim == 1:
+            right = np.reshape(right, (-1, 1))
+
         # (1) both are block matrices
-        if isinstance(left, block_matrix) and isinstance(right, block_matrix):
+        if isblock(left) and isblock(right):
             return block_matrix([np.dot(A, B) for A, B in zip(left.matlist, right.matlist)])
         # (2) left is np.ndarray with a vector shape
-        elif isinstance(left, np.ndarray) and (left.ndim == 1 or left.shape[1] == 1) and isinstance(right, block_matrix):
+        elif isinstance(left, np.ndarray) and left.shape[1] == 1 and isblock(right):
             return vec_block_dot(left, right)
         # (3) right is np.ndarray with a vector shape
-        elif isinstance(right, np.ndarray) and (right.ndim == 1 or right.shape[1] == 1) and isinstance(left, block_matrix):
+        elif isinstance(right, np.ndarray) and right.shape[1] == 1 and isblock(left):
             return block_vec_dot(left, right)
         # (4) l/r is a matrix
-        elif isinstance(left, np.ndarray) and left.ndim == 2:
+        elif isinstance(left, np.ndarray) and left.shape[1] > 1:
             #
             # [ A | B ] [ C 0 ] = [ AC BD ]
             #           [ 0 D ]
@@ -423,7 +431,7 @@ class block_matrix(object):
             dot_product = np.hstack(tmp_ans)
             return dot_product
 
-        elif isinstance(right, np.ndarray) and right.ndim == 2:
+        elif isinstance(right, np.ndarray) and right.shape[1] > 1:
             #
             # [ A | 0 ] [ C ] = [ AC ]
             # [ 0 | B ] [ D ]   [ BD ]

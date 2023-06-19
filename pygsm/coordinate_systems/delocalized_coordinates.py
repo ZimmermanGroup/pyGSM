@@ -1,5 +1,5 @@
 from __future__ import print_function
-from pygsm.utilities import nifty, block_matrix, math_utils
+from pyGSM.utilities import nifty, block_matrix, math_utils
 
 # standard library imports
 from sys import exit

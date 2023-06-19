@@ -136,7 +136,7 @@ if __name__=="__main__":
     geom = manage_xyz.read_xyz('../../data/ethylene.xyz')
     xyz = manage_xyz.xyz_to_np(geom)
     
-    # create the pygsm level of theory object
+    # create the pyGSM level of theory object
     test_lot = nanoreactor_engine(geom,job_data = {'engine',test_engine})
 
     # Test

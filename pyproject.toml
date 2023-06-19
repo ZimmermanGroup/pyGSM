@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Self-descriptive entries which should always be present
 # https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
 [project]
-name = "pygsm"
+name = "pyGSM"
 description = "Reaction path and photochemistry tool"
 dynamic = ["version"]
 readme = "README.md"
@@ -27,13 +27,14 @@ dependencies = [
     "scipy",
     "matplotlib",
     "networkx",
+    "pytest-cov",
     #"xtb",
 ]
 
 # Update the urls once the hosting is set up.
 #[project.urls]
-#"Source" = "https://github.com/<username>/pygsm/"
-#"Documentation" = "https://pygsm.readthedocs.io/"
+#"Source" = "https://github.com/<username>/pyGSM/"
+#"Documentation" = "https://pyGSM.readthedocs.io/"
 
 [project.optional-dependencies]
 test = [
@@ -68,7 +69,7 @@ where = ["."]
 
 # Ref https://setuptools.pypa.io/en/latest/userguide/datafiles.html#package-data
 [tool.setuptools.package-data]
-pygsm = [
+pyGSM = [
     "py.typed"
 ]
 
@@ -88,4 +89,4 @@ match = ["*"]
 default-tag = "1.0.0"
 
 [tool.versioningit.write]
-file = "pygsm/_version.py"
+file = "pyGSM/_version.py"

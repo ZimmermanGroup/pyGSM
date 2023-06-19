@@ -1,8 +1,8 @@
-pygsm
+pyGSM
 ==============================
 [//]: # (Badges)
-[![GitHub Actions Build Status](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/pygsm/workflows/CI/badge.svg)](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/pygsm/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/pygsm/branch/main/graph/badge.svg)](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/pygsm/branch/main)
+[![GitHub Actions Build Status](https://github.com/craldaz/pyGSM/workflows/CI/badge.svg)](https://github.com/craldaz/pyGSM/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/craldaz/pyGSM/branch/main/graph/badge.svg)](https://codecov.io/gh/craldaz/pyGSM/branch/main)
 
 
 Reaction path and photochemistry tool

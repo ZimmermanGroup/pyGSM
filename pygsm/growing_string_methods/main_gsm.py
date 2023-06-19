@@ -15,6 +15,7 @@ except:
 from molecule.molecule import Molecule
 from utilities.nifty import printcool
 from utilities.manage_xyz import xyz_to_np
+from utilities import units
 from utilities import block_matrix
 from coordinate_systems import rotate
 from optimizers import eigenvector_follow
@@ -133,7 +134,7 @@ class MainGSM(GSM):
             1 is climber
             2 is finder
         '''
-        printcool("In opt_iters")
+        printcool("In opt_iters Cody")
 
         self.nclimb = 0
         self.nhessreset = 10  # are these used??? TODO
@@ -145,7 +146,7 @@ class MainGSM(GSM):
         oi = 0
 
         # enter loop
-        while not self.isConverged:
+        while oi < max_iter:
             printcool("Starting opt iter %i" % oi)
             if self.climb and not self.find:
                 print(" CLIMBING")
@@ -155,6 +156,7 @@ class MainGSM(GSM):
             # stash previous TSnode
             self.pTSnode = self.TSnode
             self.emaxp = self.emax
+            ts_node_changed = False
 
             # store reparam energies
             print(" V_profile (beginning of iteration): ", end=' ')
@@ -231,6 +233,7 @@ class MainGSM(GSM):
                     print("TS node changed after opting")
                     self.climb = False
                     #self.slow_down_climb()
+                    ts_node_changed = True
                     self.pTSnode = self.TSnode
 
                 # opt decided Hess is not good because of overlap
@@ -254,6 +257,7 @@ class MainGSM(GSM):
                 elif self.find and self.optimizer[self.TSnode].nneg <= 3:
                     self.hessrcount -= 1
                     self.hess_counter += 1
+            print(f'{stage_changed=}: {self.climb=} {self.find=}')
 
             # => write Convergence to file <= #
             filename = 'scratch/opt_iters_{:03}_{:03}.xyz'.format(self.ID, oi)
@@ -264,16 +268,20 @@ class MainGSM(GSM):
             # TODO prints tgrads and jobGradCount
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}\n".format(oi, float(totalgrad), float(gradrms), self.TSnode, float(self.emax)))
             oi += 1
+            
+            if self.isConverged and not added and not ts_node_changed:
+                print("Converged")
+                return
 
             # => Reparam the String <= #
-            if oi < max_iter and not self.isConverged:
+            if oi < max_iter and not self.isConverged and not stage_changed:
                 self.reparameterize(nconstraints=nconstraints)
                 self.get_tangents_opting()
                 self.refresh_coordinates()
                 if self.pTSnode != self.TSnode and self.climb:
                     print("TS node changed after reparameterizing")
                     self.slow_down_climb()
-            elif oi >= max_iter and not self.isConverged:
+            elif oi == max_iter and not self.isConverged:
                 self.ran_out = True
                 print(" Ran out of iterations")
                 return
@@ -474,6 +482,7 @@ class MainGSM(GSM):
     def set_stage(self, totalgrad, sumgradrms, ts_cgradq, ts_gradrms, fp):
 
         # checking sum gradrms is not good because if one node is converged a lot while others a re not this is bad
+        print('In set stage')
         all_converged = all([self.nodes[n].gradrms < self.optimizer[n].conv_grms*1.1 for n in range(1, self.nnodes-1)])
         all_converged_climb = all([self.nodes[n].gradrms < self.optimizer[n].conv_grms*2.5 for n in range(1, self.nnodes-1)])
         stage_changed = False
@@ -750,11 +759,12 @@ class MainGSM(GSM):
         # a variable to determine how many time since last modify
         self.hess_counter = 0
         self.TS_E_0 = self.energies[TSnode]
+        print(f"{TSnode=}")
 
-        E0 = self.energies[TSnode]/GSM.units.KCAL_MOL_PER_AU
-        Em1 = self.energies[TSnode-1]/GSM.units.KCAL_MOL_PER_AU
+        E0 = self.energies[TSnode]/units.KCAL_MOL_PER_AU
+        Em1 = self.energies[TSnode-1]/units.KCAL_MOL_PER_AU
         if self.TSnode+1 < self.nnodes:
-            Ep1 = self.energies[TSnode+1]/GSM.units.KCAL_MOL_PER_AU
+            Ep1 = self.energies[TSnode+1]/units.KCAL_MOL_PER_AU
         else:
             Ep1 = Em1
 

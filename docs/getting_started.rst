@@ -1,11 +1,11 @@
 Getting Started
 ===============
 
-This page details how to get started with pygsm. 
+This page details how to get started with pyGSM. 
 
 ..  code-block:: python
     
-    import pygsm
+    import pyGSM
 
 
 You can use this ... 

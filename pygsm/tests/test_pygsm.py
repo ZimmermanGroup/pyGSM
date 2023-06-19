@@ -1,5 +1,5 @@
 """
-Unit and regression test for the pygsm package.
+Unit and regression test for the pyGSM package.
 """
 
 # Import package, test suite, and other packages as needed
@@ -7,9 +7,9 @@ import sys
 
 import pytest
 
-import pygsm
+import pyGSM
 
 
-def test_pygsm_imported():
+def test_pyGSM_imported():
     """Sample test, will always pass so long as import statement worked."""
-    assert "pygsm" in sys.modules
+    assert "pyGSM" in sys.modules

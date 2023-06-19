@@ -4,4 +4,4 @@ API Documentation
 .. autosummary::
    :toctree: autosummary
 
-   pygsm.canvas
+   pyGSM.canvas

@@ -1,6 +1,6 @@
 from __future__ import print_function
 from copy import deepcopy, copy
-from pygsm.utilities import manage_xyz, nifty, block_matrix, block_tensor
+from pyGSM.utilities import manage_xyz, nifty, block_matrix, block_tensor
 from collections import OrderedDict, defaultdict
 import itertools
 import networkx as nx

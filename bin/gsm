@@ -12,16 +12,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # local application imports
-from pygsm.coordinate_systems import Angle, DelocalizedInternalCoordinates, Dihedral, Distance, OutOfPlane, \
+from pyGSM.coordinate_systems import Angle, DelocalizedInternalCoordinates, Dihedral, Distance, OutOfPlane, \
     PrimitiveInternalCoordinates, Topology
-from pygsm.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
-from pygsm.level_of_theories.ase import ASELoT
-from pygsm.level_of_theories.xtb_lot import xTB_lot
-from pygsm.optimizers import beales_cg, conjugate_gradient, eigenvector_follow, lbfgs
-from pygsm.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
-from pygsm.utilities import elements, manage_xyz, nifty
-from pygsm.utilities.manage_xyz import XYZ_WRITERS
-from pygsm.molecule import Molecule
+from pyGSM.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
+from pyGSM.level_of_theories.ase import ASELoT
+from pyGSM.level_of_theories.xtb_lot import xTB_lot
+from pyGSM.optimizers import beales_cg, conjugate_gradient, eigenvector_follow, lbfgs
+from pyGSM.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
+from pyGSM.utilities import elements, manage_xyz, nifty
+from pyGSM.utilities.manage_xyz import XYZ_WRITERS
+from pyGSM.molecule import Molecule
 
 
 def parse_arguments(verbose=True):
@@ -130,7 +130,6 @@ def parse_arguments(verbose=True):
     args = parser.parse_args()
 
     if verbose:
-        print("what the fuck2")
         print_msg()
 
     if args.nproc > 1:
@@ -290,7 +289,7 @@ def create_lot(inpfileq: dict, geom):
             **lot_options,
         )
     else:
-        est_package = importlib.import_module("pygsm.level_of_theories." + lot_name.lower())
+        est_package = importlib.import_module("pyGSM.level_of_theories." + lot_name.lower())
         lot_class = getattr(est_package, lot_name)
         return lot_class.from_options(**lot_options)
 
@@ -361,7 +360,6 @@ def choose_optimizer(inpfileq: dict):
 
 def main():
 
-    print("WHAT THE FUCK!")
     # argument parsing and header
     inpfileq = parse_arguments(verbose=True)
 
