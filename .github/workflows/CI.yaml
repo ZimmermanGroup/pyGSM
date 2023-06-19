@@ -3,8 +3,8 @@ name: CI
 on:
   # The cookiecutter uses the "--initial-branch" flag when it runs git-init
   push:
-#     branches:
-#       - "master"
+    branches:
+      - "master"
   pull_request:
     branches:
       - "master"
