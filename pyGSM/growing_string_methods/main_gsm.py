@@ -269,7 +269,7 @@ class MainGSM(GSM):
             print("opt_iter: {:2} totalgrad: {:4.3} gradrms: {:5.4} max E({}) {:5.4}\n".format(oi, float(totalgrad), float(gradrms), self.TSnode, float(self.emax)))
             oi += 1
             
-            if self.isConverged and not added and not ts_node_changed:
+            if self.isConverged and not added and not ts_node_changed and not stage_changed:
                 print("Converged")
                 return
 
