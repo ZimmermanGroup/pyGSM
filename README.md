@@ -7,12 +7,13 @@ pyGSM
 
 Reaction path and photochemistry tool
 
-### Copyright
 
-Copyright (c) 2022, ZimmermanGroup
+## Documentation
+See https://zimmermangroup.github.io/pyGSM/
 
 
-#### Acknowledgements
- 
-Project based on the 
-[Computational Molecular Science Python Cookiecutter](https://github.com/molssi/cookiecutter-cms) version 1.1.
+## Install instructions
+pyGSM can be installed by setting up a python environment (e.g. venv, conda), cloning the GitHub repository, and installing with pip. From the root directory in the git repository, this would look like:
+```
+pip install -e .
+```
