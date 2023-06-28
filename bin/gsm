@@ -8,12 +8,10 @@ import os
 import textwrap
 
 # third party
-import matplotlib.pyplot as plt
 import numpy as np
 
 # local application imports
-from pyGSM.coordinate_systems import Angle, DelocalizedInternalCoordinates, Dihedral, Distance, OutOfPlane, \
-    PrimitiveInternalCoordinates, Topology
+from pyGSM.coordinate_systems import DelocalizedInternalCoordinates, Distance, PrimitiveInternalCoordinates, Topology
 from pyGSM.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
 from pyGSM.level_of_theories.ase import ASELoT
 from pyGSM.level_of_theories.xtb_lot import xTB_lot
@@ -22,6 +20,7 @@ from pyGSM.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
 from pyGSM.utilities import elements, manage_xyz, nifty
 from pyGSM.utilities.manage_xyz import XYZ_WRITERS
 from pyGSM.molecule import Molecule
+from pyGSM.utilities.cli_utils import get_driving_coord_prim, plot
 
 
 def parse_arguments(verbose=True):
@@ -777,31 +776,6 @@ def read_isomers_file(isomers_file):
     return driving_coordinates
 
 
-def get_driving_coord_prim(dc):
-    prim = None
-    if "ADD" in dc or "BREAK" in dc:
-        if dc[1] < dc[2]:
-            prim = Distance(dc[1] - 1, dc[2] - 1)
-        else:
-            prim = Distance(dc[2] - 1, dc[1] - 1)
-    elif "ANGLE" in dc:
-        if dc[1] < dc[3]:
-            prim = Angle(dc[1] - 1, dc[2] - 1, dc[3] - 1)
-        else:
-            prim = Angle(dc[3] - 1, dc[2] - 1, dc[1] - 1)
-    elif "TORSION" in dc:
-        if dc[1] < dc[4]:
-            prim = Dihedral(dc[1] - 1, dc[2] - 1, dc[3] - 1, dc[4] - 1)
-        else:
-            prim = Dihedral(dc[4] - 1, dc[3] - 1, dc[2] - 1, dc[1] - 1)
-    elif "OOP" in dc:
-        # if dc[1]<dc[4]:
-        prim = OutOfPlane(dc[1] - 1, dc[2] - 1, dc[3] - 1, dc[4] - 1)
-        # else:
-        #    prim = OutOfPlane(dc[4]-1,dc[3]-1,dc[2]-1,dc[1]-1)
-    return prim
-
-
 def read_force_file(force_file):
     raise NotImplementedError
     with open(force_file) as f:
@@ -820,16 +794,6 @@ def cleanup_scratch(ID):
     #    for i in range(self.gsm.nnodes):
     #        cmd = 'rm -rf scratch/{}'.format(i)
     #        os.system(cmd)
-
-
-def plot(fx, x, title):
-    plt.figure(1)
-    plt.title("String {:04d}".format(title))
-    plt.plot(x, fx, color='b', label='Energy', linewidth=2, marker='o', markersize=12)
-    plt.xlabel('Node Number')
-    plt.ylabel('Energy (kcal/mol)')
-    plt.legend(loc='best')
-    plt.savefig('{:04d}_string.png'.format(title), dpi=600)
 
 
 def get_nproc():
