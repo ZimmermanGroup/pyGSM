@@ -8,12 +8,12 @@ import ase.io
 import numpy as np
 from ase.calculators.morse import MorsePotential
 
-from pygsm.coordinate_systems import DelocalizedInternalCoordinates
-from pygsm.level_of_theories.ase import ASELoT
-from pygsm.optimizers import eigenvector_follow
-from pygsm.potential_energy_surfaces import PES
-from pygsm.utilities import elements, manage_xyz, nifty
-from pygsm.wrappers import Molecule
+from pyGSM.coordinate_systems import DelocalizedInternalCoordinates
+from pyGSM.level_of_theories.ase import ASELoT
+from pyGSM.optimizers import eigenvector_follow
+from pyGSM.potential_energy_surfaces import PES
+from pyGSM.utilities import elements, manage_xyz, nifty
+from pyGSM.molecule import Molecule
 
 
 def main(geom):
