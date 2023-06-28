@@ -2,14 +2,14 @@ pyGSM
 ==============================
 [//]: # (Badges)
 [![GitHub Actions Build Status](https://github.com/ZimmermanGroup/pyGSM/workflows/CI/badge.svg)](https://github.com/ZimmermanGroup/pyGSM/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/craldaz/pyGSM/branch/main/graph/badge.svg)](https://codecov.io/gh/craldaz/pyGSM/branch/main)
+[![codecov](https://codecov.io/gh/ZimmermanGroup/pyGSM/branch/cookiecutter-cms/graph/badge.svg)](https://codecov.io/gh/ZimmermanGroup/pyGSM/branch/cookiecutter-cms)
 
 
 Reaction path and photochemistry tool
 
 ### Copyright
 
-Copyright (c) 2022, Cody Aldaz
+Copyright (c) 2022, ZimmermanGroup
 
 
 #### Acknowledgements
