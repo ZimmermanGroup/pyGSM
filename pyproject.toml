@@ -28,7 +28,9 @@ dependencies = [
     "matplotlib",
     "networkx",
     "pytest-cov",
-    #"xtb",
+    "xtb",
+    "sphinx",
+    "sphinx_rtd_theme",
 ]
 
 # Update the urls once the hosting is set up.
