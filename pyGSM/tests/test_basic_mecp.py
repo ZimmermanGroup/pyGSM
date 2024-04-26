@@ -1,4 +1,3 @@
-from openbabel import pybel as pb
 import pytest
 
 from pyGSM.coordinate_systems.delocalized_coordinates import (
