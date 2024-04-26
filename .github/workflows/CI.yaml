@@ -72,7 +72,7 @@ jobs:
           pytest -v --cov=pyGSM --cov-report=xml --color=yes pyGSM/tests/
 
       - name: CodeCov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: unittests
