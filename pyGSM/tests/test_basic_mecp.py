@@ -115,5 +115,3 @@ def test_basic_penalty_opt():
     print(f'{energies = }')
     assert energies[-1] == pytest.approx(-1.1495296961093118)
     print('Finished!')
-
-    # print('Final energy is {:5.4f}'.format(initial.energy))
