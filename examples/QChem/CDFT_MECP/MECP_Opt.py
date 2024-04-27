@@ -121,14 +121,15 @@ def main():
     lot_class = getattr(est_package, inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-    # JOSH - try on water dimer
-    from openbabel import pybel as pb
 
-    mol = next(pb.readfile('pdb', 'pyGSM/data/dimer_h2o.pdb'))
-    coords = nifty.getAllCoords(mol)
-    atoms = nifty.getAtomicSymbols(mol)
-    print(coords)
-    geoms = [manage_xyz.combine_atom_xyz(atoms, coords)]
+    # JOSH - try on water dimer
+    # from openbabel import pybel as pb
+
+    # mol = next(pb.readfile('pdb', 'pyGSM/data/dimer_h2o.pdb'))
+    # coords = nifty.getAllCoords(mol)
+    # atoms = nifty.getAtomicSymbols(mol)
+    # print(coords)
+    # geoms = [manage_xyz.combine_atom_xyz(atoms, coords)]
 
     inpfileq['states'] = [
         (int(m), int(s))
@@ -137,10 +138,13 @@ def main():
     do_coupling = True
     coupling_states = []
 
+    multiplicity_1 = 5
+    multiplicity_2 = 5
+
     lot1 = lot_class.from_options(
         ID=0,
         lot_inp_file='ground',
-        states=[(1, 0)],
+        states=[(multiplicity_1, 0)],
         gradient_states=[0],
         coupling_states=coupling_states,
         geom=geoms[0],
@@ -152,7 +156,7 @@ def main():
     lot2 = lot_class.from_options(
         ID=1,
         lot_inp_file='set',
-        states=[(1, 0)],
+        states=[(multiplicity_2, 0)],
         gradient_states=[0],
         coupling_states=coupling_states,
         geom=geoms[0],
@@ -163,7 +167,7 @@ def main():
 
     pes1 = PES.from_options(
         lot=lot1,
-        multiplicity=1,  # JOSH
+        multiplicity=multiplicity_1,  # JOSH
         ad_idx=0,
         FORCE=inpfileq['FORCE'],
         RESTRAINTS=inpfileq['RESTRAINTS'],
@@ -171,7 +175,7 @@ def main():
 
     pes2 = PES.from_options(
         lot=lot2,
-        multiplicity=1,  # JOSH
+        multiplicity=multiplicity_2,  # JOSH
         ad_idx=0,
         FORCE=inpfileq['FORCE'],
         RESTRAINTS=inpfileq['RESTRAINTS'],
@@ -189,7 +193,7 @@ def main():
 
     hybrid_indices = None
     # frozen_indices = [0, 1, 6, 10, 11, 22, 44, 46, 49, 51, 53, 54, 55]
-    frozen_indices = [0, 1, 2]  # JOSH - for test example
+    # frozen_indices = [0, 1, 2]  # JOSH - for test example
     prim_indices = None
 
     nifty.printcool('Building the topology')
@@ -236,7 +240,7 @@ def main():
         PES=pes,
         coord_obj=coord_obj1,
         Form_Hessian=Form_Hessian,
-        frozen_atoms=frozen_indices,
+        # frozen_atoms=frozen_indices,
     )
 
     optimizer = eigenvector_follow.from_options(
