@@ -245,9 +245,9 @@ def main():
 
     optimizer = eigenvector_follow.from_options(
         Linesearch='backtrack',  # a step size algorithm
-        OPTTHRESH=0.0005,  # The gradrms threshold, this is generally easy to reach for large systems
+        OPTTHRESH=0.001,  # The gradrms threshold, this is generally easy to reach for large systems
         DMAX=0.01,  # The initial max step size, will be adjusted if optimizer is doing well. Max is 0.5
-        conv_Ediff=0.1,  # convergence of difference energy
+        conv_Ediff=1.0,  # convergence of difference energy
         conv_dE=0.1,  # convergence of energy difference between optimization steps
         conv_gmax=0.005,  # convergence of max gradient
         opt_cross=True,  # use difference energy criteria to determine if you are at crossing
@@ -257,7 +257,7 @@ def main():
     geoms, energies = optimizer.optimize(
         molecule=initial,
         refE=initial.energy,
-        opt_steps=150,  # The max number of optimization steps, use a small number until you have your final sigma
+        opt_steps=250,  # The max number of optimization steps, use a small number until you have your final sigma
         verbose=True,
         # opt_type='MECI', # JOSH
         opt_type='UNCONSTRAINED',  # JOSH
