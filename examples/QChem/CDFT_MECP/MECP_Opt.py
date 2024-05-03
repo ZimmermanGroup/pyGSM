@@ -1,49 +1,24 @@
-# MECP Code from Khoi
+# MECP Code from Khoi -> Kevin -> Josh & Taveechai
 # MECP Optimization for
 # State 1 = Ground State, State 2 = SET State
 
-# --Standard Library Imports--#
-from pathlib import Path
-import sys
-import os
-from os import path
+import argparse
 import importlib
+import os
+
 import matplotlib as mpl
 
-mpl.use('Agg')
-import matplotlib.pyplot as plt
-
-# --Third Party Imports--#
-import argparse
-import numpy as np
-import textwrap
-
-# --Local Application Imports--#
-# sys.path.append(
-#     '/export/zimmerman/khoidang/.conda/envs/pypy6/lib/python3.7/site-packages/pyGSM-0.1-py3.7.egg/pygsm'
-# )
-from pyGSM.utilities import *
-from pyGSM.potential_energy_surfaces import PES
-from pyGSM.potential_energy_surfaces import Avg_PES
-from pyGSM.potential_energy_surfaces import Penalty_PES
-from pyGSM.molecule import Molecule
-from pyGSM.optimizers import *
-from pyGSM.growing_string_methods import *
-from coordinate_systems import (
-    Topology,
-    PrimitiveInternalCoordinates,
+from pyGSM.coordinate_systems import (
     DelocalizedInternalCoordinates,
-    Distance,
-    Angle,
-    Dihedral,
-    OutOfPlane,
-    TranslationX,
-    TranslationY,
-    TranslationZ,
-    RotationA,
-    RotationB,
-    RotationC,
+    PrimitiveInternalCoordinates,
+    Topology,
 )
+from pyGSM.molecule import Molecule
+from pyGSM.optimizers import eigenvector_follow
+from pyGSM.potential_energy_surfaces import PES, Penalty_PES
+from pyGSM.utilities import elements, manage_xyz, nifty
+
+mpl.use('Agg')
 
 
 # --Job Definitions--#
@@ -53,62 +28,26 @@ def main():
     except:
         os.environ['QCSCRATCH'] = './'  # for debugging
 
-    charge = 0  # JOSH
+    charge = 0
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-xyzfile', required=True, type=str)
-    parser.add_argument('-num_nodes', type=int, default=20, required=False)
-    parser.add_argument('-isomers', type=str, required=False)
-    parser.add_argument('-ID', default=0, required=False)
     parser.add_argument('-coordinate_type', type=str, default='TRIC', required=False)
     parser.add_argument('-nproc', default=1, type=int, required=False)
 
     args = parser.parse_args()
     print('Using {} processors\n'.format(args.nproc))
     inpfileq = {
-        'lot_inp_file': 'test',
         'xyzfile': args.xyzfile,
         'EST_Package': 'QChem',
-        'reactant_geom_fixed': False,
-        'nproc': args.nproc,
         'states': [0, 1],
         # PES
-        'PES_type': 'Penalty_PES',
         'adiabatic_index': [0, 1],
         'multiplicity': [1, 1],
-        'FORCE_FILE': None,
-        'RESTRAINT_FILE': None,
         'FORCE': None,
         'RESTRAINTS': None,
-        # optimizer
-        'optimizer': 'eigenvector_follow',
-        'opt_print_level': 1,
-        'linesearch': 'NoLineSearch',
-        'DMAX': 0.1,
         # molecule
         'coordinate_type': args.coordinate_type,
-        'hybrid_coord_idx_file': None,
-        'frozen_coord_idx_file': None,
-        'prim_idx_file': None,
-        # GSM
-        'gsm_type': 'SE_Cross',
-        'num_nodes': args.num_nodes,
-        'isomers_file': args.isomers,
-        'ADD_NODE_TOL': 0.01,
-        'CONV_TOL': 0.00075,
-        'conv_Ediff': 100.0,
-        'conv_dE': 1.0,
-        'conv_gmax': 100.0,
-        'BDIST_RATIO': 0.5,
-        'DQMAG_MAX': 0.8,
-        'growth_direction': 0,
-        'ID': args.ID,
-        'product_geom_fixed': False,
-        'gsm_print_level': 1,
-        'max_gsm_iters': 1000,
-        'max_opt_steps': 250,
-        'use_multiprocessing': False,
-        'sigma': 1.0,
     }
 
     nifty.printcool_dictionary(inpfileq, title='Using GSM Keys : Values')
@@ -121,15 +60,6 @@ def main():
     lot_class = getattr(est_package, inpfileq['EST_Package'])
 
     geoms = manage_xyz.read_xyzs(inpfileq['xyzfile'])
-
-    # JOSH - try on water dimer
-    # from openbabel import pybel as pb
-
-    # mol = next(pb.readfile('pdb', 'pyGSM/data/dimer_h2o.pdb'))
-    # coords = nifty.getAllCoords(mol)
-    # atoms = nifty.getAtomicSymbols(mol)
-    # print(coords)
-    # geoms = [manage_xyz.combine_atom_xyz(atoms, coords)]
 
     inpfileq['states'] = [
         (int(m), int(s))
@@ -259,7 +189,6 @@ def main():
         refE=initial.energy,
         opt_steps=250,  # The max number of optimization steps, use a small number until you have your final sigma
         verbose=True,
-        # opt_type='MECI', # JOSH
         opt_type='UNCONSTRAINED',  # JOSH
         xyzframerate=1,  # JOSH
     )
