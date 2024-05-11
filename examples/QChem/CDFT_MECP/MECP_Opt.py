@@ -111,7 +111,7 @@ def main():
         RESTRAINTS=inpfileq['RESTRAINTS'],
     )
 
-    pes = Penalty_PES(PES1=pes1, PES2=pes2, lot=lot1)  # JOSH
+    pes = Penalty_PES(PES1=pes1, PES2=pes2, lot=lot1, sigma=10.0, alpha=1.0)  # JOSH
 
     ###====###
 
@@ -150,7 +150,6 @@ def main():
         addtr=addtr,
         addcart=addcart,
         topology=top1,
-        # frozen_atoms=frozen_indices,
     )
 
     nifty.printcool('Building Delocalized Internal Coordinates')
@@ -161,7 +160,6 @@ def main():
         addcart=addcart,
         connect=connect,
         primitives=p1,
-        # frozen_atoms=frozen_indices,
     )
 
     nifty.printcool('Building the molecule')
