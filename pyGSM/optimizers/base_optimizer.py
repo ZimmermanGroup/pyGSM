@@ -365,7 +365,7 @@ class base_optimizer(object):
         # 6/5 climb works with block matrix distributed constraints
         # => ictan climb
         if opt_type == "CLIMB":
-            gts = np.dot(g.T, molecule.constraints[:, 0])
+            gts = np.dot(g.T, molecule.constraints[:, 0]).item()
             # stepsize=np.linalg.norm(constraint_steps)
             max_step = 0.05/self.SCALE_CLIMB
             if gts > np.abs(max_step):
@@ -384,7 +384,7 @@ class base_optimizer(object):
             constraint_steps[:, 0] = dq*molecule.constraints[:, 1]
         # => seam climb
         elif opt_type == 'TS-SEAM':
-            gts = np.dot(g.T, molecule.constraints[:, 0])
+            gts = np.dot(g.T, molecule.constraints[:, 0]).item()
 
             # climbing step
             max_step = 0.05/self.SCALE_CLIMB

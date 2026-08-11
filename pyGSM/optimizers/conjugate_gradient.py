@@ -55,7 +55,7 @@ class conjugate_gradient(base_optimizer):
         gp = g.copy()
         gp_prim = np.dot(molecule.coord_basis, gp)
 
-        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n)
+        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n).item()
         if molecule.gradrms < self.conv_grms:
             print(" already at min")
             return geoms, energies
@@ -152,7 +152,7 @@ class conjugate_gradient(base_optimizer):
             print(" maximum gradient component %1.2f (au)" % gmax)
 
             # check for convergence TODO
-            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n)
+            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n).item()
             if molecule.gradrms < self.conv_grms:
                 break
 

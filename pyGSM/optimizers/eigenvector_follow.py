@@ -85,7 +85,7 @@ class eigenvector_follow(base_optimizer):
             self.x_prim = np.zeros((molecule.num_primitives, 1), dtype=float)
             self.g_prim = np.zeros((molecule.num_primitives, 1), dtype=float)
 
-        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n)
+        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n).item()
         dE = molecule.difference_energy
         update_hess = False
 
@@ -175,8 +175,10 @@ class eigenvector_follow(base_optimizer):
             dEtemp = np.dot(self.Hessian, scaled_dq)
             dEpre = np.dot(np.transpose(scaled_dq), gc) + 0.5*np.dot(np.transpose(dEtemp), scaled_dq)
             dEpre *= units.KCAL_MOL_PER_AU
+            # these are 1x1 arrays; numpy>=2 will not convert those to scalars implicitly
+            dEpre = dEpre.item()
             # print(constraint_steps.T)
-            constraint_energy = np.dot(gp.T, constraint_steps)*units.KCAL_MOL_PER_AU
+            constraint_energy = np.dot(gp.T, constraint_steps).item()*units.KCAL_MOL_PER_AU
             # print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
             # if abs(dEpre)<0.01:
@@ -191,7 +193,7 @@ class eigenvector_follow(base_optimizer):
             dEstep = fx - fxp
             print(" dEstep=%5.4f" % dEstep)
             ratio = dEstep/dEpre
-            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n)
+            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n).item()
             if ls['status'] != -2:
                 self.step_controller(actual_step, ratio, molecule.gradrms, pgradrms, dEpre, opt_type, dEstep)
 

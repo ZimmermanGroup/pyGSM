@@ -81,7 +81,7 @@ class lbfgs(base_optimizer):
             gc -= np.dot(gc.T, c[:, np.newaxis])*c[:, np.newaxis]
 
         g_prim = block_matrix.dot(molecule.coord_basis, gc)
-        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords)
+        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
 
         # primitive constraint step
         self.cstep_prim = np.zeros_like(g_prim)
@@ -178,8 +178,9 @@ class lbfgs(base_optimizer):
             dq = x-xp
 
             # TODO dEpre is missing second order effects or is it?
-            dEpre = np.dot(gc.T, dq)*units.KCAL_MOL_PER_AU
-            constraint_energy = np.dot(gp.T, constraint_steps)*units.KCAL_MOL_PER_AU
+            # these are 1x1 arrays; numpy>=2 will not convert those to scalars implicitly
+            dEpre = np.dot(gc.T, dq).item()*units.KCAL_MOL_PER_AU
+            constraint_energy = np.dot(gp.T, constraint_steps).item()*units.KCAL_MOL_PER_AU
             if opt_type not in ['UNCONSTRAINED', 'ICTAN']:
                 print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
@@ -255,7 +256,7 @@ class lbfgs(base_optimizer):
             dE = molecule.difference_energy
             if dE < 100.:
                 print(" difference energy is %5.4f" % dE)
-            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords)
+            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
 
             # control step size  NEW FEB 2020
             if flag:

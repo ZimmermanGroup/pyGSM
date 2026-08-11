@@ -65,7 +65,7 @@ class beales_cg(base_optimizer):
         # else:
         #    s0_prim = block_matrix.dot(molecule.coord_basis,s0)
 
-        molecule.gradrms = np.sqrt(np.dot(g.T, g)/n)
+        molecule.gradrms = np.sqrt(np.dot(g.T, g)/n).item()
         g_prim = block_matrix.dot(molecule.coord_basis, g)
 
         update_hess = False
@@ -204,7 +204,7 @@ class beales_cg(base_optimizer):
             # print(" maximum gradient component %1.2f (au)" % gmax)
 
             # check for convergence TODO
-            molecule.gradrms = np.sqrt(np.dot(g.T, g)/n)
+            molecule.gradrms = np.sqrt(np.dot(g.T, g)/n).item()
             gmax = float(np.max(g))
             disp = float(np.linalg.norm((xyz-xyzp).flatten()))
             print(" gmax %5.4f disp %5.4f Ediff %5.4f gradrms %5.4f\n" % (gmax, disp, dEstep, molecule.gradrms))

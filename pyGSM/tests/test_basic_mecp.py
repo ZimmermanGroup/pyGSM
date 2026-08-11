@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 
 from pyGSM.coordinate_systems.delocalized_coordinates import (
@@ -5,20 +7,36 @@ from pyGSM.coordinate_systems.delocalized_coordinates import (
 )
 from pyGSM.coordinate_systems.primitive_internals import PrimitiveInternalCoordinates
 from pyGSM.coordinate_systems.topology import Topology
-from pyGSM.level_of_theories.xtb_lot import xTB_lot
 from pyGSM.molecule.molecule import Molecule
 from pyGSM.optimizers import eigenvector_follow
 from pyGSM.potential_energy_surfaces.penalty_pes import Penalty_PES
 from pyGSM.potential_energy_surfaces.pes import PES
 from pyGSM.utilities import elements, manage_xyz, nifty
 
+# Both GFN-xTB backends should give the same answer. Whichever one is not
+# installed is skipped, so this runs on python versions where xtb-python has no
+# wheel and only tblite is available.
+XTB_BACKENDS = {
+    'xTB_lot': ('pyGSM.level_of_theories.xtb_lot', 'xtb.interface'),
+    'tblite_lot': ('pyGSM.level_of_theories.tblite_lot', 'tblite.interface'),
+}
 
-def test_basic_penalty_opt():
+
+def load_xtb_backend(name):
+    module_name, dependency = XTB_BACKENDS[name]
+    pytest.importorskip(dependency)
+    return getattr(importlib.import_module(module_name), name)
+
+
+@pytest.mark.parametrize('backend', list(XTB_BACKENDS))
+def test_basic_penalty_opt(backend):
+    lot_class = load_xtb_backend(backend)
+
     geom = manage_xyz.read_xyzs('pyGSM/data/diels_alder.xyz')[0]
 
     coupling_states = []
 
-    lot1 = xTB_lot.from_options(
+    lot1 = lot_class.from_options(
         ID=0,
         states=[(1, 0)],
         gradient_states=[0],
@@ -26,7 +44,7 @@ def test_basic_penalty_opt():
         geom=geom,
     )
 
-    lot2 = xTB_lot.from_options(
+    lot2 = lot_class.from_options(
         ID=1,
         states=[(1, 0)],
         gradient_states=[0],
@@ -113,5 +131,9 @@ def test_basic_penalty_opt():
     )
 
     print(f'{energies = }')
-    assert energies[-1] == pytest.approx(-1.1495296961093118)
+    # xtb-python reproduces this reference value exactly. tblite lands about
+    # 1e-6 kcal/mol away, which is the same size as the single point difference
+    # between the two codes and is chemically meaningless, so compare loosely
+    # enough to accept either backend while still catching real regressions.
+    assert energies[-1] == pytest.approx(-1.1495296961093118, rel=1e-5)
     print('Finished!')

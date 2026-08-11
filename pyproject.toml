@@ -28,7 +28,6 @@ dependencies = [
     "matplotlib",
     "networkx",
     "pytest-cov",
-    "xtb",
     "sphinx",
     "sphinx_rtd_theme",
     "typing-extensions",
@@ -43,6 +42,15 @@ dependencies = [
 test = [
   "pytest>=6.1.2",
   "pytest-runner"
+]
+# Semiempirical GFN-xTB backend. tblite is the maintained successor to
+# xtb-python, which has had no release since 2022 and ships no wheels beyond
+# Python 3.11; "xtb" is kept as a separate extra for existing users.
+tblite = [
+  "tblite",
+]
+xtb = [
+  "xtb",
 ]
 
 [tool.setuptools]
@@ -96,3 +104,42 @@ file = "pyGSM/_version.py"
 
 [tool.ruff.format]
 quote-style = "single"
+
+# pixi configuration lives here rather than in a separate pixi.toml so that
+# plain "pip install -e ." keeps working for anyone not using pixi.
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64"]
+
+[tool.pixi.dependencies]
+python = ">=3.10,<3.14"
+numpy = ">1.11"
+scipy = "*"
+matplotlib-base = "*"
+networkx = "*"
+six = "*"
+typing-extensions = "*"
+# conda-forge calls the tblite python bindings "tblite-python"; on PyPI the
+# same bindings are published as "tblite"
+tblite-python = "*"
+
+[tool.pixi.pypi-dependencies]
+pyGSM = { path = ".", editable = true }
+
+[tool.pixi.feature.notebook.dependencies]
+jupyterlab = "*"
+ipykernel = "*"
+py3dmol = "*"
+ase = "*"
+
+[tool.pixi.feature.test.dependencies]
+pytest = ">=6.1.2"
+pytest-cov = "*"
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+notebook = { features = ["notebook"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.tasks]
+test = "pytest -v pyGSM/tests/"

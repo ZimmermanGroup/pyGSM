@@ -14,6 +14,7 @@ import numpy as np
 from pyGSM.coordinate_systems import DelocalizedInternalCoordinates, Distance, PrimitiveInternalCoordinates, Topology
 from pyGSM.growing_string_methods import DE_GSM, SE_Cross, SE_GSM
 from pyGSM.level_of_theories.ase import ASELoT
+from pyGSM.level_of_theories.tblite_lot import tblite_lot
 from pyGSM.level_of_theories.xtb_lot import xTB_lot
 from pyGSM.optimizers import beales_cg, conjugate_gradient, eigenvector_follow, lbfgs
 from pyGSM.potential_energy_surfaces import Avg_PES, PES, Penalty_PES
@@ -41,7 +42,7 @@ def parse_arguments(verbose=True):
     parser.add_argument('-package', default="QChem", type=str,
                         help="Electronic structure theory package (default: %(default)s)",
                         choices=["QChem", "Orca", "Molpro", "PyTC", "TeraChemCloud", "OpenMM", "DFTB", "TeraChem",
-                                 "BAGEL", "xTB_lot", "ase"])
+                                 "BAGEL", "xTB_lot", "tblite_lot", "ase"])
     parser.add_argument('-lot_inp_file', type=str, default=None,
                         help='external file to specify calculation e.g. qstart,gstart,etc. Highly package specific.',
                         required=False)
@@ -279,8 +280,9 @@ def create_lot(inpfileq: dict, geom):
             **lot_options
         )
 
-    if lot_name == "xTB_lot":
-        return xTB_lot.from_options(
+    if lot_name in ("xTB_lot", "tblite_lot"):
+        xtb_class = xTB_lot if lot_name == "xTB_lot" else tblite_lot
+        return xtb_class.from_options(
             xTB_Hamiltonian=inpfileq['xTB_Hamiltonian'],
             xTB_accuracy=inpfileq['xTB_accuracy'],
             xTB_electronic_temperature=inpfileq['xTB_electronic_temperature'],

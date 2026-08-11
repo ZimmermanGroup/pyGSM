@@ -384,7 +384,7 @@ class Molecule(object):
         M = self.total_mass_au
         xyz1 = self.xyz.copy()
         xyz1 -= com
-        return np.sum(self.atomic_mass[i]*np.dot(x, x) for i, x in enumerate(xyz1))/M
+        return sum(self.atomic_mass[i]*np.dot(x, x) for i, x in enumerate(xyz1))/M
 
     @property
     def geometry(self):

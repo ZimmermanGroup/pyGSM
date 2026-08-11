@@ -158,7 +158,7 @@ def conjugate_orthogonalize(vecs, G, numCvecs=0):
     count = numCvecs
     for v in vecs[:, numCvecs:].T:
         # w = v - np.sum( np.dot(v,b)*b  for b in basis.T)
-        w = v - np.sum(ov(v, b)*b/ov(b, b) for b in basis[:, :count].T)
+        w = v - sum(ov(v, b)*b/ov(b, b) for b in basis[:, :count].T)
         # A =np.linalg.multi_dot([w[:,np.newaxis].T,G,w[:,np.newaxis]])
         # wnorm = np.sqrt(ov(w[:,np.newaxis],w[:,np.newaxis]))
         wnorm = np.sqrt(ov(w, w))
@@ -196,7 +196,7 @@ def orthogonalize(vecs, numCvecs=0):
     # count=numCvecs-1
     count = 0
     for v in vecs.T:
-        w = v - np.sum(np.dot(v, b)*b for b in basis.T)
+        w = v - sum(np.dot(v, b)*b for b in basis.T)
         wnorm = np.linalg.norm(w)
         # print("wnorm {} count {}".format(wnorm,count))
         if wnorm > 1e-3 and (abs(w) > 1e-6).any():
