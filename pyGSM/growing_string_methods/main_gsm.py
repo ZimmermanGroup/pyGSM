@@ -12,13 +12,13 @@ try:
 except:
     from gsm import GSM
 
-from molecule.molecule import Molecule
-from utilities.nifty import printcool
-from utilities.manage_xyz import xyz_to_np
-from utilities import units
-from utilities import block_matrix
-from coordinate_systems import rotate
-from optimizers import eigenvector_follow
+from pyGSM.molecule.molecule import Molecule
+from pyGSM.utilities.nifty import printcool
+from pyGSM.utilities.manage_xyz import xyz_to_np
+from pyGSM.utilities import units
+from pyGSM.utilities import block_matrix
+from pyGSM.coordinate_systems import rotate
+from pyGSM.optimizers import eigenvector_follow
 import multiprocessing as mp
 from itertools import chain
 from copy import deepcopy
