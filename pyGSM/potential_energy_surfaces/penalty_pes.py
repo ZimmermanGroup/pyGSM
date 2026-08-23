@@ -19,12 +19,20 @@ class Penalty_PES(PES):
                  sigma=1.0,
                  alpha=0.02*units.KCAL_MOL_PER_AU,
                  ):
-        self.PES1 = PES(PES1.options.copy().set_values({
-            "lot": lot,
-        }))
-        self.PES2 = PES(PES2.options.copy().set_values({
-            "lot": lot,
-        }))
+        self.PES1 = PES(
+            PES1.options.copy().set_values(
+                {
+                    # "lot": lot,
+                }
+            )
+        )
+        self.PES2 = PES(
+            PES2.options.copy().set_values(
+                {
+                    # "lot": lot,
+                }
+            )
+        )
         self.lot = lot
         self.alpha = alpha
         self.dE = 1000.

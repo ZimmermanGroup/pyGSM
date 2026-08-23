@@ -1710,16 +1710,18 @@ def getAllCoords(mol):
         tmpcoords[i, :] = [a.GetX(), a.GetY(), a.GetZ()]
     return tmpcoords
 
-#def getAtomicNum(mol,i):
-#    a = mol.OBMol.GetAtom(i)
-#    return a.GetAtomicNum()
-#
-#def getAtomicSymbols(mol):
-#    natoms = mol.OBMol.NumAtoms()
-#    atomic_nums = [ getAtomicNum(mol,i+1) for i in range(natoms) ]
-#    atomic_symbols = [ ELEMENT_TABLE.from_atomic_number(i).symbol for i in atomic_nums ]
-#    return atomic_symbols
-#
+def getAtomicNum(mol, i):
+    a = mol.OBMol.GetAtom(i)
+    return a.GetAtomicNum()
+
+
+def getAtomicSymbols(mol):
+    natoms = mol.OBMol.NumAtoms()
+    atomic_nums = [getAtomicNum(mol, i + 1) for i in range(natoms)]
+    atomic_symbols = [ELEMENT_TABLE.from_atomic_number(i).symbol for i in atomic_nums]
+    return atomic_symbols
+
+
 #def make_mol_from_coords(coords,atomic_symbols):
 #    mol = ob.OBMol()
 #    for s,xyz in zip(atomic_symbols,coords):
