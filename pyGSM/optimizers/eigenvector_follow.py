@@ -28,8 +28,9 @@ class eigenvector_follow(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
-            path=os.getcwd(),
+            path=None,
     ):
+        path = os.getcwd() if path is None else path
 
         # stash/initialize some useful attributes
         self.check_inputs(molecule, opt_type, ictan)
@@ -85,7 +86,7 @@ class eigenvector_follow(base_optimizer):
             self.x_prim = np.zeros((molecule.num_primitives, 1), dtype=float)
             self.g_prim = np.zeros((molecule.num_primitives, 1), dtype=float)
 
-        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n)
+        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n).item()
         dE = molecule.difference_energy
         update_hess = False
 
@@ -173,10 +174,10 @@ class eigenvector_follow(base_optimizer):
             # calculate predicted value from Hessian, gp is previous constrained gradient
             scaled_dq = dq*step
             dEtemp = np.dot(self.Hessian, scaled_dq)
-            dEpre = np.dot(np.transpose(scaled_dq), gc) + 0.5*np.dot(np.transpose(dEtemp), scaled_dq)
+            dEpre = (np.dot(np.transpose(scaled_dq), gc) + 0.5*np.dot(np.transpose(dEtemp), scaled_dq)).item()
             dEpre *= units.KCAL_MOL_PER_AU
             # print(constraint_steps.T)
-            constraint_energy = np.dot(gp.T, constraint_steps)*units.KCAL_MOL_PER_AU
+            constraint_energy = np.dot(gp.T, constraint_steps).item()*units.KCAL_MOL_PER_AU
             # print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
             # if abs(dEpre)<0.01:
@@ -191,7 +192,7 @@ class eigenvector_follow(base_optimizer):
             dEstep = fx - fxp
             print(" dEstep=%5.4f" % dEstep)
             ratio = dEstep/dEpre
-            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n)
+            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/n).item()
             if ls['status'] != -2:
                 self.step_controller(actual_step, ratio, molecule.gradrms, pgradrms, dEpre, opt_type, dEstep)
 
@@ -238,7 +239,7 @@ class eigenvector_follow(base_optimizer):
             # TODO turn back on conv_DE
             if self.opt_cross and abs(dE) < self.conv_dE and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if opt_type == "TS-SEAM":
-                    gts = np.dot(g.T, molecule.constraints[:, 0])
+                    gts = np.dot(g.T, molecule.constraints[:, 0]).item()
                     print(" gts %1.4f" % gts)
                     if abs(gts) < self.conv_grms*5:
                         self.converged = True
@@ -246,7 +247,7 @@ class eigenvector_follow(base_optimizer):
                     self.converged = True
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if opt_type == "CLIMB":
-                    gts = np.dot(g.T, molecule.constraints[:, 0])
+                    gts = np.dot(g.T, molecule.constraints[:, 0]).item()
                     if abs(gts) < self.conv_grms*5.:
                         self.converged = True
                 elif opt_type == "TS":

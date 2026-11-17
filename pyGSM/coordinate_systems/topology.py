@@ -1,7 +1,6 @@
 from __future__ import print_function
 from utilities import manage_xyz, nifty
 from collections import OrderedDict
-from pkg_resources import parse_version
 import itertools
 import numpy as np
 
@@ -222,12 +221,8 @@ class Topology():
             element = atoms[i]
             a = element.symbol
             G.add_node(i)
-            if parse_version(nx.__version__) >= parse_version('2.0'):
-                nx.set_node_attributes(G, {i: a}, name='e')
-                nx.set_node_attributes(G, {i: xyz[i]}, name='x')
-            else:
-                nx.set_node_attributes(G, 'e', {i: a})
-                nx.set_node_attributes(G, 'x', {i: xyz[i]})
+            nx.set_node_attributes(G, {i: a}, name='e')
+            nx.set_node_attributes(G, {i: xyz[i]}, name='x')
         for (i, j) in bonds:
             G.add_edge(i, j)
 
