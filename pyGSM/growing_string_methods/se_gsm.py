@@ -330,7 +330,7 @@ class SE_GSM(MainGSM):
         constraints = self.nodes[self.nR-1].constraints[:, 0]
         gradient = self.nodes[self.nR-1].gradient
 
-        overlap = np.dot(gradient.T, constraints)
+        overlap = np.dot(gradient.T, constraints).item()
         cgrad = overlap*constraints
 
         cgrad = np.linalg.norm(cgrad)*np.sign(overlap)

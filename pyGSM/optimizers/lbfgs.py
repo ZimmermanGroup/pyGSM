@@ -45,8 +45,9 @@ class lbfgs(base_optimizer):
             ictan=None,
             xyzframerate=4,
             verbose=False,
-            path=os.getcwd(),
+            path=None,
     ):
+        path = os.getcwd() if path is None else path
 
         # stash/initialize some useful attributes
         print(" initial E %5.4f" % (molecule.energy - refE))
@@ -81,7 +82,7 @@ class lbfgs(base_optimizer):
             gc -= np.dot(gc.T, c[:, np.newaxis])*c[:, np.newaxis]
 
         g_prim = block_matrix.dot(molecule.coord_basis, gc)
-        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords)
+        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
 
         # primitive constraint step
         self.cstep_prim = np.zeros_like(g_prim)
@@ -178,8 +179,8 @@ class lbfgs(base_optimizer):
             dq = x-xp
 
             # TODO dEpre is missing second order effects or is it?
-            dEpre = np.dot(gc.T, dq)*units.KCAL_MOL_PER_AU
-            constraint_energy = np.dot(gp.T, constraint_steps)*units.KCAL_MOL_PER_AU
+            dEpre = np.dot(gc.T, dq).item()*units.KCAL_MOL_PER_AU
+            constraint_energy = np.dot(gp.T, constraint_steps).item()*units.KCAL_MOL_PER_AU
             if opt_type not in ['UNCONSTRAINED', 'ICTAN']:
                 print("constraint_energy: %1.4f" % constraint_energy)
             dEpre += constraint_energy
@@ -255,7 +256,7 @@ class lbfgs(base_optimizer):
             dE = molecule.difference_energy
             if dE < 100.:
                 print(" difference energy is %5.4f" % dE)
-            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords)
+            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
 
             # control step size  NEW FEB 2020
             if flag:
@@ -300,7 +301,7 @@ class lbfgs(base_optimizer):
 
                 # TODO Seam Climb
                 if opt_type == "TS-SEAM":
-                    gts = np.dot(g.T, molecule.constraints[:, 0])
+                    gts = np.dot(g.T, molecule.constraints[:, 0]).item()
                     if abs(gts) < self.conv_grms*5:
                         self.converged = True
                 else:
@@ -308,7 +309,7 @@ class lbfgs(base_optimizer):
 
             elif not self.opt_cross and molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp:
                 if opt_type == "CLIMB":
-                    gts = np.dot(g.T, molecule.constraints[:, 0])
+                    gts = np.dot(g.T, molecule.constraints[:, 0]).item()
                     if abs(gts) < self.conv_grms*5:
                         self.converged = True
                 else:

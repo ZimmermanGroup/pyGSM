@@ -432,7 +432,7 @@ def steepest_ascent(nconstraints, x, fx, g, d, step, xp, constraint_step, parame
         xyz = moleule.update_xyz(x-xp)
 
         # check for convergence TODO
-        gradrms = np.sqrt(np.dot(g.T, g)/n)
+        gradrms = np.sqrt(np.dot(g.T, g)/n).item()
         if gradrms < self.conv_grms:
             break
 

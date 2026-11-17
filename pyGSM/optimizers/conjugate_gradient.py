@@ -1,183 +1,181 @@
 from __future__ import print_function
 
 # standard library imports
-try:
-    from io import StringIO
-except:
-    from StringIO import StringIO
+import os
+import sys
+from io import StringIO
 
 # third party
 import numpy as np
 
 # local application imports
 from .base_optimizer import base_optimizer
-from utilities import units
+from utilities import manage_xyz, block_matrix
 
 
 class conjugate_gradient(base_optimizer):
+    """Nonlinear conjugate gradient (Fletcher-Reeves) in delocalized internal coordinates.
 
-    def optimize(self, molecule, refE=0., opt_type='UNCONSTRAINED', opt_steps=3, ictan=None):
+    Gradient-only: it minimizes (UNCONSTRAINED, ICTAN, SEAM, MECI) and climbs (CLIMB) but cannot
+    follow an eigenvector (TS); GSM switches the TS node to eigenvector_follow for the exact TS search.
+    Same driver interface and convergence criteria as lbfgs.
+    """
+
+    @staticmethod
+    def project_constraints(g, molecule):
+        gc = g.copy()
+        for c in molecule.constraints.T:
+            gc -= np.dot(gc.T, c[:, np.newaxis])*c[:, np.newaxis]
+        return gc
+
+    def restart_term(self, g_prim):
+        """Extra term added to every search direction (none for plain CG, see beales_cg)."""
+        return 0.
+
+    def optimize(
+            self,
+            molecule,
+            refE=0.,
+            opt_type='UNCONSTRAINED',
+            opt_steps=3,
+            ictan=None,
+            xyzframerate=4,
+            verbose=False,
+            path=None,
+    ):
+        path = os.getcwd() if path is None else path
+        if opt_type in ['TS', 'TS-SEAM']:
+            raise NotImplementedError("{} is gradient-only and cannot do {}; use eigenvector_follow".format(type(self).__name__, opt_type))
+
         print(" initial E %5.4f" % (molecule.energy - refE))
-        if opt_type == 'TS':
-            raise RuntimeError
-
-        # stash/initialize some useful attributes
-        geoms = []
-        energies = []
-        geoms.append(molecule.geometry)
-        energies.append(molecule.energy-refE)
-        self.initial_step = True
-        self.disp = 1000.
-        self.Ediff = 1000.
+        geoms = [molecule.geometry]
+        energies = [molecule.energy-refE]
         self.check_inputs(molecule, opt_type, ictan)
         nconstraints = self.get_nconstraints(opt_type)
         self.buf = StringIO()
+        if opt_type == 'SEAM' or opt_type == 'MECI':
+            self.opt_cross = True
 
         # form initial coord basis
         constraints = self.get_constraint_vectors(molecule, opt_type, ictan)
         molecule.update_coordinate_basis(constraints=constraints)
 
-        # for cartesian these are the same
         x = np.copy(molecule.coordinates)
-        # xyz = np.copy(molecule.xyz)
+        xyz = np.copy(molecule.xyz)
+        num_coords = molecule.num_coordinates - nconstraints - molecule.num_frozen_atoms*3
 
-        # number of coordinates
-        if molecule.coord_obj.__class__.__name__ == 'CartesianCoordinates':
-            n = molecule.num_coordinates
-        else:
-            n_actual = molecule.num_coordinates
-            n = n_actual - nconstraints
-
-        # Evaluate the function value and its gradient.
         fx = molecule.energy
         g = molecule.gradient.copy()
-        g_prim = np.dot(molecule.coord_basis, g)
-        gp = g.copy()
-        gp_prim = np.dot(molecule.coord_basis, gp)
+        gc = self.project_constraints(g, molecule)
+        g_prim = block_matrix.dot(molecule.coord_basis, gc)
+        molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
 
-        molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n)
-        if molecule.gradrms < self.conv_grms:
-            print(" already at min")
-            return geoms, energies
+        d_prim = None  # None = (re)start with steepest descent
+        gp_prim = None
 
         for ostep in range(opt_steps):
             print(" On opt step {} ".format(ostep+1))
 
-            if self.initial_step is True:
-                # d: store the negative gradient of the object function on point x.
-                # compute the initial step
-                d_prim = -g_prim
-                # set initial step to false
-                self.initial_step = False
+            # search direction: Fletcher-Reeves, restarted after a rejected step
+            d_new = -g_prim + self.restart_term(g_prim)
+            if d_prim is None:
+                d_prim = d_new
             else:
-                # Fletcher-Reeves formula for Beta
-                # http://en.wikipedia.org/wiki/Nonlinear_conjugate_gradient_method
-                dnew = -g_prim  #
-                deltanew = np.dot(dnew.T, dnew)
-                deltaold = np.dot(-gp_prim.T, -gp_prim)
-                beta = deltanew/deltaold
-                print(" beta = %1.2f" % beta)
-                d_prim = dnew + beta*d_prim
+                beta = (np.dot(g_prim.T, g_prim)/np.dot(gp_prim.T, gp_prim)).item()
+                print(" beta = %1.3f" % beta)
+                d_prim = d_new + beta*d_prim
 
-            # form in DLC basis (does nothing if cartesian)
-            d = np.dot(molecule.coord_basis.T, d_prim)
-
-            # normalize the direction
+            # form in DLC basis (does nothing if cartesian) and normalize
+            d = block_matrix.dot(block_matrix.transpose(molecule.coord_basis), d_prim)
             actual_step = np.linalg.norm(d)
-            print(" actual_step= %1.2f" % actual_step)
-            d = d/actual_step  # normalize
-            if actual_step > self.options['DMAX']:
-                step = self.options['DMAX']
-                print(" reducing step, new step = %1.2f" % step)
-            else:
-                step = actual_step
+            print(" actual_step= %1.5f" % actual_step)
+            d = d/actual_step
+            step = min(actual_step, self.DMAX)
 
             # store
             xp = x.copy()
+            xyzp = xyz.copy()
             gp = g.copy()
-            gp_prim = np.dot(molecule.coord_basis, gp)
+            gp_prim = g_prim.copy()
             fxp = fx
 
             # => calculate constraint step <= #
             constraint_steps = self.get_constraint_steps(molecule, opt_type, g)
 
             # line search
-            print(" Linesearch")
-            ls = self.Linesearch(n, x, fx, g, d, step, xp, gp, constraint_steps, self.linesearch_parameters, molecule)
-            print(" Done linesearch")
-
-            # revert to the previous point
-            if ls['status'] < 0:
-                x = xp.copy()
-                print('[ERROR] the point return to the previous point')
-                return ls['status']
-
-            # get values from linesearch
-            p_step = step
+            ls = self.Linesearch(nconstraints, x, fx, gc, d, step, xp, constraint_steps, self.linesearch_parameters, molecule, verbose)
+            molecule = ls['molecule']
             step = ls['step']
             x = ls['x']
             fx = ls['fx']
             g = ls['g']
-            g_prim = np.dot(molecule.coord_basis, g)
-
-            # control step size
-            if step < p_step:
-                self.options['DMAX'] /= 2.
-            elif step > p_step:
-                self.options['DMAX'] *= 2.
-            if self.options['DMAX'] < 0.01:
-                self.options['DMAX'] = 0.01
-            elif self.options['DMAX'] > 0.25:
-                self.options['DMAX'] = 0.25
-
-            # dE
             dEstep = fx - fxp
             print(" dEstep=%5.4f" % dEstep)
 
-            # update molecule xyz
-            # xyz = molecule.update_xyz(x-xp)
-            geoms.append(molecule.geometry)
-            energies.append(molecule.energy-refE)
+            if ls['status'] < 0 or (dEstep > 0. and opt_type != 'CLIMB'):
+                # back to the previous point, restart CG with a smaller step
+                print('[ERROR] the point return to the previous point')
+                x = xp.copy()
+                xyz = xyzp.copy()
+                molecule.xyz = xyzp.copy()
+                g = gp.copy()
+                fx = fxp
+                dEstep = 0.
+                d_prim = None
+                if self.DMAX <= self.DMIN:
+                    print(" Reached minimum step,exiting")
+                    break
+                self.DMAX = max(step/2., self.DMIN)
+            else:
+                xyz = molecule.update_xyz(x-xp)
+                if step >= self.DMAX:
+                    self.DMAX = min(self.DMAX*1.2, self.options['abs_max_step'])
+
+            gc = self.project_constraints(g, molecule)
+            g_prim = block_matrix.dot(molecule.coord_basis, gc)
+            molecule.gradrms = np.sqrt(np.dot(gc.T, gc)/num_coords).item()
+            dE = molecule.difference_energy
+
+            if ostep % xyzframerate == 0:
+                geoms.append(molecule.geometry)
+                energies.append(molecule.energy-refE)
+                manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path, molecule.node_id), geoms, energies, scale=1.)
 
             if self.options['print_level'] > 0:
-                print(" Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (ostep+1, fx-refE, molecule.gradrms, step, self.options['DMAX']))
-            self.buf.write(u' Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (ostep+1, fx-refE, molecule.gradrms, step, self.options['DMAX']))
+                print(" Node: %d Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f" % (molecule.node_id, ostep+1, fx-refE, molecule.gradrms, step, self.DMAX))
+            self.buf.write(u' Node: %d Opt step: %d E: %5.4f gradrms: %1.5f ss: %1.3f DMAX: %1.3f\n' % (molecule.node_id, ostep+1, fx-refE, molecule.gradrms, step, self.DMAX))
 
-            # gmax = np.max(g)/units.ANGSTROM_TO_AU/KCAL_MOL_PER_AU
-            # print "current gradrms= %r au" % gradrms
-            gmax = np.max(g)/units.ANGSTROM_TO_AU
-            self.disp = np.max(x - xp)/units.ANGSTROM_TO_AU
-            self.Ediff = fx - fxp / units.KCAL_MOL_PER_AU
-            print(" maximum displacement component %1.2f (au)" % self.disp)
-            print(" maximum gradient component %1.2f (au)" % gmax)
+            # convergence, same criteria as lbfgs
+            gmax = float(np.max(np.absolute(gc)))
+            disp = float(np.linalg.norm((xyz-xyzp).flatten()))
+            print(" gmax %5.4f disp %5.4f dEstep %5.4f gradrms %5.4f\n" % (gmax, disp, dEstep, molecule.gradrms))
+            self.converged = (
+                molecule.gradrms < self.conv_grms and abs(gmax) < self.conv_gmax
+                and abs(dEstep) < self.conv_Ediff and abs(disp) < self.conv_disp
+            )
+            if self.opt_cross:
+                self.converged = self.converged and abs(dE) < self.conv_dE and ls['status'] == 0
+            if self.converged and opt_type == 'CLIMB':
+                self.converged = abs(np.dot(g.T, molecule.constraints[:, 0]).item()) < self.conv_grms*5
 
-            # check for convergence TODO
-            molecule.gradrms = np.sqrt(np.dot(g[nconstraints:].T, g[nconstraints:])/n)
-            if molecule.gradrms < self.conv_grms:
+            if self.converged:
+                print(" converged")
+                if ostep % xyzframerate != 0:
+                    geoms.append(molecule.geometry)
+                    energies.append(molecule.energy-refE)
+                    manage_xyz.write_xyzs_w_comments('{}/opt_{}.xyz'.format(path, molecule.node_id), geoms, energies, scale=1.)
                 break
 
-            # check if finished
-            # if gradrms <= params.conv_grms  or \
-            #    (self.disp <= params.conv_disp and self.Ediff <= params.conv_Ediff) or \
-            #    (gmax <= params.conv_gmax and abs(self.Ediff) <= params.conv_Ediff):
-            #    print('[INFO] converged')
-            #    print(gradrms)
-            #    #print self.Ediff
-            #    #print self.disp
-            #    break
-
-            # update DLC  --> this changes q, g, Hint
-            if not molecule.coord_obj.__class__.__name__ == 'CartesianCoordinates':
+            # update DLC  --> this changes q, g
+            if molecule.coord_obj.__class__.__name__ != 'CartesianCoordinates' and opt_type in ['SEAM', 'MECI']:
                 constraints = self.get_constraint_vectors(molecule, opt_type, ictan)
                 molecule.update_coordinate_basis(constraints=constraints)
                 x = np.copy(molecule.coordinates)
-                fx = molecule.energy
-                dE = molecule.difference_energy
-                if dE != 1000.:
-                    print(" difference energy is %5.4f" % dE)
                 g = molecule.gradient.copy()
-                molecule.form_Hessian_in_basis()
-            print()
+                gc = self.project_constraints(g, molecule)
+                g_prim = block_matrix.dot(molecule.coord_basis, gc)
+                d_prim = None  # new basis: restart
+            sys.stdout.flush()
 
         print(" opt-summary")
         print(self.buf.getvalue())

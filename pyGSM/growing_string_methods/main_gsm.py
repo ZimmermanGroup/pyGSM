@@ -801,7 +801,7 @@ class MainGSM(GSM):
 
         tan = block_matrix.dot(block_matrix.transpose(Vecs), tan0)   # (nicd,1
         Ht = np.dot(self.newic.Hessian, tan)                         # (nicd,nicd)(nicd,1) = nicd,1
-        tHt = np.dot(tan.T, Ht)
+        tHt = np.dot(tan.T, Ht).item()
 
         a = abs(q0-qm1)
         b = abs(qp1-q0)

@@ -1,4 +1,8 @@
+from pathlib import Path
+
 import pytest
+
+xtb = pytest.importorskip("xtb.interface")  # xtb-python: conda-forge only for Python >= 3.12
 
 from pyGSM.coordinate_systems.delocalized_coordinates import (
     DelocalizedInternalCoordinates,
@@ -13,8 +17,10 @@ from pyGSM.potential_energy_surfaces.pes import PES
 from pyGSM.utilities import elements, manage_xyz, nifty
 
 
-def test_basic_penalty_opt():
-    geom = manage_xyz.read_xyzs('pyGSM/data/diels_alder.xyz')[0]
+def test_basic_penalty_opt(tmp_path, monkeypatch):
+    data = Path(__file__).resolve().parents[1] / 'data' / 'diels_alder.xyz'
+    monkeypatch.chdir(tmp_path)  # xTB_lot and the optimizer write lot_jobs_*, opt_*.xyz and scratch/ in the cwd
+    geom = manage_xyz.read_xyzs(str(data))[0]
 
     coupling_states = []
 

@@ -75,7 +75,7 @@ class ASELoT(Lot):
 
     def run_ase_atoms(self, atoms: Atoms, mult, ad_idx, runtype='gradient'):
         # set the calculator
-        atoms.set_calculator(self.ase_calculator)
+        atoms.calc = self.ase_calculator
 
         # perform gradient calculation if needed
         if runtype == "gradient":
